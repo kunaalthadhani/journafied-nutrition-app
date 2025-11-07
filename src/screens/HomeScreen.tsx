@@ -626,8 +626,8 @@ export const HomeScreen: React.FC = () => {
           {/* Motivational Text - only show if no meals logged for current day */}
           {currentDayMeals.length === 0 && !hasUserTyped && (
             <View style={styles.motivationalTextContainer}>
-              <Text style={styles.motivationalText}>
-                Ready when you are. Just type what you ate and I’ll handle the rest.
+              <Text style={[styles.motivationalText, { color: theme.colors.textTertiary }]}>
+                Ready when you are. Just type what you ate and I'll handle the rest.
               </Text>
             </View>
           )}
@@ -726,11 +726,14 @@ const styles = StyleSheet.create({
     minHeight: 200,
   },
   motivationalText: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.medium,
-    color: Colors.secondaryText,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.normal,
     textAlign: 'center',
-    lineHeight: Typography.lineHeight.relaxed * Typography.fontSize.lg,
+    lineHeight: Typography.fontSize.md * 1.4,
+    opacity: 0.5,
+    textShadowColor: 'rgba(0, 0, 0, 0.1)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 4,
   },
   bottomSpacer: {
     height: 120, // Space for bottom input bar + safe area
