@@ -9,6 +9,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { useTheme, useThemeMode } from '../constants/theme';
 
 interface MenuProps {
   visible: boolean;
@@ -21,6 +22,8 @@ export const Menu: React.FC<MenuProps> = ({
   onClose,
   onSetGoals
 }) => {
+  const theme = useTheme();
+  const { mode, setMode } = useThemeMode();
   const handleSetGoals = () => {
     onSetGoals();
     onClose();
@@ -38,16 +41,44 @@ export const Menu: React.FC<MenuProps> = ({
         onPress={onClose}
         activeOpacity={1}
       >
-        <View style={styles.menuContainer}>
+        <View style={[styles.menuContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderWidth: 1 }]}>
           <TouchableOpacity 
             style={styles.menuItem}
             onPress={handleSetGoals}
             activeOpacity={0.7}
           >
-            <Feather name="target" size={20} color={Colors.primaryText} />
-            <Text style={styles.menuText}>Set Goals</Text>
+            <Feather name="target" size={20} color={theme.colors.textPrimary} />
+            <Text style={[styles.menuText, { color: theme.colors.textPrimary }]}>Set Goals</Text>
             <Feather name="chevron-right" size={16} color={Colors.tertiaryText} />
           </TouchableOpacity>
+
+          {/* Theme selector */}
+          <View style={styles.sectionHeader}> 
+            <Text style={[styles.sectionHeaderText, { color: theme.colors.textSecondary }]}>Theme</Text>
+          </View>
+          <View style={styles.themeRow}>
+            <TouchableOpacity
+              style={[styles.themeChip, { borderColor: theme.colors.border, backgroundColor: mode === 'light' ? theme.colors.accentBg : theme.colors.input }]}
+              onPress={() => setMode('light')}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: mode === 'light' ? theme.colors.accent : theme.colors.textSecondary }}>Light</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.themeChip, { borderColor: theme.colors.border, backgroundColor: mode === 'dark' ? theme.colors.accentBg : theme.colors.input }]}
+              onPress={() => setMode('dark')}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: mode === 'dark' ? theme.colors.accent : theme.colors.textSecondary }}>Dark</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.themeChip, { borderColor: theme.colors.border, backgroundColor: mode === 'system' ? theme.colors.accentBg : theme.colors.input }]}
+              onPress={() => setMode('system')}
+              activeOpacity={0.8}
+            >
+              <Text style={{ color: mode === 'system' ? theme.colors.accent : theme.colors.textSecondary }}>System</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </TouchableOpacity>
     </Modal>
@@ -87,8 +118,27 @@ const styles = StyleSheet.create({
   menuText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.primaryText,
     marginLeft: 12,
     flex: 1,
+  },
+  sectionHeader: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+  },
+  sectionHeaderText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  themeRow: {
+    flexDirection: 'row',
+    gap: 8,
+    paddingHorizontal: 16,
+    paddingBottom: 16,
+  },
+  themeChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 9999,
+    borderWidth: 1,
   },
 });

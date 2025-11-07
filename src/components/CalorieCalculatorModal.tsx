@@ -688,7 +688,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -950,6 +950,8 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     paddingVertical: 24,
     paddingHorizontal: 32,
+    borderWidth: 1,
+    borderColor: Colors.lightBorder,
   },
   calorieResultNumber: {
     fontSize: 48,

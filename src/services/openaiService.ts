@@ -1,6 +1,7 @@
 // OpenAI API service for food analysis
 import { ParsedFood } from '../utils/foodNutrition';
 import { config } from '../config/env';
+import * as FileSystem from 'expo-file-system/legacy';
 
 interface OpenAIResponse {
   choices: {
@@ -11,9 +12,30 @@ interface OpenAIResponse {
 }
 
 const FOOD_ANALYSIS_PROMPT = `
-You are a nutrition expert. Analyze the food input and return ONLY a valid JSON array of food items with their nutritional information.
+You are an expert nutritionist and food analyst. Your job is to understand what the user ate and provide accurate nutritional information.
 
-For each food item, calculate the nutritional values based on the quantity and size mentioned. Use standard nutritional databases (USDA, etc.).
+Analyze the food input carefully:
+- Identify all food items mentioned
+- Consider cooking methods (grilled, fried, boiled, etc.)
+- Account for portion sizes and descriptors (large, small, cup, handful)
+- Include condiments and additions mentioned
+- Use the most accurate nutritional data from USDA or similar databases
+
+Return ONLY a valid JSON array with detailed nutritional information:
+`;
+
+const IMAGE_ANALYSIS_PROMPT = `
+You are an expert nutritionist and food analyst. Analyze the food image provided and estimate the nutritional information.
+
+Look at the image carefully and:
+- Identify all visible food items
+- Estimate portion sizes based on visual cues (plates, bowls, common serving sizes)
+- Consider cooking methods visible in the image (grilled, fried, boiled, etc.)
+- Account for visible condiments, sauces, and additions
+- Estimate weights based on typical serving sizes for the foods identified
+- Use accurate nutritional data from USDA or similar databases
+
+Return ONLY a valid JSON array with detailed nutritional information:
 
 Return format (JSON array only, no other text):
 [
@@ -58,6 +80,7 @@ Example output: [
 
 export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedFood[]> {
   try {
+    console.log('Calling OpenAI API for food analysis:', foodInput);
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -69,7 +92,23 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedF
         messages: [
           {
             role: 'system',
-            content: FOOD_ANALYSIS_PROMPT
+            content: FOOD_ANALYSIS_PROMPT + `
+Return format (JSON array only, no other text):
+[
+  {
+    "name": "Food name",
+    "quantity": number,
+    "unit": "description of quantity (e.g., 'medium banana', 'cup of rice')",
+    "weight_g": estimated_weight_in_grams,
+    "calories": total_calories_for_this_quantity,
+    "protein": total_protein_in_grams,
+    "carbs": total_carbs_in_grams,
+    "fat": total_fat_in_grams
+  }
+]
+
+If you cannot identify any food items, return an empty array: []
+`
           },
           {
             role: 'user',
@@ -80,6 +119,8 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedF
         max_tokens: config.OPENAI_CONFIG.max_tokens,
       }),
     });
+    
+    console.log('OpenAI API response status:', response.status);
 
     if (!response.ok) {
       throw new Error(`OpenAI API error: ${response.status}`);
@@ -117,7 +158,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedF
 function validateFoodResponse(foods: any[]): boolean {
   if (!Array.isArray(foods)) return false;
   
-  return foods.every(food => 
+    return foods.every(food => 
     typeof food.name === 'string' &&
     typeof food.quantity === 'number' &&
     typeof food.unit === 'string' &&
@@ -127,4 +168,118 @@ function validateFoodResponse(foods: any[]): boolean {
     typeof food.carbs === 'number' &&
     typeof food.fat === 'number'
   );
+}
+
+/**
+ * Analyze food from an image using OpenAI Vision API
+ */
+export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood[]> {
+  try {
+    console.log('Reading image as base64 from URI:', imageUri);
+    // Read image as base64 using legacy API
+    const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+      encoding: FileSystem.EncodingType.Base64,
+    });
+    console.log('Image read, length:', base64Image.length);
+
+    // Determine image format from URI
+    const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+    const imageDataUrl = `data:image/${imageFormat};base64,${base64Image}`;
+
+    // Use vision-capable model (gpt-4o or gpt-4-vision-preview)
+    const visionModel = 'gpt-4o'; // or 'gpt-4-vision-preview'
+    
+    console.log('Sending request to OpenAI Vision API...');
+    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: visionModel,
+        messages: [
+          {
+            role: 'system',
+            content: IMAGE_ANALYSIS_PROMPT + `
+Return format (JSON array only, no other text):
+[
+  {
+    "name": "Food name",
+    "quantity": number,
+    "unit": "description of quantity (e.g., 'medium banana', 'cup of rice')",
+    "weight_g": estimated_weight_in_grams,
+    "calories": total_calories_for_this_quantity,
+    "protein": total_protein_in_grams,
+    "carbs": total_carbs_in_grams,
+    "fat": total_fat_in_grams
+  }
+]
+
+If you cannot identify any food items, return an empty array: []
+`
+          },
+          {
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: 'Analyze this food image and provide nutritional information for all visible food items. Estimate portion sizes based on what you see in the image.'
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: imageDataUrl
+                }
+              }
+            ]
+          }
+        ],
+        temperature: config.OPENAI_CONFIG.temperature,
+        max_tokens: config.OPENAI_CONFIG.max_tokens,
+      }),
+    });
+
+    console.log('OpenAI response status:', response.status);
+    
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error('OpenAI API error response:', errorText);
+      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+    }
+
+    const data: OpenAIResponse = await response.json();
+    console.log('OpenAI response received');
+    
+    const content = data.choices[0]?.message?.content;
+    console.log('Response content length:', content?.length || 0);
+
+    if (!content) {
+      throw new Error('No response from OpenAI');
+    }
+
+    // Parse the JSON response
+    let parsedFoods;
+    try {
+      parsedFoods = JSON.parse(content);
+      console.log('Parsed foods count:', parsedFoods.length);
+    } catch (parseError) {
+      console.error('JSON parse error:', parseError);
+      console.error('Content:', content);
+      throw new Error('Failed to parse OpenAI response as JSON');
+    }
+    
+    // Add unique IDs to each food item
+    const foodsWithIds = parsedFoods.map((food: any) => ({
+      ...food,
+      id: `image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+    }));
+
+    console.log('Returning parsed foods:', foodsWithIds.length);
+    return foodsWithIds;
+
+  } catch (error) {
+    console.error('Error analyzing food from image:', error);
+    throw error;
+  }
 }

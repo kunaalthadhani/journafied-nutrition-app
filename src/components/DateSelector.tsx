@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, PanResponder, Animated } from 'react-native';
-import { format, addDays, startOfWeek, isSameDay, subDays } from 'date-fns';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
+import { format, isSameDay, subDays } from 'date-fns';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { useTheme } from '../constants/theme';
 import { DayData } from '../types';
 
 interface DateSelectorProps {
@@ -14,188 +15,74 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   onDateSelect,
   selectedDate = new Date()
 }) => {
-  const [currentWeekStart, setCurrentWeekStart] = useState(startOfWeek(selectedDate, { weekStartsOn: 1 }));
-  const [weekDates, setWeekDates] = useState<DayData[]>([]);
-  const [isAnimating, setIsAnimating] = useState(false);
-  
-  const translateX = useRef(new Animated.Value(0)).current;
-  const opacity = useRef(new Animated.Value(1)).current;
+  const theme = useTheme();
+  const [dateList, setDateList] = useState<DayData[]>([]);
+  const scrollRef = useRef<ScrollView | null>(null);
 
   useEffect(() => {
-    generateWeekDates();
-  }, [selectedDate, currentWeekStart]);
-
-  const generateWeekDates = () => {
+    // Build a continuous list of days ending today, going back N days
+    const today = new Date();
+    const rangeDays = 180; // roughly 6 months
     const dates: DayData[] = [];
-    
-    for (let i = 0; i < 7; i++) {
-      const currentDate = addDays(currentWeekStart, i);
+    for (let i = rangeDays; i >= 0; i--) {
+      const d = subDays(today, i);
       dates.push({
-        date: currentDate,
-        dayName: format(currentDate, 'EEE'), // Mon, Tue, etc.
-        dayNumber: parseInt(format(currentDate, 'd')), // Day number
-        isActive: isSameDay(currentDate, selectedDate),
+        date: d,
+        dayName: format(d, 'EEE'),
+        dayNumber: parseInt(format(d, 'd')),
+        isActive: isSameDay(d, selectedDate),
       });
     }
-    
-    setWeekDates(dates);
-  };
+    setDateList(dates);
+  }, [selectedDate]);
 
-  const animateWeekChange = (direction: 'left' | 'right', callback: () => void) => {
-    if (isAnimating) return;
-    
-    setIsAnimating(true);
-    const slideDistance = direction === 'left' ? -300 : 300;
-    
-    // Slide out current week
-    Animated.parallel([
-      Animated.timing(translateX, {
-        toValue: slideDistance,
-        duration: 200,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 150,
-        useNativeDriver: true,
-      })
-    ]).start(() => {
-      // Update the week data
-      callback();
-      
-      // Reset position for slide in
-      translateX.setValue(-slideDistance);
-      
-      // Slide in new week
-      Animated.parallel([
-        Animated.timing(translateX, {
-          toValue: 0,
-          duration: 200,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacity, {
-          toValue: 1,
-          duration: 150,
-          useNativeDriver: true,
-        })
-      ]).start(() => {
-        setIsAnimating(false);
-      });
-    });
-  };
+  // Scroll to the end (today at rightmost) when list updates
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollRef.current?.scrollToEnd({ animated: false });
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [dateList.length]);
 
-  const goToPreviousWeek = () => {
-    animateWeekChange('right', () => {
-      setCurrentWeekStart(prevStart => subDays(prevStart, 7));
-    });
-  };
-
-  const goToNextWeek = () => {
-    animateWeekChange('left', () => {
-      setCurrentWeekStart(prevStart => addDays(prevStart, 7));
-    });
-  };
-
-  const panResponder = PanResponder.create({
-    onStartShouldSetPanResponder: () => !isAnimating,
-    onMoveShouldSetPanResponder: (_, gestureState) => {
-      // Don't respond if already animating
-      if (isAnimating) return false;
-      // Respond to horizontal swipes
-      return Math.abs(gestureState.dx) > Math.abs(gestureState.dy) && Math.abs(gestureState.dx) > 10;
-    },
-    onPanResponderTerminationRequest: () => false,
-    
-    onPanResponderGrant: () => {
-      // Reset any ongoing animations
-      translateX.stopAnimation();
-      opacity.stopAnimation();
-    },
-
-    onPanResponderMove: (_, gestureState) => {
-      // Provide visual feedback during swipe
-      const { dx } = gestureState;
-      const maxDrag = 100;
-      const clampedDx = Math.max(-maxDrag, Math.min(maxDrag, dx));
-      
-      translateX.setValue(clampedDx * 0.3); // Subtle movement
-      
-      // Slight opacity change during drag
-      const opacityValue = Math.max(0.7, 1 - Math.abs(clampedDx) / 200);
-      opacity.setValue(opacityValue);
-    },
-
-    onPanResponderRelease: (_, gestureState) => {
-      const { dx } = gestureState;
-      const swipeThreshold = 50;
-      
-      if (Math.abs(dx) > swipeThreshold && !isAnimating) {
-        if (dx > 0) {
-          // Swipe right - go to previous week
-          goToPreviousWeek();
-        } else {
-          // Swipe left - go to next week
-          goToNextWeek();
-        }
-      } else {
-        // Animate back to original position
-        Animated.parallel([
-          Animated.spring(translateX, {
-            toValue: 0,
-            useNativeDriver: true,
-            tension: 100,
-            friction: 8,
-          }),
-          Animated.timing(opacity, {
-            toValue: 1,
-            duration: 150,
-            useNativeDriver: true,
-          })
-        ]).start();
-      }
-    },
-  });
-
+  const today = new Date();
   const handleDatePress = (dateData: DayData) => {
-    if (onDateSelect) {
-      onDateSelect(dateData.date);
-    }
+    if (dateData.date > today) return;
+    if (onDateSelect) onDateSelect(dateData.date);
   };
 
   return (
-    <View style={styles.container} {...panResponder.panHandlers}>
+    <View style={[styles.container, { backgroundColor: theme.colors.card }]}>
       <Animated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        style={[
-          styles.scrollView,
-          {
-            transform: [{ translateX }],
-            opacity,
-          }
-        ]}
-        scrollEnabled={false} // Disable native scroll to use our swipe navigation
+        style={[styles.scrollView]}
+        ref={scrollRef}
+        scrollEventThrottle={16}
       >
-        {weekDates.map((dateData, index) => (
+        {dateList.map((dateData, index) => (
           <TouchableOpacity
             key={`${format(dateData.date, 'yyyy-MM-dd')}-${index}`} // Better key for date changes
             style={[
               styles.dayBlock,
-              dateData.isActive && styles.activeDayBlock,
+              dateData.isActive && {
+                backgroundColor: theme.colors.accentBg,
+              },
             ]}
             onPress={() => handleDatePress(dateData)}
             activeOpacity={0.7}
           >
             <Text style={[
               styles.dayName,
-              dateData.isActive && styles.activeDayName,
+              { color: theme.colors.textTertiary },
+              dateData.isActive && { color: theme.colors.accent, fontWeight: Typography.fontWeight.semiBold },
             ]}>
               {dateData.dayName}
             </Text>
             <Text style={[
               styles.dayNumber,
-              dateData.isActive && styles.activeDayNumber,
+              { color: theme.colors.textTertiary },
+              dateData.isActive && { color: theme.colors.accent, fontSize: Typography.fontSize.xl, fontWeight: Typography.fontWeight.bold },
             ]}>
               {dateData.dayNumber}
             </Text>

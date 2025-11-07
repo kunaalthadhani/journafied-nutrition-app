@@ -1,0 +1,58 @@
+import React, { useEffect, useRef } from 'react';
+import { Animated, Text, TextStyle } from 'react-native';
+import { useTheme } from '../constants/theme';
+
+interface AnimatedSpanProps {
+  children: React.ReactNode;
+  style?: TextStyle;
+  className?: string; // For NativeWind compatibility
+  delay?: number; // milliseconds delay before animation
+}
+
+export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
+  children,
+  style,
+  className,
+  delay = 0,
+}) => {
+  const theme = useTheme();
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(-10)).current;
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      Animated.parallel([
+        Animated.timing(opacity, {
+          toValue: 1,
+          duration: 300,
+          useNativeDriver: true,
+        }),
+        Animated.spring(translateY, {
+          toValue: 0,
+          tension: 50,
+          friction: 7,
+          useNativeDriver: true,
+        }),
+      ]).start();
+    }, delay);
+
+    return () => clearTimeout(timer);
+  }, [opacity, translateY, delay]);
+
+  return (
+    <Animated.Text
+      style={[
+        {
+          color: theme.colors.textPrimary,
+          fontFamily: 'monospace',
+          opacity,
+          transform: [{ translateY }],
+        },
+        style,
+      ]}
+    >
+      {children}
+    </Animated.Text>
+  );
+};
+

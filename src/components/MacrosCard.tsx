@@ -4,6 +4,8 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
+import { useTheme } from '../constants/theme';
+import { NumberTicker } from './NumberTicker';
 
 interface MacrosCardProps {
   data?: MacroData;
@@ -16,8 +18,9 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
     fat: { current: 0, target: 42, unit: 'g' }
   }
 }) => {
+  const theme = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
       {/* Header with icon and title */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
@@ -27,34 +30,58 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
             color="#E91E63" 
           />
         </View>
-        <Text style={styles.title}>Macros</Text>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Macros</Text>
       </View>
 
       {/* Three-column layout */}
       <View style={styles.statsContainer}>
         <View style={styles.statColumn}>
-          <Text style={styles.fractionText}>
-            {data.carbs.current}/{data.carbs.target}
-          </Text>
-          <Text style={styles.statLabel}>
+          <View style={{ flexDirection: 'row' }}>
+            <NumberTicker 
+              value={data.carbs.current} 
+              duration={800}
+              decimalPlaces={1}
+              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+            />
+            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
+              /{data.carbs.target}
+            </Text>
+          </View>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
             Carbs ({data.carbs.unit})
           </Text>
         </View>
 
         <View style={[styles.statColumn, styles.middleColumn]}>
-          <Text style={styles.fractionText}>
-            {data.protein.current}/{data.protein.target}
-          </Text>
-          <Text style={styles.statLabel}>
+          <View style={{ flexDirection: 'row' }}>
+            <NumberTicker 
+              value={data.protein.current} 
+              duration={800}
+              decimalPlaces={1}
+              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+            />
+            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
+              /{data.protein.target}
+            </Text>
+          </View>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
             Protein ({data.protein.unit})
           </Text>
         </View>
 
         <View style={styles.statColumn}>
-          <Text style={styles.fractionText}>
-            {data.fat.current}/{data.fat.target}
-          </Text>
-          <Text style={styles.statLabel}>
+          <View style={{ flexDirection: 'row' }}>
+            <NumberTicker 
+              value={data.fat.current} 
+              duration={800}
+              decimalPlaces={1}
+              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+            />
+            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
+              /{data.fat.target}
+            </Text>
+          </View>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
             Fat ({data.fat.unit})
           </Text>
         </View>
@@ -66,20 +93,17 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.cardBackground,
-    borderRadius: 14,
-    padding: Platform.OS === 'android' ? 8 : 12, // Reduced padding on Android
-    marginHorizontal: -16, // Extend to full width
-    paddingHorizontal: 28, // Add back inner padding
-    // Shadow for iOS
+    borderRadius: 12,
+    padding: Platform.OS === 'android' ? 8 : 12,
+    marginHorizontal: -16,
+    paddingHorizontal: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: Colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    // Shadow for Android
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   header: {
     flexDirection: 'row',

@@ -1,10 +1,5 @@
 import React, { useState } from 'react';
-import {
-  View,
-  StyleSheet,
-  Dimensions,
-  PanResponder,
-} from 'react-native';
+import { View, StyleSheet, Dimensions, PanResponder } from 'react-native';
 import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
 import { Colors } from '../constants/colors';
@@ -54,8 +49,8 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
       onScrollEnable?.(false);
     },
 
-    onPanResponderMove: (_, gestureState) => {
-      // No animations during move
+    onPanResponderMove: () => {
+      // No animations during move (simple snap behavior)
     },
 
     onPanResponderRelease: (_, gestureState) => {
@@ -81,10 +76,7 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
     <View style={styles.container}>
       {/* Card with indicators on top */}
       <View style={styles.cardWrapper}>
-        <View
-          style={styles.cardContainer}
-          {...panResponder.panHandlers}
-        >
+        <View style={styles.cardContainer} {...panResponder.panHandlers}>
           {currentCard === 'macros' && <MacrosCard data={macrosData} />}
           {currentCard === 'macros2' && <Macros2Card data={macros2Data} dailyCalories={dailyCalories} />}
         </View>
@@ -109,8 +101,8 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.white,
-    marginTop: -8, // Pull cards up with negative margin
+    backgroundColor: Colors.background,
+    marginTop: -8,
     paddingBottom: 8,
   },
   cardWrapper: {

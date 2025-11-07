@@ -3,6 +3,7 @@ import { View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { useTheme } from '../constants/theme';
 import { CalorieData } from '../types';
 
 interface CaloriesCardProps {
@@ -17,31 +18,32 @@ export const CaloriesCard: React.FC<CaloriesCardProps> = ({
     target: 1500
   }
 }) => {
+  const theme = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
       {/* Header with icon and title */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
           <Text style={styles.flameIcon}>🔥</Text>
         </View>
-        <Text style={styles.title}>Calories</Text>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Calories</Text>
       </View>
 
       {/* Three-column layout */}
       <View style={styles.statsContainer}>
         <View style={styles.statColumn}>
-          <Text style={styles.statValue}>{data.food}</Text>
-          <Text style={styles.statLabel}>Food</Text>
+          <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{data.food}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Food</Text>
         </View>
 
         <View style={[styles.statColumn, styles.middleColumn]}>
-          <Text style={styles.statValue}>{data.exercise}</Text>
-          <Text style={styles.statLabel}>Exercise</Text>
+          <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{data.exercise}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Exercise</Text>
         </View>
 
         <View style={styles.statColumn}>
-          <Text style={styles.statValue}>{data.remaining}</Text>
-          <Text style={styles.statLabel}>Remaining</Text>
+          <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{data.remaining}</Text>
+          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Remaining</Text>
         </View>
       </View>
     </View>
@@ -51,20 +53,17 @@ export const CaloriesCard: React.FC<CaloriesCardProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.cardBackground,
-    borderRadius: 14,
+    borderRadius: 12,
     padding: 12,
-    marginHorizontal: -16, // Extend to full width
-    paddingHorizontal: 28, // Add back inner padding
-    // Shadow for iOS
+    marginHorizontal: -16,
+    paddingHorizontal: 28,
+    borderWidth: 1,
+    borderColor: Colors.border,
     shadowColor: Colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    // Shadow for Android
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   header: {
     flexDirection: 'row',

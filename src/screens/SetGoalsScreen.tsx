@@ -120,12 +120,17 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           <View style={styles.caloriesContainer}>
             <TextInput
               style={styles.caloriesInput}
-              value={calories.toString()}
+              value={calories === 0 ? '' : calories.toString()}
               onChangeText={(text) => {
-                const numValue = parseInt(text) || 0;
-                setCalories(numValue);
+                const sanitized = text.replace(/[^0-9]/g, '');
+                if (sanitized.length === 0) {
+                  setCalories(0);
+                } else {
+                  const numValue = parseInt(sanitized, 10);
+                  setCalories(isNaN(numValue) ? 0 : numValue);
+                }
               }}
-              keyboardType="numeric"
+              keyboardType="number-pad"
               placeholder="1500"
             />
             <Text style={styles.caloriesLabel}>calories</Text>
@@ -260,7 +265,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.white,
+    backgroundColor: Colors.background,
   },
   header: {
     flexDirection: 'row',
@@ -282,7 +287,7 @@ const styles = StyleSheet.create({
   saveButton: {
     paddingHorizontal: 16,
     paddingVertical: 8,
-    backgroundColor: Colors.activeGreenBorder,
+    backgroundColor: Colors.info,
     borderRadius: 8,
   },
   saveText: {
@@ -339,14 +344,13 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 16,
     marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.lightBorder,
     shadowColor: Colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 6,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 1,
+    shadowRadius: 2,
+    elevation: 1,
   },
   macroHeader: {
     flexDirection: 'row',

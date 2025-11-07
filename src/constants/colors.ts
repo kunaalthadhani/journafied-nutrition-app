@@ -1,30 +1,30 @@
 export const Colors = {
-  // Primary colors
+  // Base / foreground (shadcn-inspired: slate + neutral)
   white: '#FFFFFF',
-  background: '#FFFFFF',
-  
-  // Card backgrounds
-  cardBackground: '#F2F7FF',
-  inputBackground: '#F5F5F5',
-  
-  // Accent colors
-  activeGreen: '#E8F5E9',
-  activeGreenBorder: '#4CAF50',
-  
+  background: '#F8FAFC', // slate-50
+  cardBackground: '#FFFFFF',
+  inputBackground: '#F1F5F9', // slate-100
+
+  // Border / ring
+  lightBorder: '#E5E7EB', // gray-200
+  border: '#E5E7EB',
+  ring: '#94A3B8', // slate-400
+
   // Text colors
-  primaryText: '#000000',
-  secondaryText: '#666666',
-  tertiaryText: '#9E9E9E',
-  
-  // Border colors
-  lightBorder: '#E5E5E5',
-  
-  // Shadow colors
-  shadow: '#000000',
-  
-  // Status colors
-  success: '#4CAF50',
-  warning: '#FF9800',
-  error: '#F44336',
-  info: '#2196F3',
+  primaryText: '#0F172A', // slate-900
+  secondaryText: '#475569', // slate-600
+  tertiaryText: '#94A3B8', // slate-400
+
+  // Accents (keep green cue; use slightly deeper tone for borders)
+  activeGreen: '#ECFDF5', // emerald-50
+  activeGreenBorder: '#10B981', // emerald-500
+
+  // Shadow colors (subtle)
+  shadow: 'rgba(2, 6, 23, 0.08)', // slate-950 with low opacity
+
+  // Status colors (align to Tailwind palette)
+  success: '#10B981', // emerald-500
+  warning: '#F59E0B', // amber-500
+  error: '#EF4444', // red-500
+  info: '#3B82F6', // blue-500
 };

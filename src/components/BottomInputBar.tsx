@@ -1,71 +1,163 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import {
   View,
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  KeyboardAvoidingView,
+  Keyboard,
+  Animated,
+  Easing,
   Platform,
 } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { useTheme } from '../constants/theme';
+import { Spacing } from '../constants/spacing';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface BottomInputBarProps {
   onSubmit?: (text: string) => void;
   onPlusPress?: () => void;
+  onMicPress?: () => void;
   placeholder?: string;
   isLoading?: boolean;
+  isRecording?: boolean;
+  transcribedText?: string;
+  onTranscribedTextChange?: (text: string) => void;
+  isTranscribing?: boolean;
+  onUserTyping?: () => void;
 }
 
 export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onSubmit,
   onPlusPress,
+  onMicPress,
   placeholder = "What did you eat or exercise?",
-  isLoading = false
+  isLoading = false,
+  isRecording = false,
+  transcribedText = '',
+  onTranscribedTextChange,
+  isTranscribing = false,
+  onUserTyping,
 }) => {
   const [text, setText] = React.useState('');
+  const theme = useTheme();
+  const insets = useSafeAreaInsets();
+  const translateY = React.useRef(new Animated.Value(0)).current;
+  
+  // Use transcribed text or manual text input
+  const currentText = transcribedText || text;
+  const hasText = currentText.trim().length > 0;
 
   const handleSubmit = () => {
-    if (text.trim() && onSubmit && !isLoading) {
-      onSubmit(text.trim());
+    if (currentText.trim() && onSubmit && !isLoading && !isRecording && !isTranscribing) {
+      onSubmit(currentText.trim());
       setText('');
+      // Clear transcribed text if available
+      if (onTranscribedTextChange) {
+        onTranscribedTextChange('');
+      }
+    }
+  };
+  
+  const handleTextChange = (newText: string) => {
+    setText(newText);
+    if (newText.length > 0) {
+      onUserTyping?.();
+    }
+    // Clear transcribed text when user starts typing
+    if (transcribedText && onTranscribedTextChange) {
+      onTranscribedTextChange('');
     }
   };
 
+  useEffect(() => {
+    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
+    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
+
+    const showSub = Keyboard.addListener(showEvent, (event) => {
+      const keyboardHeight = event?.endCoordinates?.height ?? 0;
+      const offset = keyboardHeight - insets.bottom;
+      Animated.timing(translateY, {
+        toValue: -offset,
+        duration: 250,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    const hideSub = Keyboard.addListener(hideEvent, () => {
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }).start();
+    });
+
+    return () => {
+      showSub.remove();
+      hideSub.remove();
+    };
+  }, [insets.bottom, translateY]);
+
   return (
-    <KeyboardAvoidingView 
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      style={styles.keyboardContainer}
+    <Animated.View
+      style={[
+        styles.keyboardContainer,
+        {
+          backgroundColor: theme.colors.background,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 24 : 16,
+          transform: [{ translateY }],
+        },
+      ]}
     >
       <View style={styles.container}>
-        <View style={styles.inputContainer}>
+        <View style={[styles.inputContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+          <TouchableOpacity 
+            onPress={onPlusPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+            disabled={isLoading || isRecording || isTranscribing}
+            style={styles.plusIconButton}
+          >
+            <Feather name="plus" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+
           <TextInput
-            style={[styles.textInput, isLoading && styles.textInputDisabled]}
+            style={[styles.textInput, { color: theme.colors.textPrimary }, (isLoading || isRecording || isTranscribing) && styles.textInputDisabled]}
             placeholder={placeholder}
-            placeholderTextColor={Colors.tertiaryText}
-            value={text}
-            onChangeText={setText}
+            placeholderTextColor={theme.colors.textTertiary}
+            value={currentText}
+            onChangeText={handleTextChange}
             onSubmitEditing={handleSubmit}
             returnKeyType="send"
             multiline={false}
             maxLength={200}
-            editable={!isLoading}
+            editable={!isLoading && !isRecording && !isTranscribing}
           />
-          <TouchableOpacity 
-            style={styles.iconButton}
-            onPress={onPlusPress || handleSubmit}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <Feather 
-              name="plus" 
-              size={20} 
-              color={Colors.secondaryText} 
-            />
-          </TouchableOpacity>
+
+          <View style={styles.rightControls}>
+            <TouchableOpacity 
+              style={[
+                styles.circleButton,
+                { backgroundColor: theme.colors.input },
+                (isRecording || isTranscribing) && { backgroundColor: theme.colors.error }
+              ]}
+              onPress={onMicPress}
+              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+              disabled={isLoading}
+            >
+              <Feather 
+                name={isTranscribing ? "loader" : "mic"} 
+                size={18} 
+                color={(isRecording || isTranscribing) ? Colors.white : theme.colors.textSecondary} 
+              />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
-    </KeyboardAvoidingView>
+    </Animated.View>
   );
 };
 
@@ -75,31 +167,39 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    paddingHorizontal: 16,
   },
   container: {
-    backgroundColor: Colors.white,
-    paddingHorizontal: 16,
+    backgroundColor: 'transparent',
     paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 34 : 16, // Account for iPhone home indicator
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.inputBackground,
-    borderRadius: 24,
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    minHeight: 48,
-    // Shadow for iOS
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 30,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    minHeight: 64,
+    borderWidth: 1,
+    borderColor: Colors.lightBorder,
     shadowColor: Colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 8,
-    // Shadow for Android
-    elevation: 4,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  leftControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginRight: Spacing.sm,
+  },
+  rightControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.sm,
+    marginLeft: Spacing.sm,
   },
   textInput: {
     flex: 1,
@@ -107,18 +207,36 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
     color: Colors.primaryText,
     paddingVertical: 0, // Remove default padding
-    marginRight: 12,
+    paddingHorizontal: Spacing.sm,
   },
   textInputDisabled: {
     color: Colors.tertiaryText,
     opacity: 0.6,
   },
-  iconButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  recordingButton: {
+    backgroundColor: Colors.error, // Red background when recording
+  },
+  circleButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.white,
+    borderWidth: 1,
+    borderColor: Colors.lightBorder,
+  },
+  micButton: {
+    padding: Spacing.xs,
+  },
+  sendBubble: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusIconButton: {
+    padding: Spacing.xs,
+    marginRight: Spacing.xs,
   },
 });
