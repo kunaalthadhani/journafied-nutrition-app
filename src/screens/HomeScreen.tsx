@@ -14,6 +14,8 @@ import { StatCardsSection } from '../components/StatCardsSection';
 import { BottomInputBar } from '../components/BottomInputBar';
 import { SidebarMenu } from '../components/SidebarMenu';
 import { SetGoalsScreen } from './SetGoalsScreen';
+import { WeightTrackerScreen } from './WeightTrackerScreen';
+import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -32,6 +34,8 @@ export const HomeScreen: React.FC = () => {
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showSetGoals, setShowSetGoals] = useState(false);
+  const [showWeightTracker, setShowWeightTracker] = useState(false);
+  const [showNutritionAnalysis, setShowNutritionAnalysis] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState({
     calories: 1500,
@@ -96,6 +100,22 @@ export const HomeScreen: React.FC = () => {
     setShowSetGoals(false);
   };
 
+  const handleWeightTracker = () => {
+    setShowWeightTracker(true);
+  };
+
+  const handleNutritionAnalysis = () => {
+    setShowNutritionAnalysis(true);
+  };
+
+  const handleNutritionAnalysisBack = () => {
+    setShowNutritionAnalysis(false);
+  };
+
+  const handleWeightTrackerBack = () => {
+    setShowWeightTracker(false);
+  };
+
   const handleGoalsSave = (goals: any) => {
     console.log('Goals saved:', goals);
     setDailyCalories(goals.calories);
@@ -104,8 +124,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleCalendarPress = () => {
-    console.log('Calendar pressed');
-    // TODO: Implement calendar functionality
+    setShowWeightTracker(true);
   };
 
   const handleDateSelect = (date: Date) => {
@@ -584,6 +603,22 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+  if (showWeightTracker) {
+    return (
+      <WeightTrackerScreen 
+        onBack={handleWeightTrackerBack}
+      />
+    );
+  }
+
+  if (showNutritionAnalysis) {
+    return (
+      <NutritionAnalysisScreen 
+        onBack={handleNutritionAnalysisBack}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -592,6 +627,8 @@ export const HomeScreen: React.FC = () => {
           selectedDate={formattedDate}
           onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
+          onWeightTrackerPress={handleWeightTracker}
+          onNutritionAnalysisPress={handleNutritionAnalysis}
         />
 
         {/* Scrollable Content (vertical only). Only DateSelector has horizontal scroll. */}
@@ -626,8 +663,11 @@ export const HomeScreen: React.FC = () => {
           {/* Motivational Text - only show if no meals logged for current day */}
           {currentDayMeals.length === 0 && !hasUserTyped && (
             <View style={styles.motivationalTextContainer}>
-              <Text style={[styles.motivationalText, { color: theme.colors.textTertiary }]}>
-                Ready when you are. Just type what you ate and I'll handle the rest.
+              <Text style={styles.motivationalTitle}>
+                Ready when you are!
+              </Text>
+              <Text style={styles.motivationalText}>
+                Type what you've eaten and I'll handle the rest
               </Text>
             </View>
           )}
@@ -659,10 +699,8 @@ export const HomeScreen: React.FC = () => {
           visible={menuVisible}
           onClose={() => setMenuVisible(false)}
           onSetGoals={handleSetGoals}
-          onWeightTracker={() => {
-            // TODO: Implement weight tracker
-            console.log('Weight Tracker pressed');
-          }}
+          onWeightTracker={handleWeightTracker}
+          onNutritionAnalysis={handleNutritionAnalysis}
           onLogin={() => {
             // TODO: Implement login
             console.log('Login pressed');
@@ -725,15 +763,19 @@ const styles = StyleSheet.create({
     paddingVertical: 40,
     minHeight: 200,
   },
+  motivationalTitle: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.semibold,
+    color: Colors.primaryText,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
   motivationalText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
+    color: Colors.secondaryText,
     textAlign: 'center',
-    lineHeight: Typography.fontSize.md * 1.4,
-    opacity: 0.5,
-    textShadowColor: 'rgba(0, 0, 0, 0.1)',
-    textShadowOffset: { width: 0, height: 1 },
-    textShadowRadius: 4,
+    lineHeight: Typography.lineHeight.relaxed * Typography.fontSize.md,
   },
   bottomSpacer: {
     height: 120, // Space for bottom input bar + safe area

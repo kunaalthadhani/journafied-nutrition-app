@@ -40,7 +40,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
             <NumberTicker 
               value={data.carbs.current} 
               duration={800}
-              decimalPlaces={1}
+              decimalPlaces={0}
               style={[styles.fractionText, { color: theme.colors.textPrimary }]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
@@ -57,7 +57,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
             <NumberTicker 
               value={data.protein.current} 
               duration={800}
-              decimalPlaces={1}
+              decimalPlaces={0}
               style={[styles.fractionText, { color: theme.colors.textPrimary }]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
@@ -74,7 +74,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
             <NumberTicker 
               value={data.fat.current} 
               duration={800}
-              decimalPlaces={1}
+              decimalPlaces={0}
               style={[styles.fractionText, { color: theme.colors.textPrimary }]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>

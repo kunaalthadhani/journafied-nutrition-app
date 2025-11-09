@@ -121,7 +121,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             disabled={isLoading || isRecording || isTranscribing}
             style={styles.plusIconButton}
           >
-            <Feather name="plus" size={20} color={theme.colors.textSecondary} />
+            <Feather name="plus" size={20} color="#14B8A6" />
           </TouchableOpacity>
 
           <TextInput
@@ -141,17 +141,17 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             <TouchableOpacity 
               style={[
                 styles.circleButton,
-                { backgroundColor: theme.colors.input },
+                { backgroundColor: hasText ? '#14B8A6' : theme.colors.input },
                 (isRecording || isTranscribing) && { backgroundColor: theme.colors.error }
               ]}
-              onPress={onMicPress}
+              onPress={hasText ? handleSubmit : onMicPress}
               hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              disabled={isLoading}
+              disabled={isLoading || (isRecording && !hasText) || (isTranscribing && !hasText)}
             >
               <Feather 
-                name={isTranscribing ? "loader" : "mic"} 
+                name={isTranscribing ? "loader" : hasText ? "send" : "mic"} 
                 size={18} 
-                color={(isRecording || isTranscribing) ? Colors.white : theme.colors.textSecondary} 
+                color={(isRecording || isTranscribing) ? Colors.white : hasText ? Colors.white : "#14B8A6"} 
               />
             </TouchableOpacity>
           </View>

@@ -20,6 +20,7 @@ interface SidebarMenuProps {
   onClose: () => void;
   onSetGoals: () => void;
   onWeightTracker?: () => void;
+  onNutritionAnalysis?: () => void;
   onLogin?: () => void;
   onSettings?: () => void;
   onAbout?: () => void;
@@ -67,7 +68,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
         <Feather 
           name={icon as any} 
           size={20} 
-          color={isActive ? theme.colors.accent : theme.colors.textSecondary} 
+          color="#14B8A6" 
         />
         <Text
           style={[
@@ -89,6 +90,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onClose,
   onSetGoals,
   onWeightTracker,
+  onNutritionAnalysis,
   onLogin,
   onSettings,
   onAbout,
@@ -162,6 +164,11 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     onClose();
   };
 
+  const handleNutritionAnalysis = () => {
+    onNutritionAnalysis?.();
+    onClose();
+  };
+
   const handleLogin = () => {
     onLogin?.();
     onClose();
@@ -227,7 +234,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   style={styles.closeButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Feather name="x" size={24} color={theme.colors.textSecondary} />
+                  <Feather name="x" size={24} color="#14B8A6" />
                 </TouchableOpacity>
               </View>
 
@@ -247,6 +254,13 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   icon="trending-up"
                   label="Weight Tracker"
                   onPress={handleWeightTracker}
+                />
+                {/* Separator between Weight Tracker and Nutrition Analysis */}
+                <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                <MenuItem
+                  icon="bar-chart-2"
+                  label="Nutrition Analysis"
+                  onPress={handleNutritionAnalysis}
                 />
               </View>
             </View>

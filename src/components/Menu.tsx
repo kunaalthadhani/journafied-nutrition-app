@@ -47,9 +47,9 @@ export const Menu: React.FC<MenuProps> = ({
             onPress={handleSetGoals}
             activeOpacity={0.7}
           >
-            <Feather name="target" size={20} color={theme.colors.textPrimary} />
+            <Feather name="target" size={20} color="#14B8A6" />
             <Text style={[styles.menuText, { color: theme.colors.textPrimary }]}>Set Goals</Text>
-            <Feather name="chevron-right" size={16} color={Colors.tertiaryText} />
+            <Feather name="chevron-right" size={16} color="#14B8A6" />
           </TouchableOpacity>
 
           {/* Theme selector */}

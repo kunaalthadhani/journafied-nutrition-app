@@ -274,7 +274,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
                     onPress={handleCloseModal}
                     style={styles.closeButton}
                   >
-                    <Feather name="x" size={24} color={theme.colors.textSecondary} />
+                    <Feather name="x" size={24} color="#14B8A6" />
                   </TouchableOpacity>
                 </View>
                 

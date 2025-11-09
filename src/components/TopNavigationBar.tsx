@@ -9,12 +9,16 @@ import { useTheme } from '../constants/theme';
 interface TopNavigationBarProps {
   onMenuPress?: () => void;
   onCalendarPress?: () => void;
+  onWeightTrackerPress?: () => void;
+  onNutritionAnalysisPress?: () => void;
   selectedDate?: string;
 }
 
 export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onMenuPress,
   onCalendarPress,
+  onWeightTrackerPress,
+  onNutritionAnalysisPress,
   selectedDate = "October 28, 2025"
 }) => {
   const theme = useTheme();
@@ -27,7 +31,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           onPress={onMenuPress}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="menu" size={24} color={theme.colors.textPrimary} />
+          <Feather name="menu" size={24} color="#14B8A6" />
         </TouchableOpacity>
 
         {/* Center: Date Picker */}
@@ -38,19 +42,28 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           <Feather 
             name="chevron-down" 
             size={16} 
-            color={theme.colors.textSecondary} 
+            color="#14B8A6" 
             style={styles.chevronIcon}
           />
         </TouchableOpacity>
 
-        {/* Right: Calendar Icon */}
-        <TouchableOpacity 
-          style={styles.iconContainer} 
-          onPress={onCalendarPress}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Feather name="calendar" size={22} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
+        {/* Right: Icons */}
+        <View style={styles.rightIconsContainer}>
+          <TouchableOpacity 
+            style={styles.iconContainer} 
+            onPress={onWeightTrackerPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="trending-up" size={22} color="#14B8A6" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            style={styles.iconContainer} 
+            onPress={onNutritionAnalysisPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Feather name="bar-chart-2" size={22} color="#14B8A6" />
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -75,6 +88,11 @@ const styles = StyleSheet.create({
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  rightIconsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   dateContainer: {
     flexDirection: 'row',
