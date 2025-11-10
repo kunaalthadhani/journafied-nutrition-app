@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
+import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 
@@ -40,6 +41,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   onRequestSetGoals,
 }) => {
   const theme = useTheme();
+  const { convertWeightToDisplay, convertWeightFromDisplay, getWeightUnitLabel, weightUnit } = usePreferences();
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
   const [showLogModal, setShowLogModal] = useState(false);
   const [logWeight, setLogWeight] = useState('');
@@ -216,9 +218,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       return;
     }
 
+    // Convert from display unit to kg for storage
+    const weightKg = convertWeightFromDisplay(weight, weightUnit);
+
     const newEntry: WeightEntry = {
       date: logDate,
-      weight: weight,
+      weight: weightKg, // Store in kg
     };
 
     setWeightEntries([...weightEntries, newEntry].sort((a, b) => a.date.getTime() - b.date.getTime()));
@@ -276,14 +281,18 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         <View style={styles.summaryContainer}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {currentWeight !== null ? `${currentWeight.toFixed(1)} kg` : '--'}
+              {currentWeight !== null 
+                ? `${convertWeightToDisplay(currentWeight).toFixed(1)} ${getWeightUnitLabel()}` 
+                : '--'}
             </Text>
           <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Current</Text>
           </View>
           <View style={styles.summaryItem}>
           <View style={styles.changeContainer}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {dropFromStart !== null ? `${dropFromStart.toFixed(1)} kg` : '--'}
+                {dropFromStart !== null 
+                  ? `${convertWeightToDisplay(Math.abs(dropFromStart)).toFixed(1)} ${getWeightUnitLabel()}` 
+                  : '--'}
             </Text>
               {dropFromStart !== null && dropFromStart > 0.05 && (
               <Feather name="trending-down" size={16} color="#10B981" style={styles.trendIcon} />
@@ -296,7 +305,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-            {targetWeightValue > 0 ? `${targetWeightValue.toFixed(1)} kg` : '--'}
+            {targetWeightValue > 0 
+              ? `${convertWeightToDisplay(targetWeightValue).toFixed(1)} ${getWeightUnitLabel()}` 
+              : '--'}
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
@@ -322,7 +333,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           },
                         ]}
                       >
-                        {value.toFixed(1)}
+                        {convertWeightToDisplay(value).toFixed(1)} {getWeightUnitLabel()}
                       </Text>
                     );
                   })}
@@ -452,7 +463,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               </View>
               <TextInput
                 style={[styles.weightInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
-                placeholder="Enter weight (kg)"
+                placeholder={`Enter weight (${getWeightUnitLabel()})`}
                 placeholderTextColor={theme.colors.textTertiary}
                 value={logWeight}
                 onChangeText={setLogWeight}

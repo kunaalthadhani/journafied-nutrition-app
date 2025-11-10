@@ -20,6 +20,7 @@ import { SidebarMenu } from '../components/SidebarMenu';
 import { SetGoalsScreen } from './SetGoalsScreen';
 import { WeightTrackerScreen } from './WeightTrackerScreen';
 import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
+import { SettingsScreen } from './SettingsScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -40,6 +41,7 @@ export const HomeScreen: React.FC = () => {
   const [showSetGoals, setShowSetGoals] = useState(false);
   const [showWeightTracker, setShowWeightTracker] = useState(false);
   const [showNutritionAnalysis, setShowNutritionAnalysis] = useState(false);
+  const [showSettings, setShowSettings] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState({
     calories: 1500,
@@ -131,6 +133,14 @@ export const HomeScreen: React.FC = () => {
   const handleRequestLogMeal = () => {
     setShowNutritionAnalysis(false);
     setShouldFocusInput(true);
+  };
+
+  const handleSettings = () => {
+    setShowSettings(true);
+  };
+
+  const handleSettingsBack = () => {
+    setShowSettings(false);
   };
 
   const handleWeightTrackerBack = () => {
@@ -716,6 +726,14 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+  if (showSettings) {
+    return (
+      <SettingsScreen 
+        onBack={handleSettingsBack}
+      />
+    );
+  }
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -807,10 +825,7 @@ export const HomeScreen: React.FC = () => {
             // TODO: Implement login
             console.log('Login pressed');
           }}
-          onSettings={() => {
-            // TODO: Implement settings
-            console.log('Settings pressed');
-          }}
+          onSettings={handleSettings}
           onAbout={() => {
             // TODO: Implement about
             console.log('About pressed');

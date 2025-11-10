@@ -7,15 +7,18 @@ import 'react-native-gesture-handler';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { Colors } from './src/constants/colors';
 import { ThemeProvider } from './src/constants/theme';
+import { PreferencesProvider } from './src/contexts/PreferencesContext';
 
 export default function App() {
   return (
     <SafeAreaProvider>
       <ThemeProvider>
-      <NavigationContainer>
-        <HomeScreen />
-        <StatusBar style="dark" backgroundColor={Colors.white} />
-      </NavigationContainer>
+        <PreferencesProvider>
+          <NavigationContainer>
+            <HomeScreen />
+            <StatusBar style="dark" backgroundColor={Colors.white} />
+          </NavigationContainer>
+        </PreferencesProvider>
       </ThemeProvider>
     </SafeAreaProvider>
   );

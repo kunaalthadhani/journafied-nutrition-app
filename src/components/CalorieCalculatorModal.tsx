@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 export interface CalorieCalculationResult {
   calories: number;
@@ -40,6 +41,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   onCalculated
 }) => {
   const theme = useTheme();
+  const { weightUnit: preferredWeightUnit } = usePreferences();
   const [currentStep, setCurrentStep] = useState(1);
   const [goal, setGoal] = useState<Goal | null>(null);
   
@@ -52,16 +54,22 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   const [heightFeetInput, setHeightFeetInput] = useState('');
   const [heightInchesInput, setHeightInchesInput] = useState('');
   
-  // Weight question state
-  const [weightUnit, setWeightUnit] = useState<WeightUnit>('kg');
+  // Weight question state - use preference as default
+  const [weightUnit, setWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
   const [weight, setWeight] = useState('');
   
   // Age question state
   const [age, setAge] = useState('');
   
-  // Target weight question state
-  const [targetWeightUnit, setTargetWeightUnit] = useState<WeightUnit>('kg');
+  // Target weight question state - use preference as default
+  const [targetWeightUnit, setTargetWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
   const [targetWeight, setTargetWeight] = useState('');
+  
+  // Update weight units when preference changes
+  useEffect(() => {
+    setWeightUnit(preferredWeightUnit);
+    setTargetWeightUnit(preferredWeightUnit);
+  }, [preferredWeightUnit]);
   
   // Rate question state
   const [selectedRate, setSelectedRate] = useState<number | null>(null);
