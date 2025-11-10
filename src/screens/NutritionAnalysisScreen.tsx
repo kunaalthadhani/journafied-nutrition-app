@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,11 +11,14 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { format, subDays, subMonths, subYears } from 'date-fns';
+import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { Meal } from '../components/FoodLogSection';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
+  onRequestLogMeal?: () => void;
+  mealsByDate?: Record<string, Meal[]>;
   targetCalories?: number;
   targetProtein?: number;
   targetCarbs?: number;
@@ -34,6 +37,8 @@ interface DailyNutrition {
 
 export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = ({
   onBack,
+  onRequestLogMeal,
+  mealsByDate = {},
   targetCalories: targetCaloriesProp,
   targetProtein: targetProteinProp,
   targetCarbs: targetCarbsProp,
@@ -43,16 +48,42 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
 
-  // Sample nutrition data - in a real app, this would come from storage/API
-  const [nutritionData] = useState<DailyNutrition[]>([
-    { date: subDays(new Date(), 6), protein: 85, fat: 45, carbs: 120 },
-    { date: subDays(new Date(), 5), protein: 92, fat: 50, carbs: 135 },
-    { date: subDays(new Date(), 4), protein: 78, fat: 42, carbs: 110 },
-    { date: subDays(new Date(), 3), protein: 95, fat: 48, carbs: 145 },
-    { date: subDays(new Date(), 2), protein: 88, fat: 46, carbs: 125 },
-    { date: subDays(new Date(), 1), protein: 90, fat: 47, carbs: 130 },
-    { date: new Date(), protein: 87, fat: 44, carbs: 128 },
-  ]);
+  // Transform mealsByDate into DailyNutrition format
+  const nutritionData = useMemo<DailyNutrition[]>(() => {
+    const dailyData: DailyNutrition[] = [];
+    
+    // Iterate through all dates with meals
+    Object.keys(mealsByDate).forEach((dateKey) => {
+      const meals = mealsByDate[dateKey];
+      if (!meals || meals.length === 0) return;
+      
+      // Aggregate all foods from all meals for this date
+      let totalProtein = 0;
+      let totalCarbs = 0;
+      let totalFat = 0;
+      
+      meals.forEach((meal) => {
+        meal.foods.forEach((food) => {
+          totalProtein += food.protein || 0;
+          totalCarbs += food.carbs || 0;
+          totalFat += food.fat || 0;
+        });
+      });
+      
+      // Parse the date key (YYYY-MM-DD) into a Date object
+      const date = parseISO(dateKey);
+      
+      dailyData.push({
+        date,
+        protein: totalProtein,
+        carbs: totalCarbs,
+        fat: totalFat,
+      });
+    });
+    
+    // Sort by date (oldest first)
+    return dailyData.sort((a, b) => a.date.getTime() - b.date.getTime());
+  }, [mealsByDate]);
 
   // Filter data based on time range
   const getFilteredData = () => {
@@ -86,30 +117,35 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   };
 
   const filteredData = getFilteredData();
-  const graphData = filteredData.length > 0 ? filteredData : nutritionData;
+  const graphData = filteredData;
 
   // Target values (in grams) - in a real app, these would come from saved goals
   const targetProtein = targetProteinProp && targetProteinProp > 0 ? targetProteinProp : undefined;
   const targetCarbs = targetCarbsProp && targetCarbsProp > 0 ? targetCarbsProp : undefined;
   const targetFat = targetFatProp && targetFatProp > 0 ? targetFatProp : undefined;
 
-  // Calculate averages
-  const averageProtein = graphData.length > 0
-    ? graphData.reduce((sum, entry) => sum + entry.protein, 0) / graphData.length
-    : 0;
-  const averageCarbs = graphData.length > 0
-    ? graphData.reduce((sum, entry) => sum + entry.carbs, 0) / graphData.length
-    : 0;
-  const averageFat = graphData.length > 0
-    ? graphData.reduce((sum, entry) => sum + entry.fat, 0) / graphData.length
-    : 0;
+  // Check if there's any logged meal data
+  const hasLoggedMeals = graphData.length > 0;
 
-  const averageCalories = Math.round(
-    graphData.reduce((sum, entry) => {
-      const calories = (entry.protein * 4) + (entry.carbs * 4) + (entry.fat * 9);
-      return sum + calories;
-    }, 0) / graphData.length
-  );
+  // Calculate averages
+  const averageProtein = hasLoggedMeals
+    ? graphData.reduce((sum, entry) => sum + entry.protein, 0) / graphData.length
+    : null;
+  const averageCarbs = hasLoggedMeals
+    ? graphData.reduce((sum, entry) => sum + entry.carbs, 0) / graphData.length
+    : null;
+  const averageFat = hasLoggedMeals
+    ? graphData.reduce((sum, entry) => sum + entry.fat, 0) / graphData.length
+    : null;
+
+  const averageCalories = hasLoggedMeals
+    ? Math.round(
+        graphData.reduce((sum, entry) => {
+          const calories = (entry.protein * 4) + (entry.carbs * 4) + (entry.fat * 9);
+          return sum + calories;
+        }, 0) / graphData.length
+      )
+    : null;
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
   const hasTargetCalories = targetCalories !== undefined;
 
@@ -121,10 +157,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const innerHeight = graphHeight - padding * 2;
 
   // Find max value across all macronutrients for Y-axis scaling
-  const maxProtein = Math.max(...graphData.map(d => d.protein), targetProtein ?? 0);
-  const maxCarbs = Math.max(...graphData.map(d => d.carbs), targetCarbs ?? 0);
-  const maxFat = Math.max(...graphData.map(d => d.fat), targetFat ?? 0);
-  const maxValue = Math.ceil(Math.max(maxProtein, maxCarbs, maxFat) / 25) * 25; // Round up to nearest 25
+  const maxProtein = graphData.length > 0 
+    ? Math.max(...graphData.map(d => d.protein), targetProtein ?? 0)
+    : (targetProtein ?? 0);
+  const maxCarbs = graphData.length > 0
+    ? Math.max(...graphData.map(d => d.carbs), targetCarbs ?? 0)
+    : (targetCarbs ?? 0);
+  const maxFat = graphData.length > 0
+    ? Math.max(...graphData.map(d => d.fat), targetFat ?? 0)
+    : (targetFat ?? 0);
+  const maxValue = Math.ceil(Math.max(maxProtein, maxCarbs, maxFat, 50) / 25) * 25; // Round up to nearest 25, minimum 50
 
   const getDateRange = () => {
     if (graphData.length === 0) return '';
@@ -139,8 +181,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     calories: (entry.protein * 4) + (entry.carbs * 4) + (entry.fat * 9),
   }));
 
-  const minCalories = Math.min(...caloriesData.map(d => d.calories));
-  const maxCalories = Math.max(...caloriesData.map(d => d.calories));
+  const minCalories = caloriesData.length > 0 
+    ? Math.min(...caloriesData.map(d => d.calories))
+    : 0;
+  const maxCalories = caloriesData.length > 0
+    ? Math.max(...caloriesData.map(d => d.calories))
+    : 2000;
   const caloriesRange = maxCalories - minCalories || 1;
   const caloriesPadding = caloriesRange * 0.1;
 
@@ -255,12 +301,42 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {!hasLoggedMeals && (
+          <View
+            style={[
+              styles.emptyStateContainer,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+            ]}
+          >
+            <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
+              Log your first meal
+            </Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+              Start tracking your nutrition by logging your meals.
+            </Text>
+            <TouchableOpacity
+              style={[styles.emptyStateButton, { backgroundColor: '#14B8A6' }]}
+              onPress={() => {
+                if (onRequestLogMeal) {
+                  onRequestLogMeal();
+                } else {
+                  onBack();
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.emptyStateButtonText}>
+                Log Meal
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
 
         {/* Calorie Summary */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {averageCalories} Kcal
+              {averageCalories !== null ? `${averageCalories} Kcal` : '--'}
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Average</Text>
           </View>
@@ -272,7 +348,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           </View>
         </View>
 
-        {/* Tab Navigation */}
+        {hasLoggedMeals && (
+          <>
+            {/* Tab Navigation */}
         <View style={[styles.tabContainer, { backgroundColor: theme.colors.input }]}>
           <TouchableOpacity
             style={[
@@ -449,21 +527,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 <View style={[styles.averageDot, { backgroundColor: '#14B8A6' }]} />
                 <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Protein:</Text>
                 <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageProtein.toFixed(0)}g
+                  {averageProtein !== null ? `${averageProtein.toFixed(0)}g` : '--'}
                 </Text>
               </View>
               <View style={styles.averageItem}>
                 <View style={[styles.averageDot, { backgroundColor: '#FF7E67' }]} />
                 <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Carbs:</Text>
                 <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageCarbs.toFixed(0)}g
+                  {averageCarbs !== null ? `${averageCarbs.toFixed(0)}g` : '--'}
                 </Text>
               </View>
               <View style={styles.averageItem}>
                 <View style={[styles.averageDot, { backgroundColor: '#40514E' }]} />
                 <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Fat:</Text>
                 <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageFat.toFixed(0)}g
+                  {averageFat !== null ? `${averageFat.toFixed(0)}g` : '--'}
                 </Text>
               </View>
             </View>
@@ -636,13 +714,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           </View>
         )}
 
-        {/* Information Box */}
-        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-          <Feather name="info" size={20} color="#14B8A6" />
-          <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-            Your protein intake is below target. Consider adding more lean protein to your meals.
-          </Text>
-        </View>
+            {/* Information Box */}
+            <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+              <Feather name="info" size={20} color="#14B8A6" />
+              <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                Your protein intake is below target. Consider adding more lean protein to your meals.
+              </Text>
+            </View>
+          </>
+        )}
       </ScrollView>
     </SafeAreaView>
   );
@@ -820,6 +900,35 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.sm,
     lineHeight: 20,
+  },
+  emptyStateContainer: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 24,
+    marginTop: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyStateTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: Typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyStateButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  emptyStateButtonText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
   },
 });
 

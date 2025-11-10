@@ -27,6 +27,7 @@ interface BottomInputBarProps {
   onTranscribedTextChange?: (text: string) => void;
   isTranscribing?: boolean;
   onUserTyping?: () => void;
+  autoFocus?: boolean;
 }
 
 export const BottomInputBar: React.FC<BottomInputBarProps> = ({
@@ -40,6 +41,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onTranscribedTextChange,
   isTranscribing = false,
   onUserTyping,
+  autoFocus = false,
 }) => {
   const [text, setText] = React.useState('');
   const theme = useTheme();
@@ -48,6 +50,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const [inputHeight, setInputHeight] = React.useState(0);
   const calculatedInputHeight = Math.min(120, Math.max(28, inputHeight));
   const [isFocused, setIsFocused] = React.useState(false);
+  const inputRef = React.useRef<TextInput>(null);
   
   // Use transcribed text or manual text input
   const currentText = transcribedText || text;
@@ -105,6 +108,16 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     };
   }, [insets.bottom, translateY]);
 
+  // Auto-focus when requested
+  useEffect(() => {
+    if (autoFocus && inputRef.current) {
+      // Small delay to ensure the component is mounted
+      setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+    }
+  }, [autoFocus]);
+
   return (
     <Animated.View
       style={[
@@ -128,6 +141,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </TouchableOpacity>
 
           <TextInput
+            ref={inputRef}
             style={[styles.textInput, { color: theme.colors.textPrimary, height: calculatedInputHeight, textAlign: (!isFocused && !hasText) ? 'center' : 'left', textAlignVertical: (!isFocused && !hasText) ? 'center' : 'top' }, (isLoading || isRecording || isTranscribing) && styles.textInputDisabled]}
             placeholder={(!isFocused && !hasText) ? placeholder : ''}
             placeholderTextColor={theme.colors.textTertiary}

@@ -71,6 +71,7 @@ export const HomeScreen: React.FC = () => {
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
   const [showAnalyzingOverlay, setShowAnalyzingOverlay] = useState(false);
   const [goalsSet, setGoalsSet] = useState(false);
+  const [shouldFocusInput, setShouldFocusInput] = useState(false);
   
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -124,6 +125,12 @@ export const HomeScreen: React.FC = () => {
 
   const handleNutritionAnalysisBack = () => {
     setShowNutritionAnalysis(false);
+    setShouldFocusInput(false);
+  };
+
+  const handleRequestLogMeal = () => {
+    setShowNutritionAnalysis(false);
+    setShouldFocusInput(true);
   };
 
   const handleWeightTrackerBack = () => {
@@ -692,6 +699,8 @@ export const HomeScreen: React.FC = () => {
     return (
       <NutritionAnalysisScreen 
         onBack={handleNutritionAnalysisBack}
+        onRequestLogMeal={handleRequestLogMeal}
+        mealsByDate={mealsByDate}
         targetCalories={goalsSet ? savedGoals.calories : undefined}
         targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
         targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
@@ -768,7 +777,11 @@ export const HomeScreen: React.FC = () => {
           isTranscribing={isTranscribing}
           transcribedText={transcribedText}
           onTranscribedTextChange={setTranscribedText}
-          onUserTyping={() => setHasUserTyped(true)}
+          onUserTyping={() => {
+            setHasUserTyped(true);
+            setShouldFocusInput(false);
+          }}
+          autoFocus={shouldFocusInput}
           placeholder={
             isAnalyzingFood ? "Analyzing your food..." : 
             isRecording ? "Recording..." : 
