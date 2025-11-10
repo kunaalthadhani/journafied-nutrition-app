@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,9 @@ import Svg, { Path, Circle, Line } from 'react-native-svg';
 
 interface WeightTrackerScreenProps {
   onBack: () => void;
+  initialCurrentWeightKg?: number | null;
+  targetWeightKg?: number | null;
+  onRequestSetGoals?: () => void;
 }
 
 interface WeightEntry {
@@ -30,7 +33,12 @@ interface WeightEntry {
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
 
-export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack }) => {
+export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
+  onBack,
+  initialCurrentWeightKg,
+  targetWeightKg,
+  onRequestSetGoals,
+}) => {
   const theme = useTheme();
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
   const [showLogModal, setShowLogModal] = useState(false);
@@ -38,30 +46,55 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack
   const [logDate, setLogDate] = useState(new Date());
 
   // Sample weight data - in a real app, this would come from storage/API
-  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([
-    { date: subDays(new Date(), 365), weight: 64.5 },
-    { date: subDays(new Date(), 340), weight: 64.2 },
-    { date: subDays(new Date(), 300), weight: 63.8 },
-    { date: subDays(new Date(), 270), weight: 63.5 },
-    { date: subDays(new Date(), 240), weight: 63.2 },
-    { date: subDays(new Date(), 210), weight: 63.0 },
-    { date: subDays(new Date(), 180), weight: 62.8 },
-    { date: subDays(new Date(), 150), weight: 62.5 },
-    { date: subDays(new Date(), 120), weight: 62.3 },
-    { date: subDays(new Date(), 90), weight: 62.0 },
-    { date: subDays(new Date(), 60), weight: 61.8 },
-    { date: subDays(new Date(), 30), weight: 61.5 },
-    { date: subDays(new Date(), 7), weight: 61.3 },
-    { date: new Date(), weight: 61.2 },
-  ]);
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
+    if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
+      return [{ date: new Date(), weight: initialCurrentWeightKg }];
+    }
+    return [];
+  });
 
-  const targetWeight = 60;
-  const currentWeight = weightEntries[weightEntries.length - 1]?.weight || 0;
-  const firstWeight = weightEntries[0]?.weight || currentWeight;
-  const weightChange = currentWeight - firstWeight;
-  const averageWeight = weightEntries.length > 0
-    ? weightEntries.reduce((sum, entry) => sum + entry.weight, 0) / weightEntries.length
-    : 0;
+  const hasEntries = weightEntries.length > 0;
+
+  const [targetWeight, setTargetWeight] = useState<number | null>(
+    typeof targetWeightKg === 'number' && !isNaN(targetWeightKg) ? targetWeightKg : null
+  );
+
+  const currentWeight = weightEntries.length > 0 ? weightEntries[weightEntries.length - 1].weight : null;
+  const targetWeightValue = targetWeight ?? 0;
+  const hasMultipleEntries = weightEntries.length >= 2;
+  const startingWeight = weightEntries.length > 0 ? weightEntries[0].weight : null;
+  const dropFromStart =
+    hasMultipleEntries && startingWeight !== null && currentWeight !== null
+      ? startingWeight - currentWeight
+      : null;
+
+  useEffect(() => {
+    if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
+      setWeightEntries((prevEntries) => {
+        if (prevEntries.length === 0) {
+          return [{ date: new Date(), weight: initialCurrentWeightKg }];
+        }
+
+        const alreadyHasInitial = prevEntries.some(entry =>
+          Math.abs(entry.weight - initialCurrentWeightKg) < 0.01
+        );
+        if (alreadyHasInitial) {
+          return prevEntries;
+        }
+
+        return [
+          ...prevEntries,
+          { date: new Date(), weight: initialCurrentWeightKg },
+        ];
+      });
+    }
+  }, [initialCurrentWeightKg]);
+
+  useEffect(() => {
+    if (typeof targetWeightKg === 'number' && !isNaN(targetWeightKg) && targetWeightKg > 0) {
+      setTargetWeight(targetWeightKg);
+    }
+  }, [targetWeightKg]);
 
   // Filter data based on time range
   const getFilteredData = () => {
@@ -96,6 +129,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack
 
   const filteredData = getFilteredData();
   const graphData = filteredData.length > 0 ? filteredData : weightEntries;
+  const hasGraphData = graphData.length > 0;
 
   // Calculate graph dimensions and points
   const graphWidth = 300;
@@ -104,10 +138,26 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack
   const innerWidth = graphWidth - padding * 2;
   const innerHeight = graphHeight - padding * 2;
 
-  const minWeight = Math.min(...graphData.map(d => d.weight));
-  const maxWeight = Math.max(...graphData.map(d => d.weight));
-  const weightRange = maxWeight - minWeight || 1;
-  const weightPadding = weightRange * 0.1;
+  const minWeight = hasGraphData ? Math.min(...graphData.map(d => d.weight)) : 0;
+  const maxWeight = hasGraphData ? Math.max(...graphData.map(d => d.weight)) : 1;
+  const weightRange = hasGraphData ? Math.max(maxWeight - minWeight, 0) : 0;
+  const weightPadding = hasGraphData ? Math.max(weightRange * 0.1, 1) : 1;
+  const axisMinWeight = hasGraphData ? minWeight - weightPadding : 0;
+  const axisMaxWeight = hasGraphData ? maxWeight + weightPadding : 5;
+  const axisWeightRange = Math.max(axisMaxWeight - axisMinWeight, 1);
+
+  // Compute "nice" Y-axis ticks based on current data
+  const generateYAxisTicks = () => {
+    const desiredTicks = 6;
+    if (desiredTicks <= 1) {
+      return [axisMinWeight];
+    }
+
+    const step = axisWeightRange / (desiredTicks - 1);
+    return Array.from({ length: desiredTicks }, (_, i) => axisMinWeight + step * i);
+  };
+
+  const yAxisTicks = generateYAxisTicks();
 
   const getDateRange = () => {
     if (graphData.length === 0) return '';
@@ -116,21 +166,46 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack
     return `${format(start, 'd MMM yyyy')} - ${format(end, 'd MMM yyyy')}`;
   };
 
-  // Generate path for line chart
-  const generatePath = () => {
+  // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
+  const generateSmoothPath = () => {
     if (graphData.length === 0) return '';
-    
+
     const points = graphData.map((entry, index) => {
       const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
-      const normalizedWeight = (entry.weight - minWeight + weightPadding) / (weightRange + weightPadding * 2);
+      const normalizedWeight = (entry.weight - axisMinWeight) / axisWeightRange;
       const y = padding + innerHeight - (normalizedWeight * innerHeight);
-      return { x, y, weight: entry.weight };
+      return { x, y };
     });
 
-    let path = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 1; i < points.length; i++) {
-      path += ` L ${points[i].x} ${points[i].y}`;
+    if (points.length === 1) {
+      return `M ${points[0].x} ${points[0].y}`;
     }
+
+    if (points.length === 2) {
+      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+    }
+
+    let path = `M ${points[0].x} ${points[0].y}`;
+
+    for (let i = 0; i < points.length - 1; i++) {
+      const current = points[i];
+      const next = points[i + 1];
+      const prev = i > 0 ? points[i - 1] : current;
+      const after = i < points.length - 2 ? points[i + 2] : next;
+
+      const dx1 = next.x - prev.x;
+      const dy1 = next.y - prev.y;
+      const dx2 = after.x - current.x;
+      const dy2 = after.y - current.y;
+
+      const cp1x = current.x + dx1 / 6;
+      const cp1y = current.y + dy1 / 6;
+      const cp2x = next.x - dx2 / 6;
+      const cp2y = next.y - dy2 / 6;
+
+      path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
+    }
+
     return path;
   };
 
@@ -166,156 +241,179 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({ onBack
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {!hasEntries && (
+          <View
+            style={[
+              styles.emptyStateContainer,
+              { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+            ]}
+          >
+            <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
+              Let’s set your goals
+            </Text>
+            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+              Add your targets to start tracking your weight journey.
+            </Text>
+            <TouchableOpacity
+              style={[styles.emptyStateButton, { backgroundColor: '#14B8A6' }]}
+              onPress={() => {
+                if (onRequestSetGoals) {
+                  onRequestSetGoals();
+                } else {
+                  setShowLogModal(true);
+                }
+              }}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.emptyStateButtonText}>
+                {onRequestSetGoals ? 'Set Goals' : 'Log Weight'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {/* Weight Summary */}
         <View style={styles.summaryContainer}>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {averageWeight.toFixed(1)} kg
+              {currentWeight !== null ? `${currentWeight.toFixed(1)} kg` : '--'}
             </Text>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Average</Text>
+          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Current</Text>
           </View>
           <View style={styles.summaryItem}>
-            <View style={styles.changeContainer}>
-              <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {weightChange >= 0 ? '+' : ''}{weightChange.toFixed(1)}kg
-              </Text>
-              {weightChange < 0 && (
-                <Feather name="trending-down" size={16} color="#10B981" style={styles.trendIcon} />
-              )}
-            </View>
+          <View style={styles.changeContainer}>
+            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
+                {dropFromStart !== null ? `${dropFromStart.toFixed(1)} kg` : '--'}
+            </Text>
+              {dropFromStart !== null && dropFromStart > 0.05 && (
+              <Feather name="trending-down" size={16} color="#10B981" style={styles.trendIcon} />
+            )}
+              {dropFromStart !== null && dropFromStart < -0.05 && (
+              <Feather name="trending-up" size={16} color="#F97316" style={styles.trendIcon} />
+            )}
+          </View>
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Drop</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {targetWeight} kg
+            {targetWeightValue > 0 ? `${targetWeightValue.toFixed(1)} kg` : '--'}
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
         </View>
 
-        {/* Graph Section */}
-        <View style={styles.graphContainer}>
-            <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
-              {/* Y-axis labels */}
-              <View style={styles.yAxisContainer}>
-                {[64.0, 63.5, 63.0, 62.5, 62.0, 61.5].map((value, index) => (
-                  <Text
-                    key={index}
-                    style={[
-                      styles.yAxisLabel,
-                      {
-                        color: theme.colors.textTertiary,
-                        top: padding + (index / 5) * innerHeight - 8,
-                      },
-                    ]}
-                  >
-                    {value.toFixed(1)}
-                  </Text>
-                ))}
-              </View>
-
-              {/* Graph */}
-              <View style={styles.graph}>
-                <Svg width={graphWidth} height={graphHeight}>
-                  {/* Grid lines */}
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <Line
-                      key={i}
-                      x1={padding}
-                      y1={padding + (i / 5) * innerHeight}
-                      x2={graphWidth - padding}
-                      y2={padding + (i / 5) * innerHeight}
-                      stroke={theme.colors.border}
-                      strokeWidth={0.5}
-                      strokeDasharray="2,2"
-                    />
-                  ))}
-
-                  {/* Line path */}
-                  <Path
-                    d={generatePath()}
-                    fill="none"
-                    stroke="#14B8A6"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
-
-                  {/* Data points */}
-                  {graphData.map((entry, index) => {
-                    const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
-                    const normalizedWeight = (entry.weight - minWeight + weightPadding) / (weightRange + weightPadding * 2);
-                    const y = padding + innerHeight - (normalizedWeight * innerHeight);
+        {hasGraphData && (
+          <>
+            {/* Graph Section */}
+            <View style={styles.graphContainer}>
+              <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
+                {/* Y-axis labels */}
+                <View style={styles.yAxisContainer}>
+                  {yAxisTicks.map((value, index) => {
+                    const ratio = Math.max(0, Math.min(1, (value - axisMinWeight) / axisWeightRange));
                     return (
-                      <Circle
+                      <Text
                         key={index}
-                        cx={x}
-                        cy={y}
-                        r={4}
-                        fill="#14B8A6"
-                      />
+                        style={[
+                          styles.yAxisLabel,
+                          {
+                            color: theme.colors.textTertiary,
+                            top: padding + innerHeight - (ratio * innerHeight) - 8,
+                          },
+                        ]}
+                      >
+                        {value.toFixed(1)}
+                      </Text>
                     );
                   })}
-                </Svg>
+                </View>
+
+                {/* Graph */}
+                <View style={styles.graph}>
+                  <Svg width={graphWidth} height={graphHeight}>
+                    {/* Grid lines */}
+                    {[0, 1, 2, 3, 4, 5].map((i) => (
+                      <Line
+                        key={i}
+                        x1={padding}
+                        y1={padding + (i / 5) * innerHeight}
+                        x2={graphWidth - padding}
+                        y2={padding + (i / 5) * innerHeight}
+                        stroke={theme.colors.border}
+                        strokeWidth={0.5}
+                        strokeDasharray="2,2"
+                      />
+                    ))}
+
+                    {/* Line path */}
+                    <Path
+                      d={generateSmoothPath()}
+                      fill="none"
+                      stroke="#14B8A6"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    />
+
+                    {/* Data points */}
+                    {graphData.map((entry, index) => {
+                      const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
+                      const normalizedWeight = (entry.weight - axisMinWeight) / axisWeightRange;
+                      const y = padding + innerHeight - (normalizedWeight * innerHeight);
+                      return (
+                        <Circle
+                          key={index}
+                          cx={x}
+                          cy={y}
+                          r={4}
+                          fill="#14B8A6"
+                        />
+                      );
+                    })}
+                  </Svg>
+                </View>
               </View>
 
-              {/* Right Y-axis labels (BMI or secondary metric) */}
-              <View style={styles.yAxisRightContainer}>
-                {[29.5, 29.0, 28.5, 28.0, 27.5, 27.0].map((value, index) => (
-                  <Text
-                    key={index}
+              {/* Time Range Selector */}
+              <View style={styles.timeRangeContainer}>
+                {timeRanges.map((range) => (
+                  <TouchableOpacity
+                    key={range}
                     style={[
-                      styles.yAxisLabel,
-                      {
-                        color: theme.colors.textTertiary,
-                        top: padding + (index / 5) * innerHeight - 8,
-                      },
+                      styles.timeRangeButton,
+                      timeRange === range && { backgroundColor: '#14B8A6' },
                     ]}
+                    onPress={() => setTimeRange(range)}
                   >
-                    {value.toFixed(1)}
-                  </Text>
+                    <Text
+                      style={[
+                        styles.timeRangeText,
+                        {
+                          color: timeRange === range ? Colors.white : theme.colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      {range}
+                    </Text>
+                  </TouchableOpacity>
                 ))}
               </View>
+
+              {/* Date Range */}
+              <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                {getDateRange()}
+              </Text>
             </View>
 
-            {/* Time Range Selector */}
-            <View style={styles.timeRangeContainer}>
-              {timeRanges.map((range) => (
-                <TouchableOpacity
-                  key={range}
-                  style={[
-                    styles.timeRangeButton,
-                    timeRange === range && { backgroundColor: '#14B8A6' },
-                  ]}
-                  onPress={() => setTimeRange(range)}
-                >
-                  <Text
-                    style={[
-                      styles.timeRangeText,
-                      {
-                        color: timeRange === range ? Colors.white : theme.colors.textSecondary,
-                      },
-                    ]}
-                  >
-                    {range}
-                  </Text>
-                </TouchableOpacity>
-              ))}
+            {/* Information Box */}
+            <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+              <Feather name="info" size={20} color="#14B8A6" />
+              <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                Your weight is fluctuating. Consider tracking hydration and sleep patterns.
+              </Text>
             </View>
-
-            {/* Date Range */}
-            <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
-              {getDateRange()}
-            </Text>
-          </View>
-
-        {/* Information Box */}
-        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-          <Feather name="info" size={20} color="#14B8A6" />
-          <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-            Your weight is fluctuating. Consider tracking hydration and sleep patterns.
-          </Text>
-        </View>
+          </>
+        )}
       </ScrollView>
 
       {/* Log Weight Button */}
@@ -532,6 +630,35 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.sm,
     lineHeight: 20,
+  },
+  emptyStateContainer: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 24,
+    marginTop: 24,
+    marginBottom: 16,
+    alignItems: 'center',
+    gap: 12,
+  },
+  emptyStateTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+    textAlign: 'center',
+  },
+  emptyStateText: {
+    fontSize: Typography.fontSize.sm,
+    textAlign: 'center',
+    lineHeight: 20,
+  },
+  emptyStateButton: {
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+  },
+  emptyStateButtonText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
   },
   buttonContainer: {
     paddingHorizontal: 16,

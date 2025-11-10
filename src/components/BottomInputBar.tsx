@@ -45,6 +45,9 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = React.useRef(new Animated.Value(0)).current;
+  const [inputHeight, setInputHeight] = React.useState(0);
+  const calculatedInputHeight = Math.min(120, Math.max(28, inputHeight));
+  const [isFocused, setIsFocused] = React.useState(false);
   
   // Use transcribed text or manual text input
   const currentText = transcribedText || text;
@@ -125,14 +128,22 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </TouchableOpacity>
 
           <TextInput
-            style={[styles.textInput, { color: theme.colors.textPrimary }, (isLoading || isRecording || isTranscribing) && styles.textInputDisabled]}
-            placeholder={placeholder}
+            style={[styles.textInput, { color: theme.colors.textPrimary, height: calculatedInputHeight, textAlign: (!isFocused && !hasText) ? 'center' : 'left', textAlignVertical: (!isFocused && !hasText) ? 'center' : 'top' }, (isLoading || isRecording || isTranscribing) && styles.textInputDisabled]}
+            placeholder={(!isFocused && !hasText) ? placeholder : ''}
             placeholderTextColor={theme.colors.textTertiary}
             value={currentText}
             onChangeText={handleTextChange}
             onSubmitEditing={handleSubmit}
-            returnKeyType="send"
-            multiline={false}
+            returnKeyType="default"
+            multiline={true}
+            onFocus={() => setIsFocused(true)}
+            onBlur={() => setIsFocused(false)}
+            onContentSizeChange={(e) => {
+              const newHeight = e.nativeEvent.contentSize.height;
+              if (newHeight !== inputHeight) {
+                setInputHeight(newHeight);
+              }
+            }}
             maxLength={200}
             editable={!isLoading && !isRecording && !isTranscribing}
           />
@@ -179,8 +190,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.cardBackground,
     borderRadius: 30,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    minHeight: 64,
+    paddingVertical: 6,
+    minHeight: 56,
     borderWidth: 1,
     borderColor: Colors.lightBorder,
     shadowColor: Colors.shadow,

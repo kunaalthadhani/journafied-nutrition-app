@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
@@ -22,6 +22,7 @@ export interface Meal {
 interface FoodLogSectionProps {
   meals: Meal[];
   onRemoveFood: (foodId: string) => void;
+  onEditMealPrompt?: (mealId: string, newPrompt: string) => Promise<void> | void;
   dailyCalories?: number;
   savedGoals?: {
     calories: number;
@@ -34,11 +35,14 @@ interface FoodLogSectionProps {
   };
 }
 
-export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveFood, dailyCalories = 1500, savedGoals }) => {
+export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveFood, onEditMealPrompt, dailyCalories = 1500, savedGoals }) => {
   const theme = useTheme();
   const [animatedMeals, setAnimatedMeals] = useState<Set<string>>(new Set());
   const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
   const [viewedFoods, setViewedFoods] = useState<Set<string>>(new Set());
+  const [editingMealId, setEditingMealId] = useState<string | null>(null);
+  const [editedPrompt, setEditedPrompt] = useState('');
+  const [isMealUpdating, setIsMealUpdating] = useState(false);
 
   // Check if food is not the best fit
   const isNotBestFit = (food: ParsedFood): boolean => {
@@ -139,6 +143,34 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
     setSelectedFood(null);
   };
 
+  const handleStartEditPrompt = (meal: Meal) => {
+    setEditingMealId(meal.id);
+    setEditedPrompt(meal.prompt);
+  };
+
+  const handleSavePrompt = async () => {
+    if (!editingMealId || !onEditMealPrompt || isMealUpdating) return;
+    const trimmed = editedPrompt.trim();
+    if (!trimmed.length) {
+      setEditingMealId(null);
+      setEditedPrompt('');
+      return;
+    }
+    try {
+      setIsMealUpdating(true);
+      await Promise.resolve(onEditMealPrompt(editingMealId, trimmed));
+    } finally {
+      setIsMealUpdating(false);
+    }
+    setEditingMealId(null);
+    setEditedPrompt('');
+  };
+
+  const handleCancelEditPrompt = () => {
+    setEditingMealId(null);
+    setEditedPrompt('');
+  };
+
   // Track which meals have completed their animation
   React.useEffect(() => {
     if (meals.length === 0) return;
@@ -172,12 +204,63 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
             <Terminal key={meal.id} style={styles.terminal}>
               {/* Prompt with typing animation - only show if not an image */}
               {!meal.imageUri && (
-                <TypingAnimation 
-                  speed={20}
-                  style={{ color: theme.colors.textSecondary, marginBottom: 8, fontSize: 12 }}
-                >
-                  {`> ${meal.prompt}`}
-                </TypingAnimation>
+                <View style={styles.promptRow}>
+                  {editingMealId === meal.id ? (
+                    <>
+                      <TextInput
+                        value={editedPrompt}
+                        onChangeText={setEditedPrompt}
+                        style={[
+                          styles.promptInput,
+                          {
+                            color: theme.colors.textPrimary,
+                            borderColor: theme.colors.border,
+                            backgroundColor: theme.colors.input,
+                          },
+                        ]}
+                        autoFocus
+                        returnKeyType="send"
+                        blurOnSubmit
+                        enablesReturnKeyAutomatically
+                        onSubmitEditing={handleSavePrompt}
+                        placeholder="Edit prompt"
+                        placeholderTextColor={theme.colors.textTertiary}
+                      />
+                      <TouchableOpacity
+                        onPress={handleCancelEditPrompt}
+                        style={styles.promptActionButton}
+                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                      >
+                        <Feather name="x" size={14} color={theme.colors.textSecondary} />
+                      </TouchableOpacity>
+                    </>
+                  ) : (
+                    <>
+                      <View style={styles.promptTextWrapper}>
+                        <TypingAnimation 
+                          speed={20}
+                          style={[styles.promptText, { color: theme.colors.textSecondary }]}
+                        >
+                          {`> ${meal.prompt}`}
+                        </TypingAnimation>
+                        {onEditMealPrompt && (
+                          <TouchableOpacity
+                            style={styles.editIconButton}
+                            onPress={() => handleStartEditPrompt(meal)}
+                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                          >
+                            <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                      {isMealUpdating && editingMealId === meal.id && (
+                        <Text style={[styles.updatingText, { color: theme.colors.textTertiary }]}>
+                          updating…
+                        </Text>
+                      )}
+                    </>
+                  )}
+                </View>
               )}
               
               {/* Food Items with animated spans */}
@@ -339,6 +422,42 @@ const styles = StyleSheet.create({
   container: {
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.sm,
+  },
+  promptRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  promptTextWrapper: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+  },
+  promptText: {
+    flex: 1,
+    fontSize: 12,
+  },
+  editIconButton: {
+    padding: 4,
+    marginLeft: 8,
+  },
+  promptInput: {
+    flex: 1,
+    fontSize: 12,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    minHeight: 36,
+  },
+  promptActionButton: {
+    padding: 4,
+    marginLeft: 6,
+  },
+  updatingText: {
+    marginTop: 4,
+    fontSize: 11,
+    fontStyle: 'italic',
   },
   terminal: {
     marginBottom: Spacing.md,

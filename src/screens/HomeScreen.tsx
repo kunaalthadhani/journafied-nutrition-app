@@ -5,7 +5,11 @@ import {
   StyleSheet,
   ScrollView,
   InteractionManager,
+  ActivityIndicator,
+  Animated,
+  Easing,
 } from 'react-native';
+import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { format } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
@@ -45,6 +49,8 @@ export const HomeScreen: React.FC = () => {
     proteinGrams: 113, // (1500 * 30%) / 4 cal/g = 112.5 ≈ 113
     carbsGrams: 169,   // (1500 * 45%) / 4 cal/g = 168.75 ≈ 169
     fatGrams: 42,      // (1500 * 25%) / 9 cal/g = 41.67 ≈ 42
+    currentWeightKg: null as number | null,
+    targetWeightKg: null as number | null,
   });
   // Store meals by date (YYYY-MM-DD format)
   const [mealsByDate, setMealsByDate] = useState<Record<string, Meal[]>>({});
@@ -62,6 +68,9 @@ export const HomeScreen: React.FC = () => {
   const uploadIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
+  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
+  const [showAnalyzingOverlay, setShowAnalyzingOverlay] = useState(false);
+  const [goalsSet, setGoalsSet] = useState(false);
   
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -100,6 +109,11 @@ export const HomeScreen: React.FC = () => {
     setShowSetGoals(false);
   };
 
+  const handleOpenSetGoalsFromWeightTracker = () => {
+    setShowWeightTracker(false);
+    setShowSetGoals(true);
+  };
+
   const handleWeightTracker = () => {
     setShowWeightTracker(true);
   };
@@ -120,6 +134,7 @@ export const HomeScreen: React.FC = () => {
     console.log('Goals saved:', goals);
     setDailyCalories(goals.calories);
     setSavedGoals(goals);
+    setGoalsSet(true);
     // TODO: Update app state with new goals
   };
 
@@ -185,6 +200,40 @@ export const HomeScreen: React.FC = () => {
         [currentDateKey]: updatedMeals
       };
     });
+  };
+
+  const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
+    try {
+      setIsAnalyzingFood(true);
+      const parsedFoods = await analyzeFoodWithChatGPT(newPrompt);
+      setMealsByDate(prev => {
+        const currentMeals = prev[currentDateKey] || [];
+        const updatedMeals = currentMeals.map(meal =>
+          meal.id === mealId
+            ? { ...meal, prompt: newPrompt, foods: parsedFoods }
+            : meal
+        );
+        return {
+          ...prev,
+          [currentDateKey]: updatedMeals,
+        };
+      });
+    } catch (error) {
+      console.error('Error re-analyzing edited prompt:', error);
+      // Fallback: still update the prompt even if analysis failed
+      setMealsByDate(prev => {
+        const currentMeals = prev[currentDateKey] || [];
+        const updatedMeals = currentMeals.map(meal =>
+          meal.id === mealId ? { ...meal, prompt: newPrompt } : meal
+        );
+        return {
+          ...prev,
+          [currentDateKey]: updatedMeals,
+        };
+      });
+    } finally {
+      setIsAnalyzingFood(false);
+    }
   };
 
   const handlePlusPress = () => {
@@ -591,6 +640,31 @@ export const HomeScreen: React.FC = () => {
     };
   }, []);
 
+  React.useEffect(() => {
+    if (isAnalyzingFood) {
+      setShowAnalyzingOverlay(true);
+      Animated.timing(overlayOpacity, {
+        toValue: 1,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start();
+    } else {
+      Animated.timing(overlayOpacity, {
+        toValue: 0,
+        duration: 220,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }).start(({ finished }) => {
+        if (finished) {
+          setShowAnalyzingOverlay(false);
+        }
+      });
+    }
+  }, [isAnalyzingFood, overlayOpacity]);
+
+  // Removed floating blob animation
+
   const formattedDate = format(selectedDate, 'MMMM d, yyyy');
 
   if (showSetGoals) {
@@ -607,6 +681,9 @@ export const HomeScreen: React.FC = () => {
     return (
       <WeightTrackerScreen 
         onBack={handleWeightTrackerBack}
+        initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
+        targetWeightKg={savedGoals.targetWeightKg ?? undefined}
+        onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
       />
     );
   }
@@ -615,6 +692,10 @@ export const HomeScreen: React.FC = () => {
     return (
       <NutritionAnalysisScreen 
         onBack={handleNutritionAnalysisBack}
+        targetCalories={goalsSet ? savedGoals.calories : undefined}
+        targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
+        targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
+        targetFat={goalsSet ? savedGoals.fatGrams : undefined}
       />
     );
   }
@@ -631,31 +712,32 @@ export const HomeScreen: React.FC = () => {
           onNutritionAnalysisPress={handleNutritionAnalysis}
         />
 
-        {/* Scrollable Content (vertical only). Only DateSelector has horizontal scroll. */}
+        {/* Date Selector (horizontal scroll/pan within the bar only) */}
+        <DateSelector
+          selectedDate={selectedDate}
+          onDateSelect={handleDateSelect}
+        />
+
+        {/* Stat Cards */}
+        <StatCardsSection
+          macrosData={macrosData}
+          macros2Data={macros2Data}
+          dailyCalories={dailyCalories}
+          onScrollEnable={setScrollEnabled}
+        />
+
+        {/* Scrollable Content for logs */}
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
-          scrollEnabled={false}
+          scrollEnabled={scrollEnabled}
         >
-          {/* Date Selector (horizontal scroll/pan within the bar only) */}
-          <DateSelector
-            selectedDate={selectedDate}
-            onDateSelect={handleDateSelect}
-          />
-
-          {/* Stat Cards */}
-          <StatCardsSection
-            macrosData={macrosData}
-            macros2Data={macros2Data}
-            dailyCalories={dailyCalories}
-            onScrollEnable={setScrollEnabled}
-          />
-
           {/* Food Log Section */}
           <FoodLogSection 
             meals={currentDayMeals}
             onRemoveFood={handleRemoveFood}
+            onEditMealPrompt={handleEditMealPrompt}
             dailyCalories={dailyCalories}
             savedGoals={savedGoals}
           />
@@ -735,6 +817,21 @@ export const HomeScreen: React.FC = () => {
           }}
           onRetry={handleRetryUpload}
         />
+
+        {showAnalyzingOverlay && (
+          <Animated.View
+            style={[styles.analyzingOverlay, { opacity: overlayOpacity }]}
+            pointerEvents={isAnalyzingFood ? 'auto' : 'none'}
+          >
+            <BlurView intensity={8} tint="light" style={StyleSheet.absoluteFill} />
+            <View style={styles.analyzingInline}>
+              <ActivityIndicator size="small" color="#14B8A6" />
+              <Text style={[styles.analyzingText, { color: Colors.white }]}>
+                Analyzing your food...
+              </Text>
+            </View>
+          </Animated.View>
+        )}
       </View>
     </SafeAreaView>
   );
@@ -779,5 +876,29 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 120, // Space for bottom input bar + safe area
+  },
+  analyzingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  analyzingInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    backgroundColor: 'rgba(15, 23, 42, 0.55)',
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(20, 184, 166, 0.2)',
+  },
+  analyzingText: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.medium,
   },
 });

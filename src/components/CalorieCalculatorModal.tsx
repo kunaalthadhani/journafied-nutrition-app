@@ -17,10 +17,16 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 
+export interface CalorieCalculationResult {
+  calories: number;
+  currentWeightKg?: number;
+  targetWeightKg?: number;
+}
+
 interface CalorieCalculatorModalProps {
   visible: boolean;
   onClose: () => void;
-  onCalculated: (calories: number) => void;
+  onCalculated: (result: CalorieCalculationResult) => void;
 }
 
 type Goal = 'lose' | 'maintain' | 'gain';
@@ -69,6 +75,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   // Helper functions for calculations
   const convertWeightToKg = (weight: string, unit: WeightUnit): number => {
     const weightNum = parseFloat(weight);
+    if (isNaN(weightNum)) return 0;
     return unit === 'lbs' ? weightNum * 0.453592 : weightNum;
   };
 
@@ -218,7 +225,14 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
 
   const handleSaveCalories = () => {
     if (calculatedCalories) {
-      onCalculated(calculatedCalories);
+      const currentWeightKgValue = weight ? convertWeightToKg(weight, weightUnit) : 0;
+      const targetWeightKgValue = targetWeight ? convertWeightToKg(targetWeight, targetWeightUnit) : 0;
+
+      onCalculated({
+        calories: calculatedCalories,
+        currentWeightKg: currentWeightKgValue || undefined,
+        targetWeightKg: targetWeightKgValue || undefined,
+      });
     }
     handleClose();
   };

@@ -16,6 +16,10 @@ import Svg, { Path, Circle, Line } from 'react-native-svg';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
+  targetCalories?: number;
+  targetProtein?: number;
+  targetCarbs?: number;
+  targetFat?: number;
 }
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
@@ -28,7 +32,13 @@ interface DailyNutrition {
   carbs: number;
 }
 
-export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = ({ onBack }) => {
+export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = ({
+  onBack,
+  targetCalories: targetCaloriesProp,
+  targetProtein: targetProteinProp,
+  targetCarbs: targetCarbsProp,
+  targetFat: targetFatProp,
+}) => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
@@ -79,9 +89,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const graphData = filteredData.length > 0 ? filteredData : nutritionData;
 
   // Target values (in grams) - in a real app, these would come from saved goals
-  const targetProtein = 113; // ~30% of 1500 cal / 4 cal per gram
-  const targetCarbs = 169;   // ~45% of 1500 cal / 4 cal per gram
-  const targetFat = 42;    // ~25% of 1500 cal / 9 cal per gram
+  const targetProtein = targetProteinProp && targetProteinProp > 0 ? targetProteinProp : undefined;
+  const targetCarbs = targetCarbsProp && targetCarbsProp > 0 ? targetCarbsProp : undefined;
+  const targetFat = targetFatProp && targetFatProp > 0 ? targetFatProp : undefined;
 
   // Calculate averages
   const averageProtein = graphData.length > 0
@@ -100,7 +110,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       return sum + calories;
     }, 0) / graphData.length
   );
-  const targetCalories = 1500;
+  const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
+  const hasTargetCalories = targetCalories !== undefined;
 
   // Calculate graph dimensions
   const graphWidth = 300;
@@ -110,9 +121,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const innerHeight = graphHeight - padding * 2;
 
   // Find max value across all macronutrients for Y-axis scaling
-  const maxProtein = Math.max(...graphData.map(d => d.protein), targetProtein);
-  const maxCarbs = Math.max(...graphData.map(d => d.carbs), targetCarbs);
-  const maxFat = Math.max(...graphData.map(d => d.fat), targetFat);
+  const maxProtein = Math.max(...graphData.map(d => d.protein), targetProtein ?? 0);
+  const maxCarbs = Math.max(...graphData.map(d => d.carbs), targetCarbs ?? 0);
+  const maxFat = Math.max(...graphData.map(d => d.fat), targetFat ?? 0);
   const maxValue = Math.ceil(Math.max(maxProtein, maxCarbs, maxFat) / 25) * 25; // Round up to nearest 25
 
   const getDateRange = () => {
@@ -238,7 +249,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <Feather name="arrow-left" size={24} color="#14B8A6" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Insights & Analytics
+          Nutrition Analysis
         </Text>
         <View style={styles.headerRight} />
       </View>
@@ -255,7 +266,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {targetCalories} Kcal
+              {hasTargetCalories ? `${targetCalories} Kcal` : '--'}
             </Text>
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
@@ -348,10 +359,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   ))}
 
                   {/* Target line */}
-                  {(() => {
+                  {hasTargetCalories && (() => {
                     const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
                     const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-                    const targetY = padding + innerHeight - ((targetCalories - minCal) / (maxCal - minCal)) * innerHeight;
+                    const targetY = padding + innerHeight - ((targetCalories! - minCal) / (maxCal - minCal)) * innerHeight;
                     return (
                       <Line
                         x1={padding}
@@ -497,44 +508,49 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   ))}
 
                   {/* Target lines */}
-                  {(() => {
+                  {targetProtein !== undefined && (() => {
                     const targetProteinY = padding + innerHeight - (targetProtein / maxValue) * innerHeight;
-                    const targetCarbsY = padding + innerHeight - (targetCarbs / maxValue) * innerHeight;
-                    const targetFatY = padding + innerHeight - (targetFat / maxValue) * innerHeight;
-                    
                     return (
-                      <>
-                        <Line
-                          x1={padding}
-                          y1={targetProteinY}
-                          x2={graphWidth - padding}
-                          y2={targetProteinY}
-                          stroke="#14B8A6"
-                          strokeWidth={1}
-                          strokeDasharray="4,4"
-                          opacity={0.5}
-                        />
-                        <Line
-                          x1={padding}
-                          y1={targetCarbsY}
-                          x2={graphWidth - padding}
-                          y2={targetCarbsY}
-                          stroke="#FF7E67"
-                          strokeWidth={1}
-                          strokeDasharray="4,4"
-                          opacity={0.5}
-                        />
-                        <Line
-                          x1={padding}
-                          y1={targetFatY}
-                          x2={graphWidth - padding}
-                          y2={targetFatY}
-                          stroke="#40514E"
-                          strokeWidth={1}
-                          strokeDasharray="4,4"
-                          opacity={0.5}
-                        />
-                      </>
+                      <Line
+                        x1={padding}
+                        y1={targetProteinY}
+                        x2={graphWidth - padding}
+                        y2={targetProteinY}
+                        stroke="#14B8A6"
+                        strokeWidth={1}
+                        strokeDasharray="4,4"
+                        opacity={0.5}
+                      />
+                    );
+                  })()}
+                  {targetCarbs !== undefined && (() => {
+                    const targetCarbsY = padding + innerHeight - (targetCarbs / maxValue) * innerHeight;
+                    return (
+                      <Line
+                        x1={padding}
+                        y1={targetCarbsY}
+                        x2={graphWidth - padding}
+                        y2={targetCarbsY}
+                        stroke="#FF7E67"
+                        strokeWidth={1}
+                        strokeDasharray="4,4"
+                        opacity={0.5}
+                      />
+                    );
+                  })()}
+                  {targetFat !== undefined && (() => {
+                    const targetFatY = padding + innerHeight - (targetFat / maxValue) * innerHeight;
+                    return (
+                      <Line
+                        x1={padding}
+                        y1={targetFatY}
+                        x2={graphWidth - padding}
+                        y2={targetFatY}
+                        stroke="#40514E"
+                        strokeWidth={1}
+                        strokeDasharray="4,4"
+                        opacity={0.5}
+                      />
                     );
                   })()}
 

@@ -12,7 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { CalorieCalculatorModal } from '../components/CalorieCalculatorModal';
+import { CalorieCalculatorModal, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
 
 interface SetGoalsScreenProps {
   onBack: () => void;
@@ -28,6 +28,8 @@ interface GoalData {
   proteinGrams: number;
   carbsGrams: number;
   fatGrams: number;
+  currentWeightKg: number | null;
+  targetWeightKg: number | null;
 }
 
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
@@ -41,6 +43,8 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [carbsPercentage, setCarbsPercentage] = useState(initialGoals?.carbsPercentage || 45);
   const [fatPercentage, setFatPercentage] = useState(initialGoals?.fatPercentage || 25);
   const [showCalculator, setShowCalculator] = useState(false);
+  const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(initialGoals?.currentWeightKg ?? null);
+  const [targetWeightKg, setTargetWeightKg] = useState<number | null>(initialGoals?.targetWeightKg ?? null);
 
   // Calculate grams based on calories per gram
   const calculateMacros = () => {
@@ -58,8 +62,14 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const { proteinGrams, carbsGrams, fatGrams } = calculateMacros();
   const totalPercentage = proteinPercentage + carbsPercentage + fatPercentage;
 
-  const handleCalculatedCalories = (calculatedCalories: number) => {
-    setCalories(calculatedCalories);
+  const handleCalculatedCalories = (result: CalorieCalculationResult) => {
+    setCalories(result.calories);
+    if (typeof result.currentWeightKg === 'number' && !isNaN(result.currentWeightKg)) {
+      setCurrentWeightKg(result.currentWeightKg);
+    }
+    if (typeof result.targetWeightKg === 'number' && !isNaN(result.targetWeightKg)) {
+      setTargetWeightKg(result.targetWeightKg);
+    }
     setShowCalculator(false);
   };
 
@@ -96,6 +106,8 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       proteinGrams,
       carbsGrams,
       fatGrams,
+      currentWeightKg,
+      targetWeightKg,
     };
     onSave(goalData);
     onBack();
@@ -138,7 +150,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
               )}
             </View>
             <Feather 
-              name="calculator" 
+              name="grid" 
               size={18} 
               color="#14B8A6" 
               style={styles.calculatorIcon}
