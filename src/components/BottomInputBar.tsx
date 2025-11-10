@@ -15,6 +15,7 @@ import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { Spacing } from '../constants/spacing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { BarVisualizer } from './BarVisualizer';
 
 interface BottomInputBarProps {
   onSubmit?: (text: string) => void;
@@ -130,6 +131,16 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
       ]}
     >
       <View style={styles.container}>
+        {isRecording && (
+          <View style={[styles.visualizerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <BarVisualizer
+              state="listening"
+              barCount={20}
+              minHeight={15}
+              maxHeight={60}
+            />
+          </View>
+        )}
         <View style={[styles.inputContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
           <TouchableOpacity 
             onPress={onPlusPress}
@@ -163,22 +174,41 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           />
 
           <View style={styles.rightControls}>
-            <TouchableOpacity 
-              style={[
-                styles.circleButton,
-                { backgroundColor: hasText ? '#14B8A6' : theme.colors.input },
-                (isRecording || isTranscribing) && { backgroundColor: theme.colors.error }
-              ]}
-              onPress={hasText ? handleSubmit : onMicPress}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-              disabled={isLoading || (isRecording && !hasText) || (isTranscribing && !hasText)}
-            >
+            {isRecording ? (
+              // Stop recording button
+              <TouchableOpacity 
+                style={[
+                  styles.circleButton,
+                  { backgroundColor: theme.colors.error }
+                ]}
+                onPress={onMicPress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={isLoading || isTranscribing}
+              >
               <Feather 
-                name={isTranscribing ? "loader" : hasText ? "send" : "mic"} 
+                name="stop-circle" 
                 size={18} 
-                color={(isRecording || isTranscribing) ? Colors.white : hasText ? Colors.white : "#14B8A6"} 
+                color={Colors.white} 
               />
-            </TouchableOpacity>
+              </TouchableOpacity>
+            ) : (
+              // Send or mic button
+              <TouchableOpacity 
+                style={[
+                  styles.circleButton,
+                  { backgroundColor: hasText ? '#14B8A6' : theme.colors.input }
+                ]}
+                onPress={hasText ? handleSubmit : onMicPress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={isLoading || isTranscribing}
+              >
+                <Feather 
+                  name={isTranscribing ? "loader" : hasText ? "send" : "mic"} 
+                  size={18} 
+                  color={hasText ? Colors.white : "#14B8A6"} 
+                />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
       </View>
@@ -252,6 +282,13 @@ const styles = StyleSheet.create({
   },
   micButton: {
     padding: Spacing.xs,
+  },
+  visualizerContainer: {
+    borderRadius: 12,
+    borderWidth: 1,
+    padding: 12,
+    marginBottom: 8,
+    overflow: 'hidden',
   },
   sendBubble: {
     width: 40,

@@ -260,9 +260,11 @@ export const HomeScreen: React.FC = () => {
           console.log('Transcription received:', transcription);
         } else {
           console.log('No transcription received');
+          alert('No transcription received. Please try again.');
         }
       } catch (error) {
         console.error('Error stopping recording:', error);
+        alert('Failed to transcribe audio. Please try typing instead.');
       } finally {
         setIsTranscribing(false);
       }
@@ -275,11 +277,16 @@ export const HomeScreen: React.FC = () => {
           console.log('Recording started successfully');
         } else {
           console.log('Failed to start recording');
-          // TODO: Show error message to user
+          alert('Failed to start recording. Please check microphone permissions.');
         }
       } catch (error) {
         console.error('Error starting recording:', error);
-        // TODO: Show error message to user
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+        if (errorMessage.includes('permission')) {
+          alert('Microphone permission is required. Please enable it in your device settings.');
+        } else {
+          alert('Failed to start recording. Please try again.');
+        }
       }
     }
   };
