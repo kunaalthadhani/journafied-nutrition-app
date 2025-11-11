@@ -267,7 +267,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
-              <MenuItem icon="log-in" label="Log in" onPress={handleLogin} isBottom />
+              <MenuItem icon="user" label="Account" onPress={handleLogin} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="settings" label="Settings" onPress={handleSettings} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />

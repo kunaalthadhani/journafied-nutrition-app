@@ -21,6 +21,9 @@ import { SetGoalsScreen } from './SetGoalsScreen';
 import { WeightTrackerScreen } from './WeightTrackerScreen';
 import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
 import { SettingsScreen } from './SettingsScreen';
+import { SubscriptionScreen } from './SubscriptionScreen';
+import { AccountScreen } from './AccountScreen';
+import { AboutScreen } from './AboutScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -42,6 +45,10 @@ export const HomeScreen: React.FC = () => {
   const [showWeightTracker, setShowWeightTracker] = useState(false);
   const [showNutritionAnalysis, setShowNutritionAnalysis] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showSubscription, setShowSubscription] = useState(false);
+  const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free');
+  const [showAccount, setShowAccount] = useState(false);
+  const [showAbout, setShowAbout] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState({
     calories: 1500,
@@ -143,8 +150,37 @@ export const HomeScreen: React.FC = () => {
     setShowSettings(false);
   };
 
+  const handleOpenSubscription = () => {
+    setShowSettings(false);
+    setShowSubscription(true);
+  };
+  const handleSubscriptionBack = () => {
+    setShowSubscription(false);
+  };
+  const handleSubscribe = (plan: 'annual' | 'monthly') => {
+    setUserPlan('premium');
+    setShowSubscription(false);
+    setShowSettings(true);
+  };
+
   const handleWeightTrackerBack = () => {
     setShowWeightTracker(false);
+  };
+
+  const handleAccount = () => {
+    setMenuVisible(false);
+    setShowAccount(true);
+  };
+  const handleAccountBack = () => {
+    setShowAccount(false);
+  };
+
+  const handleAbout = () => {
+    setShowAbout(true);
+  };
+
+  const handleAboutBack = () => {
+    setShowAbout(false);
   };
 
   const handleGoalsSave = (goals: any) => {
@@ -728,9 +764,25 @@ export const HomeScreen: React.FC = () => {
 
   if (showSettings) {
     return (
-      <SettingsScreen 
-        onBack={handleSettingsBack}
-      />
+      <SettingsScreen onBack={handleSettingsBack} plan={userPlan} onOpenSubscription={handleOpenSubscription} />
+    );
+  }
+
+  if (showSubscription) {
+    return (
+      <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+    );
+  }
+
+  if (showAccount) {
+    return (
+      <AccountScreen onBack={handleAccountBack} />
+    );
+  }
+
+  if (showAbout) {
+    return (
+      <AboutScreen onBack={handleAboutBack} />
     );
   }
 
@@ -821,15 +873,9 @@ export const HomeScreen: React.FC = () => {
           onSetGoals={handleSetGoals}
           onWeightTracker={handleWeightTracker}
           onNutritionAnalysis={handleNutritionAnalysis}
-          onLogin={() => {
-            // TODO: Implement login
-            console.log('Login pressed');
-          }}
           onSettings={handleSettings}
-          onAbout={() => {
-            // TODO: Implement about
-            console.log('About pressed');
-          }}
+          onLogin={handleAccount}
+          onAbout={handleAbout}
         />
         
         <PhotoOptionsModal

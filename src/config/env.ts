@@ -14,6 +14,14 @@ export const config = {
     model: 'gpt-4', // or 'gpt-3.5-turbo' for lower cost
     temperature: 0.3,
     max_tokens: 1000,
+  },
+
+  // OAuth client IDs (fill these from your Google Cloud Console)
+  GOOGLE_OAUTH: {
+    expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID || '',
+    iosClientId: process.env.EXPO_PUBLIC_GOOGLE_IOS_CLIENT_ID || '',
+    androidClientId: process.env.EXPO_PUBLIC_GOOGLE_ANDROID_CLIENT_ID || '',
+    webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID || '',
   }
 };
 

@@ -19,6 +19,8 @@ import { usePreferences } from '../contexts/PreferencesContext';
 
 interface SettingsScreenProps {
   onBack: () => void;
+  plan?: 'free' | 'premium';
+  onOpenSubscription?: () => void;
 }
 
 interface SettingItemProps {
@@ -102,7 +104,7 @@ interface MealReminder {
   minute: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -244,6 +246,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
     }
   };
 
+  const handleUpgradeToPremium = () => {
+    if (plan === 'premium') {
+      Alert.alert('Premium', 'You are already on Premium.');
+      return;
+    }
+    onOpenSubscription?.();
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
       {/* Header */}
@@ -258,6 +268,34 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        {/* Subscriptions Section */}
+        <SettingSection title="Subscriptions">
+          <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }] }>
+            <View style={styles.subscriptionHeader}>
+              <View style={styles.subscriptionTitleRow}>
+                <Feather name="star" size={18} color="#14B8A6" />
+                <Text style={[styles.subscriptionTitle, { color: theme.colors.textPrimary }]}>Current Plan</Text>
+              </View>
+              <View style={[styles.planBadge, { backgroundColor: plan === 'premium' ? '#14B8A6' : theme.colors.input, borderColor: theme.colors.border }] }>
+                <Text style={[styles.planBadgeText, { color: plan === 'premium' ? Colors.white : theme.colors.textSecondary }]}>
+                  {plan === 'premium' ? 'Premium' : 'Free'}
+                </Text>
+              </View>
+            </View>
+            <Text style={[styles.subscriptionSubtitle, { color: theme.colors.textSecondary }] }>
+              {plan === 'premium' ? 'Enjoy all premium features.' : 'You are on the Free plan. Upgrade to unlock premium features.'}
+            </Text>
+            <TouchableOpacity
+              style={[styles.upgradeButton, { backgroundColor: '#14B8A6' }]}
+              onPress={handleUpgradeToPremium}
+              activeOpacity={0.85}
+            >
+              <Text style={styles.upgradeButtonText}>
+                {plan === 'premium' ? 'Manage Subscription' : 'Upgrade to Premium'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </SettingSection>
         {/* Preferences Section */}
         <SettingSection title="Preferences">
           <SettingItem
@@ -332,47 +370,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack }) => {
           />
         </SettingSection>
 
-        {/* Data Management Section */}
-        <SettingSection title="Data Management">
-          <SettingItem
-            icon="download"
-            title="Export Data"
-            subtitle="Download your data as JSON"
-            onPress={handleExportData}
-          />
-          <SettingItem
-            icon="trash-2"
-            title="Clear Cache"
-            subtitle="Free up storage space"
-            onPress={handleClearCache}
-          />
-          <SettingItem
-            icon="alert-triangle"
-            title="Delete All Data"
-            subtitle="Permanently remove all your data"
-            onPress={handleDeleteData}
-          />
-        </SettingSection>
-
-        {/* About Section */}
-        <SettingSection title="About">
-          <SettingItem
-            icon="info"
-            title="About Journafied"
-            subtitle="Version 1.0.0"
-            onPress={handleAbout}
-          />
-          <SettingItem
-            icon="shield"
-            title="Privacy Policy"
-            onPress={handlePrivacyPolicy}
-          />
-          <SettingItem
-            icon="file-text"
-            title="Terms of Service"
-            onPress={handleTermsOfService}
-          />
-        </SettingSection>
+        
 
         {/* Support Section */}
         <SettingSection title="Support">
@@ -603,6 +601,54 @@ const styles = StyleSheet.create({
   unitOptionText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.medium,
+  },
+  subscriptionCard: {
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 16,
+  },
+  subscriptionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  subscriptionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  subscriptionTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  subscriptionSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    marginBottom: 12,
+  },
+  planBadge: {
+    paddingVertical: 4,
+    paddingHorizontal: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  planBadgeText: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.semiBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  upgradeButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 10,
+    marginTop: 4,
+  },
+  upgradeButtonText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
   },
 });
 

@@ -333,7 +333,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           },
                         ]}
                       >
-                        {convertWeightToDisplay(value).toFixed(1)} {getWeightUnitLabel()}
+                        {convertWeightToDisplay(value).toFixed(1)}
                       </Text>
                     );
                   })}
