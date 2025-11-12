@@ -14,6 +14,7 @@ import { useTheme } from '../constants/theme';
 import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
+import { analyticsService } from '../services/analyticsService';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
@@ -285,6 +286,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     return path;
   };
 
+  const handleTimeRangeChange = (range: TimeRange) => {
+    analyticsService.trackTimeRangeFilterChange();
+    setTimeRange(range);
+  };
+
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
 
   return (
@@ -495,7 +501,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     styles.timeRangeButton,
                     timeRange === range && { backgroundColor: '#14B8A6' },
                   ]}
-                  onPress={() => setTimeRange(range)}
+                  onPress={() => handleTimeRangeChange(range)}
                 >
                   <Text
                     style={[
@@ -691,7 +697,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     styles.timeRangeButton,
                     timeRange === range && { backgroundColor: '#14B8A6' },
                   ]}
-                  onPress={() => setTimeRange(range)}
+                  onPress={() => handleTimeRangeChange(range)}
                 >
                   <Text
                     style={[

@@ -5,6 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
+import { dataStorage } from '../services/dataStorage';
 
 interface AccountScreenProps {
   onBack: () => void;
@@ -16,11 +17,17 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
 
-  const handleSignUp = () => {
+  const handleSignUp = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Missing info', 'Please fill in name, email, and password.');
       return;
     }
+    // Save account info (in production, password should be hashed)
+    await dataStorage.saveAccountInfo({
+      name: name.trim(),
+      email: email.trim(),
+      passwordHash: password.trim(), // In production, hash this properly
+    });
     Alert.alert('Registered', 'Your account has been created (demo).');
   };
 

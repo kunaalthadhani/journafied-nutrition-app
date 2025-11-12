@@ -22,6 +22,13 @@ export interface CalorieCalculationResult {
   calories: number;
   currentWeightKg?: number;
   targetWeightKg?: number;
+  age?: number;
+  gender?: 'male' | 'female';
+  heightCm?: number;
+  heightFeet?: number;
+  heightInches?: number;
+  goal?: 'lose' | 'maintain' | 'gain';
+  activityRate?: number;
 }
 
 interface CalorieCalculatorModalProps {
@@ -236,10 +243,32 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       const currentWeightKgValue = weight ? convertWeightToKg(weight, weightUnit) : 0;
       const targetWeightKgValue = targetWeight ? convertWeightToKg(targetWeight, targetWeightUnit) : 0;
 
+      // Calculate height in cm
+      let heightCmValue: number | undefined;
+      let heightFeetValue: number | undefined;
+      let heightInchesValue: number | undefined;
+      
+      if (heightUnit === 'cm') {
+        heightCmValue = heightCm ? parseFloat(heightCm) : undefined;
+      } else {
+        const feet = parseFloat(heightFeetInput) || 0;
+        const inches = parseFloat(heightInchesInput) || 0;
+        heightCmValue = (feet * 12 + inches) * 2.54;
+        heightFeetValue = feet || undefined;
+        heightInchesValue = inches || undefined;
+      }
+
       onCalculated({
         calories: calculatedCalories,
         currentWeightKg: currentWeightKgValue || undefined,
         targetWeightKg: targetWeightKgValue || undefined,
+        age: age ? parseInt(age) : undefined,
+        gender: gender || undefined,
+        heightCm: heightCmValue,
+        heightFeet: heightFeetValue,
+        heightInches: heightInchesValue,
+        goal: goal || undefined,
+        activityRate: selectedRate !== null ? selectedRate : undefined,
       });
     }
     handleClose();

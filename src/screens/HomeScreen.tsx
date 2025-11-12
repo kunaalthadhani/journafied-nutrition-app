@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -35,6 +35,12 @@ import { analyzeFoodWithChatGPT, analyzeFoodFromImage } from '../services/openai
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
 import { useTheme } from '../constants/theme';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStorage, ExtendedGoalData } from '../services/dataStorage';
+import { analyticsService } from '../services/analyticsService';
+import * as Device from 'expo-device';
+import Constants from 'expo-constants';
+import { Platform, AppState } from 'react-native';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -47,10 +53,11 @@ export const HomeScreen: React.FC = () => {
   const [showSettings, setShowSettings] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free');
+  const [entryCount, setEntryCount] = useState<number>(0);
   const [showAccount, setShowAccount] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
-  const [savedGoals, setSavedGoals] = useState({
+  const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
     proteinPercentage: 30,
     carbsPercentage: 45,
@@ -58,8 +65,8 @@ export const HomeScreen: React.FC = () => {
     proteinGrams: 113, // (1500 * 30%) / 4 cal/g = 112.5 ≈ 113
     carbsGrams: 169,   // (1500 * 45%) / 4 cal/g = 168.75 ≈ 169
     fatGrams: 42,      // (1500 * 25%) / 9 cal/g = 41.67 ≈ 42
-    currentWeightKg: null as number | null,
-    targetWeightKg: null as number | null,
+    currentWeightKg: null,
+    targetWeightKg: null,
   });
   // Store meals by date (YYYY-MM-DD format)
   const [mealsByDate, setMealsByDate] = useState<Record<string, Meal[]>>({});
@@ -112,6 +119,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSetGoals = () => {
+    analyticsService.trackSetGoalsOpen();
     setShowSetGoals(true);
   };
 
@@ -125,10 +133,12 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleWeightTracker = () => {
+    analyticsService.trackWeightTrackerOpen();
     setShowWeightTracker(true);
   };
 
   const handleNutritionAnalysis = () => {
+    analyticsService.trackNutritionAnalysisOpen();
     setShowNutritionAnalysis(true);
   };
 
@@ -143,6 +153,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettings = () => {
+    analyticsService.trackSettingsOpen();
     setShowSettings(true);
   };
 
@@ -151,14 +162,16 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenSubscription = () => {
+    analyticsService.trackSubscriptionScreenOpen();
     setShowSettings(false);
     setShowSubscription(true);
   };
   const handleSubscriptionBack = () => {
     setShowSubscription(false);
   };
-  const handleSubscribe = (plan: 'annual' | 'monthly') => {
+  const handleSubscribe = async (plan: 'annual' | 'monthly') => {
     setUserPlan('premium');
+    await dataStorage.saveUserPlan('premium');
     setShowSubscription(false);
     setShowSettings(true);
   };
@@ -168,6 +181,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAccount = () => {
+    analyticsService.trackAccountScreenOpen();
     setMenuVisible(false);
     setShowAccount(true);
   };
@@ -176,6 +190,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAbout = () => {
+    analyticsService.trackAboutScreenOpen();
     setShowAbout(true);
   };
 
@@ -183,12 +198,12 @@ export const HomeScreen: React.FC = () => {
     setShowAbout(false);
   };
 
-  const handleGoalsSave = (goals: any) => {
+  const handleGoalsSave = async (goals: ExtendedGoalData) => {
     console.log('Goals saved:', goals);
     setDailyCalories(goals.calories);
     setSavedGoals(goals);
     setGoalsSet(true);
-    // TODO: Update app state with new goals
+    await dataStorage.saveGoals(goals);
   };
 
   const handleCalendarPress = () => {
@@ -196,14 +211,111 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleDateSelect = (date: Date) => {
+    analyticsService.trackDateSelectorChange();
     setSelectedDate(date);
     console.log('Date selected:', format(date, 'yyyy-MM-dd'));
+  };
+
+  // Persist meals whenever mealsByDate changes
+  useEffect(() => {
+    if (Object.keys(mealsByDate).length > 0) {
+      dataStorage.saveMeals(mealsByDate);
+    }
+  }, [mealsByDate]);
+
+  // Entry limit persistence
+  const ENTRY_COUNT_KEY = '@journafied:entryCount';
+  const FREE_ENTRY_LIMIT = 20;
+
+  // Initialize analytics and load all data on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        // Initialize analytics
+        await analyticsService.initialize();
+        await analyticsService.trackAppOpen();
+
+        // Load entry count
+        const stored = await AsyncStorage.getItem(ENTRY_COUNT_KEY);
+        if (stored) setEntryCount(parseInt(stored, 10) || 0);
+        else {
+          const count = await dataStorage.loadEntryCount();
+          setEntryCount(count);
+        }
+
+        // Load user plan
+        const plan = await dataStorage.loadUserPlan();
+        setUserPlan(plan);
+
+        // Load goals
+        const savedGoalsData = await dataStorage.loadGoals();
+        if (savedGoalsData) {
+          setSavedGoals(savedGoalsData);
+          setDailyCalories(savedGoalsData.calories);
+          setGoalsSet(true);
+        }
+
+        // Load meals
+        const savedMeals = await dataStorage.loadMeals();
+        if (Object.keys(savedMeals).length > 0) {
+          setMealsByDate(savedMeals);
+        }
+
+        // Capture and save device info
+        const deviceInfo = {
+          deviceName: Device.deviceName || 'Unknown',
+          modelName: Device.modelName || 'Unknown',
+          osName: Device.osName || 'Unknown',
+          osVersion: Device.osVersion || 'Unknown',
+          platform: Platform.OS,
+          appVersion: Constants.expoConfig?.version || '1.0.0',
+          timestamp: new Date().toISOString(),
+        };
+        await dataStorage.saveDeviceInfo(deviceInfo);
+      } catch (error) {
+        console.error('Error loading data:', error);
+      }
+    })();
+
+    // Track app close when component unmounts or app goes to background
+    const subscription = AppState.addEventListener('change', (nextAppState) => {
+      if (nextAppState === 'background' || nextAppState === 'inactive') {
+        analyticsService.trackAppClose();
+      } else if (nextAppState === 'active') {
+        analyticsService.trackAppOpen();
+      }
+    });
+
+    return () => {
+      subscription.remove();
+      analyticsService.trackAppClose();
+    };
+  }, []);
+
+  const incrementEntryCount = async () => {
+    const next = entryCount + 1;
+    setEntryCount(next);
+    try {
+      await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(next));
+      await dataStorage.saveEntryCount(next);
+    } catch {}
+  };
+
+  const canAddEntry = () => {
+    if (userPlan === 'premium') return true;
+    return entryCount < FREE_ENTRY_LIMIT;
   };
 
   const handleInputSubmit = async (text: string) => {
     console.log('Input submitted:', text);
     
     if (!text.trim()) return;
+    // Enforce free plan entry limit for new prompts
+    if (!canAddEntry()) {
+      setShowSubscription(true);
+      setShowSettings(false);
+      return;
+    }
     
     setIsAnalyzingFood(true);
     
@@ -225,6 +337,10 @@ export const HomeScreen: React.FC = () => {
           ...prev,
           [currentDateKey]: [...(prev[currentDateKey] || []), newMeal]
         }));
+        // Count this new prompt as an entry
+        await incrementEntryCount();
+        // Track meal logged
+        await analyticsService.trackMealLogged(selectedDate);
         console.log('ChatGPT parsed foods:', parsedFoods);
       } else {
         console.log('No foods recognized by ChatGPT:', text);
@@ -239,6 +355,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleRemoveFood = (foodId: string) => {
+    analyticsService.trackFoodItemRemoval();
     setMealsByDate(prev => {
       const currentMeals = prev[currentDateKey] || [];
       const updatedMeals = currentMeals
@@ -256,6 +373,12 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
+    // Enforce free plan entry limit for edits
+    if (!canAddEntry()) {
+      setShowSubscription(true);
+      setShowSettings(false);
+      return;
+    }
     try {
       setIsAnalyzingFood(true);
       const parsedFoods = await analyzeFoodWithChatGPT(newPrompt);
@@ -271,6 +394,10 @@ export const HomeScreen: React.FC = () => {
           [currentDateKey]: updatedMeals,
         };
       });
+      // Count this edit as an entry
+      await incrementEntryCount();
+      // Track meal prompt edit
+      analyticsService.trackMealPromptEdit();
     } catch (error) {
       console.error('Error re-analyzing edited prompt:', error);
       // Fallback: still update the prompt even if analysis failed
@@ -320,6 +447,7 @@ export const HomeScreen: React.FC = () => {
         const success = await voiceService.startRecording();
         if (success) {
           setIsRecording(true);
+          analyticsService.trackVoiceRecording();
           console.log('Recording started successfully');
         } else {
           console.log('Failed to start recording');
@@ -343,6 +471,7 @@ export const HomeScreen: React.FC = () => {
       return;
     }
     
+    analyticsService.trackCameraUsage();
     console.log('handleTakePhoto called - setting pending action');
     pendingActionRef.current = 'camera';
     setPhotoModalVisible(false);
@@ -354,6 +483,7 @@ export const HomeScreen: React.FC = () => {
       return;
     }
     
+    analyticsService.trackPhotoLibraryUsage();
     console.log('handleUploadPhoto called - setting pending action');
     pendingActionRef.current = 'library';
     setPhotoModalVisible(false);
@@ -442,6 +572,8 @@ export const HomeScreen: React.FC = () => {
           [dateKey]: [...(prev[dateKey] || []), newMeal]
         }));
         
+        // Track meal logged
+        await analyticsService.trackMealLogged(selectedDate);
         console.log('Meal added to date:', dateKey);
         
         // Update status to completed and close modal immediately
@@ -764,7 +896,7 @@ export const HomeScreen: React.FC = () => {
 
   if (showSettings) {
     return (
-      <SettingsScreen onBack={handleSettingsBack} plan={userPlan} onOpenSubscription={handleOpenSubscription} />
+      <SettingsScreen onBack={handleSettingsBack} plan={userPlan} onOpenSubscription={handleOpenSubscription} entryCount={entryCount} freeEntryLimit={FREE_ENTRY_LIMIT} />
     );
   }
 

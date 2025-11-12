@@ -30,6 +30,13 @@ interface GoalData {
   fatGrams: number;
   currentWeightKg: number | null;
   targetWeightKg: number | null;
+  age?: number;
+  gender?: 'male' | 'female';
+  heightCm?: number;
+  heightFeet?: number;
+  heightInches?: number;
+  goal?: 'lose' | 'maintain' | 'gain';
+  activityRate?: number;
 }
 
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
@@ -45,6 +52,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [showCalculator, setShowCalculator] = useState(false);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(initialGoals?.currentWeightKg ?? null);
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(initialGoals?.targetWeightKg ?? null);
+  const [age, setAge] = useState<number | undefined>(initialGoals?.age);
+  const [gender, setGender] = useState<'male' | 'female' | undefined>(initialGoals?.gender);
+  const [heightCm, setHeightCm] = useState<number | undefined>(initialGoals?.heightCm);
+  const [heightFeet, setHeightFeet] = useState<number | undefined>(initialGoals?.heightFeet);
+  const [heightInches, setHeightInches] = useState<number | undefined>(initialGoals?.heightInches);
+  const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain' | undefined>(initialGoals?.goal);
+  const [activityRate, setActivityRate] = useState<number | undefined>(initialGoals?.activityRate);
 
   // Calculate grams based on calories per gram
   const calculateMacros = () => {
@@ -70,6 +84,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (typeof result.targetWeightKg === 'number' && !isNaN(result.targetWeightKg)) {
       setTargetWeightKg(result.targetWeightKg);
     }
+    if (result.age !== undefined) setAge(result.age);
+    if (result.gender !== undefined) setGender(result.gender);
+    if (result.heightCm !== undefined) setHeightCm(result.heightCm);
+    if (result.heightFeet !== undefined) setHeightFeet(result.heightFeet);
+    if (result.heightInches !== undefined) setHeightInches(result.heightInches);
+    if (result.goal !== undefined) setGoal(result.goal);
+    if (result.activityRate !== undefined) setActivityRate(result.activityRate);
     setShowCalculator(false);
   };
 
@@ -108,6 +129,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       fatGrams,
       currentWeightKg,
       targetWeightKg,
+      age,
+      gender,
+      heightCm,
+      heightFeet,
+      heightInches,
+      goal,
+      activityRate,
     };
     onSave(goalData);
     onBack();

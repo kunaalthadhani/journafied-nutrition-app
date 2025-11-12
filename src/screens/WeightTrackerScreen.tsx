@@ -19,6 +19,8 @@ import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
+import { dataStorage } from '../services/dataStorage';
+import { analyticsService } from '../services/analyticsService';
 
 interface WeightTrackerScreenProps {
   onBack: () => void;
@@ -70,6 +72,18 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       ? startingWeight - currentWeight
       : null;
 
+  // Load weight entries on mount
+  useEffect(() => {
+    (async () => {
+      const savedEntries = await dataStorage.loadWeightEntries();
+      if (savedEntries.length > 0) {
+        setWeightEntries(savedEntries);
+      } else if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
+        setWeightEntries([{ date: new Date(), weight: initialCurrentWeightKg }]);
+      }
+    })();
+  }, []);
+
   useEffect(() => {
     if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
       setWeightEntries((prevEntries) => {
@@ -91,6 +105,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       });
     }
   }, [initialCurrentWeightKg]);
+
+  // Persist weight entries whenever they change
+  useEffect(() => {
+    if (weightEntries.length > 0) {
+      dataStorage.saveWeightEntries(weightEntries);
+    }
+  }, [weightEntries]);
 
   useEffect(() => {
     if (typeof targetWeightKg === 'number' && !isNaN(targetWeightKg) && targetWeightKg > 0) {
@@ -227,9 +248,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     };
 
     setWeightEntries([...weightEntries, newEntry].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    // Track weight entry logged
+    analyticsService.trackWeightEntryLogged(logDate);
     setLogWeight('');
     setLogDate(new Date());
     setShowLogModal(false);
+  };
+
+  const handleTimeRangeChange = (range: TimeRange) => {
+    analyticsService.trackTimeRangeFilterChange();
+    setTimeRange(range);
   };
 
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
@@ -394,7 +422,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       styles.timeRangeButton,
                       timeRange === range && { backgroundColor: '#14B8A6' },
                     ]}
-                    onPress={() => setTimeRange(range)}
+                    onPress={() => handleTimeRangeChange(range)}
                   >
                     <Text
                       style={[

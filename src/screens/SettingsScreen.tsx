@@ -21,6 +21,8 @@ interface SettingsScreenProps {
   onBack: () => void;
   plan?: 'free' | 'premium';
   onOpenSubscription?: () => void;
+  entryCount?: number;
+  freeEntryLimit?: number;
 }
 
 interface SettingItemProps {
@@ -104,7 +106,7 @@ interface MealReminder {
   minute: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription, entryCount = 0, freeEntryLimit = 20 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -294,6 +296,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
                 {plan === 'premium' ? 'Manage Subscription' : 'Upgrade to Premium'}
               </Text>
             </TouchableOpacity>
+            {plan === 'free' && (
+              <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
+                {Math.max(0, freeEntryLimit - entryCount)} entries remaining
+              </Text>
+            )}
           </View>
         </SettingSection>
         {/* Preferences Section */}
@@ -649,6 +656,10 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
+  },
+  remainingText: {
+    marginTop: 8,
+    fontSize: Typography.fontSize.sm,
   },
 });
 
