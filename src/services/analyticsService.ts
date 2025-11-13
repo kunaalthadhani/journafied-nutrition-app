@@ -51,6 +51,20 @@ export interface AnalyticsData {
   averageWeightEntriesPerWeek: number;
   totalMealsLogged: number;
   totalWeightEntries: number;
+
+  // Referral tracking
+  referralCodesGenerated: number;
+  referralCodesShared: number;
+  referralCodesSharedByMethod: {
+    share: number;
+    copy: number;
+    link: number;
+  };
+  referralCodesRedeemed: number;
+  referralRewardsEarned: number;
+  referralRewardsEarnedAsReferrer: number;
+  referralRewardsEarnedAsReferee: number;
+  referralCodeClicks: number; // if shared via deep link
 }
 
 const defaultAnalytics: AnalyticsData = {
@@ -89,6 +103,14 @@ const defaultAnalytics: AnalyticsData = {
   averageWeightEntriesPerWeek: 0,
   totalMealsLogged: 0,
   totalWeightEntries: 0,
+  referralCodesGenerated: 0,
+  referralCodesShared: 0,
+  referralCodesSharedByMethod: { share: 0, copy: 0, link: 0 },
+  referralCodesRedeemed: 0,
+  referralRewardsEarned: 0,
+  referralRewardsEarnedAsReferrer: 0,
+  referralRewardsEarnedAsReferee: 0,
+  referralCodeClicks: 0,
 };
 
 class AnalyticsService {
@@ -360,9 +382,51 @@ class AnalyticsService {
     const now = new Date();
     return Math.floor((now.getTime() - firstOpen.getTime()) / (1000 * 60 * 60 * 24));
   }
+
+  // Referral tracking
+  async trackReferralCodeGenerated(userId: string): Promise<void> {
+    await this.initialize();
+    this.analytics.referralCodesGenerated += 1;
+    await this.save();
+  }
+
+  async trackReferralCodeShared(userId: string, method: 'share' | 'copy' | 'link'): Promise<void> {
+    await this.initialize();
+    this.analytics.referralCodesShared += 1;
+    this.analytics.referralCodesSharedByMethod[method] += 1;
+    await this.save();
+  }
+
+  async trackReferralCodeRedeemed(referralCode: string, refereeEmail: string): Promise<void> {
+    await this.initialize();
+    this.analytics.referralCodesRedeemed += 1;
+    await this.save();
+  }
+
+  async trackReferralRewardEarned(
+    userId: string,
+    entriesAwarded: number,
+    type: 'referrer' | 'referee'
+  ): Promise<void> {
+    await this.initialize();
+    this.analytics.referralRewardsEarned += 1;
+    if (type === 'referrer') {
+      this.analytics.referralRewardsEarnedAsReferrer += 1;
+    } else {
+      this.analytics.referralRewardsEarnedAsReferee += 1;
+    }
+    await this.save();
+  }
+
+  async trackReferralCodeClick(referralCode: string): Promise<void> {
+    await this.initialize();
+    this.analytics.referralCodeClicks += 1;
+    await this.save();
+  }
 }
 
 export const analyticsService = new AnalyticsService();
+
 
 
 

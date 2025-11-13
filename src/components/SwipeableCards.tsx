@@ -103,7 +103,7 @@ const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.background,
     marginTop: -8,
-    paddingBottom: 8,
+    paddingBottom: 0,
   },
   cardWrapper: {
     position: 'relative',

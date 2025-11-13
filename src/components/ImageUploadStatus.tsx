@@ -22,6 +22,7 @@ interface ImageUploadStatusProps {
   status: 'uploading' | 'completed' | 'failed' | 'analyzing';
   onClose: () => void;
   onRetry?: () => void;
+  statusMessage?: string | null;
 }
 
 export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
@@ -32,6 +33,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
   status,
   onClose,
   onRetry,
+  statusMessage,
 }) => {
   const theme = useTheme();
   const progressAnim = useRef(new Animated.Value(0)).current;
@@ -107,9 +109,9 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
         <View style={styles.uploadStatusSection}>
           <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
             {status === 'uploading' && `Uploading - ${progress}%`}
-            {status === 'analyzing' && 'Analyzing image...'}
-            {status === 'completed' && 'Upload completed'}
-            {status === 'failed' && 'Upload failed'}
+            {status === 'analyzing' && (statusMessage || 'Analyzing image...')}
+            {status === 'completed' && (statusMessage || 'Upload completed')}
+            {status === 'failed' && (statusMessage || 'Upload failed')}
           </Text>
 
           {/* File List */}
@@ -189,7 +191,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                   <View style={styles.statusRow}>
                     <Feather name="alert-circle" size={16} color="#14B8A6" />
                     <Text style={[styles.statusMessage, { color: theme.colors.error }]}>
-                      Error
+                      {statusMessage || 'Error'}
                     </Text>
                   </View>
                 </>

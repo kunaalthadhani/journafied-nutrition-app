@@ -23,120 +23,18 @@ interface FoodLogSectionProps {
   meals: Meal[];
   onRemoveFood: (foodId: string) => void;
   onEditMealPrompt?: (mealId: string, newPrompt: string) => Promise<void> | void;
-  dailyCalories?: number;
-  savedGoals?: {
-    calories: number;
-    proteinPercentage: number;
-    carbsPercentage: number;
-    fatPercentage: number;
-    proteinGrams: number;
-    carbsGrams: number;
-    fatGrams: number;
-  };
 }
 
-export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveFood, onEditMealPrompt, dailyCalories = 1500, savedGoals }) => {
+export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveFood, onEditMealPrompt }) => {
   const theme = useTheme();
   const [animatedMeals, setAnimatedMeals] = useState<Set<string>>(new Set());
   const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
-  const [viewedFoods, setViewedFoods] = useState<Set<string>>(new Set());
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
 
-  // Check if food is not the best fit
-  const isNotBestFit = (food: ParsedFood): boolean => {
-    if (!savedGoals) return false;
-
-    const caloriesPercent = (food.calories / savedGoals.calories) * 100;
-    const proteinPercent = (food.protein / savedGoals.proteinGrams) * 100;
-
-    const proteinCal = food.protein * 4;
-    const carbsCal = food.carbs * 4;
-    const fatCal = food.fat * 9;
-    const totalCal = proteinCal + carbsCal + fatCal;
-    
-    if (totalCal === 0) return false;
-    
-    const proteinRatio = proteinCal / totalCal;
-    const carbsRatio = carbsCal / totalCal;
-
-    // Not the best fit if:
-    // - High calories (>=30% of daily) OR
-    // - Low protein (<5%) AND high calories (>15%) OR
-    // - Very high in carbs (>60% of calories) OR
-    // - Low protein (<10%) AND moderate calories (>10%)
-    return (
-      caloriesPercent >= 30 ||
-      (proteinPercent < 5 && caloriesPercent > 15) ||
-      carbsRatio > 0.6 ||
-      (proteinPercent < 10 && caloriesPercent > 10)
-    );
-  };
-
-  // Analyze food against user goals and provide detailed explanation
-  const analyzeFood = (food: ParsedFood): string => {
-    if (!savedGoals) {
-      return `This food item contains ${food.calories} calories, ${food.protein}g protein, ${food.carbs}g carbs, and ${food.fat}g fat. It's a decent choice for a balanced meal.`;
-    }
-
-    const caloriesPercent = (food.calories / savedGoals.calories) * 100;
-    const proteinPercent = (food.protein / savedGoals.proteinGrams) * 100;
-    const carbsPercent = (food.carbs / savedGoals.carbsGrams) * 100;
-    const fatPercent = (food.fat / savedGoals.fatGrams) * 100;
-
-    const proteinCal = food.protein * 4;
-    const carbsCal = food.carbs * 4;
-    const fatCal = food.fat * 9;
-    const totalCal = proteinCal + carbsCal + fatCal;
-    
-    if (totalCal === 0) {
-      return `${food.name} contains ${food.calories} calories. This item provides minimal nutritional value and may not contribute significantly to your daily goals.`;
-    }
-    
-    const proteinRatio = proteinCal / totalCal;
-    const carbsRatio = carbsCal / totalCal;
-    const fatRatio = fatCal / totalCal;
-
-    // Build detailed explanation
-    let explanation = '';
-
-    // Overall assessment
-    if (proteinPercent >= 15 && caloriesPercent <= 20) {
-      explanation = `This is an excellent choice for your goals! ${food.name} provides ${proteinPercent.toFixed(0)}% of your daily protein target while using only ${caloriesPercent.toFixed(0)}% of your calorie budget. `;
-    } else if (proteinPercent >= 10 && caloriesPercent <= 15) {
-      explanation = `This is a good choice. ${food.name} offers a solid protein content (${proteinPercent.toFixed(0)}% of daily goal) at a reasonable calorie cost (${caloriesPercent.toFixed(0)}% of daily budget). `;
-    } else if (caloriesPercent >= 30) {
-      explanation = `This food is quite calorie-dense, using ${caloriesPercent.toFixed(0)}% of your daily calorie budget. `;
-    } else if (proteinPercent < 5 && caloriesPercent > 15) {
-      explanation = `This food is relatively low in protein (only ${proteinPercent.toFixed(0)}% of your daily goal) but still takes up ${caloriesPercent.toFixed(0)}% of your calorie budget. `;
-    } else {
-      explanation = `${food.name} contributes ${caloriesPercent.toFixed(0)}% to your daily calories and ${proteinPercent.toFixed(0)}% to your protein goal. `;
-    }
-
-    // Macro balance details
-    if (proteinRatio >= 0.25) {
-      explanation += `The macro distribution is well-balanced with a good protein ratio. `;
-    } else if (carbsRatio > 0.6) {
-      explanation += `However, it's very high in carbohydrates (${(carbsRatio * 100).toFixed(0)}% of calories), which may not align with your goals if you're focusing on protein or fat intake. `;
-    }
-
-    // Protein-specific advice
-    if (proteinPercent >= 15) {
-      explanation += `This is particularly beneficial if you're aiming to build or maintain muscle mass.`;
-    } else if (proteinPercent < 5 && caloriesPercent > 10) {
-      explanation += `Consider pairing this with a protein-rich side to better meet your daily protein target.`;
-    } else {
-      explanation += `It fits reasonably well within a balanced diet when combined with other nutrient-dense foods.`;
-    }
-
-    return explanation;
-  };
-
   const handleFoodPress = (food: ParsedFood) => {
     setSelectedFood(food);
-    // Mark as viewed when user opens the modal
-    setViewedFoods((prev) => new Set(prev).add(food.id));
   };
 
   const handleCloseModal = () => {
@@ -266,7 +164,6 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
               {/* Food Items with animated spans */}
               {meal.foods.map((food, foodIndex) => {
                 const baseDelay = 500 + (mealIndex * 1000) + (foodIndex * 300);
-                const showWarning = isNotBestFit(food) && !viewedFoods.has(food.id);
                 const isFirstFood = foodIndex === 0;
         
         return (
@@ -284,14 +181,6 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
                         >
                           {`${food.name} (${food.weight_g}g)`}
                         </AnimatedSpan>
-                        {showWarning && (
-                          <AnimatedSpan
-                            delay={baseDelay}
-                            style={{ color: '#EF4444', marginLeft: 4, marginBottom: 4, fontSize: 14 }}
-                          >
-                            ⚠️
-                          </AnimatedSpan>
-                        )}
                       </View>
                       {isFirstFood && meal.imageUri && (
                         <Image 
@@ -401,14 +290,6 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
                 </View>
                 </View>
 
-                <View style={[styles.modalExplanation, { borderTopColor: theme.colors.border }]}>
-                  <Text style={[styles.explanationTitle, { color: theme.colors.textPrimary }]}>
-                    Analysis
-                  </Text>
-                  <Text style={[styles.explanationText, { color: theme.colors.textSecondary }]}>
-                    {analyzeFood(selectedFood)}
-                  </Text>
-                </View>
               </>
             )}
           </TouchableOpacity>
@@ -540,18 +421,5 @@ const styles = StyleSheet.create({
   },
   nutritionUnit: {
     fontSize: Typography.fontSize.xs,
-  },
-  modalExplanation: {
-    paddingTop: Spacing.md,
-    borderTopWidth: 1,
-  },
-  explanationTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: Spacing.sm,
-  },
-  explanationText: {
-    fontSize: Typography.fontSize.sm,
-    lineHeight: Typography.fontSize.sm * 1.6,
   },
 });

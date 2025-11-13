@@ -6,6 +6,8 @@ import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 import { dataStorage } from '../services/dataStorage';
+import { referralService } from '../services/referralService';
+import { analyticsService } from '../services/analyticsService';
 
 interface AccountScreenProps {
   onBack: () => void;
@@ -16,19 +18,67 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [referralCode, setReferralCode] = useState('');
+  const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
+  const [isValidatingCode, setIsValidatingCode] = useState(false);
 
   const handleSignUp = async () => {
     if (!name.trim() || !email.trim() || !password.trim()) {
       Alert.alert('Missing info', 'Please fill in name, email, and password.');
       return;
     }
+
+    // Validate referral code if provided
+    let referralRedemption = null;
+    let hasUsedReferralCode = false;
+    
+    if (referralCode.trim()) {
+      setIsValidatingCode(true);
+      const validation = await referralService.validateReferralCodeForRedemption(
+        referralCode.trim(),
+        email.trim()
+      );
+
+      if (!validation.valid) {
+        setReferralCodeError(validation.error || 'Invalid referral code');
+        setIsValidatingCode(false);
+        return;
+      }
+
+      // Create redemption record
+      referralRedemption = await referralService.createReferralRedemption(
+        validation.referralCode!,
+        email.trim(),
+        name.trim()
+      );
+      hasUsedReferralCode = true;
+      setIsValidatingCode(false);
+      
+      // Track analytics (already tracked in createReferralRedemption, but we can track here too if needed)
+    }
+
     // Save account info (in production, password should be hashed)
     await dataStorage.saveAccountInfo({
       name: name.trim(),
       email: email.trim(),
       passwordHash: password.trim(), // In production, hash this properly
+      hasUsedReferralCode,
     });
-    Alert.alert('Registered', 'Your account has been created (demo).');
+
+    // Generate referral code for the new user
+    await referralService.getOrCreateReferralCode(email.trim());
+
+    if (referralRedemption) {
+      Alert.alert(
+        'Referral Code Applied!',
+        'Your referral code has been applied. Log 5 meals to unlock +10 free entries for you and your friend!'
+      );
+    } else {
+      Alert.alert('Registered', 'Your account has been created.');
+    }
+
+    // Call onBack or navigate back
+    onBack();
   };
 
   return (
@@ -76,11 +126,52 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
             onChangeText={setPassword}
             secureTextEntry
             autoCapitalize="none"
-            returnKeyType="done"
+            returnKeyType="next"
           />
 
-          <TouchableOpacity style={styles.primaryButton} onPress={handleSignUp}>
-            <Text style={styles.primaryButtonText}>Sign up</Text>
+          {/* Referral Code Input */}
+          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+            Referral Code (Optional)
+          </Text>
+          <TextInput
+            style={[
+              styles.input,
+              {
+                color: theme.colors.textPrimary,
+                borderColor: referralCodeError ? theme.colors.error : theme.colors.border,
+                backgroundColor: theme.colors.input,
+              },
+            ]}
+            placeholder="Enter friend's referral code"
+            placeholderTextColor={theme.colors.textTertiary}
+            value={referralCode}
+            onChangeText={(text) => {
+              setReferralCode(text.toUpperCase().trim());
+              setReferralCodeError(null); // Clear error on input
+            }}
+            autoCapitalize="characters"
+            returnKeyType="done"
+            editable={!isValidatingCode}
+          />
+          {referralCodeError && (
+            <Text style={[styles.errorText, { color: theme.colors.error }]}>
+              {referralCodeError}
+            </Text>
+          )}
+          {referralCode && !referralCodeError && (
+            <Text style={[styles.helperText, { color: theme.colors.textTertiary }]}>
+              Enter a friend's code to get +10 free entries after logging 5 meals
+            </Text>
+          )}
+
+          <TouchableOpacity 
+            style={[styles.primaryButton, isValidatingCode && styles.primaryButtonDisabled]} 
+            onPress={handleSignUp}
+            disabled={isValidatingCode}
+          >
+            <Text style={styles.primaryButtonText}>
+              {isValidatingCode ? 'Validating...' : 'Sign up'}
+            </Text>
           </TouchableOpacity>
 
           {/* OAuth options removed for now */}
@@ -147,5 +238,17 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
-  
+  primaryButtonDisabled: {
+    opacity: 0.6,
+  },
+  errorText: {
+    fontSize: Typography.fontSize.sm,
+    marginTop: 4,
+    marginBottom: 4,
+  },
+  helperText: {
+    fontSize: Typography.fontSize.sm,
+    marginTop: 4,
+    marginBottom: 4,
+  },
 });

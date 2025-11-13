@@ -41,7 +41,15 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               value={data.carbs.current} 
               duration={800}
               decimalPlaces={0}
-              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+              style={[
+                styles.fractionText,
+                {
+                  color:
+                    data.carbs.current > data.carbs.target
+                      ? '#EF4444'
+                      : theme.colors.textPrimary,
+                },
+              ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
               /{data.carbs.target}
@@ -58,7 +66,15 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               value={data.protein.current} 
               duration={800}
               decimalPlaces={0}
-              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+              style={[
+                styles.fractionText,
+                {
+                  color:
+                    data.protein.current > data.protein.target
+                      ? '#EF4444'
+                      : theme.colors.textPrimary,
+                },
+              ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
               /{data.protein.target}
@@ -75,7 +91,15 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               value={data.fat.current} 
               duration={800}
               decimalPlaces={0}
-              style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+              style={[
+                styles.fractionText,
+                {
+                  color:
+                    data.fat.current > data.fat.target
+                      ? '#EF4444'
+                      : theme.colors.textPrimary,
+                },
+              ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
               /{data.fat.target}

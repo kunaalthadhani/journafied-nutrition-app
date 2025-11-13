@@ -125,7 +125,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
         styles.keyboardContainer,
         {
           backgroundColor: theme.colors.background,
-          paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 24 : 16,
+          paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 20 : 12,
           transform: [{ translateY }],
         },
       ]}

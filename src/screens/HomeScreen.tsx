@@ -8,9 +8,11 @@ import {
   ActivityIndicator,
   Animated,
   Easing,
+  Alert,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
 import { DateSelector } from '../components/DateSelector';
@@ -24,6 +26,8 @@ import { SettingsScreen } from './SettingsScreen';
 import { SubscriptionScreen } from './SubscriptionScreen';
 import { AccountScreen } from './AccountScreen';
 import { AboutScreen } from './AboutScreen';
+import { AdminPushScreen } from './AdminPushScreen';
+import { ReferralScreen } from './ReferralScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -34,10 +38,13 @@ import { parseFoodInput, calculateTotalNutrition, ParsedFood } from '../utils/fo
 import { analyzeFoodWithChatGPT, analyzeFoodFromImage } from '../services/openaiService';
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
+import * as Notifications from 'expo-notifications';
 import { useTheme } from '../constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataStorage, ExtendedGoalData } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
+import { notificationService } from '../services/notificationService';
+import { referralService } from '../services/referralService';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform, AppState } from 'react-native';
@@ -56,6 +63,10 @@ export const HomeScreen: React.FC = () => {
   const [entryCount, setEntryCount] = useState<number>(0);
   const [showAccount, setShowAccount] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showAdminPush, setShowAdminPush] = useState(false);
+  const [showReferral, setShowReferral] = useState(false);
+  const [referralCode, setReferralCode] = useState<string | null>(null);
+  const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -81,6 +92,7 @@ export const HomeScreen: React.FC = () => {
   const [uploadFileName, setUploadFileName] = useState('');
   const [uploadProgress, setUploadProgress] = useState(0);
   const [uploadStatus, setUploadStatus] = useState<'uploading' | 'completed' | 'failed' | 'analyzing'>('uploading');
+  const [uploadStatusMessage, setUploadStatusMessage] = useState<string | null>(null);
   const uploadIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
@@ -152,8 +164,20 @@ export const HomeScreen: React.FC = () => {
     setShouldFocusInput(true);
   };
 
-  const handleSettings = () => {
+  const handleSettings = async () => {
     analyticsService.trackSettingsOpen();
+    // Reload referral data to ensure it's up to date
+    try {
+      const accountInfo = await dataStorage.loadAccountInfo();
+      if (accountInfo?.email) {
+        const code = await dataStorage.getReferralCode(accountInfo.email);
+        setReferralCode(code?.code || null);
+        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+        setTotalEarnedEntries(earned);
+      }
+    } catch (error) {
+      console.error('Error reloading referral data in settings:', error);
+    }
     setShowSettings(true);
   };
 
@@ -197,6 +221,55 @@ export const HomeScreen: React.FC = () => {
   const handleAboutBack = () => {
     setShowAbout(false);
   };
+
+  const handleOpenReferral = () => {
+    setShowSettings(false);
+    setShowReferral(true);
+  };
+
+  const handleReferralBack = async () => {
+    setShowReferral(false);
+    setShowSettings(true);
+    // Reload referral data
+    try {
+      const accountInfo = await dataStorage.loadAccountInfo();
+      if (accountInfo?.email) {
+        const code = await dataStorage.getReferralCode(accountInfo.email);
+        setReferralCode(code?.code || null);
+        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+        setTotalEarnedEntries(earned);
+      }
+    } catch (error) {
+      console.error('Error reloading referral data:', error);
+    }
+  };
+
+  const handleAdminPush = () => {
+    console.log('Opening admin push console');
+    setShowAdminPush(true);
+  };
+
+  const handleAdminPushBack = () => {
+    setShowAdminPush(false);
+  };
+
+  const handleNotificationResponse = React.useCallback(
+    (response: Notifications.NotificationResponse) => {
+      try {
+        const data = response.notification.request.content.data || {};
+        const broadcastId =
+          typeof (data as Record<string, unknown>).broadcastId === 'string'
+            ? (data as Record<string, unknown>).broadcastId
+            : null;
+        if (broadcastId) {
+          notificationService.recordPushClick(broadcastId);
+        }
+      } catch (error) {
+        console.error('Error handling notification response:', error);
+      }
+    },
+    []
+  );
 
   const handleGoalsSave = async (goals: ExtendedGoalData) => {
     console.log('Goals saved:', goals);
@@ -272,6 +345,32 @@ export const HomeScreen: React.FC = () => {
           timestamp: new Date().toISOString(),
         };
         await dataStorage.saveDeviceInfo(deviceInfo);
+
+        // Load referral code and earned entries
+        const accountInfo = await dataStorage.loadAccountInfo();
+        if (accountInfo?.email) {
+          // Ensure user has a referral code
+          let code = await dataStorage.getReferralCode(accountInfo.email);
+          if (!code) {
+            // Generate if missing
+            await referralService.getOrCreateReferralCode(accountInfo.email);
+            code = await dataStorage.getReferralCode(accountInfo.email);
+          }
+          setReferralCode(code?.code || null);
+
+          // Load total earned entries
+          const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+          setTotalEarnedEntries(earned);
+
+          // Verify pending redemptions are still valid
+          const redemptions = await dataStorage.getReferralRedemptionsForUser(
+            accountInfo.email,
+            'referee'
+          );
+          const pending = redemptions.filter((r) => r.status === 'pending');
+          // Check if any pending redemptions should be marked as failed (e.g., expired)
+          // For now, we'll keep them pending indefinitely, but you could add expiration logic
+        }
       } catch (error) {
         console.error('Error loading data:', error);
       }
@@ -292,6 +391,38 @@ export const HomeScreen: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    (async () => {
+      const registration = await notificationService.registerDeviceAsync();
+      if (registration.status === 'error') {
+        console.error('Push notification registration failed:', registration.error);
+      } else if (registration.status === 'denied') {
+        console.log('Push notification permission denied by user.');
+      } else if (registration.status === 'not_physical') {
+        console.log('Push notification registration skipped: requires physical device.');
+      } else if (registration.status === 'granted') {
+        console.log('Push token stored for broadcasts.');
+      }
+    })();
+  }, []);
+
+  useEffect(() => {
+    const responseListener =
+      Notifications.addNotificationResponseReceivedListener(handleNotificationResponse);
+
+    let isMounted = true;
+    Notifications.getLastNotificationResponseAsync().then((response) => {
+      if (isMounted && response) {
+        handleNotificationResponse(response);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      responseListener.remove();
+    };
+  }, [handleNotificationResponse]);
+
   const incrementEntryCount = async () => {
     const next = entryCount + 1;
     setEntryCount(next);
@@ -301,47 +432,92 @@ export const HomeScreen: React.FC = () => {
     } catch {}
   };
 
-  const canAddEntry = () => {
+  const canAddEntry = async () => {
     if (userPlan === 'premium') return true;
-    return entryCount < FREE_ENTRY_LIMIT;
+
+    // Get base free limit
+    const baseLimit = FREE_ENTRY_LIMIT; // 20
+
+    // Get bonus entries from referrals
+    const accountInfo = await dataStorage.loadAccountInfo();
+    let bonusEntries = 0;
+    if (accountInfo?.email) {
+      bonusEntries = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+    }
+
+    // Calculate effective limit
+    const effectiveLimit = baseLimit + bonusEntries;
+
+    return entryCount < effectiveLimit;
   };
 
   const handleInputSubmit = async (text: string) => {
     console.log('Input submitted:', text);
-    
+
     if (!text.trim()) return;
     // Enforce free plan entry limit for new prompts
-    if (!canAddEntry()) {
-      setShowSubscription(true);
-      setShowSettings(false);
+    if (!(await canAddEntry())) {
+      Alert.alert(
+        'Entry Limit Reached',
+        'You have reached your free entry limit. Upgrade to Premium for unlimited entries.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => handleOpenSubscription() },
+        ]
+      );
       return;
     }
-    
+
     setIsAnalyzingFood(true);
-    
+
     try {
       // Use ChatGPT for real-time food analysis
       const parsedFoods = await analyzeFoodWithChatGPT(text);
-      
+
       if (parsedFoods.length > 0) {
         // Create a new meal entry with the prompt and foods
         const newMeal: Meal = {
           id: `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
           prompt: text.trim(),
           foods: parsedFoods,
-          timestamp: Date.now()
+          timestamp: Date.now(),
         };
-        
+
         // Add meal to the current selected date
-        setMealsByDate(prev => ({
+        setMealsByDate((prev) => ({
           ...prev,
-          [currentDateKey]: [...(prev[currentDateKey] || []), newMeal]
+          [currentDateKey]: [...(prev[currentDateKey] || []), newMeal],
         }));
         // Count this new prompt as an entry
         await incrementEntryCount();
         // Track meal logged
         await analyticsService.trackMealLogged(selectedDate);
         console.log('ChatGPT parsed foods:', parsedFoods);
+
+        // Check referral progress after meal is successfully added
+        const accountInfo = await dataStorage.loadAccountInfo();
+        if (accountInfo?.email) {
+          const referralResult = await referralService.processMealLoggingProgress(accountInfo.email);
+
+          if (referralResult.rewardsAwarded && referralResult.entriesAwarded) {
+            // Show success message
+            Alert.alert(
+              '🎉 Referral Reward Earned!',
+              referralResult.message ||
+                `You've earned +${referralResult.entriesAwarded} free entries!`,
+              [{ text: 'Awesome!', style: 'default' }]
+            );
+
+            // Reload entry count and total earned entries to reflect new bonus entries
+            const newEntryCount = await dataStorage.loadEntryCount();
+            setEntryCount(newEntryCount);
+            
+            // Reload total earned entries from referrals
+            const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+            setTotalEarnedEntries(earned);
+          }
+          // Note: Progress messages are optional and can be noisy, so we're not showing them
+        }
       } else {
         console.log('No foods recognized by ChatGPT:', text);
         // TODO: Show message to user that no foods were recognized
@@ -374,9 +550,15 @@ export const HomeScreen: React.FC = () => {
 
   const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
     // Enforce free plan entry limit for edits
-    if (!canAddEntry()) {
-      setShowSubscription(true);
-      setShowSettings(false);
+    if (!(await canAddEntry())) {
+      Alert.alert(
+        'Entry Limit Reached',
+        'You have reached your free entry limit. Upgrade to Premium for unlimited entries.',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'Upgrade', onPress: () => handleOpenSubscription() },
+        ]
+      );
       return;
     }
     try {
@@ -498,6 +680,7 @@ export const HomeScreen: React.FC = () => {
     setUploadFileName('');
     setUploadProgress(0);
     setUploadStatus('uploading');
+    setUploadStatusMessage(null);
     setUploadStatusVisible(false);
   };
 
@@ -514,7 +697,10 @@ export const HomeScreen: React.FC = () => {
       if (progress >= 100) {
         progress = 100;
         setUploadProgress(100);
-        setUploadStatus('completed');
+        setUploadStatus('analyzing');
+        setUploadStatusMessage(null);
+        setUploadStatusVisible(false);
+        setIsAnalyzingFood(true);
         if (uploadIntervalRef.current) {
           clearInterval(uploadIntervalRef.current);
           uploadIntervalRef.current = null;
@@ -522,9 +708,8 @@ export const HomeScreen: React.FC = () => {
         
         // Wait a moment, then start analyzing
         setTimeout(() => {
-          setUploadStatus('analyzing');
           analyzeUploadedImage(imageUri);
-        }, 500);
+        }, 300);
       } else {
         setUploadProgress(Math.round(progress));
       }
@@ -571,30 +756,21 @@ export const HomeScreen: React.FC = () => {
           ...prev,
           [dateKey]: [...(prev[dateKey] || []), newMeal]
         }));
-        
-        // Track meal logged
         await analyticsService.trackMealLogged(selectedDate);
         console.log('Meal added to date:', dateKey);
-        
-        // Update status to completed and close modal immediately
-        setUploadStatus('completed');
-        setTimeout(() => {
-          setUploadStatusVisible(false);
-          resetUploadState();
-        }, 1000);
+        resetUploadState();
       } else {
         console.log('No foods recognized in image');
-        setUploadStatus('completed');
-        setTimeout(() => {
-          setUploadStatusVisible(false);
-          resetUploadState();
-        }, 1500);
+        setUploadStatus('failed');
+        setUploadStatusMessage('No food detected');
+        setUploadStatusVisible(true);
       }
     } catch (error) {
       console.error('Error analyzing image:', error);
       setUploadStatus('failed');
-      alert(`Failed to analyze image: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      // Keep modal open so user can retry
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      setUploadStatusMessage(`Failed to analyze image: ${errorMessage}`);
+      setUploadStatusVisible(true);
     } finally {
       setIsAnalyzingFood(false);
     }
@@ -603,11 +779,16 @@ export const HomeScreen: React.FC = () => {
   const handleRetryUpload = async () => {
     if (uploadStatus === 'failed' && uploadedImage) {
       // Retry analysis
+      setUploadStatus('analyzing');
+      setUploadStatusMessage(null);
+      setUploadStatusVisible(false);
+      setIsAnalyzingFood(true);
       await analyzeUploadedImage(uploadedImage);
     } else if (uploadedImage) {
       // Retry upload
       setUploadProgress(0);
       setUploadStatus('uploading');
+      setUploadStatusMessage(null);
       simulateUpload(uploadedImage);
     }
   };
@@ -859,6 +1040,12 @@ export const HomeScreen: React.FC = () => {
 
   const formattedDate = format(selectedDate, 'MMMM d, yyyy');
 
+  if (showAdminPush) {
+    return (
+      <AdminPushScreen onBack={handleAdminPushBack} />
+    );
+  }
+
   if (showSetGoals) {
     return (
       <SetGoalsScreen 
@@ -896,7 +1083,16 @@ export const HomeScreen: React.FC = () => {
 
   if (showSettings) {
     return (
-      <SettingsScreen onBack={handleSettingsBack} plan={userPlan} onOpenSubscription={handleOpenSubscription} entryCount={entryCount} freeEntryLimit={FREE_ENTRY_LIMIT} />
+      <SettingsScreen
+        onBack={handleSettingsBack}
+        plan={userPlan}
+        onOpenSubscription={handleOpenSubscription}
+        entryCount={entryCount}
+        freeEntryLimit={FREE_ENTRY_LIMIT}
+        onOpenReferral={handleOpenReferral}
+        referralCode={referralCode}
+        totalEarnedEntries={totalEarnedEntries}
+      />
     );
   }
 
@@ -916,6 +1112,10 @@ export const HomeScreen: React.FC = () => {
     return (
       <AboutScreen onBack={handleAboutBack} />
     );
+  }
+
+  if (showReferral) {
+    return <ReferralScreen onBack={handleReferralBack} />;
   }
 
   return (
@@ -944,6 +1144,39 @@ export const HomeScreen: React.FC = () => {
           onScrollEnable={setScrollEnabled}
         />
 
+        {/* Macro Exceeded Warning Banner */}
+        {(() => {
+          const exceededMacros: string[] = [];
+          if (macrosData.carbs.current > macrosData.carbs.target) {
+            exceededMacros.push('Carbs');
+          }
+          if (macrosData.protein.current > macrosData.protein.target) {
+            exceededMacros.push('Protein');
+          }
+          if (macrosData.fat.current > macrosData.fat.target) {
+            exceededMacros.push('Fat');
+          }
+
+          if (exceededMacros.length > 0) {
+            let message = '';
+            if (exceededMacros.length === 1) {
+              message = `You have exceeded ${exceededMacros[0]} today`;
+            } else if (exceededMacros.length === 2) {
+              message = `${exceededMacros[0]} and ${exceededMacros[1]} have been exceeded today`;
+            } else {
+              message = `${exceededMacros[0]}, ${exceededMacros[1]}, and ${exceededMacros[2]} have been exceeded today`;
+            }
+
+            return (
+              <View style={styles.macroWarningBanner}>
+                <Feather name="alert-circle" size={16} color={Colors.white} />
+                <Text style={styles.macroWarningText}>{message}</Text>
+              </View>
+            );
+          }
+          return null;
+        })()}
+
         {/* Scrollable Content for logs */}
         <ScrollView
           style={styles.scrollView}
@@ -956,8 +1189,6 @@ export const HomeScreen: React.FC = () => {
             meals={currentDayMeals}
             onRemoveFood={handleRemoveFood}
             onEditMealPrompt={handleEditMealPrompt}
-            dailyCalories={dailyCalories}
-            savedGoals={savedGoals}
           />
 
           {/* Motivational Text - only show if no meals logged for current day */}
@@ -1008,6 +1239,7 @@ export const HomeScreen: React.FC = () => {
           onSettings={handleSettings}
           onLogin={handleAccount}
           onAbout={handleAbout}
+          onAdminPush={handleAdminPush}
         />
         
         <PhotoOptionsModal
@@ -1024,6 +1256,7 @@ export const HomeScreen: React.FC = () => {
           fileName={uploadFileName}
           progress={uploadProgress}
           status={uploadStatus}
+          statusMessage={uploadStatusMessage}
           onClose={() => {
             setUploadStatusVisible(false);
             resetUploadState();
@@ -1089,6 +1322,24 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 120, // Space for bottom input bar + safe area
+  },
+  macroWarningBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    marginTop: 0,
+    marginBottom: 16,
+    marginHorizontal: -16, // Extend to full width like the cards
+    backgroundColor: '#EF4444',
+    gap: 8,
+  },
+  macroWarningText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    color: Colors.white,
+    textAlign: 'center',
   },
   analyzingOverlay: {
     position: 'absolute',

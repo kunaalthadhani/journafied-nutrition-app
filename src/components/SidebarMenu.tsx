@@ -24,6 +24,7 @@ interface SidebarMenuProps {
   onLogin?: () => void;
   onSettings?: () => void;
   onAbout?: () => void;
+  onAdminPush?: () => void;
 }
 
 interface MenuItemProps {
@@ -94,11 +95,14 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onLogin,
   onSettings,
   onAbout,
+  onAdminPush,
 }) => {
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
   const [containerHeight, setContainerHeight] = useState(SCREEN_HEIGHT);
+  const [secretTapCount, setSecretTapCount] = useState(0);
+  const secretTimerRef = useRef<NodeJS.Timeout | null>(null);
   
   // Initialize slideAnim with a default value, then update when dimensions are available
   const slideAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.75 || -300)).current;
@@ -184,6 +188,42 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     onClose();
   };
 
+  const resetSecretTap = () => {
+    setSecretTapCount(0);
+    if (secretTimerRef.current) {
+      clearTimeout(secretTimerRef.current);
+      secretTimerRef.current = null;
+    }
+  };
+
+  const handleSecretTap = () => {
+    setSecretTapCount((prev) => {
+      const next = prev + 1;
+      if (next >= 5) {
+        resetSecretTap();
+        onAdminPush?.();
+        onClose();
+        return 0;
+      }
+      if (secretTimerRef.current) {
+        clearTimeout(secretTimerRef.current);
+      }
+      secretTimerRef.current = setTimeout(() => {
+        resetSecretTap();
+      }, 1500);
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    return () => {
+      if (secretTimerRef.current) {
+        clearTimeout(secretTimerRef.current);
+        secretTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const overlayOpacity = overlayAnim.interpolate({
     inputRange: [0, 1],
     outputRange: [0, 0.5],
@@ -226,9 +266,11 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             <View style={styles.content}>
               {/* Header */}
               <View style={styles.header}>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-                  Menu
-                </Text>
+                <TouchableOpacity onPress={handleSecretTap} activeOpacity={0.7}>
+                  <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+                    Menu
+                  </Text>
+                </TouchableOpacity>
                 <TouchableOpacity
                   onPress={onClose}
                   style={styles.closeButton}
