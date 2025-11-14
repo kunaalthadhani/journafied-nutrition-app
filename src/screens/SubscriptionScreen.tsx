@@ -32,7 +32,7 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         {/* Intro Card */}
         <View style={[styles.introCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Unlock Journafied Premium</Text>
+          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Unlock TrackKal Premium</Text>
           <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Ad-free. Unlimited entries. Cancel anytime.</Text>
 
           <View style={styles.features}>

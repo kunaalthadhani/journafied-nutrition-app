@@ -168,7 +168,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
 
   const handleAbout = () => {
     Alert.alert(
-      'About Journafied',
+      'About TrackKal',
       'Version 1.0.0\n\nA nutrition and fitness tracking app to help you achieve your health goals.',
       [{ text: 'OK' }]
     );
@@ -300,7 +300,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
             {plan === 'free' && (
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
                 {Math.max(0, freeEntryLimit + (totalEarnedEntries || 0) - entryCount)} entries remaining
-                {totalEarnedEntries && totalEarnedEntries > 0 && (
+                {(totalEarnedEntries || 0) > 0 && (
                   <Text style={{ color: '#14B8A6' }}>
                     {' '}(includes +{totalEarnedEntries} from referrals)
                   </Text>

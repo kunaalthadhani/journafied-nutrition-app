@@ -187,7 +187,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               await dataStorage.saveEntryCount(0);
               await dataStorage.saveUserPlan('free');
               // Clear entry count from AsyncStorage as well
-              await AsyncStorage.setItem('@journafied:entryCount', '0');
+              await AsyncStorage.setItem('@trackkal:entryCount', '0');
               
               // Reset state to show registration form
               setAccountInfo(null);

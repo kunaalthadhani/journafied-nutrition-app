@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const ANALYTICS_KEY = '@journafied:analytics';
+const ANALYTICS_KEY = '@trackkal:analytics';
 
 export interface AnalyticsData {
   // App usage

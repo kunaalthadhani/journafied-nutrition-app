@@ -320,7 +320,7 @@ export const HomeScreen: React.FC = () => {
   }, [mealsByDate]);
 
   // Entry limit persistence
-  const ENTRY_COUNT_KEY = '@journafied:entryCount';
+  const ENTRY_COUNT_KEY = '@trackkal:entryCount';
   const FREE_ENTRY_LIMIT = 20;
 
   // Initialize analytics and load all data on mount

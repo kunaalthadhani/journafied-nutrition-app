@@ -13,7 +13,7 @@ interface PreferencesContextType {
 
 const PreferencesContext = createContext<PreferencesContextType | undefined>(undefined);
 
-const WEIGHT_UNIT_KEY = '@journafied:weightUnit';
+const WEIGHT_UNIT_KEY = '@trackkal:weightUnit';
 
 export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [weightUnit, setWeightUnitState] = useState<WeightUnit>('kg');

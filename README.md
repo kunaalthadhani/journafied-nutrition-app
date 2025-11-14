@@ -1,4 +1,4 @@
-# Journafied - Fitness Tracking Mobile App
+# TrackKal - Fitness Tracking Mobile App
 
 A cross-platform fitness and wellness tracking application built with React Native and Expo, featuring a clean, modern Apple Health-inspired design.
 
@@ -44,7 +44,7 @@ A cross-platform fitness and wellness tracking application built with React Nati
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd journafied-app
+   cd trackkal-app
    ```
 
 2. **Install dependencies**

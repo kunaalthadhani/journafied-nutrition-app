@@ -71,11 +71,11 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
 
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
-      const shareMessage = `Join me on Journafied! Use my referral code ${referralCode.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
+      const shareMessage = `Join me on TrackKal! Use my referral code ${referralCode.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
 
       await Share.share({
         message: shareMessage,
-        title: 'Join Journafied with my referral code',
+        title: 'Join TrackKal with my referral code',
       });
 
       // Track share event

@@ -2,19 +2,19 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Meal } from '../components/FoodLogSection';
 
 const STORAGE_KEYS = {
-  GOALS: '@journafied:goals',
-  MEALS: '@journafied:meals',
-  WEIGHT_ENTRIES: '@journafied:weightEntries',
-  ENTRY_COUNT: '@journafied:entryCount',
-  USER_PLAN: '@journafied:userPlan',
-  DEVICE_INFO: '@journafied:deviceInfo',
-  ACCOUNT_INFO: '@journafied:accountInfo',
-  PREFERENCES: '@journafied:preferences',
-  PUSH_TOKENS: '@journafied:pushTokens',
-  PUSH_HISTORY: '@journafied:pushHistory',
-  REFERRAL_CODES: '@journafied:referralCodes',
-  REFERRAL_REDEMPTIONS: '@journafied:referralRedemptions',
-  REFERRAL_REWARDS: '@journafied:referralRewards',
+  GOALS: '@trackkal:goals',
+  MEALS: '@trackkal:meals',
+  WEIGHT_ENTRIES: '@trackkal:weightEntries',
+  ENTRY_COUNT: '@trackkal:entryCount',
+  USER_PLAN: '@trackkal:userPlan',
+  DEVICE_INFO: '@trackkal:deviceInfo',
+  ACCOUNT_INFO: '@trackkal:accountInfo',
+  PREFERENCES: '@trackkal:preferences',
+  PUSH_TOKENS: '@trackkal:pushTokens',
+  PUSH_HISTORY: '@trackkal:pushHistory',
+  REFERRAL_CODES: '@trackkal:referralCodes',
+  REFERRAL_REDEMPTIONS: '@trackkal:referralRedemptions',
+  REFERRAL_REWARDS: '@trackkal:referralRewards',
 };
 
 export interface ExtendedGoalData {

@@ -30,9 +30,9 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
         <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>Journafied</Text>
+          <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>TrackKal</Text>
           <Text style={[styles.version, { color: theme.colors.textSecondary }]}>Version 1.0.0</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>Journafied helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
+          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>TrackKal helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
         </View>
 
         <View style={[styles.section, { borderColor: theme.colors.border }]}> 
