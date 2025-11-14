@@ -79,8 +79,13 @@ Example output: [
 `;
 
 export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedFood[]> {
+  // Validate API key before making request
+  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
+    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+  }
+
   try {
-    console.log('Calling OpenAI API for food analysis:', foodInput);
+    if (__DEV__) console.log('Calling OpenAI API for food analysis:', foodInput);
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -120,7 +125,7 @@ If you cannot identify any food items, return an empty array: []
       }),
     });
     
-    console.log('OpenAI API response status:', response.status);
+    if (__DEV__) console.log('OpenAI API response status:', response.status);
 
     if (!response.ok) {
       throw new Error(`OpenAI API error: ${response.status}`);
@@ -145,10 +150,10 @@ If you cannot identify any food items, return an empty array: []
     return foodsWithIds;
 
   } catch (error) {
-    console.error('Error analyzing food with ChatGPT:', error);
+    if (__DEV__) console.error('Error analyzing food with ChatGPT:', error);
     
     // Fallback to local parsing if ChatGPT fails
-    console.log('Falling back to local food parsing...');
+    if (__DEV__) console.log('Falling back to local food parsing...');
     const { parseFoodInput } = require('../utils/foodNutrition');
     return parseFoodInput(foodInput);
   }
@@ -174,13 +179,18 @@ function validateFoodResponse(foods: any[]): boolean {
  * Analyze food from an image using OpenAI Vision API
  */
 export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood[]> {
+  // Validate API key before making request
+  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
+    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+  }
+
   try {
-    console.log('Reading image as base64 from URI:', imageUri);
+    if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
     // Read image as base64 using legacy API
     const base64Image = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    console.log('Image read, length:', base64Image.length);
+    if (__DEV__) console.log('Image read, length:', base64Image.length);
 
     // Determine image format from URI
     const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
@@ -189,7 +199,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood
     // Use vision-capable model (gpt-4o or gpt-4-vision-preview)
     const visionModel = 'gpt-4o'; // or 'gpt-4-vision-preview'
     
-    console.log('Sending request to OpenAI Vision API...');
+    if (__DEV__) console.log('Sending request to OpenAI Vision API...');
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -240,19 +250,19 @@ If you cannot identify any food items, return an empty array: []
       }),
     });
 
-    console.log('OpenAI response status:', response.status);
+    if (__DEV__) console.log('OpenAI response status:', response.status);
     
     if (!response.ok) {
       const errorText = await response.text();
-      console.error('OpenAI API error response:', errorText);
+      if (__DEV__) console.error('OpenAI API error response:', errorText);
       throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
     }
 
     const data: OpenAIResponse = await response.json();
-    console.log('OpenAI response received');
+    if (__DEV__) console.log('OpenAI response received');
     
     const content = data.choices[0]?.message?.content;
-    console.log('Response content length:', content?.length || 0);
+    if (__DEV__) console.log('Response content length:', content?.length || 0);
 
     if (!content) {
       throw new Error('No response from OpenAI');
@@ -262,10 +272,10 @@ If you cannot identify any food items, return an empty array: []
     let parsedFoods;
     try {
       parsedFoods = JSON.parse(content);
-      console.log('Parsed foods count:', parsedFoods.length);
+      if (__DEV__) console.log('Parsed foods count:', parsedFoods.length);
     } catch (parseError) {
-      console.error('JSON parse error:', parseError);
-      console.error('Content:', content);
+      if (__DEV__) console.error('JSON parse error:', parseError);
+      if (__DEV__) console.error('Content:', content);
       throw new Error('Failed to parse OpenAI response as JSON');
     }
     
@@ -275,11 +285,11 @@ If you cannot identify any food items, return an empty array: []
       id: `image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
     }));
 
-    console.log('Returning parsed foods:', foodsWithIds.length);
+    if (__DEV__) console.log('Returning parsed foods:', foodsWithIds.length);
     return foodsWithIds;
 
   } catch (error) {
-    console.error('Error analyzing food from image:', error);
+    if (__DEV__) console.error('Error analyzing food from image:', error);
     throw error;
   }
 }

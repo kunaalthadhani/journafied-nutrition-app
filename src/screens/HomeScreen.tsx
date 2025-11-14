@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
 import { DateSelector } from '../components/DateSelector';
+import { CalendarModal } from '../components/CalendarModal';
 import { StatCardsSection } from '../components/StatCardsSection';
 import { BottomInputBar } from '../components/BottomInputBar';
 import { SidebarMenu } from '../components/SidebarMenu';
@@ -67,6 +68,7 @@ export const HomeScreen: React.FC = () => {
   const [showReferral, setShowReferral] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
+  const [showCalendar, setShowCalendar] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -113,17 +115,19 @@ export const HomeScreen: React.FC = () => {
   // Calculate current nutrition from current day's foods
   const currentNutrition = calculateTotalNutrition(allLoggedFoods);
   
-  // Generate macro data from saved goals with current values
+  // Generate macro data from saved goals with current values (with null safety)
   const macrosData: MacroData = {
-    carbs: { current: currentNutrition.totalCarbs, target: savedGoals.carbsGrams, unit: 'g' },
-    protein: { current: currentNutrition.totalProtein, target: savedGoals.proteinGrams, unit: 'g' },
-    fat: { current: currentNutrition.totalFat, target: savedGoals.fatGrams, unit: 'g' }
+    carbs: { current: currentNutrition.totalCarbs, target: savedGoals?.carbsGrams ?? 0, unit: 'g' },
+    protein: { current: currentNutrition.totalProtein, target: savedGoals?.proteinGrams ?? 0, unit: 'g' },
+    fat: { current: currentNutrition.totalFat, target: savedGoals?.fatGrams ?? 0, unit: 'g' }
   };
   // Calories card data (Food, Exercise, Remaining)
+  const effectiveDailyCalories = dailyCalories && dailyCalories > 0 ? dailyCalories : 1500;
+  const remainingCalories = Math.max(0, effectiveDailyCalories - currentNutrition.totalCalories);
   const macros2Data: MacroData = {
     carbs: { current: currentNutrition.totalCalories, target: 0, unit: 'cal' }, // Food calories
     protein: { current: 0, target: 0, unit: 'cal' }, // Exercise calories
-    fat: { current: dailyCalories - currentNutrition.totalCalories, target: 0, unit: 'cal' } // Remaining calories
+    fat: { current: remainingCalories, target: 0, unit: 'cal' } // Remaining calories
   };
 
   const handleMenuPress = () => {
@@ -176,7 +180,7 @@ export const HomeScreen: React.FC = () => {
         setTotalEarnedEntries(earned);
       }
     } catch (error) {
-      console.error('Error reloading referral data in settings:', error);
+      if (__DEV__) console.error('Error reloading referral data in settings:', error);
     }
     setShowSettings(true);
   };
@@ -209,8 +213,29 @@ export const HomeScreen: React.FC = () => {
     setMenuVisible(false);
     setShowAccount(true);
   };
-  const handleAccountBack = () => {
+  const handleAccountBack = async () => {
     setShowAccount(false);
+    // Reload account data to sync state after potential logout
+    try {
+      const accountInfo = await dataStorage.loadAccountInfo();
+      if (!accountInfo?.email) {
+        // Account was cleared - reset entry count and referral data
+        setEntryCount(0);
+        setReferralCode(null);
+        setTotalEarnedEntries(0);
+        // Also reload entry count from storage to ensure consistency
+        const count = await dataStorage.loadEntryCount();
+        setEntryCount(count);
+      } else {
+        // Reload referral data if account exists
+        const code = await dataStorage.getReferralCode(accountInfo.email);
+        setReferralCode(code?.code || null);
+        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+        setTotalEarnedEntries(earned);
+      }
+    } catch (error) {
+      if (__DEV__) console.error('Error reloading account data:', error);
+    }
   };
 
   const handleAbout = () => {
@@ -223,13 +248,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenReferral = () => {
-    setShowSettings(false);
     setShowReferral(true);
   };
 
   const handleReferralBack = async () => {
     setShowReferral(false);
-    setShowSettings(true);
     // Reload referral data
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
@@ -240,12 +263,12 @@ export const HomeScreen: React.FC = () => {
         setTotalEarnedEntries(earned);
       }
     } catch (error) {
-      console.error('Error reloading referral data:', error);
+      if (__DEV__) console.error('Error reloading referral data:', error);
     }
   };
 
   const handleAdminPush = () => {
-    console.log('Opening admin push console');
+    if (__DEV__) console.log('Opening admin push console');
     setShowAdminPush(true);
   };
 
@@ -265,14 +288,14 @@ export const HomeScreen: React.FC = () => {
           notificationService.recordPushClick(broadcastId);
         }
       } catch (error) {
-        console.error('Error handling notification response:', error);
+        if (__DEV__) console.error('Error handling notification response:', error);
       }
     },
     []
   );
 
   const handleGoalsSave = async (goals: ExtendedGoalData) => {
-    console.log('Goals saved:', goals);
+    if (__DEV__) console.log('Goals saved:', goals);
     setDailyCalories(goals.calories);
     setSavedGoals(goals);
     setGoalsSet(true);
@@ -280,13 +303,13 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleCalendarPress = () => {
-    setShowWeightTracker(true);
+    setShowCalendar(true);
   };
 
   const handleDateSelect = (date: Date) => {
     analyticsService.trackDateSelectorChange();
     setSelectedDate(date);
-    console.log('Date selected:', format(date, 'yyyy-MM-dd'));
+    if (__DEV__) console.log('Date selected:', format(date, 'yyyy-MM-dd'));
   };
 
   // Persist meals whenever mealsByDate changes
@@ -333,6 +356,22 @@ export const HomeScreen: React.FC = () => {
         if (Object.keys(savedMeals).length > 0) {
           setMealsByDate(savedMeals);
         }
+        
+        // Validate entry count matches actual meal count (always run)
+        let actualMealCount = 0;
+        Object.values(savedMeals).forEach(meals => {
+          actualMealCount += meals.length;
+        });
+        
+        const storedCount = await dataStorage.loadEntryCount();
+        
+        if (actualMealCount !== storedCount) {
+          if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualMealCount}`);
+          // Auto-fix by setting entry count to actual meal count
+          await dataStorage.saveEntryCount(actualMealCount);
+          await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualMealCount));
+          setEntryCount(actualMealCount);
+        }
 
         // Capture and save device info
         const deviceInfo = {
@@ -370,9 +409,14 @@ export const HomeScreen: React.FC = () => {
           const pending = redemptions.filter((r) => r.status === 'pending');
           // Check if any pending redemptions should be marked as failed (e.g., expired)
           // For now, we'll keep them pending indefinitely, but you could add expiration logic
+        } else {
+          // Account is cleared/logged out - reset entry count and referral data
+          setEntryCount(0);
+          setReferralCode(null);
+          setTotalEarnedEntries(0);
         }
       } catch (error) {
-        console.error('Error loading data:', error);
+        if (__DEV__) console.error('Error loading data:', error);
       }
     })();
 
@@ -395,13 +439,13 @@ export const HomeScreen: React.FC = () => {
     (async () => {
       const registration = await notificationService.registerDeviceAsync();
       if (registration.status === 'error') {
-        console.error('Push notification registration failed:', registration.error);
+        if (__DEV__) console.error('Push notification registration failed:', registration.error);
       } else if (registration.status === 'denied') {
-        console.log('Push notification permission denied by user.');
+        if (__DEV__) console.log('Push notification permission denied by user.');
       } else if (registration.status === 'not_physical') {
-        console.log('Push notification registration skipped: requires physical device.');
+        if (__DEV__) console.log('Push notification registration skipped: requires physical device.');
       } else if (registration.status === 'granted') {
-        console.log('Push token stored for broadcasts.');
+        if (__DEV__) console.log('Push token stored for broadcasts.');
       }
     })();
   }, []);
@@ -429,7 +473,11 @@ export const HomeScreen: React.FC = () => {
     try {
       await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(next));
       await dataStorage.saveEntryCount(next);
-    } catch {}
+    } catch (error) {
+      if (__DEV__) console.error('Error saving entry count:', error);
+      // Try to restore previous count on error
+      setEntryCount(entryCount);
+    }
   };
 
   const canAddEntry = async () => {
@@ -448,11 +496,14 @@ export const HomeScreen: React.FC = () => {
     // Calculate effective limit
     const effectiveLimit = baseLimit + bonusEntries;
 
-    return entryCount < effectiveLimit;
+    // Read entry count from storage to avoid stale state
+    const currentEntryCount = await dataStorage.loadEntryCount();
+
+    return currentEntryCount < effectiveLimit;
   };
 
   const handleInputSubmit = async (text: string) => {
-    console.log('Input submitted:', text);
+    if (__DEV__) console.log('Input submitted:', text);
 
     if (!text.trim()) return;
     // Enforce free plan entry limit for new prompts
@@ -472,7 +523,20 @@ export const HomeScreen: React.FC = () => {
 
     try {
       // Use ChatGPT for real-time food analysis
-      const parsedFoods = await analyzeFoodWithChatGPT(text);
+      let parsedFoods;
+      try {
+        parsedFoods = await analyzeFoodWithChatGPT(text);
+      } catch (apiError: any) {
+        if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
+          Alert.alert(
+            'Food Analysis Not Configured',
+            'Food analysis is not configured. Please contact support.'
+          );
+          setIsAnalyzingFood(false);
+          return;
+        }
+        throw apiError; // Re-throw other errors
+      }
 
       if (parsedFoods.length > 0) {
         // Create a new meal entry with the prompt and foods
@@ -492,7 +556,7 @@ export const HomeScreen: React.FC = () => {
         await incrementEntryCount();
         // Track meal logged
         await analyticsService.trackMealLogged(selectedDate);
-        console.log('ChatGPT parsed foods:', parsedFoods);
+        if (__DEV__) console.log('ChatGPT parsed foods:', parsedFoods);
 
         // Check referral progress after meal is successfully added
         const accountInfo = await dataStorage.loadAccountInfo();
@@ -508,23 +572,30 @@ export const HomeScreen: React.FC = () => {
               [{ text: 'Awesome!', style: 'default' }]
             );
 
-            // Reload entry count and total earned entries to reflect new bonus entries
-            const newEntryCount = await dataStorage.loadEntryCount();
-            setEntryCount(newEntryCount);
-            
-            // Reload total earned entries from referrals
+            // Reload total earned entries from referrals (this affects the limit, not the count)
             const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
             setTotalEarnedEntries(earned);
+            
+            // Note: We don't reload entryCount here because it was just incremented above
+            // The entry count is correct, and the bonus entries increase the limit, not the count
           }
           // Note: Progress messages are optional and can be noisy, so we're not showing them
         }
       } else {
-        console.log('No foods recognized by ChatGPT:', text);
-        // TODO: Show message to user that no foods were recognized
+        if (__DEV__) console.log('No foods recognized by ChatGPT:', text);
+        Alert.alert(
+          'No Food Detected',
+          'We couldn\'t recognize any food items in your input. Please try again with a clearer description.',
+          [{ text: 'OK' }]
+        );
       }
     } catch (error) {
-      console.error('Error processing food input:', error);
-      // TODO: Show error message to user
+      if (__DEV__) console.error('Error processing food input:', error);
+      Alert.alert(
+        'Error',
+        'Something went wrong while processing your food input. Please try again.',
+        [{ text: 'OK' }]
+      );
     } finally {
       setIsAnalyzingFood(false);
     }
@@ -563,7 +634,32 @@ export const HomeScreen: React.FC = () => {
     }
     try {
       setIsAnalyzingFood(true);
-      const parsedFoods = await analyzeFoodWithChatGPT(newPrompt);
+      let parsedFoods;
+      try {
+        parsedFoods = await analyzeFoodWithChatGPT(newPrompt);
+      } catch (apiError: any) {
+        if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
+          Alert.alert(
+            'Food Analysis Not Configured',
+            'Food analysis is not configured. Please contact support.'
+          );
+          setIsAnalyzingFood(false);
+          return;
+        }
+        throw apiError; // Re-throw other errors
+      }
+
+      // Check if foods were detected
+      if (parsedFoods.length === 0) {
+        Alert.alert(
+          'No Food Detected',
+          'We couldn\'t recognize any food items in your input. Please try again with a clearer description.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Update meal with new prompt and foods
       setMealsByDate(prev => {
         const currentMeals = prev[currentDateKey] || [];
         const updatedMeals = currentMeals.map(meal =>
@@ -576,23 +672,19 @@ export const HomeScreen: React.FC = () => {
           [currentDateKey]: updatedMeals,
         };
       });
-      // Count this edit as an entry
+
+      // Count this edit as an entry only after successful update
       await incrementEntryCount();
       // Track meal prompt edit
       analyticsService.trackMealPromptEdit();
     } catch (error) {
-      console.error('Error re-analyzing edited prompt:', error);
-      // Fallback: still update the prompt even if analysis failed
-      setMealsByDate(prev => {
-        const currentMeals = prev[currentDateKey] || [];
-        const updatedMeals = currentMeals.map(meal =>
-          meal.id === mealId ? { ...meal, prompt: newPrompt } : meal
-        );
-        return {
-          ...prev,
-          [currentDateKey]: updatedMeals,
-        };
-      });
+      if (__DEV__) console.error('Error re-analyzing edited prompt:', error);
+      Alert.alert(
+        'Error',
+        'Something went wrong while processing your food input. Please try again.',
+        [{ text: 'OK' }]
+      );
+      // Do NOT update meal or increment entry count on error
     } finally {
       setIsAnalyzingFood(false);
     }
@@ -612,13 +704,13 @@ export const HomeScreen: React.FC = () => {
         const transcription = await voiceService.stopRecording();
         if (transcription) {
           setTranscribedText(transcription);
-          console.log('Transcription received:', transcription);
+          if (__DEV__) console.log('Transcription received:', transcription);
         } else {
-          console.log('No transcription received');
+          if (__DEV__) console.log('No transcription received');
           alert('No transcription received. Please try again.');
         }
       } catch (error) {
-        console.error('Error stopping recording:', error);
+        if (__DEV__) console.error('Error stopping recording:', error);
         alert('Failed to transcribe audio. Please try typing instead.');
       } finally {
         setIsTranscribing(false);
@@ -630,13 +722,13 @@ export const HomeScreen: React.FC = () => {
         if (success) {
           setIsRecording(true);
           analyticsService.trackVoiceRecording();
-          console.log('Recording started successfully');
+          if (__DEV__) console.log('Recording started successfully');
         } else {
-          console.log('Failed to start recording');
+          if (__DEV__) console.log('Failed to start recording');
           alert('Failed to start recording. Please check microphone permissions.');
         }
       } catch (error) {
-        console.error('Error starting recording:', error);
+        if (__DEV__) console.error('Error starting recording:', error);
         const errorMessage = error instanceof Error ? error.message : 'Unknown error';
         if (errorMessage.includes('permission')) {
           alert('Microphone permission is required. Please enable it in your device settings.');
@@ -649,24 +741,24 @@ export const HomeScreen: React.FC = () => {
 
   const handleTakePhoto = () => {
     if (isOpeningCameraRef.current || pendingActionRef.current) {
-      console.log('Already processing, ignoring duplicate call');
+      if (__DEV__) console.log('Already processing, ignoring duplicate call');
       return;
     }
     
     analyticsService.trackCameraUsage();
-    console.log('handleTakePhoto called - setting pending action');
+    if (__DEV__) console.log('handleTakePhoto called - setting pending action');
     pendingActionRef.current = 'camera';
     setPhotoModalVisible(false);
   };
 
   const handleUploadPhoto = () => {
     if (isOpeningCameraRef.current || pendingActionRef.current) {
-      console.log('Already processing, ignoring duplicate call');
+      if (__DEV__) console.log('Already processing, ignoring duplicate call');
       return;
     }
     
     analyticsService.trackPhotoLibraryUsage();
-    console.log('handleUploadPhoto called - setting pending action');
+    if (__DEV__) console.log('handleUploadPhoto called - setting pending action');
     pendingActionRef.current = 'library';
     setPhotoModalVisible(false);
   };
@@ -719,24 +811,36 @@ export const HomeScreen: React.FC = () => {
   const analyzeUploadedImage = async (imageUri?: string) => {
     const uriToAnalyze = imageUri || uploadedImage;
     if (!uriToAnalyze) {
-      console.log('No uploaded image to analyze, imageUri:', imageUri, 'uploadedImage:', uploadedImage);
+      if (__DEV__) console.log('No uploaded image to analyze, imageUri:', imageUri, 'uploadedImage:', uploadedImage);
       return;
     }
 
     try {
       setIsAnalyzingFood(true);
-      console.log('Starting image analysis for URI:', uriToAnalyze);
+      if (__DEV__) console.log('Starting image analysis for URI:', uriToAnalyze);
       
       // Add timeout to prevent infinite hanging
-      const analysisPromise = analyzeFoodFromImage(uriToAnalyze);
-      const timeoutPromise = new Promise<ParsedFood[]>((_, reject) => 
-        setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
-      );
+      let parsedFoods;
+      try {
+        const analysisPromise = analyzeFoodFromImage(uriToAnalyze);
+        const timeoutPromise = new Promise<ParsedFood[]>((_, reject) => 
+          setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
+        );
+        
+        // Analyze the image using OpenAI Vision API
+        parsedFoods = await Promise.race([analysisPromise, timeoutPromise]);
+      } catch (apiError: any) {
+        if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
+          setUploadStatus('failed');
+          setUploadStatusMessage('Food analysis is not configured. Please contact support.');
+          setUploadStatusVisible(true);
+          setIsAnalyzingFood(false);
+          return;
+        }
+        throw apiError; // Re-throw other errors
+      }
       
-      // Analyze the image using OpenAI Vision API
-      const parsedFoods = await Promise.race([analysisPromise, timeoutPromise]);
-      
-      console.log('Analysis complete, parsed foods:', parsedFoods);
+      if (__DEV__) console.log('Analysis complete, parsed foods:', parsedFoods);
       
       if (parsedFoods.length > 0) {
         // Get current date key at the time of analysis
@@ -757,16 +861,16 @@ export const HomeScreen: React.FC = () => {
           [dateKey]: [...(prev[dateKey] || []), newMeal]
         }));
         await analyticsService.trackMealLogged(selectedDate);
-        console.log('Meal added to date:', dateKey);
+        if (__DEV__) console.log('Meal added to date:', dateKey);
         resetUploadState();
       } else {
-        console.log('No foods recognized in image');
+        if (__DEV__) console.log('No foods recognized in image');
         setUploadStatus('failed');
         setUploadStatusMessage('No food detected');
         setUploadStatusVisible(true);
       }
     } catch (error) {
-      console.error('Error analyzing image:', error);
+      if (__DEV__) console.error('Error analyzing image:', error);
       setUploadStatus('failed');
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       setUploadStatusMessage(`Failed to analyze image: ${errorMessage}`);
@@ -794,7 +898,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleClosePhotoModal = () => {
-    console.log('Closing photo modal');
+    if (__DEV__) console.log('Closing photo modal');
     setPhotoModalVisible(false);
     // Don't reset upload state here - only reset if user explicitly closes
     // resetUploadState();
@@ -802,7 +906,7 @@ export const HomeScreen: React.FC = () => {
 
   // Handle modal dismissal
   const handleModalDismiss = () => {
-    console.log('Modal dismissed, pending action:', pendingActionRef.current);
+    if (__DEV__) console.log('Modal dismissed, pending action:', pendingActionRef.current);
     if (pendingActionRef.current) {
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
@@ -827,7 +931,7 @@ export const HomeScreen: React.FC = () => {
           const action = pendingActionRef.current;
           pendingActionRef.current = null;
           
-          console.log('Fallback: Opening after modal close');
+          if (__DEV__) console.log('Fallback: Opening after modal close');
           if (action === 'camera') {
             openCameraAfterModalClose();
           } else if (action === 'library') {
@@ -845,10 +949,10 @@ export const HomeScreen: React.FC = () => {
     isOpeningCameraRef.current = true;
     
     try {
-      console.log('Opening camera after modal close...');
+      if (__DEV__) console.log('Opening camera after modal close...');
       // Check if we already have permissions
       const existingPermission = await ImagePicker.getCameraPermissionsAsync();
-      console.log('Existing camera permission:', existingPermission);
+      if (__DEV__) console.log('Existing camera permission:', existingPermission);
       
       let permissionResult;
       if (existingPermission.status === 'granted') {
@@ -859,7 +963,7 @@ export const HomeScreen: React.FC = () => {
         isOpeningCameraRef.current = false;
         return;
       } else {
-        console.log('Requesting camera permissions...');
+        if (__DEV__) console.log('Requesting camera permissions...');
         // Add timeout to prevent hanging
         const permissionPromise = ImagePicker.requestCameraPermissionsAsync();
         const timeoutPromise = new Promise((_, reject) => 
@@ -868,9 +972,9 @@ export const HomeScreen: React.FC = () => {
         
         try {
           permissionResult = await Promise.race([permissionPromise, timeoutPromise]) as typeof existingPermission;
-          console.log('Permission result:', permissionResult);
+          if (__DEV__) console.log('Permission result:', permissionResult);
         } catch (timeoutError) {
-          console.error('Permission request timeout:', timeoutError);
+          if (__DEV__) console.error('Permission request timeout:', timeoutError);
           alert('Permission request timed out. Please try again.');
           isOpeningCameraRef.current = false;
           return;
@@ -883,14 +987,14 @@ export const HomeScreen: React.FC = () => {
         return;
       }
 
-      console.log('Launching camera...');
+      if (__DEV__) console.log('Launching camera...');
       const result = await ImagePicker.launchCameraAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
       });
 
-      console.log('Camera result:', result);
+      if (__DEV__) console.log('Camera result:', result);
       isOpeningCameraRef.current = false;
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -911,11 +1015,11 @@ export const HomeScreen: React.FC = () => {
         // Pass the URI directly to avoid state timing issues
         simulateUpload(asset.uri);
       } else {
-        console.log('Camera was canceled');
+        if (__DEV__) console.log('Camera was canceled');
         resetUploadState();
       }
     } catch (error) {
-      console.error('Error taking photo:', error);
+      if (__DEV__) console.error('Error taking photo:', error);
       isOpeningCameraRef.current = false;
       alert(`Failed to take photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
       resetUploadState();
@@ -927,10 +1031,10 @@ export const HomeScreen: React.FC = () => {
     isOpeningCameraRef.current = true;
     
     try {
-      console.log('Opening library after modal close...');
+      if (__DEV__) console.log('Opening library after modal close...');
       // Check if we already have permissions
       const existingPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
-      console.log('Existing library permission:', existingPermission);
+      if (__DEV__) console.log('Existing library permission:', existingPermission);
       
       let permissionResult;
       if (existingPermission.status === 'granted') {
@@ -941,7 +1045,7 @@ export const HomeScreen: React.FC = () => {
         isOpeningCameraRef.current = false;
         return;
       } else {
-        console.log('Requesting media library permissions...');
+        if (__DEV__) console.log('Requesting media library permissions...');
         // Add timeout to prevent hanging
         const permissionPromise = ImagePicker.requestMediaLibraryPermissionsAsync();
         const timeoutPromise = new Promise((_, reject) => 
@@ -950,9 +1054,9 @@ export const HomeScreen: React.FC = () => {
         
         try {
           permissionResult = await Promise.race([permissionPromise, timeoutPromise]) as typeof existingPermission;
-          console.log('Permission result:', permissionResult);
+          if (__DEV__) console.log('Permission result:', permissionResult);
         } catch (timeoutError) {
-          console.error('Permission request timeout:', timeoutError);
+          if (__DEV__) console.error('Permission request timeout:', timeoutError);
           alert('Permission request timed out. Please try again.');
           isOpeningCameraRef.current = false;
           return;
@@ -965,14 +1069,14 @@ export const HomeScreen: React.FC = () => {
         return;
       }
 
-      console.log('Launching image picker...');
+      if (__DEV__) console.log('Launching image picker...');
       const result = await ImagePicker.launchImageLibraryAsync({
         mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: false,
         quality: 0.8,
       });
 
-      console.log('Image picker result:', result);
+      if (__DEV__) console.log('Image picker result:', result);
       isOpeningCameraRef.current = false;
 
       if (!result.canceled && result.assets && result.assets[0]) {
@@ -993,11 +1097,11 @@ export const HomeScreen: React.FC = () => {
         // Pass the URI directly to avoid state timing issues
         simulateUpload(asset.uri);
       } else {
-        console.log('Image picker was canceled');
+        if (__DEV__) console.log('Image picker was canceled');
         resetUploadState();
       }
     } catch (error) {
-      console.error('Error uploading photo:', error);
+      if (__DEV__) console.error('Error uploading photo:', error);
       isOpeningCameraRef.current = false;
       alert(`Failed to upload photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
       resetUploadState();
@@ -1089,8 +1193,6 @@ export const HomeScreen: React.FC = () => {
         onOpenSubscription={handleOpenSubscription}
         entryCount={entryCount}
         freeEntryLimit={FREE_ENTRY_LIMIT}
-        onOpenReferral={handleOpenReferral}
-        referralCode={referralCode}
         totalEarnedEntries={totalEarnedEntries}
       />
     );
@@ -1240,6 +1342,7 @@ export const HomeScreen: React.FC = () => {
           onLogin={handleAccount}
           onAbout={handleAbout}
           onAdminPush={handleAdminPush}
+          onReferral={handleOpenReferral}
         />
         
         <PhotoOptionsModal
@@ -1278,6 +1381,15 @@ export const HomeScreen: React.FC = () => {
             </View>
           </Animated.View>
         )}
+
+        <CalendarModal
+          visible={showCalendar}
+          onClose={() => setShowCalendar(false)}
+          selectedDate={selectedDate}
+          onDateSelect={handleDateSelect}
+          mealsByDate={mealsByDate}
+          dailyCalorieTarget={dailyCalories}
+        />
       </View>
     </SafeAreaView>
   );

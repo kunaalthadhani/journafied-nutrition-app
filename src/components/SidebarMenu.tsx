@@ -25,6 +25,7 @@ interface SidebarMenuProps {
   onSettings?: () => void;
   onAbout?: () => void;
   onAdminPush?: () => void;
+  onReferral?: () => void;
 }
 
 interface MenuItemProps {
@@ -96,6 +97,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onSettings,
   onAbout,
   onAdminPush,
+  onReferral,
 }) => {
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
@@ -185,6 +187,11 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
   const handleAbout = () => {
     onAbout?.();
+    onClose();
+  };
+
+  const handleReferral = () => {
+    onReferral?.();
     onClose();
   };
 
@@ -310,6 +317,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
               <MenuItem icon="user" label="Account" onPress={handleLogin} isBottom />
+              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+              <MenuItem icon="users" label="Referral" onPress={handleReferral} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="settings" label="Settings" onPress={handleSettings} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />

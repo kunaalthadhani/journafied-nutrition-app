@@ -35,7 +35,11 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
         </TouchableOpacity>
 
         {/* Center: Date Picker */}
-        <TouchableOpacity style={styles.dateContainer}>
+        <TouchableOpacity 
+          style={styles.dateContainer}
+          onPress={onCalendarPress}
+          activeOpacity={0.7}
+        >
           <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>
             {selectedDate}
           </Text>

@@ -23,8 +23,6 @@ interface SettingsScreenProps {
   onOpenSubscription?: () => void;
   entryCount?: number;
   freeEntryLimit?: number;
-  onOpenReferral?: () => void;
-  referralCode?: string | null;
   totalEarnedEntries?: number;
 }
 
@@ -109,7 +107,7 @@ interface MealReminder {
   minute: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription, entryCount = 0, freeEntryLimit = 20, onOpenReferral, referralCode, totalEarnedEntries }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription, entryCount = 0, freeEntryLimit = 20, totalEarnedEntries }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
@@ -312,40 +310,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
           </View>
         </SettingSection>
 
-        {/* Referral Program Section */}
-        {onOpenReferral && (
-          <SettingSection title="Referral Program">
-            <View style={styles.referralCard}>
-              <View style={styles.referralHeader}>
-                <Feather name="users" size={18} color="#14B8A6" />
-                <Text style={[styles.referralTitle, { color: theme.colors.textPrimary }]}>
-                  Invite Friends
-                </Text>
-              </View>
-              <Text style={[styles.referralSubtitle, { color: theme.colors.textSecondary }]}>
-                Share your code and earn +10 free entries for each friend who joins and logs 5 meals.
-              </Text>
-              {referralCode && (
-                <View style={[styles.referralCodeDisplay, { backgroundColor: theme.colors.input }]}>
-                  <Text style={[styles.referralCodeText, { color: theme.colors.textPrimary }]}>
-                    Your code: {referralCode}
-                  </Text>
-                </View>
-              )}
-              {totalEarnedEntries !== undefined && totalEarnedEntries > 0 && (
-                <Text style={[styles.referralEarned, { color: '#14B8A6' }]}>
-                  You've earned +{totalEarnedEntries} entries from referrals
-                </Text>
-              )}
-              <TouchableOpacity
-                style={[styles.referralButton, { backgroundColor: '#14B8A6' }]}
-                onPress={onOpenReferral}
-              >
-                <Text style={styles.referralButtonText}>Invite Friends</Text>
-              </TouchableOpacity>
-            </View>
-          </SettingSection>
-        )}
         {/* Preferences Section */}
         <SettingSection title="Preferences">
           <SettingItem
@@ -703,52 +667,6 @@ const styles = StyleSheet.create({
   remainingText: {
     marginTop: 8,
     fontSize: Typography.fontSize.sm,
-  },
-  referralCard: {
-    padding: 16,
-  },
-  referralHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  referralTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginLeft: 8,
-  },
-  referralSubtitle: {
-    fontSize: Typography.fontSize.sm,
-    marginBottom: 12,
-    lineHeight: 18,
-  },
-  referralCodeDisplay: {
-    borderRadius: 8,
-    padding: 12,
-    marginBottom: 8,
-  },
-  referralCodeText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-    fontFamily: 'monospace',
-    letterSpacing: 2,
-    textAlign: 'center',
-  },
-  referralEarned: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  referralButton: {
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-  referralButtonText: {
-    color: Colors.white,
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
   },
 });
 
