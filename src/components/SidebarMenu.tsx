@@ -269,7 +269,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             },
           ]}
         >
-          <SafeAreaView style={styles.safeArea} edges={['top', 'bottom', 'left', 'right']}>
+          <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
             <View style={styles.content}>
               {/* Header */}
               <View style={styles.header}>
@@ -360,7 +360,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    height: 64,
+    minHeight: 56,
   },
   headerTitle: {
     fontSize: Typography.fontSize.xl,

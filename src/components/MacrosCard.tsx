@@ -43,12 +43,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={[
                 styles.fractionText,
-                {
-                  color:
-                    data.carbs.current > data.carbs.target
-                      ? '#EF4444'
-                      : theme.colors.textPrimary,
-                },
+                { color: theme.colors.textPrimary },
               ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
@@ -68,12 +63,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={[
                 styles.fractionText,
-                {
-                  color:
-                    data.protein.current > data.protein.target
-                      ? '#EF4444'
-                      : theme.colors.textPrimary,
-                },
+                { color: theme.colors.textPrimary },
               ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
@@ -93,12 +83,7 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={[
                 styles.fractionText,
-                {
-                  color:
-                    data.fat.current > data.fat.target
-                      ? '#EF4444'
-                      : theme.colors.textPrimary,
-                },
+                { color: theme.colors.textPrimary },
               ]}
             />
             <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>

@@ -11,8 +11,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
-import { Colors } from '../constants/colors';
-import { format, startOfMonth, endOfMonth, eachDayOfInterval, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth } from 'date-fns';
+import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth } from 'date-fns';
 import { Meal } from './FoodLogSection';
 import { calculateTotalNutrition } from '../utils/foodNutrition';
 
@@ -106,7 +105,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
       transparent={false}
       onRequestClose={onClose}
     >
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onClose} style={styles.backButton}>
@@ -125,19 +124,24 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
           </View>
         </View>
 
-        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+        <ScrollView 
+          style={styles.scrollView}
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
+        >
           {/* Legend */}
           <View style={[styles.legendCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <Text style={[styles.legendTitle, { color: theme.colors.textPrimary }]}>Legend</Text>
             <View style={styles.legendRow}>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#22C55E' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#D1FAE5' }]} />
                 <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
                   Within calorie range
                 </Text>
               </View>
               <View style={styles.legendItem}>
-                <View style={[styles.legendDot, { backgroundColor: '#EF4444' }]} />
+                <View style={[styles.legendDot, { backgroundColor: '#FEE2E2' }]} />
                 <Text style={[styles.legendText, { color: theme.colors.textSecondary }]}>
                   Exceeded calories
                 </Text>
@@ -173,22 +177,17 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
                 let dateColor = theme.colors.textTertiary;
                 let backgroundColor = 'transparent';
-                let borderColor = 'transparent';
 
                 if (isCurrentMonth) {
                   if (dayData.status === 'exceeded') {
-                    backgroundColor = '#EF4444';
-                    dateColor = Colors.white;
+                    backgroundColor = '#FEE2E2';
+                    dateColor = theme.colors.textPrimary;
                   } else if (dayData.status === 'within') {
-                    backgroundColor = '#22C55E';
-                    dateColor = Colors.white;
+                    backgroundColor = '#D1FAE5';
+                    dateColor = theme.colors.textPrimary;
                   } else {
                     backgroundColor = theme.colors.input;
                     dateColor = theme.colors.textSecondary;
-                  }
-
-                  if (isSelected) {
-                    borderColor = '#14B8A6';
                   }
                 }
 
@@ -199,8 +198,6 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                       styles.calendarDay,
                       {
                         backgroundColor,
-                        borderColor,
-                        borderWidth: isSelected ? 2 : 0,
                       },
                       !isCurrentMonth && styles.calendarDayDisabled,
                     ]}
@@ -239,8 +236,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingTop: 12,
+    paddingBottom: 16,
     borderBottomWidth: 1,
+    minHeight: 56,
   },
   backButton: {
     padding: 8,
@@ -257,8 +256,11 @@ const styles = StyleSheet.create({
   monthButton: {
     padding: 8,
   },
-  content: {
+  scrollView: {
     flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
     paddingHorizontal: 16,
   },
   legendCard: {

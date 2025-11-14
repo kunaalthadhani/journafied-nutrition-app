@@ -1221,7 +1221,7 @@ export const HomeScreen: React.FC = () => {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
@@ -1246,44 +1246,13 @@ export const HomeScreen: React.FC = () => {
           onScrollEnable={setScrollEnabled}
         />
 
-        {/* Macro Exceeded Warning Banner */}
-        {(() => {
-          const exceededMacros: string[] = [];
-          if (macrosData.carbs.current > macrosData.carbs.target) {
-            exceededMacros.push('Carbs');
-          }
-          if (macrosData.protein.current > macrosData.protein.target) {
-            exceededMacros.push('Protein');
-          }
-          if (macrosData.fat.current > macrosData.fat.target) {
-            exceededMacros.push('Fat');
-          }
-
-          if (exceededMacros.length > 0) {
-            let message = '';
-            if (exceededMacros.length === 1) {
-              message = `You have exceeded ${exceededMacros[0]} today`;
-            } else if (exceededMacros.length === 2) {
-              message = `${exceededMacros[0]} and ${exceededMacros[1]} have been exceeded today`;
-            } else {
-              message = `${exceededMacros[0]}, ${exceededMacros[1]}, and ${exceededMacros[2]} have been exceeded today`;
-            }
-
-            return (
-              <View style={styles.macroWarningBanner}>
-                <Feather name="alert-circle" size={16} color={Colors.white} />
-                <Text style={styles.macroWarningText}>{message}</Text>
-              </View>
-            );
-          }
-          return null;
-        })()}
 
         {/* Scrollable Content for logs */}
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
           scrollEnabled={scrollEnabled}
         >
           {/* Food Log Section */}
@@ -1434,24 +1403,6 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 120, // Space for bottom input bar + safe area
-  },
-  macroWarningBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    marginTop: 0,
-    marginBottom: 16,
-    marginHorizontal: -16, // Extend to full width like the cards
-    backgroundColor: '#EF4444',
-    gap: 8,
-  },
-  macroWarningText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    color: Colors.white,
-    textAlign: 'center',
   },
   analyzingOverlay: {
     position: 'absolute',

@@ -375,6 +375,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       style={styles.content}
       contentContainerStyle={styles.summaryContent}
       showsVerticalScrollIndicator={false}
+      removeClippedSubviews={false}
     >
       <View
         style={[
@@ -524,7 +525,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   );
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#14B8A6" />

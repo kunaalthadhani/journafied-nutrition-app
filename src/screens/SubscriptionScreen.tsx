@@ -19,7 +19,7 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
   const [selectedPlan, setSelectedPlan] = useState<Plan>('annual');
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -29,7 +29,12 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         {/* Intro Card */}
         <View style={[styles.introCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Unlock TrackKal Premium</Text>

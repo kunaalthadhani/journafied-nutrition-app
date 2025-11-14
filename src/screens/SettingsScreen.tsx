@@ -258,7 +258,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -270,7 +270,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         {/* Subscriptions Section */}
         <SettingSection title="Subscriptions">
           <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }] }>

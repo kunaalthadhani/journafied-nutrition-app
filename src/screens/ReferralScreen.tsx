@@ -109,7 +109,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
 
   if (isLoading) {
     return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#14B8A6" />
         </View>
@@ -118,7 +118,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
   }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -130,7 +130,12 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         {/* Referral Code Card */}
         <View
           style={[

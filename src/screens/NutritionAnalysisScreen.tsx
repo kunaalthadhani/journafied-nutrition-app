@@ -31,6 +31,7 @@ type TabType = 'Calories' | 'Macros';
 
 interface DailyNutrition {
   date: Date;
+  calories: number;
   protein: number;
   fat: number;
   carbs: number;
@@ -59,12 +60,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       if (!meals || meals.length === 0) return;
       
       // Aggregate all foods from all meals for this date
+      let totalCalories = 0;
       let totalProtein = 0;
       let totalCarbs = 0;
       let totalFat = 0;
       
       meals.forEach((meal) => {
         meal.foods.forEach((food) => {
+          totalCalories += food.calories || 0;
           totalProtein += food.protein || 0;
           totalCarbs += food.carbs || 0;
           totalFat += food.fat || 0;
@@ -76,6 +79,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       
       dailyData.push({
         date,
+        calories: totalCalories,
         protein: totalProtein,
         carbs: totalCarbs,
         fat: totalFat,
@@ -142,8 +146,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const averageCalories = hasLoggedMeals
     ? Math.round(
         graphData.reduce((sum, entry) => {
-          const calories = (entry.protein * 4) + (entry.carbs * 4) + (entry.fat * 9);
-          return sum + calories;
+          return sum + entry.calories;
         }, 0) / graphData.length
       )
     : null;
@@ -179,7 +182,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Calculate calories for each day
   const caloriesData = graphData.map(entry => ({
     date: entry.date,
-    calories: (entry.protein * 4) + (entry.carbs * 4) + (entry.fat * 9),
+    calories: entry.calories,
   }));
 
   const minCalories = caloriesData.length > 0 
@@ -294,7 +297,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -306,7 +309,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         {!hasLoggedMeals && (
           <View
             style={[

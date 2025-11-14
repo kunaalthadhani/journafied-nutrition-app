@@ -143,7 +143,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -159,6 +159,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
       >
         {/* Daily Calories */}
         <View style={styles.caloriesSection}>

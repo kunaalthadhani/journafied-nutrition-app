@@ -18,7 +18,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -28,7 +28,12 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
           <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>TrackKal</Text>
           <Text style={[styles.version, { color: theme.colors.textSecondary }]}>Version 1.0.0</Text>

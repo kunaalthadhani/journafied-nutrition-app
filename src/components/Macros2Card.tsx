@@ -43,12 +43,7 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
             duration={800}
             style={[
               styles.fractionText,
-              {
-                color:
-                  data.carbs.current > dailyCalories
-                    ? '#EF4444'
-                    : theme.colors.textPrimary,
-              },
+              { color: theme.colors.textPrimary },
             ]}
           />
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>

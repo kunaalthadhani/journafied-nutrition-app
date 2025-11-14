@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -21,6 +21,7 @@ import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
 import Svg, { Path, Circle, Line } from 'react-native-svg';
 import { dataStorage } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 interface WeightTrackerScreenProps {
   onBack: () => void;
@@ -48,6 +49,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [showLogModal, setShowLogModal] = useState(false);
   const [logWeight, setLogWeight] = useState('');
   const [logDate, setLogDate] = useState(new Date());
+  const [insight, setInsight] = useState<string>('');
+  const [insightGeneratedDate, setInsightGeneratedDate] = useState<string | null>(null);
+  const [goalType, setGoalType] = useState<'lose' | 'maintain' | 'gain' | undefined>(undefined);
 
   // Sample weight data - in a real app, this would come from storage/API
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
@@ -67,12 +71,19 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const targetWeightValue = targetWeight ?? 0;
   const hasMultipleEntries = weightEntries.length >= 2;
   const startingWeight = weightEntries.length > 0 ? weightEntries[0].weight : null;
-  const dropFromStart =
+  const weightChangeFromStart =
     hasMultipleEntries && startingWeight !== null && currentWeight !== null
-      ? startingWeight - currentWeight
+      ? currentWeight - startingWeight // Positive = gained, Negative = lost
       : null;
+  
+  // Determine label and value based on goal type
+  const isGainGoal = goalType === 'gain';
+  const changeLabel = isGainGoal ? 'Gain' : 'Drop';
+  const changeValue = weightChangeFromStart !== null 
+    ? (isGainGoal ? weightChangeFromStart : -weightChangeFromStart) // For gain: show positive, for lose: show positive (drop)
+    : null;
 
-  // Load weight entries on mount
+  // Load weight entries, insight, and goal on mount
   useEffect(() => {
     (async () => {
       const savedEntries = await dataStorage.loadWeightEntries();
@@ -80,6 +91,27 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         setWeightEntries(savedEntries);
       } else if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
         setWeightEntries([{ date: new Date(), weight: initialCurrentWeightKg }]);
+      }
+      
+      // Load goal type
+      const savedGoals = await dataStorage.loadGoals();
+      if (savedGoals?.goal) {
+        setGoalType(savedGoals.goal);
+      }
+      
+      // Load saved insight if it was generated today
+      try {
+        const savedInsightData = await AsyncStorage.getItem('@trackkal:weightInsight');
+        if (savedInsightData) {
+          const { insight: savedInsight, date: savedDate } = JSON.parse(savedInsightData);
+          const today = format(new Date(), 'yyyy-MM-dd');
+          if (savedDate === today && savedInsight) {
+            setInsight(savedInsight);
+            setInsightGeneratedDate(savedDate);
+          }
+        }
+      } catch (error) {
+        // Ignore errors loading insight
       }
     })();
   }, []);
@@ -119,8 +151,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     }
   }, [targetWeightKg]);
 
-  // Filter data based on time range
-  const getFilteredData = () => {
+  // Filter data based on time range - memoized to update when timeRange or weightEntries change
+  const filteredData = useMemo(() => {
     const now = new Date();
     let startDate: Date;
     
@@ -147,10 +179,19 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         startDate = subYears(now, 1);
     }
     
-    return weightEntries.filter(entry => entry.date >= startDate);
-  };
+    // Filter and sort by date to ensure chronological order
+    const filtered = weightEntries
+      .filter(entry => {
+        // Compare dates at start of day to avoid time component issues
+        const entryDate = startOfDay(entry.date);
+        const startDateDay = startOfDay(startDate);
+        return entryDate >= startDateDay;
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    
+    return filtered;
+  }, [timeRange, weightEntries]);
 
-  const filteredData = getFilteredData();
   const graphData = filteredData.length > 0 ? filteredData : weightEntries;
   const hasGraphData = graphData.length > 0;
 
@@ -182,12 +223,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   const yAxisTicks = generateYAxisTicks();
 
-  const getDateRange = () => {
-    if (graphData.length === 0) return '';
-    const start = graphData[0].date;
-    const end = graphData[graphData.length - 1].date;
+  // Compute date range from filtered data - updates when filteredData changes
+  const dateRange = useMemo(() => {
+    // Use filteredData for date range (already sorted)
+    const dataToUse = filteredData.length > 0 ? filteredData : weightEntries;
+    if (dataToUse.length === 0) return '';
+    // Data is already sorted, so first and last are correct
+    const start = dataToUse[0].date;
+    const end = dataToUse[dataToUse.length - 1].date;
     return `${format(start, 'd MMM yyyy')} - ${format(end, 'd MMM yyyy')}`;
-  };
+  }, [filteredData, weightEntries]);
 
   // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
   const generateSmoothPath = () => {
@@ -258,12 +303,89 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const handleTimeRangeChange = (range: TimeRange) => {
     analyticsService.trackTimeRangeFilterChange();
     setTimeRange(range);
+    // Reset insight when time range changes so it regenerates with new data
+    setInsightGeneratedDate(null);
+    setInsight('');
+    // Clear stored insight so it regenerates
+    AsyncStorage.removeItem('@trackkal:weightInsight').catch(() => {
+      // Ignore storage errors
+    });
   };
 
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
 
+  // Generate insights based on weight data - only once per day
+  useEffect(() => {
+    if (!hasGraphData || graphData.length < 2) {
+      return;
+    }
+
+    // Check if we've already generated insight today
+    const today = format(new Date(), 'yyyy-MM-dd');
+    if (insightGeneratedDate === today) {
+      return; // Already generated today, don't regenerate
+    }
+
+    // Generate insight based on weight trends
+    const generateInsight = () => {
+      const weights = graphData.map(entry => entry.weight);
+      const dates = graphData.map(entry => entry.date);
+      
+      // Calculate trend
+      const firstWeight = weights[0];
+      const lastWeight = weights[weights.length - 1];
+      const weightChange = lastWeight - firstWeight;
+      const weightChangeAbs = Math.abs(weightChange);
+      const daysDiff = (dates[dates.length - 1].getTime() - dates[0].getTime()) / (1000 * 60 * 60 * 24);
+      
+      // Calculate variability (standard deviation)
+      const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
+      const variance = weights.reduce((sum, w) => sum + Math.pow(w - avgWeight, 2), 0) / weights.length;
+      const stdDev = Math.sqrt(variance);
+      const variability = stdDev / avgWeight; // Coefficient of variation
+      
+      // Calculate rate of change
+      const weeklyChange = daysDiff > 0 ? (weightChange / daysDiff) * 7 : 0;
+      
+      let insightText = '';
+      
+      if (variability > 0.02) {
+        // High variability
+        insightText = 'Your weight is fluctuating. Consider tracking hydration and sleep patterns to identify patterns.';
+      } else if (weightChangeAbs < 0.5) {
+        // Stable weight
+        insightText = 'Your weight has been stable. Great consistency! Keep maintaining your current routine.';
+      } else if (weightChange > 0.5) {
+        // Gaining weight
+        const weeklyGain = convertWeightToDisplay(Math.abs(weeklyChange));
+        insightText = `You've gained ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period (${weeklyGain.toFixed(1)} ${getWeightUnitLabel()}/week).`;
+      } else if (weightChange < -0.5) {
+        // Losing weight
+        const weeklyLoss = convertWeightToDisplay(Math.abs(weeklyChange));
+        insightText = `You've lost ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period (${weeklyLoss.toFixed(1)} ${getWeightUnitLabel()}/week). Keep up the great progress!`;
+      } else {
+        // Small change
+        insightText = 'Your weight shows minimal change. Small fluctuations are normal and expected.';
+      }
+      
+      return insightText;
+    };
+
+    const insightText = generateInsight();
+    setInsight(insightText);
+    setInsightGeneratedDate(today);
+    
+    // Save insight to storage so it persists across app restarts
+    AsyncStorage.setItem('@trackkal:weightInsight', JSON.stringify({
+      insight: insightText,
+      date: today
+    })).catch(() => {
+      // Ignore storage errors
+    });
+  }, [hasGraphData, graphData, insightGeneratedDate, convertWeightToDisplay, getWeightUnitLabel]);
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
@@ -273,7 +395,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+      <ScrollView 
+        style={styles.content} 
+        contentContainerStyle={{ flexGrow: 1 }}
+        showsVerticalScrollIndicator={false}
+        removeClippedSubviews={false}
+      >
         {!hasEntries && (
           <View
             style={[
@@ -318,18 +445,28 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           <View style={styles.summaryItem}>
           <View style={styles.changeContainer}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {dropFromStart !== null 
-                  ? `${convertWeightToDisplay(Math.abs(dropFromStart)).toFixed(1)} ${getWeightUnitLabel()}` 
+                {changeValue !== null 
+                  ? `${convertWeightToDisplay(Math.abs(changeValue)).toFixed(1)} ${getWeightUnitLabel()}` 
                   : '--'}
             </Text>
-              {dropFromStart !== null && dropFromStart > 0.05 && (
-              <Feather name="trending-down" size={16} color="#10B981" style={styles.trendIcon} />
+              {changeValue !== null && changeValue > 0.05 && (
+              <Feather 
+                name={isGainGoal ? "trending-up" : "trending-down"} 
+                size={16} 
+                color={isGainGoal ? "#10B981" : "#10B981"} 
+                style={styles.trendIcon} 
+              />
             )}
-              {dropFromStart !== null && dropFromStart < -0.05 && (
-              <Feather name="trending-up" size={16} color="#F97316" style={styles.trendIcon} />
+              {changeValue !== null && changeValue < -0.05 && (
+              <Feather 
+                name={isGainGoal ? "trending-down" : "trending-up"} 
+                size={16} 
+                color="#F97316" 
+                style={styles.trendIcon} 
+              />
             )}
           </View>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Drop</Text>
+            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{changeLabel}</Text>
           </View>
           <View style={styles.summaryItem}>
             <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
@@ -440,17 +577,22 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
               {/* Date Range */}
               <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
-                {getDateRange()}
+                {dateRange}
               </Text>
+
+              {/* Insights below date range */}
+              {insight && (
+                <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
+                  <Feather name="info" size={16} color="#14B8A6" />
+                  <View style={styles.insightTextContainer}>
+                    <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
+                      {insight}
+                    </Text>
+                  </View>
+                </View>
+              )}
             </View>
 
-            {/* Information Box */}
-            <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-              <Feather name="info" size={20} color="#14B8A6" />
-              <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                Your weight is fluctuating. Consider tracking hydration and sleep patterns.
-              </Text>
-            </View>
           </>
         )}
       </ScrollView>
@@ -655,20 +797,27 @@ const styles = StyleSheet.create({
   dateRange: {
     textAlign: 'center',
     fontSize: Typography.fontSize.sm,
-    marginBottom: 24,
+    marginBottom: 12,
   },
-  infoBox: {
+  insightBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 16,
-    borderRadius: 12,
-    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    gap: 8,
     marginBottom: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  infoText: {
+  insightTextContainer: {
     flex: 1,
-    fontSize: Typography.fontSize.sm,
-    lineHeight: 20,
+  },
+  insightText: {
+    fontSize: Typography.fontSize.xs,
+    lineHeight: 16,
   },
   emptyStateContainer: {
     borderWidth: 1,
