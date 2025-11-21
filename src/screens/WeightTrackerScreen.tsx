@@ -469,11 +469,19 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{changeLabel}</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-            {targetWeightValue > 0 
-              ? `${convertWeightToDisplay(targetWeightValue).toFixed(1)} ${getWeightUnitLabel()}` 
-              : '--'}
-            </Text>
+            {targetWeightValue > 0 ? (
+              <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
+                {`${convertWeightToDisplay(targetWeightValue).toFixed(1)} ${getWeightUnitLabel()}`}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.setGoalLink}
+                onPress={() => onRequestSetGoals?.()}
+                activeOpacity={0.85}
+              >
+                <Text style={styles.setGoalText}>Set Goal</Text>
+              </TouchableOpacity>
+            )}
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
         </View>
@@ -498,7 +506,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           },
                         ]}
                       >
-                        {convertWeightToDisplay(value).toFixed(1)}
+                        {convertWeightToDisplay(value).toFixed(0)}
                       </Text>
                     );
                   })}
@@ -716,6 +724,20 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: Typography.fontSize.sm,
+  },
+  setGoalLink: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#14B8A6',
+    marginBottom: 4,
+  },
+  setGoalText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    color: '#14B8A6',
+    textAlign: 'center',
   },
   changeContainer: {
     flexDirection: 'row',

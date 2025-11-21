@@ -24,6 +24,7 @@ interface SettingsScreenProps {
   entryCount?: number;
   freeEntryLimit?: number;
   totalEarnedEntries?: number;
+  taskBonusEntries?: number;
 }
 
 interface SettingItemProps {
@@ -107,11 +108,22 @@ interface MealReminder {
   minute: number;
 }
 
-export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = 'free', onOpenSubscription, entryCount = 0, freeEntryLimit = 20, totalEarnedEntries }) => {
+export const SettingsScreen: React.FC<SettingsScreenProps> = ({
+  onBack,
+  plan = 'free',
+  onOpenSubscription,
+  entryCount = 0,
+  freeEntryLimit = 20,
+  totalEarnedEntries,
+  taskBonusEntries,
+}) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showUnitSelector, setShowUnitSelector] = useState(false);
+  const referralBonus = totalEarnedEntries || 0;
+  const challengeBonus = taskBonusEntries || 0;
+  const totalBonusEntries = referralBonus + challengeBonus;
   
   // Meal reminder settings
   const [breakfastReminder, setBreakfastReminder] = useState<MealReminder>({
@@ -304,10 +316,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({ onBack, plan = '
             </TouchableOpacity>
             {plan === 'free' && (
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
-                {Math.max(0, freeEntryLimit + (totalEarnedEntries || 0) - entryCount)} entries remaining
-                {(totalEarnedEntries || 0) > 0 && (
+                {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining
+                {totalBonusEntries > 0 && (
                   <Text style={{ color: '#14B8A6' }}>
-                    {' '}(includes +{totalEarnedEntries} from referrals)
+                    {' '}(
+                    {[
+                      referralBonus > 0 ? `+${referralBonus} from referrals` : null,
+                      challengeBonus > 0 ? `+${challengeBonus} from challenges` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' & ')}
+                    )
                   </Text>
                 )}
               </Text>

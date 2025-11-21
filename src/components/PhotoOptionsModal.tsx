@@ -68,7 +68,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
 
         {/* Upload Area */}
         <View style={styles.uploadSection}>
-          <TouchableOpacity
+                <TouchableOpacity 
             style={[
               styles.uploadArea,
               {
@@ -79,25 +79,25 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
             ]}
             onPress={handleUploadPhoto}
             activeOpacity={0.8}
-          >
+                >
             <View style={styles.uploadContent}>
               <View style={[styles.cloudIconContainer, { backgroundColor: theme.colors.accentBg }]}>
                 <Feather name="upload-cloud" size={48} color="#14B8A6" />
-              </View>
+                  </View>
               <Text style={[styles.uploadText, { color: theme.colors.textPrimary }]}>
                 Drag & drop your image OR
               </Text>
-              <TouchableOpacity
+                <TouchableOpacity 
                 onPress={handleUploadPhoto}
-                activeOpacity={0.7}
+                  activeOpacity={0.7}
                 style={styles.browseButton}
               >
                 <Text style={[styles.browseText, { color: theme.colors.info }]}>
                   Browse files
                 </Text>
               </TouchableOpacity>
-            </View>
-          </TouchableOpacity>
+                  </View>
+                </TouchableOpacity>
 
           {/* Alternative: Take Picture */}
           <View style={styles.alternativeSection}>
@@ -106,8 +106,8 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
               <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>OR</Text>
               <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
             </View>
-
-            <TouchableOpacity
+                
+                <TouchableOpacity 
               style={[
                 styles.takePhotoButton,
                 {
@@ -117,7 +117,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
               ]}
               onPress={handleTakePhoto}
               activeOpacity={0.8}
-            >
+                >
               <View style={styles.takePhotoContent}>
                 <View style={[styles.cameraIconContainer, { backgroundColor: theme.colors.accentBg }]}>
                   <Feather name="camera" size={32} color="#14B8A6" />
@@ -132,9 +132,9 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
                 </View>
                 <Feather name="chevron-right" size={20} color="#14B8A6" />
               </View>
-            </TouchableOpacity>
-          </View>
-        </View>
+                </TouchableOpacity>
+              </View>
+            </View>
       </SafeAreaView>
     </Modal>
   );
@@ -152,7 +152,7 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
     borderBottomWidth: 1,
     height: 60,
-  },
+    },
   backButton: {
     width: 40,
     height: 40,

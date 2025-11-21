@@ -18,6 +18,8 @@ interface SetGoalsScreenProps {
   onBack: () => void;
   onSave: (goals: GoalData) => void;
   initialGoals?: GoalData;
+  onStartCustomPlan?: () => void;
+  onCustomPlanCompleted?: () => void;
 }
 
 interface GoalData {
@@ -42,7 +44,9 @@ interface GoalData {
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
   onSave,
-  initialGoals
+  initialGoals,
+  onStartCustomPlan,
+  onCustomPlanCompleted,
 }) => {
   const theme = useTheme();
   const [calories, setCalories] = useState(initialGoals?.calories || 1500);
@@ -76,6 +80,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const { proteinGrams, carbsGrams, fatGrams } = calculateMacros();
   const totalPercentage = proteinPercentage + carbsPercentage + fatPercentage;
 
+  const handleStartCustomPlan = () => {
+    setShowCalculator(true);
+    onStartCustomPlan?.();
+  };
+
   const handleCalculatedCalories = (result: CalorieCalculationResult) => {
     setCalories(result.calories);
     if (typeof result.currentWeightKg === 'number' && !isNaN(result.currentWeightKg)) {
@@ -92,6 +101,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.goal !== undefined) setGoal(result.goal);
     if (result.activityRate !== undefined) setActivityRate(result.activityRate);
     setShowCalculator(false);
+    onCustomPlanCompleted?.();
   };
 
   const handleProteinChange = (value: number) => {
@@ -161,16 +171,29 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
       >
+        <TouchableOpacity
+          style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
+          onPress={handleStartCustomPlan}
+          activeOpacity={0.85}
+        >
+          <View>
+            <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
+              Create Custom Plan
+            </Text>
+            <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
+              Answer a few questions and we’ll set everything for you.
+            </Text>
+          </View>
+          <Feather name="chevron-right" size={20} color="#14B8A6" />
+        </TouchableOpacity>
         {/* Daily Calories */}
         <View style={styles.caloriesSection}>
-          <TouchableOpacity 
+          <View 
             style={[styles.calorieBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-            onPress={() => setShowCalculator(true)}
-            activeOpacity={0.7}
           >
             <View style={styles.calorieContent}>
               <Text style={[styles.calorieNumber, { color: theme.colors.textPrimary }]}>
-                {calories === 0 ? 'Tap to calculate' : calories}
+                {calories === 0 ? 'Calculated target' : calories}
               </Text>
               {calories > 0 && (
                 <Text style={[styles.calorieLabel, { color: theme.colors.textPrimary }]}>
@@ -178,15 +201,9 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
                 </Text>
               )}
             </View>
-            <Feather 
-              name="grid" 
-              size={18} 
-              color="#14B8A6" 
-              style={styles.calculatorIcon}
-            />
-          </TouchableOpacity>
+          </View>
           <Text style={[styles.calorieHelperText, { color: theme.colors.textSecondary }]}>
-            Tap to calculate your daily calories
+            Use “Create Custom Plan” above to calculate automatically.
           </Text>
         </View>
 
@@ -422,6 +439,26 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
     marginTop: 8,
     textAlign: 'center',
+  },
+  customPlanButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    marginTop: 16,
+    marginBottom: 8,
+    gap: 12,
+  },
+  customPlanTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  customPlanSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    marginTop: 4,
   },
   macrosSection: {
     marginTop: 20,

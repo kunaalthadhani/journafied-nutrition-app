@@ -15,6 +15,8 @@ const STORAGE_KEYS = {
   REFERRAL_CODES: '@trackkal:referralCodes',
   REFERRAL_REDEMPTIONS: '@trackkal:referralRedemptions',
   REFERRAL_REWARDS: '@trackkal:referralRewards',
+  SAVED_PROMPTS: '@trackkal:savedPrompts',
+  ENTRY_TASKS: '@trackkal:entryTasks',
 };
 
 export interface ExtendedGoalData {
@@ -97,6 +99,20 @@ export interface ReferralReward {
   entriesAwarded: number; // number of entries awarded (typically 10)
   reason: 'referrer_reward' | 'referee_reward'; // why the reward was given
   relatedRedemptionId: string; // links to the ReferralRedemption that triggered this
+}
+
+export interface SavedPrompt {
+  id: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type EntryTaskType = 'customPlan' | 'registration';
+
+export interface EntryTasksStatus {
+  customPlanCompleted: boolean;
+  registrationCompleted: boolean;
 }
 
 export const dataStorage = {
@@ -356,6 +372,102 @@ export const dataStorage = {
     } catch (error) {
       console.error('Error incrementing push history clicks:', error);
     }
+  },
+
+  // Saved prompt helpers
+  async loadSavedPrompts(): Promise<SavedPrompt[]> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
+      if (!data) return [];
+      const parsed = JSON.parse(data);
+      return Array.isArray(parsed)
+        ? parsed.filter((item: SavedPrompt) => typeof item?.id === 'string' && typeof item?.text === 'string')
+        : [];
+    } catch (error) {
+      console.error('Error loading saved prompts:', error);
+      return [];
+    }
+  },
+
+  async saveSavedPrompts(prompts: SavedPrompt[]): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SAVED_PROMPTS, JSON.stringify(prompts));
+    } catch (error) {
+      console.error('Error saving prompts:', error);
+    }
+  },
+
+  async addSavedPrompt(prompt: SavedPrompt): Promise<void> {
+    try {
+      const existing = await this.loadSavedPrompts();
+      const updated = [prompt, ...existing];
+      await this.saveSavedPrompts(updated);
+    } catch (error) {
+      console.error('Error adding saved prompt:', error);
+    }
+  },
+
+  async removeSavedPrompt(id: string): Promise<void> {
+    try {
+      const existing = await this.loadSavedPrompts();
+      const updated = existing.filter(prompt => prompt.id !== id);
+      await this.saveSavedPrompts(updated);
+    } catch (error) {
+      console.error('Error removing saved prompt:', error);
+    }
+  },
+
+  // Entry task reward helpers
+  async loadEntryTasks(): Promise<EntryTasksStatus> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
+      if (!data) {
+        return { customPlanCompleted: false, registrationCompleted: false };
+      }
+      const parsed = JSON.parse(data);
+      return {
+        customPlanCompleted: !!parsed.customPlanCompleted,
+        registrationCompleted: !!parsed.registrationCompleted,
+      };
+    } catch (error) {
+      console.error('Error loading entry tasks:', error);
+      return { customPlanCompleted: false, registrationCompleted: false };
+    }
+  },
+
+  async saveEntryTasks(status: EntryTasksStatus): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(status));
+    } catch (error) {
+      console.error('Error saving entry tasks:', error);
+    }
+  },
+
+  async completeEntryTask(task: EntryTaskType): Promise<{ status: EntryTasksStatus; awarded: boolean }> {
+    try {
+      const current = await this.loadEntryTasks();
+      const taskKey =
+        task === 'customPlan' ? 'customPlanCompleted' : 'registrationCompleted';
+      if (current[taskKey]) {
+        return { status: current, awarded: false };
+      }
+      const updated: EntryTasksStatus = { ...current, [taskKey]: true };
+      await this.saveEntryTasks(updated);
+      return { status: updated, awarded: true };
+    } catch (error) {
+      console.error('Error completing entry task:', error);
+      return {
+        status: { customPlanCompleted: false, registrationCompleted: false },
+        awarded: false,
+      };
+    }
+  },
+
+  getEntryTaskBonus(status?: EntryTasksStatus): number {
+    const resolved = status || { customPlanCompleted: false, registrationCompleted: false };
+    const bonusPerTask = 5;
+    return (resolved.customPlanCompleted ? bonusPerTask : 0) +
+      (resolved.registrationCompleted ? bonusPerTask : 0);
   },
 
   // Referral code storage methods

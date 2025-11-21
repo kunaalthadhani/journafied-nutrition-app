@@ -11,7 +11,7 @@ export const Colors = {
   ring: '#94A3B8', // slate-400
 
   // Text colors
-  primaryText: '#0F172A', // slate-900
+  primaryText: '#475569', // slate-600
   secondaryText: '#475569', // slate-600
   tertiaryText: '#94A3B8', // slate-400
 

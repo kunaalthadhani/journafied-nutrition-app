@@ -26,6 +26,7 @@ interface SidebarMenuProps {
   onAbout?: () => void;
   onAdminPush?: () => void;
   onReferral?: () => void;
+  onFreeEntries?: () => void;
 }
 
 interface MenuItemProps {
@@ -98,6 +99,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onAbout,
   onAdminPush,
   onReferral,
+  onFreeEntries,
 }) => {
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
@@ -192,6 +194,11 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
   const handleReferral = () => {
     onReferral?.();
+    onClose();
+  };
+
+  const handleFreeEntries = () => {
+    onFreeEntries?.();
     onClose();
   };
 
@@ -294,7 +301,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               <View style={styles.menuSection}>
                 <MenuItem
                   icon="target"
-                  label="Set Goals"
+                  label="Custom Plan"
                   onPress={handleSetGoals}
                 />
                 {/* Separator between Set Goals and Weight Tracker */}
@@ -316,6 +323,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
+              <MenuItem icon="gift" label="Get Free Entries" onPress={handleFreeEntries} isBottom />
+              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="user" label="Account" onPress={handleLogin} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="users" label="Referral" onPress={handleReferral} isBottom />

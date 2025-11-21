@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Menu, ChevronDown, TrendingUp, BarChart3 } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -31,7 +31,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           onPress={onMenuPress}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Feather name="menu" size={24} color="#14B8A6" />
+          <Menu color="#14B8A6" size={24} strokeWidth={2.6} />
         </TouchableOpacity>
 
         {/* Center: Date Picker */}
@@ -43,12 +43,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>
             {selectedDate}
           </Text>
-          <Feather 
-            name="chevron-down" 
-            size={16} 
-            color="#14B8A6" 
-            style={styles.chevronIcon}
-          />
+          <ChevronDown color="#14B8A6" size={16} strokeWidth={2.6} style={styles.chevronIcon} />
         </TouchableOpacity>
 
         {/* Right: Icons */}
@@ -58,14 +53,14 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             onPress={onWeightTrackerPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="trending-up" size={22} color="#14B8A6" />
+            <TrendingUp color="#14B8A6" size={22} strokeWidth={2.6} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.iconContainer} 
             onPress={onNutritionAnalysisPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="bar-chart-2" size={22} color="#14B8A6" />
+            <BarChart3 color="#14B8A6" size={22} strokeWidth={2.6} />
           </TouchableOpacity>
         </View>
       </View>

@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
@@ -10,6 +11,7 @@ import { Terminal } from './Terminal';
 import { TypingAnimation } from './TypingAnimation';
 import { AnimatedSpan } from './AnimatedSpan';
 import { useTheme } from '../constants/theme';
+import { SavedPrompt } from '../services/dataStorage';
 
 export interface Meal {
   id: string;
@@ -23,15 +25,33 @@ interface FoodLogSectionProps {
   meals: Meal[];
   onRemoveFood: (foodId: string) => void;
   onEditMealPrompt?: (mealId: string, newPrompt: string) => Promise<void> | void;
+  savedPrompts?: SavedPrompt[];
+  onToggleSavePrompt?: (meal: Meal) => void;
+  onDeleteMeal?: (mealId: string) => void;
 }
 
-export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveFood, onEditMealPrompt }) => {
+export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
+  meals,
+  onRemoveFood,
+  onEditMealPrompt,
+  savedPrompts = [],
+  onToggleSavePrompt,
+  onDeleteMeal,
+}) => {
   const theme = useTheme();
   const [animatedMeals, setAnimatedMeals] = useState<Set<string>>(new Set());
   const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
+
+  const savedPromptLookup = useMemo(() => {
+    const map = new Map<string, string>();
+    savedPrompts.forEach(prompt => {
+      map.set(prompt.text.trim().toLowerCase(), prompt.id);
+    });
+    return map;
+  }, [savedPrompts]);
 
   const handleFoodPress = (food: ParsedFood) => {
     setSelectedFood(food);
@@ -141,15 +161,30 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
                         >
                           {`> ${meal.prompt}`}
                         </TypingAnimation>
-                        {onEditMealPrompt && (
-                          <TouchableOpacity
-                            style={styles.editIconButton}
-                            onPress={() => handleStartEditPrompt(meal)}
-                            hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                          >
-                            <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
-                          </TouchableOpacity>
-                        )}
+                        <View style={styles.promptActions}>
+                          {onToggleSavePrompt && (
+                            <TouchableOpacity
+                              style={styles.bookmarkButton}
+                              onPress={() => onToggleSavePrompt(meal)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              {savedPromptLookup.has(meal.prompt.trim().toLowerCase()) ? (
+                                <BookmarkCheck size={16} color="#14B8A6" strokeWidth={2.6} />
+                              ) : (
+                                <BookmarkPlus size={16} color={theme.colors.textSecondary} strokeWidth={2.6} />
+                              )}
+                            </TouchableOpacity>
+                          )}
+                          {onEditMealPrompt && (
+                            <TouchableOpacity
+                              style={styles.editIconButton}
+                              onPress={() => handleStartEditPrompt(meal)}
+                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                            >
+                              <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
                       {isMealUpdating && editingMealId === meal.id && (
                         <Text style={[styles.updatingText, { color: theme.colors.textTertiary }]}>
@@ -201,19 +236,29 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({ meals, onRemoveF
                 );
               })}
 
-              {/* Success message - once per meal */}
-              {meal.foods.length > 0 && (
-                <TypingAnimation
-                  speed={30}
-                  style={{ 
-                    color: theme.colors.textSecondary, 
-                    marginTop: 8,
-                    fontSize: 12 
-                  }}
-                >
-                  {`Success! Added ${meal.foods.length} food item${meal.foods.length > 1 ? 's' : ''}.`}
-                </TypingAnimation>
-              )}
+              {/* Footer actions */}
+              <View style={styles.mealFooter}>
+                {meal.foods.length > 0 && (
+                  <TypingAnimation
+                    speed={30}
+                    style={{ 
+                      color: theme.colors.textSecondary, 
+                      fontSize: 12 
+                    }}
+                  >
+                    {`Success! Added ${meal.foods.length} food item${meal.foods.length > 1 ? 's' : ''}.`}
+                  </TypingAnimation>
+                )}
+                {onDeleteMeal && (
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={() => onDeleteMeal(meal.id)}
+                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                  >
+                    <Feather name="trash-2" size={14} color="#EF4444" />
+                  </TouchableOpacity>
+                )}
+              </View>
             </Terminal>
           );
         })}
@@ -312,15 +357,23 @@ const styles = StyleSheet.create({
   promptTextWrapper: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   promptText: {
     flex: 1,
     fontSize: 12,
   },
+  promptActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginLeft: 8,
+    gap: 4,
+  },
   editIconButton: {
     padding: 4,
-    marginLeft: 8,
+  },
+  bookmarkButton: {
+    padding: 4,
   },
   promptInput: {
     flex: 1,
@@ -365,6 +418,22 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     marginLeft: Spacing.sm,
+  },
+  mealFooter: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  deleteButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.2)',
+    backgroundColor: 'rgba(239, 68, 68, 0.08)',
   },
   modalOverlay: {
     flex: 1,

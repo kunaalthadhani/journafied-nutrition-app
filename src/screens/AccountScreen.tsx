@@ -37,6 +37,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const [entryCount, setEntryCount] = useState(0);
   const [plan, setPlan] = useState<'free' | 'premium'>('free');
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
+  const [taskBonusEntries, setTaskBonusEntries] = useState(0);
   const [referralDetails, setReferralDetails] = useState<{
     code: string | null;
     totalReferrals: number;
@@ -108,6 +109,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           goal: goalWeight,
           change,
         });
+
+        const tasksStatus = await dataStorage.loadEntryTasks();
+        setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
       } catch (error) {
         console.error('Error loading account data:', error);
       } finally {
@@ -146,7 +150,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const remainingEntries =
     plan === 'premium'
       ? null
-      : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries - entryCount);
+      : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries - entryCount);
 
   const handleResetPassword = () => {
     Alert.alert(
@@ -260,14 +264,16 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     // Generate referral code for the new user
     await referralService.getOrCreateReferralCode(email.trim());
 
-    if (referralRedemption) {
-      Alert.alert(
-        'Referral Code Applied!',
-        'Your referral code has been applied. Log 5 meals to unlock +10 free entries for you and your friend!'
-      );
-    } else {
-      Alert.alert('Registered', 'Your account has been created.');
+    const rewardResult = await dataStorage.completeEntryTask('registration');
+    let registrationMessage = referralRedemption
+      ? 'Your referral code has been applied. Log 5 meals to unlock +10 free entries for you and your friend!'
+      : 'Your account has been created.';
+    if (rewardResult.awarded) {
+      registrationMessage += '\n\nYou unlocked +5 free entries for registering!';
+      const tasksStatus = await dataStorage.loadEntryTasks();
+      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
     }
+    Alert.alert('Registered', registrationMessage);
 
     // Call onBack or navigate back
     onBack();
@@ -446,7 +452,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
             </Text>
             {plan !== 'premium' && (
               <Text style={[styles.statHelper, { color: theme.colors.textSecondary }]}>
-                out of {FREE_ENTRY_LIMIT + totalEarnedEntries}
+                out of {FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries}
               </Text>
             )}
           </View>

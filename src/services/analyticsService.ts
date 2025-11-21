@@ -51,6 +51,8 @@ export interface AnalyticsData {
   averageWeightEntriesPerWeek: number;
   totalMealsLogged: number;
   totalWeightEntries: number;
+  savedPromptsSaved: number;
+  savedPromptsReused: number;
 
   // Referral tracking
   referralCodesGenerated: number;
@@ -103,6 +105,8 @@ const defaultAnalytics: AnalyticsData = {
   averageWeightEntriesPerWeek: 0,
   totalMealsLogged: 0,
   totalWeightEntries: 0,
+  savedPromptsSaved: 0,
+  savedPromptsReused: 0,
   referralCodesGenerated: 0,
   referralCodesShared: 0,
   referralCodesSharedByMethod: { share: 0, copy: 0, link: 0 },
@@ -267,6 +271,18 @@ class AnalyticsService {
   async trackSubscriptionScreenOpen(): Promise<void> {
     await this.initialize();
     this.analytics.subscriptionScreenOpens++;
+    await this.save();
+  }
+
+  async trackSavedPromptAdded(): Promise<void> {
+    await this.initialize();
+    this.analytics.savedPromptsSaved++;
+    await this.save();
+  }
+
+  async trackSavedPromptReused(): Promise<void> {
+    await this.initialize();
+    this.analytics.savedPromptsReused++;
     await this.save();
   }
 

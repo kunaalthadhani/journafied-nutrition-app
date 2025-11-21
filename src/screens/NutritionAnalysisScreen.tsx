@@ -19,6 +19,7 @@ import { analyticsService } from '../services/analyticsService';
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
   onRequestLogMeal?: () => void;
+  onRequestSetGoals?: () => void;
   mealsByDate?: Record<string, Meal[]>;
   targetCalories?: number;
   targetProtein?: number;
@@ -40,6 +41,7 @@ interface DailyNutrition {
 export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = ({
   onBack,
   onRequestLogMeal,
+  onRequestSetGoals,
   mealsByDate = {},
   targetCalories: targetCaloriesProp,
   targetProtein: targetProteinProp,
@@ -49,6 +51,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
+  const handleSetGoalPress = () => {
+    if (onRequestSetGoals) {
+      onRequestSetGoals();
+    } else if (onBack) {
+      onBack();
+    }
+  };
 
   // Transform mealsByDate into DailyNutrition format
   const nutritionData = useMemo<DailyNutrition[]>(() => {
@@ -355,9 +364,19 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Average</Text>
           </View>
           <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {hasTargetCalories ? `${targetCalories} Kcal` : '--'}
-            </Text>
+            {hasTargetCalories ? (
+              <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
+                {`${targetCalories} Kcal`}
+              </Text>
+            ) : (
+              <TouchableOpacity
+                style={styles.setGoalLink}
+                onPress={handleSetGoalPress}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.setGoalText, { color: '#14B8A6' }]}>Set Goal</Text>
+              </TouchableOpacity>
+            )}
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
         </View>
@@ -804,6 +823,19 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     fontSize: Typography.fontSize.sm,
+  },
+  setGoalLink: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: '#14B8A6',
+    marginBottom: 4,
+  },
+  setGoalText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    textAlign: 'center',
   },
   tabContainer: {
     flexDirection: 'row',

@@ -4,6 +4,7 @@ import {
   Text,
   StyleSheet,
   ScrollView,
+  TouchableOpacity,
   InteractionManager,
   ActivityIndicator,
   Animated,
@@ -29,6 +30,7 @@ import { AccountScreen } from './AccountScreen';
 import { AboutScreen } from './AboutScreen';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
+import { FreeEntriesScreen } from './FreeEntriesScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -42,7 +44,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useTheme } from '../constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dataStorage, ExtendedGoalData } from '../services/dataStorage';
+import { dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import { notificationService } from '../services/notificationService';
 import { referralService } from '../services/referralService';
@@ -102,6 +104,14 @@ export const HomeScreen: React.FC = () => {
   const [showAnalyzingOverlay, setShowAnalyzingOverlay] = useState(false);
   const [goalsSet, setGoalsSet] = useState(false);
   const [shouldFocusInput, setShouldFocusInput] = useState(false);
+  const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+  const [entryTasks, setEntryTasks] = useState<EntryTasksStatus>({
+    customPlanCompleted: false,
+    registrationCompleted: false,
+  });
+  const [taskBonusEntries, setTaskBonusEntries] = useState(0);
+  const [showFreeEntries, setShowFreeEntries] = useState(false);
   
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -129,7 +139,6 @@ export const HomeScreen: React.FC = () => {
     protein: { current: 0, target: 0, unit: 'cal' }, // Exercise calories
     fat: { current: remainingCalories, target: 0, unit: 'cal' } // Remaining calories
   };
-
   const handleMenuPress = () => {
     setMenuVisible(true);
   };
@@ -145,6 +154,11 @@ export const HomeScreen: React.FC = () => {
 
   const handleOpenSetGoalsFromWeightTracker = () => {
     setShowWeightTracker(false);
+    setShowSetGoals(true);
+  };
+
+  const handleOpenSetGoalsFromNutritionAnalysis = () => {
+    setShowNutritionAnalysis(false);
     setShowSetGoals(true);
   };
 
@@ -173,6 +187,7 @@ export const HomeScreen: React.FC = () => {
     // Reload referral data to ensure it's up to date
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
+      setAccountInfo(accountInfo || null);
       if (accountInfo?.email) {
         const code = await dataStorage.getReferralCode(accountInfo.email);
         setReferralCode(code?.code || null);
@@ -218,6 +233,7 @@ export const HomeScreen: React.FC = () => {
     // Reload account data to sync state after potential logout
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
+      setAccountInfo(accountInfo || null);
       if (!accountInfo?.email) {
         // Account was cleared - reset entry count and referral data
         setEntryCount(0);
@@ -233,6 +249,7 @@ export const HomeScreen: React.FC = () => {
         const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
         setTotalEarnedEntries(earned);
       }
+      await refreshEntryTasks();
     } catch (error) {
       if (__DEV__) console.error('Error reloading account data:', error);
     }
@@ -256,6 +273,7 @@ export const HomeScreen: React.FC = () => {
     // Reload referral data
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
+      setAccountInfo(accountInfo || null);
       if (accountInfo?.email) {
         const code = await dataStorage.getReferralCode(accountInfo.email);
         setReferralCode(code?.code || null);
@@ -265,6 +283,25 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       if (__DEV__) console.error('Error reloading referral data:', error);
     }
+  };
+
+  const handleOpenFreeEntries = () => {
+    setMenuVisible(false);
+    setShowFreeEntries(true);
+  };
+
+  const handleFreeEntriesBack = () => {
+    setShowFreeEntries(false);
+  };
+
+  const handleCustomPlanTaskNavigate = () => {
+    setShowFreeEntries(false);
+    handleSetGoals();
+  };
+
+  const handleRegistrationTaskNavigate = () => {
+    setShowFreeEntries(false);
+    handleAccount();
   };
 
   const handleAdminPush = () => {
@@ -322,6 +359,33 @@ export const HomeScreen: React.FC = () => {
   // Entry limit persistence
   const ENTRY_COUNT_KEY = '@trackkal:entryCount';
   const FREE_ENTRY_LIMIT = 20;
+  const MAX_SAVED_PROMPTS = 6;
+  const TASK_BONUS_PER_ACTION = 5;
+  const normalizePromptText = (value: string) => value.trim().toLowerCase();
+  const createSavedPrompt = (text: string): SavedPrompt => {
+    const timestamp = new Date().toISOString();
+    return {
+      id: `prompt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      text,
+      createdAt: timestamp,
+      updatedAt: timestamp,
+    };
+  };
+  const persistSavedPrompts = async (prompts: SavedPrompt[]) => {
+    try {
+      await dataStorage.saveSavedPrompts(prompts);
+    } catch (error) {
+      if (__DEV__) console.error('Error persisting saved prompts:', error);
+    }
+  };
+  const calculateTaskBonus = (status: EntryTasksStatus) =>
+    (status.customPlanCompleted ? TASK_BONUS_PER_ACTION : 0) +
+    (status.registrationCompleted ? TASK_BONUS_PER_ACTION : 0);
+  const refreshEntryTasks = async () => {
+    const status = await dataStorage.loadEntryTasks();
+    setEntryTasks(status);
+    setTaskBonusEntries(calculateTaskBonus(status));
+  };
 
   // Initialize analytics and load all data on mount
   useEffect(() => {
@@ -373,6 +437,16 @@ export const HomeScreen: React.FC = () => {
           setEntryCount(actualMealCount);
         }
 
+        // Load saved prompts (cap to latest 6)
+        const storedPrompts = await dataStorage.loadSavedPrompts();
+        if (storedPrompts.length > 0) {
+          setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
+        }
+
+        const tasksStatus = await dataStorage.loadEntryTasks();
+        setEntryTasks(tasksStatus);
+        setTaskBonusEntries(calculateTaskBonus(tasksStatus));
+
         // Capture and save device info
         const deviceInfo = {
           deviceName: Device.deviceName || 'Unknown',
@@ -387,6 +461,7 @@ export const HomeScreen: React.FC = () => {
 
         // Load referral code and earned entries
         const accountInfo = await dataStorage.loadAccountInfo();
+        setAccountInfo(accountInfo || null);
         if (accountInfo?.email) {
           // Ensure user has a referral code
           let code = await dataStorage.getReferralCode(accountInfo.email);
@@ -494,7 +569,7 @@ export const HomeScreen: React.FC = () => {
     }
 
     // Calculate effective limit
-    const effectiveLimit = baseLimit + bonusEntries;
+    const effectiveLimit = baseLimit + bonusEntries + taskBonusEntries;
 
     // Read entry count from storage to avoid stale state
     const currentEntryCount = await dataStorage.loadEntryCount();
@@ -688,6 +763,79 @@ export const HomeScreen: React.FC = () => {
     } finally {
       setIsAnalyzingFood(false);
     }
+  };
+
+  const handleDeleteMeal = (mealId: string) => {
+    Alert.alert(
+      'Delete Prompt',
+      'Are you sure you want to delete this prompt and its foods?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setMealsByDate(prev => {
+              const currentMeals = prev[currentDateKey] || [];
+              const updatedMeals = currentMeals.filter(meal => meal.id !== mealId);
+              return {
+                ...prev,
+                [currentDateKey]: updatedMeals,
+              };
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleCustomPlanTaskReward = async () => {
+    const result = await dataStorage.completeEntryTask('customPlan');
+    if (result.awarded) {
+      const bonus = calculateTaskBonus(result.status);
+      setEntryTasks(result.status);
+      setTaskBonusEntries(bonus);
+      Alert.alert('Bonus Unlocked', 'Custom plan created! +5 free entries added to your limit.');
+    }
+  };
+
+  const handleToggleSavePrompt = async (meal: Meal) => {
+    const trimmedPrompt = meal.prompt?.trim();
+    if (!trimmedPrompt) return;
+
+    const normalized = normalizePromptText(trimmedPrompt);
+    const existing = savedPrompts.find(
+      prompt => normalizePromptText(prompt.text) === normalized
+    );
+
+    if (existing) {
+      const updated = savedPrompts.filter(prompt => prompt.id !== existing.id);
+      setSavedPrompts(updated);
+      await persistSavedPrompts(updated);
+      return;
+    }
+
+    const sanitized = savedPrompts.filter(
+      prompt => normalizePromptText(prompt.text) !== normalized
+    );
+    const newPrompt = createSavedPrompt(trimmedPrompt);
+    const updated = [newPrompt, ...sanitized].slice(0, MAX_SAVED_PROMPTS);
+    setSavedPrompts(updated);
+    await persistSavedPrompts(updated);
+    await analyticsService.trackSavedPromptAdded();
+  };
+
+  const handleSelectSavedPrompt = async (prompt: SavedPrompt) => {
+    setTranscribedText(prompt.text);
+    setShouldFocusInput(true);
+    setHasUserTyped(true);
+    await analyticsService.trackSavedPromptReused();
+  };
+
+  const handleRemoveSavedPrompt = async (id: string) => {
+    const updated = savedPrompts.filter(prompt => prompt.id !== id);
+    setSavedPrompts(updated);
+    await persistSavedPrompts(updated);
   };
 
   const handlePlusPress = () => {
@@ -1142,6 +1290,23 @@ export const HomeScreen: React.FC = () => {
 
   // Removed floating blob animation
 
+  const entryTaskItems = [
+    {
+      id: 'customPlan',
+      title: 'Create a Custom Plan',
+      description: '+5 free entries when you finish the questionnaire.',
+      completed: entryTasks.customPlanCompleted,
+      onPress: handleCustomPlanTaskNavigate,
+    },
+    {
+      id: 'registration',
+      title: 'Register your TrackKal account',
+      description: '+5 free entries and sync across devices.',
+      completed: entryTasks.registrationCompleted,
+      onPress: handleRegistrationTaskNavigate,
+    },
+  ];
+
   const formattedDate = format(selectedDate, 'MMMM d, yyyy');
 
   if (showAdminPush) {
@@ -1156,6 +1321,11 @@ export const HomeScreen: React.FC = () => {
         onBack={handleGoalsBack}
         onSave={handleGoalsSave}
         initialGoals={savedGoals}
+        onStartCustomPlan={() => {
+          setShowSetGoals(false);
+          setShowSetGoals(true);
+        }}
+        onCustomPlanCompleted={handleCustomPlanTaskReward}
       />
     );
   }
@@ -1176,6 +1346,7 @@ export const HomeScreen: React.FC = () => {
       <NutritionAnalysisScreen 
         onBack={handleNutritionAnalysisBack}
         onRequestLogMeal={handleRequestLogMeal}
+        onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
         mealsByDate={mealsByDate}
         targetCalories={goalsSet ? savedGoals.calories : undefined}
         targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
@@ -1194,6 +1365,7 @@ export const HomeScreen: React.FC = () => {
         entryCount={entryCount}
         freeEntryLimit={FREE_ENTRY_LIMIT}
         totalEarnedEntries={totalEarnedEntries}
+        taskBonusEntries={taskBonusEntries}
       />
     );
   }
@@ -1216,9 +1388,18 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-  if (showReferral) {
-    return <ReferralScreen onBack={handleReferralBack} />;
+  if (showFreeEntries) {
+    return (
+      <FreeEntriesScreen
+        tasks={entryTaskItems}
+        onBack={handleFreeEntriesBack}
+      />
+    );
   }
+
+if (showReferral) {
+  return <ReferralScreen onBack={handleReferralBack} />;
+}
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
@@ -1246,7 +1427,6 @@ export const HomeScreen: React.FC = () => {
           onScrollEnable={setScrollEnabled}
         />
 
-
         {/* Scrollable Content for logs */}
         <ScrollView
           style={styles.scrollView}
@@ -1260,6 +1440,9 @@ export const HomeScreen: React.FC = () => {
             meals={currentDayMeals}
             onRemoveFood={handleRemoveFood}
             onEditMealPrompt={handleEditMealPrompt}
+            savedPrompts={savedPrompts}
+            onToggleSavePrompt={handleToggleSavePrompt}
+            onDeleteMeal={handleDeleteMeal}
           />
 
           {/* Motivational Text - only show if no meals logged for current day */}
@@ -1293,6 +1476,9 @@ export const HomeScreen: React.FC = () => {
             setShouldFocusInput(false);
           }}
           autoFocus={shouldFocusInput}
+          quickPrompts={savedPrompts}
+          onQuickPromptPress={handleSelectSavedPrompt}
+          onQuickPromptRemove={handleRemoveSavedPrompt}
           placeholder={
             isAnalyzingFood ? "Analyzing your food..." : 
             isRecording ? "Recording..." : 
@@ -1312,6 +1498,7 @@ export const HomeScreen: React.FC = () => {
           onAbout={handleAbout}
           onAdminPush={handleAdminPush}
           onReferral={handleOpenReferral}
+          onFreeEntries={handleOpenFreeEntries}
         />
         
         <PhotoOptionsModal
@@ -1402,7 +1589,7 @@ const styles = StyleSheet.create({
     lineHeight: Typography.lineHeight.relaxed * Typography.fontSize.md,
   },
   bottomSpacer: {
-    height: 120, // Space for bottom input bar + safe area
+    height: 160, // Space for bottom input bar + chips + safe area
   },
   analyzingOverlay: {
     position: 'absolute',

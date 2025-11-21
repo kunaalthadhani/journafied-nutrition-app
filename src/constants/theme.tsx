@@ -45,7 +45,7 @@ const lightTheme: Theme = {
 		input: '#F1F5F9',
 		border: '#E5E7EB',
 		ring: '#94A3B8',
-		textPrimary: '#0F172A',
+		textPrimary: '#475569',
 		textSecondary: '#475569',
 		textTertiary: '#94A3B8',
 		accentBg: '#ECFDF5',
