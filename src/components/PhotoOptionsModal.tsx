@@ -58,7 +58,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="arrow-left" size={24} color="#14B8A6" />
+            <Feather name="arrow-left" size={24} color="#10B981" />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Upload Image
@@ -82,7 +82,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
                 >
             <View style={styles.uploadContent}>
               <View style={[styles.cloudIconContainer, { backgroundColor: theme.colors.accentBg }]}>
-                <Feather name="upload-cloud" size={48} color="#14B8A6" />
+                <Feather name="upload-cloud" size={48} color="#10B981" />
                   </View>
               <Text style={[styles.uploadText, { color: theme.colors.textPrimary }]}>
                 Drag & drop your image OR
@@ -120,7 +120,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
                 >
               <View style={styles.takePhotoContent}>
                 <View style={[styles.cameraIconContainer, { backgroundColor: theme.colors.accentBg }]}>
-                  <Feather name="camera" size={32} color="#14B8A6" />
+                  <Feather name="camera" size={32} color="#10B981" />
                 </View>
                 <View style={styles.takePhotoTextContainer}>
                   <Text style={[styles.takePhotoTitle, { color: theme.colors.textPrimary }]}>
@@ -130,7 +130,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
                     Use your camera to capture an image
                   </Text>
                 </View>
-                <Feather name="chevron-right" size={20} color="#14B8A6" />
+                <Feather name="chevron-right" size={20} color="#10B981" />
               </View>
                 </TouchableOpacity>
               </View>
@@ -253,3 +253,4 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
   },
 });
+

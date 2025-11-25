@@ -71,7 +71,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
         <Feather 
           name={icon as any} 
           size={20} 
-          color="#14B8A6" 
+          color="#10B981" 
         />
         <Text
           style={[
@@ -290,7 +290,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   style={styles.closeButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Feather name="x" size={24} color="#14B8A6" />
+                  <Feather name="x" size={24} color="#10B981" />
                 </TouchableOpacity>
               </View>
 
@@ -406,4 +406,5 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.md,
   },
 });
+
 

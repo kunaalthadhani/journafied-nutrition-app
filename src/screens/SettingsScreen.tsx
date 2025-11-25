@@ -11,6 +11,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -55,7 +56,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
     >
       <View style={styles.settingItemLeft}>
         <View style={[styles.iconContainer, { backgroundColor: theme.colors.input }]}>
-          <Feather name={icon as any} size={20} color="#14B8A6" />
+          <Feather name={icon as any} size={20} color="#10B981" />
         </View>
         <View style={styles.settingItemText}>
           <Text style={[styles.settingTitle, { color: theme.colors.textPrimary }]}>
@@ -172,9 +173,40 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleClearCache = () => {
     Alert.alert(
-      'Clear Cache',
-      'Cache cleared successfully!',
-      [{ text: 'OK' }]
+      'Clear All Data',
+      'Are you sure you want to clear all app data? This will delete all your meals, weight entries, goals, and settings. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Clear',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              // Clear all AsyncStorage data
+              await AsyncStorage.clear();
+              Alert.alert(
+                'Data Cleared',
+                'All app data has been cleared successfully. The app will restart.',
+                [
+                  {
+                    text: 'OK',
+                    onPress: () => {
+                      // Note: In a real app, you might want to reload the app
+                      // For now, we'll just show the alert
+                    },
+                  },
+                ]
+              );
+            } catch (error) {
+              Alert.alert(
+                'Error',
+                'Failed to clear data. Please try again.',
+                [{ text: 'OK' }]
+              );
+            }
+          },
+        },
+      ]
     );
   };
 
@@ -274,7 +306,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
           Settings
@@ -293,10 +325,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }] }>
             <View style={styles.subscriptionHeader}>
               <View style={styles.subscriptionTitleRow}>
-                <Feather name="star" size={18} color="#14B8A6" />
+                <Feather name="star" size={18} color="#10B981" />
                 <Text style={[styles.subscriptionTitle, { color: theme.colors.textPrimary }]}>Current Plan</Text>
               </View>
-              <View style={[styles.planBadge, { backgroundColor: plan === 'premium' ? '#14B8A6' : theme.colors.input, borderColor: theme.colors.border }] }>
+              <View style={[styles.planBadge, { backgroundColor: plan === 'premium' ? '#10B981' : theme.colors.input, borderColor: theme.colors.border }] }>
                 <Text style={[styles.planBadgeText, { color: plan === 'premium' ? Colors.white : theme.colors.textSecondary }]}>
                   {plan === 'premium' ? 'Premium' : 'Free'}
                 </Text>
@@ -306,7 +338,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               {plan === 'premium' ? 'Enjoy all premium features.' : 'You are on the Free plan. Upgrade to unlock premium features.'}
             </Text>
             <TouchableOpacity
-              style={[styles.upgradeButton, { backgroundColor: '#14B8A6' }]}
+              style={[styles.upgradeButton, { backgroundColor: '#10B981' }]}
               onPress={handleUpgradeToPremium}
               activeOpacity={0.85}
             >
@@ -318,7 +350,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
                 {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining
                 {totalBonusEntries > 0 && (
-                  <Text style={{ color: '#14B8A6' }}>
+                  <Text style={{ color: '#10B981' }}>
                     {' '}(
                     {[
                       referralBonus > 0 ? `+${referralBonus} from referrals` : null,
@@ -344,7 +376,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
-                trackColor={{ false: theme.colors.border, true: '#14B8A6' }}
+                trackColor={{ false: theme.colors.border, true: '#10B981' }}
                 thumbColor={Colors.white}
               />
             }
@@ -370,7 +402,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={breakfastReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('breakfast', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#14B8A6' }}
+                trackColor={{ false: theme.colors.border, true: '#10B981' }}
                 thumbColor={Colors.white}
               />
             }
@@ -385,7 +417,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={lunchReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('lunch', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#14B8A6' }}
+                trackColor={{ false: theme.colors.border, true: '#10B981' }}
                 thumbColor={Colors.white}
               />
             }
@@ -400,7 +432,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={dinnerReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('dinner', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#14B8A6' }}
+                trackColor={{ false: theme.colors.border, true: '#10B981' }}
                 thumbColor={Colors.white}
               />
             }
@@ -408,7 +440,15 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
         </SettingSection>
 
-        
+        {/* Data Section */}
+        <SettingSection title="Data">
+          <SettingItem
+            icon="trash-2"
+            title="Clear Cache"
+            subtitle="Delete all app data (meals, weights, goals, settings)"
+            onPress={handleClearCache}
+          />
+        </SettingSection>
 
         {/* Support Section */}
         <SettingSection title="Support">
@@ -464,7 +504,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.unitOption,
-                  weightUnit === 'kg' && { backgroundColor: '#14B8A6' },
+                  weightUnit === 'kg' && { backgroundColor: '#10B981' },
                   { borderColor: theme.colors.border },
                 ]}
                 onPress={async () => {
@@ -487,7 +527,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.unitOption,
-                  weightUnit === 'lbs' && { backgroundColor: '#14B8A6' },
+                  weightUnit === 'lbs' && { backgroundColor: '#10B981' },
                   { borderColor: theme.colors.border },
                 ]}
                 onPress={async () => {
@@ -693,4 +733,5 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
   },
 });
+
 

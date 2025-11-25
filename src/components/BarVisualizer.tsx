@@ -36,13 +36,13 @@ export const BarVisualizer: React.FC<BarVisualizerProps> = ({
       case 'initializing':
         return '#3B82F6'; // blue
       case 'listening':
-        return '#14B8A6'; // green (teal)
+        return '#10B981'; // green (teal)
       case 'speaking':
         return '#10B981'; // emerald
       case 'thinking':
         return '#8B5CF6'; // purple
       default:
-        return '#14B8A6';
+        return '#10B981';
     }
   };
 
@@ -145,4 +145,5 @@ const styles = StyleSheet.create({
     minHeight: 15,
   },
 });
+
 

@@ -32,7 +32,7 @@ export const FreeEntriesScreen: React.FC<FreeEntriesScreenProps> = ({ tasks, onB
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Get Free Entries</Text>
         <View style={styles.headerRight} />
@@ -171,4 +171,6 @@ const styles = StyleSheet.create({
 });
 
 export default FreeEntriesScreen;
+
+
 

@@ -389,7 +389,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Weight Tracker</Text>
         <View style={styles.headerRight} />
@@ -415,7 +415,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               Add your targets to start tracking your weight journey.
             </Text>
             <TouchableOpacity
-              style={[styles.emptyStateButton, { backgroundColor: '#14B8A6' }]}
+              style={[styles.emptyStateButton, { backgroundColor: '#10B981' }]}
               onPress={() => {
                 if (onRequestSetGoals) {
                   onRequestSetGoals();
@@ -533,7 +533,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     <Path
                       d={generateSmoothPath()}
                       fill="none"
-                      stroke="#14B8A6"
+                      stroke="#10B981"
                       strokeWidth={2}
                       strokeLinecap="round"
                       strokeLinejoin="round"
@@ -550,7 +550,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           cx={x}
                           cy={y}
                           r={4}
-                          fill="#14B8A6"
+                          fill="#10B981"
                         />
                       );
                     })}
@@ -565,7 +565,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     key={range}
                     style={[
                       styles.timeRangeButton,
-                      timeRange === range && { backgroundColor: '#14B8A6' },
+                      timeRange === range && { backgroundColor: '#10B981' },
                     ]}
                     onPress={() => handleTimeRangeChange(range)}
                   >
@@ -591,7 +591,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               {/* Insights below date range */}
               {insight && (
                 <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
-                  <Feather name="info" size={16} color="#14B8A6" />
+                  <Feather name="info" size={16} color="#10B981" />
                   <View style={styles.insightTextContainer}>
                     <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
                       {insight}
@@ -608,7 +608,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       {/* Log Weight Button */}
       <View style={styles.buttonContainer}>
         <TouchableOpacity
-          style={[styles.logButton, { backgroundColor: '#14B8A6' }]}
+          style={[styles.logButton, { backgroundColor: '#10B981' }]}
           onPress={() => setShowLogModal(true)}
         >
           <Text style={styles.logButtonText}>Log Weight</Text>
@@ -636,7 +636,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               <View style={styles.modalHeader}>
                 <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Log Weight</Text>
                 <TouchableOpacity onPress={() => setShowLogModal(false)}>
-                  <Feather name="x" size={24} color="#14B8A6" />
+                  <Feather name="x" size={24} color="#10B981" />
                 </TouchableOpacity>
               </View>
               <TextInput
@@ -649,7 +649,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 autoFocus
               />
               <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: '#14B8A6' }]}
+                style={[styles.modalButton, { backgroundColor: '#10B981' }]}
                 onPress={handleLogWeight}
               >
                 <Text style={styles.modalButtonText}>Save</Text>
@@ -730,13 +730,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#14B8A6',
+    borderColor: '#10B981',
     marginBottom: 4,
   },
   setGoalText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
-    color: '#14B8A6',
+    color: '#10B981',
     textAlign: 'center',
   },
   changeContainer: {
@@ -923,5 +923,6 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
   },
 });
+
 
 

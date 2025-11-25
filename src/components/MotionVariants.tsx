@@ -124,7 +124,7 @@ export const MotionVariants: React.FC<MotionVariantsProps> = ({ items = [0, 1, 2
 
       {/* Toggle always on top */}
       <TouchableOpacity style={styles.toggle} onPress={toggle} activeOpacity={0.8}>
-        <Feather name={isOpen ? 'x' : 'menu'} size={22} color="#14B8A6" />
+        <Feather name={isOpen ? 'x' : 'menu'} size={22} color="#10B981" />
       </TouchableOpacity>
     </View>
   );
@@ -193,5 +193,6 @@ const styles = StyleSheet.create({
 });
 
 export default MotionVariants;
+
 
 

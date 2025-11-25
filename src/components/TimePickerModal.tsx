@@ -95,7 +95,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                       style={[
                         styles.pickerItem,
                         selectedHour === hour && {
-                          backgroundColor: '#14B8A6',
+                          backgroundColor: '#10B981',
                         },
                       ]}
                       onPress={() => setSelectedHour(hour)}
@@ -139,7 +139,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                       style={[
                         styles.pickerItem,
                         selectedMinute === minute && {
-                          backgroundColor: '#14B8A6',
+                          backgroundColor: '#10B981',
                         },
                       ]}
                       onPress={() => setSelectedMinute(minute)}
@@ -279,7 +279,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#10B981',
     alignItems: 'center',
   },
   confirmButtonText: {
@@ -288,6 +288,8 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 });
+
+
 
 
 

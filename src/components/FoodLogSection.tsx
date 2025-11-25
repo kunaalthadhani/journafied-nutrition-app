@@ -169,7 +169,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                               hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                             >
                               {savedPromptLookup.has(meal.prompt.trim().toLowerCase()) ? (
-                                <BookmarkCheck size={16} color="#14B8A6" strokeWidth={2.6} />
+                                <BookmarkCheck size={16} color="#10B981" strokeWidth={2.6} />
                               ) : (
                                 <BookmarkPlus size={16} color={theme.colors.textSecondary} strokeWidth={2.6} />
                               )}
@@ -291,7 +291,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     onPress={handleCloseModal}
                     style={styles.closeButton}
                   >
-                    <Feather name="x" size={24} color="#14B8A6" />
+                    <Feather name="x" size={24} color="#10B981" />
                   </TouchableOpacity>
                 </View>
                 
@@ -492,3 +492,4 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.xs,
   },
 });
+

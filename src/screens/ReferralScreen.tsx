@@ -111,7 +111,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
     return (
       <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
         <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#14B8A6" />
+          <ActivityIndicator size="large" color="#10B981" />
         </View>
       </SafeAreaView>
     );
@@ -122,7 +122,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
           Invite Friends
@@ -154,12 +154,12 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
               style={[styles.copyButton, { backgroundColor: theme.colors.input }]}
               onPress={handleCopyCode}
             >
-              <Feather name="copy" size={18} color="#14B8A6" />
-              <Text style={[styles.copyButtonText, { color: '#14B8A6' }]}>Copy</Text>
+              <Feather name="copy" size={18} color="#10B981" />
+              <Text style={[styles.copyButtonText, { color: '#10B981' }]}>Copy</Text>
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={[styles.shareButton, { backgroundColor: '#14B8A6' }]}
+            style={[styles.shareButton, { backgroundColor: '#10B981' }]}
             onPress={handleShareCode}
           >
             <Feather name="share-2" size={18} color={Colors.white} />
@@ -212,7 +212,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
             { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
           ]}
         >
-          <Feather name="info" size={20} color="#14B8A6" />
+          <Feather name="info" size={20} color="#10B981" />
           <Text style={[styles.instructionsText, { color: theme.colors.textSecondary }]}>
             Share your code with friends. When they sign up and log 5 meals, you both get +10 free
             entries!
@@ -444,4 +444,5 @@ const styles = StyleSheet.create({
     height: 32,
   },
 });
+
 

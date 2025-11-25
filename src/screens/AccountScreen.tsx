@@ -405,8 +405,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
             ]}
             onPress={handleResetPassword}
           >
-            <Feather name="refresh-ccw" size={14} color="#14B8A6" />
-            <Text style={[styles.resetButtonText, { color: '#14B8A6' }]}>Reset password</Text>
+            <Feather name="refresh-ccw" size={14} color="#10B981" />
+            <Text style={[styles.resetButtonText, { color: '#10B981' }]}>Reset password</Text>
           </TouchableOpacity>
         </View>
         <View style={styles.planRow}>
@@ -414,7 +414,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           <View
             style={[
               styles.planBadge,
-              { backgroundColor: plan === 'premium' ? '#14B8A6' : theme.colors.input },
+              { backgroundColor: plan === 'premium' ? '#10B981' : theme.colors.input },
             ]}
           >
             <Text
@@ -460,7 +460,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
               From referrals
             </Text>
-            <Text style={[styles.statValue, { color: '#14B8A6' }]}>
+            <Text style={[styles.statValue, { color: '#10B981' }]}>
               +{referralDetails.entriesFromReferrals}
             </Text>
             <Text style={[styles.statHelper, { color: theme.colors.textSecondary }]}>
@@ -480,7 +480,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           Goals & focus
         </Text>
         <View style={styles.goalRow}>
-          <Feather name="target" size={18} color="#14B8A6" />
+          <Feather name="target" size={18} color="#10B981" />
           <Text style={[styles.goalText, { color: theme.colors.textPrimary }]}>
             {goals?.goal ? goalLabelMap[goals.goal] : 'Goal not set yet'}
           </Text>
@@ -512,7 +512,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           </View>
         </View>
         <View style={styles.weightChangeRow}>
-          <Feather name="trending-down" size={18} color="#14B8A6" />
+          <Feather name="trending-down" size={18} color="#10B981" />
           <Text style={[styles.weightChangeText, { color: theme.colors.textPrimary }]}>
             {formatWeightChange(weightSummary.change)}
           </Text>
@@ -534,7 +534,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Account</Text>
         <View style={styles.headerRight} />
@@ -542,7 +542,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
 
       {isLoading ? (
         <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color="#14B8A6" />
+          <ActivityIndicator size="large" color="#10B981" />
           <Text style={{ marginTop: 12, color: theme.colors.textSecondary }}>Loading account…</Text>
         </View>
       ) : accountInfo ? (
@@ -603,7 +603,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.md,
   },
   primaryButton: {
-    backgroundColor: '#14B8A6',
+    backgroundColor: '#10B981',
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
@@ -772,3 +772,4 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
   },
 });
+

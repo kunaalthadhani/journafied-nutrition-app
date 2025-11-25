@@ -97,7 +97,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="arrow-left" size={24} color="#14B8A6" />
+            <Feather name="arrow-left" size={24} color="#10B981" />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Upload Image
@@ -121,7 +121,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                 <Image source={{ uri: imageUri }} style={styles.fileImage} />
               ) : (
                 <View style={[styles.fileIconPlaceholder, { backgroundColor: theme.colors.input }]}>
-                  <Feather name={getFileIcon()} size={24} color="#14B8A6" />
+                  <Feather name={getFileIcon()} size={24} color="#10B981" />
                 </View>
               )}
             </View>
@@ -167,7 +167,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                     />
                   </View>
                   <View style={styles.statusRow}>
-                    <Feather name="check-circle" size={16} color="#14B8A6" />
+                    <Feather name="check-circle" size={16} color="#10B981" />
                     <Text style={[styles.statusMessage, { color: theme.colors.success }]}>
                       Upload successful
                     </Text>
@@ -189,7 +189,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                     />
                   </View>
                   <View style={styles.statusRow}>
-                    <Feather name="alert-circle" size={16} color="#14B8A6" />
+                    <Feather name="alert-circle" size={16} color="#10B981" />
                     <Text style={[styles.statusMessage, { color: theme.colors.error }]}>
                       {statusMessage || 'Error'}
                     </Text>
@@ -201,12 +201,12 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
             <View style={styles.fileActions}>
               {(status === 'uploading' || status === 'analyzing') && (
                 <TouchableOpacity onPress={onClose} style={styles.actionButton} disabled={status === 'analyzing'}>
-                  <Feather name="x" size={20} color="#14B8A6" />
+                  <Feather name="x" size={20} color="#10B981" />
                 </TouchableOpacity>
               )}
               {status === 'failed' && onRetry && (
                 <TouchableOpacity onPress={onRetry} style={styles.actionButton}>
-                  <Feather name="refresh-cw" size={20} color="#14B8A6" />
+                  <Feather name="refresh-cw" size={20} color="#10B981" />
                 </TouchableOpacity>
               )}
             </View>
@@ -316,4 +316,5 @@ const styles = StyleSheet.create({
     padding: Spacing.xs,
   },
 });
+
 

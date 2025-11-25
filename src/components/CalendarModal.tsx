@@ -234,7 +234,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                         styles.calendarDay,
                         {
                           backgroundColor,
-                          borderColor: '#14B8A6',
+                          borderColor: '#10B981',
                           borderWidth,
                         },
                         !isCurrentMonth && styles.calendarDayDisabled,
@@ -252,7 +252,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                         {format(dayData.date, 'd')}
                       </Text>
                       {isToday && (
-                        <View style={[styles.todayIndicator, { backgroundColor: '#14B8A6' }]} />
+                        <View style={[styles.todayIndicator, { backgroundColor: '#10B981' }]} />
                       )}
                     </TouchableOpacity>
                   );
@@ -385,4 +385,5 @@ const styles = StyleSheet.create({
     borderRadius: 2,
   },
 });
+
 

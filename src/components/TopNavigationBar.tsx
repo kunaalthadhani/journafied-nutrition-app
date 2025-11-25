@@ -31,7 +31,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           onPress={onMenuPress}
           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
         >
-          <Menu color="#14B8A6" size={24} strokeWidth={2.6} />
+          <Menu color="#10B981" size={24} strokeWidth={2.6} />
         </TouchableOpacity>
 
         {/* Center: Date Picker */}
@@ -43,7 +43,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
           <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>
             {selectedDate}
           </Text>
-          <ChevronDown color="#14B8A6" size={16} strokeWidth={2.6} style={styles.chevronIcon} />
+          <ChevronDown color="#10B981" size={16} strokeWidth={2.6} style={styles.chevronIcon} />
         </TouchableOpacity>
 
         {/* Right: Icons */}
@@ -53,14 +53,14 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             onPress={onWeightTrackerPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <TrendingUp color="#14B8A6" size={22} strokeWidth={2.6} />
+            <TrendingUp color="#10B981" size={22} strokeWidth={2.6} />
           </TouchableOpacity>
           <TouchableOpacity 
             style={styles.iconContainer} 
             onPress={onNutritionAnalysisPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <BarChart3 color="#14B8A6" size={22} strokeWidth={2.6} />
+            <BarChart3 color="#10B981" size={22} strokeWidth={2.6} />
           </TouchableOpacity>
         </View>
       </View>

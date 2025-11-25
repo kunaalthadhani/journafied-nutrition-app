@@ -157,7 +157,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]} pointerEvents="none">
           Set Goals
@@ -184,7 +184,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
               Answer a few questions and we’ll set everything for you.
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#14B8A6" />
+          <Feather name="chevron-right" size={20} color="#10B981" />
         </TouchableOpacity>
         {/* Daily Calories */}
         <View style={styles.caloriesSection}>
@@ -243,13 +243,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
                     style={[styles.controlButton, { marginRight: 8 }]}
                     onPress={() => handleProteinChange(Math.max(0, proteinPercentage - 5))}
                   >
-                    <Feather name="minus" size={16} color="#14B8A6" />
+                    <Feather name="minus" size={16} color="#10B981" />
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.controlButton}
                     onPress={() => handleProteinChange(Math.min(100, proteinPercentage + 5))}
                   >
-                    <Feather name="plus" size={16} color="#14B8A6" />
+                    <Feather name="plus" size={16} color="#10B981" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -257,7 +257,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
                 <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
                   <View style={[styles.progressFill, { 
                     width: `${proteinPercentage}%`,
-                    backgroundColor: '#14B8A6'
+                    backgroundColor: '#10B981'
                   }]} />
                 </View>
               </View>
@@ -284,13 +284,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
                     style={[styles.controlButton, { marginRight: 8 }]}
                     onPress={() => handleCarbsChange(Math.max(0, carbsPercentage - 5))}
                   >
-                    <Feather name="minus" size={16} color="#14B8A6" />
+                    <Feather name="minus" size={16} color="#10B981" />
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.controlButton}
                     onPress={() => handleCarbsChange(Math.min(100, carbsPercentage + 5))}
                   >
-                    <Feather name="plus" size={16} color="#14B8A6" />
+                    <Feather name="plus" size={16} color="#10B981" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -325,13 +325,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
                     style={[styles.controlButton, { marginRight: 8 }]}
                     onPress={() => handleFatChange(Math.max(0, fatPercentage - 5))}
                   >
-                    <Feather name="minus" size={16} color="#14B8A6" />
+                    <Feather name="minus" size={16} color="#10B981" />
                   </TouchableOpacity>
                   <TouchableOpacity 
                     style={styles.controlButton}
                     onPress={() => handleFatChange(Math.min(100, fatPercentage + 5))}
                   >
-                    <Feather name="plus" size={16} color="#14B8A6" />
+                    <Feather name="plus" size={16} color="#10B981" />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -351,7 +351,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       {/* Save Goals Button */}
       <View style={styles.saveButtonContainer}>
         <TouchableOpacity
-          style={[styles.saveGoalsButton, { backgroundColor: '#14B8A6' }]}
+          style={[styles.saveGoalsButton, { backgroundColor: '#10B981' }]}
           onPress={handleSave}
         >
           <Text style={styles.saveGoalsText}>Save Goals</Text>

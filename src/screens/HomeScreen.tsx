@@ -1530,7 +1530,7 @@ if (showReferral) {
           >
             <BlurView intensity={8} tint="light" style={StyleSheet.absoluteFill} />
             <View style={styles.analyzingInline}>
-              <ActivityIndicator size="small" color="#14B8A6" />
+              <ActivityIndicator size="small" color="#10B981" />
               <Text style={[styles.analyzingText, { color: Colors.white }]}>
                 Analyzing your food...
               </Text>

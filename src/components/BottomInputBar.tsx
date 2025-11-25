@@ -214,7 +214,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             disabled={isLoading || isRecording || isTranscribing}
             style={styles.plusIconButton}
           >
-            <Plus color="#14B8A6" size={20} strokeWidth={2.6} />
+            <Plus color="#10B981" size={20} strokeWidth={2.6} />
           </TouchableOpacity>
 
           <TextInput
@@ -259,18 +259,18 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               <TouchableOpacity 
                 style={[
                   styles.circleButton,
-                  { backgroundColor: hasText ? '#14B8A6' : theme.colors.input }
+                  { backgroundColor: hasText ? '#10B981' : theme.colors.input }
                 ]}
                 onPress={hasText ? handleSubmit : onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 disabled={isLoading || isTranscribing}
               >
                 {isTranscribing ? (
-                  <Loader size={18} color={hasText ? Colors.white : '#14B8A6'} strokeWidth={2.6} />
+                  <Loader size={18} color={hasText ? Colors.white : '#10B981'} strokeWidth={2.6} />
                 ) : hasText ? (
                   <Send size={18} color={Colors.white} strokeWidth={2.6} />
                 ) : (
-                  <Mic size={18} color="#14B8A6" strokeWidth={2.6} />
+                  <Mic size={18} color="#10B981" strokeWidth={2.6} />
                 )}
               </TouchableOpacity>
             )}

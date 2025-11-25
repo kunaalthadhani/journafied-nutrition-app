@@ -42,7 +42,7 @@ export const BarVisualizerDemo: React.FC = () => {
               style={[
                 styles.button,
                 {
-                  backgroundColor: state === s ? '#14B8A6' : theme.colors.input,
+                  backgroundColor: state === s ? '#10B981' : theme.colors.input,
                   borderColor: theme.colors.border,
                 },
               ]}
@@ -104,6 +104,8 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.medium,
   },
 });
+
+
 
 
 

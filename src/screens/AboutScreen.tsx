@@ -22,7 +22,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About</Text>
         <View style={styles.headerRight} />
@@ -43,12 +43,12 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
         <View style={[styles.section, { borderColor: theme.colors.border }]}> 
           <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Links</Text>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/privacy')}>
-            <Feather name="shield" size={18} color="#14B8A6" />
+            <Feather name="shield" size={18} color="#10B981" />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Privacy Policy</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/terms')}>
-            <Feather name="file-text" size={18} color="#14B8A6" />
+            <Feather name="file-text" size={18} color="#10B981" />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Terms of Service</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
           </TouchableOpacity>
@@ -134,6 +134,7 @@ const styles = StyleSheet.create({
     height: 24,
   },
 });
+
 
 
 

@@ -310,7 +310,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#14B8A6" />
+          <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
           Nutrition Analysis
@@ -338,7 +338,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               Start tracking your nutrition by logging your meals.
             </Text>
             <TouchableOpacity
-              style={[styles.emptyStateButton, { backgroundColor: '#14B8A6' }]}
+              style={[styles.emptyStateButton, { backgroundColor: '#10B981' }]}
               onPress={() => {
                 if (onRequestLogMeal) {
                   onRequestLogMeal();
@@ -374,7 +374,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 onPress={handleSetGoalPress}
                 activeOpacity={0.8}
               >
-                <Text style={[styles.setGoalText, { color: '#14B8A6' }]}>Set Goal</Text>
+                <Text style={[styles.setGoalText, { color: '#10B981' }]}>Set Goal</Text>
               </TouchableOpacity>
             )}
             <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
@@ -388,7 +388,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <TouchableOpacity
             style={[
               styles.tab,
-              activeTab === 'Calories' && { backgroundColor: '#14B8A6' },
+              activeTab === 'Calories' && { backgroundColor: '#10B981' },
             ]}
             onPress={() => setActiveTab('Calories')}
           >
@@ -406,7 +406,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <TouchableOpacity
             style={[
               styles.tab,
-              activeTab === 'Macros' && { backgroundColor: '#14B8A6' },
+              activeTab === 'Macros' && { backgroundColor: '#10B981' },
             ]}
             onPress={() => setActiveTab('Macros')}
           >
@@ -480,7 +480,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         y1={targetY}
                         x2={graphWidth - padding}
                         y2={targetY}
-                        stroke="#14B8A6"
+                        stroke="#10B981"
                         strokeWidth={1}
                         strokeDasharray="4,4"
                         opacity={0.5}
@@ -492,7 +492,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   <Path
                     d={generateCaloriesPath()}
                     fill="none"
-                    stroke="#14B8A6"
+                    stroke="#10B981"
                     strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -511,7 +511,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         cx={x}
                         cy={y}
                         r={4}
-                        fill="#14B8A6"
+                        fill="#10B981"
                       />
                     );
                   })}
@@ -526,7 +526,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   key={range}
                   style={[
                     styles.timeRangeButton,
-                    timeRange === range && { backgroundColor: '#14B8A6' },
+                    timeRange === range && { backgroundColor: '#10B981' },
                   ]}
                   onPress={() => handleTimeRangeChange(range)}
                 >
@@ -557,7 +557,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             {/* Daily Averages */}
             <View style={styles.averagesContainer}>
               <View style={styles.averageItem}>
-                <View style={[styles.averageDot, { backgroundColor: '#14B8A6' }]} />
+                <View style={[styles.averageDot, { backgroundColor: '#10B981' }]} />
                 <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Protein:</Text>
                 <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
                   {averageProtein !== null ? `${averageProtein.toFixed(0)}g` : '--'}
@@ -627,7 +627,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         y1={targetProteinY}
                         x2={graphWidth - padding}
                         y2={targetProteinY}
-                        stroke="#14B8A6"
+                        stroke="#10B981"
                         strokeWidth={1}
                         strokeDasharray="4,4"
                         opacity={0.5}
@@ -669,7 +669,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   <Path
                     d={generateSmoothPath(graphData.map(d => d.protein))}
                     fill="none"
-                    stroke="#14B8A6"
+                    stroke="#10B981"
                     strokeWidth={2}
                     strokeLinecap="round"
                     strokeLinejoin="round"
@@ -705,7 +705,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                     return (
                       <React.Fragment key={index}>
-                        <Circle cx={x} cy={proteinY} r={4} fill="#14B8A6" />
+                        <Circle cx={x} cy={proteinY} r={4} fill="#10B981" />
                         <Circle cx={x} cy={carbsY} r={4} fill="#FF7E67" />
                         <Circle cx={x} cy={fatY} r={4} fill="#40514E" />
                       </React.Fragment>
@@ -722,7 +722,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   key={range}
                   style={[
                     styles.timeRangeButton,
-                    timeRange === range && { backgroundColor: '#14B8A6' },
+                    timeRange === range && { backgroundColor: '#10B981' },
                   ]}
                   onPress={() => handleTimeRangeChange(range)}
                 >
@@ -749,7 +749,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
             {/* Information Box */}
             <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-              <Feather name="info" size={20} color="#14B8A6" />
+              <Feather name="info" size={20} color="#10B981" />
               <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
                 Your protein intake is below target. Consider adding more lean protein to your meals.
               </Text>
@@ -829,7 +829,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 16,
     borderWidth: 1,
-    borderColor: '#14B8A6',
+    borderColor: '#10B981',
     marginBottom: 4,
   },
   setGoalText: {
@@ -977,4 +977,5 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
   },
 });
+
 

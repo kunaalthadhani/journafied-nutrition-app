@@ -313,7 +313,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { backgroundColor: goal === 'lose' ? '#14B8A6' : theme.colors.card }
+                  { backgroundColor: goal === 'lose' ? '#10B981' : theme.colors.card }
                 ]}
                 onPress={() => handleGoalSelect('lose')}
               >
@@ -328,7 +328,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { backgroundColor: goal === 'maintain' ? '#14B8A6' : theme.colors.card }
+                  { backgroundColor: goal === 'maintain' ? '#10B981' : theme.colors.card }
                 ]}
                 onPress={() => handleGoalSelect('maintain')}
               >
@@ -343,7 +343,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { backgroundColor: goal === 'gain' ? '#14B8A6' : theme.colors.card }
+                  { backgroundColor: goal === 'gain' ? '#10B981' : theme.colors.card }
                 ]}
                 onPress={() => handleGoalSelect('gain')}
               >
@@ -365,7 +365,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { backgroundColor: gender === 'male' ? '#14B8A6' : theme.colors.card }
+                  { backgroundColor: gender === 'male' ? '#10B981' : theme.colors.card }
                 ]}
                 onPress={() => handleGenderSelect('male')}
               >
@@ -380,7 +380,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TouchableOpacity
                 style={[
                   styles.optionButton,
-                  { backgroundColor: gender === 'female' ? '#14B8A6' : theme.colors.card }
+                  { backgroundColor: gender === 'female' ? '#10B981' : theme.colors.card }
                 ]}
                 onPress={() => handleGenderSelect('female')}
               >
@@ -400,12 +400,12 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your height?</Text>
             
             {/* Unit Selector */}
-            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#14B8A6', borderWidth: 1 }]}>
+            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
               <TouchableOpacity
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: heightUnit === 'cm' ? '#14B8A6' : 'transparent',
+                    backgroundColor: heightUnit === 'cm' ? '#10B981' : 'transparent',
                     borderTopLeftRadius: 8,
                     borderBottomLeftRadius: 8
                   }
@@ -421,7 +421,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: heightUnit === 'ft' ? '#14B8A6' : 'transparent',
+                    backgroundColor: heightUnit === 'ft' ? '#10B981' : 'transparent',
                     borderTopRightRadius: 8,
                     borderBottomRightRadius: 8
                   }
@@ -496,12 +496,12 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your weight?</Text>
             
             {/* Unit Selector */}
-            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#14B8A6', borderWidth: 1 }]}>
+            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
               <TouchableOpacity
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: weightUnit === 'kg' ? '#14B8A6' : 'transparent',
+                    backgroundColor: weightUnit === 'kg' ? '#10B981' : 'transparent',
                     borderTopLeftRadius: 8,
                     borderBottomLeftRadius: 8
                   }
@@ -517,7 +517,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: weightUnit === 'lbs' ? '#14B8A6' : 'transparent',
+                    backgroundColor: weightUnit === 'lbs' ? '#10B981' : 'transparent',
                     borderTopRightRadius: 8,
                     borderBottomRightRadius: 8
                   }
@@ -578,12 +578,12 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your target weight?</Text>
             
             {/* Unit Selector */}
-            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#14B8A6', borderWidth: 1 }]}>
+            <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
               <TouchableOpacity
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: targetWeightUnit === 'kg' ? '#14B8A6' : 'transparent',
+                    backgroundColor: targetWeightUnit === 'kg' ? '#10B981' : 'transparent',
                     borderTopLeftRadius: 8,
                     borderBottomLeftRadius: 8
                   }
@@ -599,7 +599,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
                 style={[
                   styles.unitButton,
                   { 
-                    backgroundColor: targetWeightUnit === 'lbs' ? '#14B8A6' : 'transparent',
+                    backgroundColor: targetWeightUnit === 'lbs' ? '#10B981' : 'transparent',
                     borderTopRightRadius: 8,
                     borderBottomRightRadius: 8
                   }
@@ -646,21 +646,21 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
                   key={option.rate}
                   style={[
                     styles.rateOptionButton,
-                    { backgroundColor: theme.colors.card, borderColor: selectedRate === option.rate ? '#14B8A6' : 'transparent' },
+                    { backgroundColor: theme.colors.card, borderColor: selectedRate === option.rate ? '#10B981' : 'transparent' },
                     selectedRate === option.rate && { borderWidth: 2 }
                   ]}
                   onPress={() => handleRateSelect(option.rate)}
                 >
                   <Text style={[
                     styles.rateOptionTitle,
-                    { color: selectedRate === option.rate ? '#14B8A6' : theme.colors.textPrimary },
+                    { color: selectedRate === option.rate ? '#10B981' : theme.colors.textPrimary },
                     selectedRate === option.rate && styles.selectedOptionText
                   ]}>
                     {option.label}
                   </Text>
                   <Text style={[
                     styles.rateOptionSubtitle,
-                    { color: selectedRate === option.rate ? '#14B8A6' : theme.colors.textSecondary }
+                    { color: selectedRate === option.rate ? '#10B981' : theme.colors.textSecondary }
                   ]}>
                     {option.sublabel}
                   </Text>
@@ -676,7 +676,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>Your Daily Calorie Goal</Text>
             
             <View style={[styles.calorieResultContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-              <Text style={[styles.calorieResultNumber, { color: '#14B8A6' }]}>{calculatedCalories}</Text>
+              <Text style={[styles.calorieResultNumber, { color: '#10B981' }]}>{calculatedCalories}</Text>
               <Text style={[styles.calorieResultLabel, { color: theme.colors.textSecondary }]}>calories per day</Text>
             </View>
             
@@ -694,7 +694,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               </TouchableOpacity>
               
               <TouchableOpacity
-                style={[styles.saveButton, { backgroundColor: '#14B8A6' }]}
+                style={[styles.saveButton, { backgroundColor: '#10B981' }]}
                 onPress={handleSaveCalories}
               >
                 <Text style={styles.saveButtonText}>Save</Text>
@@ -714,7 +714,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: !goal ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: !goal ? theme.colors.border : '#10B981' }
             ]}
             onPress={() => goal && setCurrentStep(currentStep + 1)}
             disabled={!goal}
@@ -742,7 +742,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: !gender ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: !gender ? theme.colors.border : '#10B981' }
             ]}
             onPress={() => gender && setCurrentStep(currentStep + 1)}
             disabled={!gender}
@@ -774,7 +774,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: !isValid ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: !isValid ? theme.colors.border : '#10B981' }
             ]}
             onPress={handleHeightNext}
             disabled={!isValid}
@@ -802,7 +802,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: weight.trim() === '' ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: weight.trim() === '' ? theme.colors.border : '#10B981' }
             ]}
             onPress={handleWeightNext}
             disabled={weight.trim() === ''}
@@ -830,7 +830,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: age.trim() === '' ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: age.trim() === '' ? theme.colors.border : '#10B981' }
             ]}
             onPress={handleAgeNext}
             disabled={age.trim() === ''}
@@ -858,7 +858,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: targetWeight.trim() === '' ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: targetWeight.trim() === '' ? theme.colors.border : '#10B981' }
             ]}
             onPress={handleTargetWeightNext}
             disabled={targetWeight.trim() === ''}
@@ -886,7 +886,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: selectedRate === null ? theme.colors.border : '#14B8A6' }
+              { backgroundColor: selectedRate === null ? theme.colors.border : '#10B981' }
             ]}
             onPress={handleCompleteCalculation}
             disabled={selectedRate === null}
@@ -927,14 +927,14 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               Calculate Daily Calories
             </Text>
             <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Feather name="x" size={24} color="#14B8A6" />
+              <Feather name="x" size={24} color="#10B981" />
             </TouchableOpacity>
           </View>
 
           {/* Progress Bar */}
           <View style={styles.progressContainer}>
             <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
-              <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: '#14B8A6' }]} />
+              <View style={[styles.progressFill, { width: `${progress}%`, backgroundColor: '#10B981' }]} />
             </View>
             <Text style={[styles.progressText, { color: theme.colors.textSecondary }]}>
               {currentStep} of {totalSteps}
@@ -1246,3 +1246,4 @@ const styles = StyleSheet.create({
     color: Colors.white,
   },
 });
+
