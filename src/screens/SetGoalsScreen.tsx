@@ -184,7 +184,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
               Answer a few questions and we’ll set everything for you.
             </Text>
           </View>
-          <Feather name="chevron-right" size={20} color="#10B981" />
         </TouchableOpacity>
         {/* Daily Calories */}
         <View style={styles.caloriesSection}>

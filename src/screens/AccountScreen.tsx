@@ -392,7 +392,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
         <View style={styles.profileHeader}>
           <View>
             <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>
-              {accountInfo?.name || 'TrackKal user'}
+              {accountInfo?.name || 'TrackKcal user'}
             </Text>
             <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
               {accountInfo?.email}

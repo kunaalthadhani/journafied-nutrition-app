@@ -50,6 +50,7 @@ export interface AnalyticsData {
   averageMealsPerDay: number;
   averageWeightEntriesPerWeek: number;
   totalMealsLogged: number;
+  totalExercisesLogged: number;
   totalWeightEntries: number;
   savedPromptsSaved: number;
   savedPromptsReused: number;
@@ -104,6 +105,7 @@ const defaultAnalytics: AnalyticsData = {
   averageMealsPerDay: 0,
   averageWeightEntriesPerWeek: 0,
   totalMealsLogged: 0,
+  totalExercisesLogged: 0,
   totalWeightEntries: 0,
   savedPromptsSaved: 0,
   savedPromptsReused: 0,
@@ -314,6 +316,14 @@ class AnalyticsService {
 
     await this.updateStreak(logDate);
     await this.updateAverages();
+    await this.save();
+  }
+
+  async trackExerciseLogged(date?: Date): Promise<void> {
+    await this.initialize();
+    const logDate = date || new Date();
+    this.analytics.totalExercisesLogged++;
+    await this.updateStreak(logDate);
     await this.save();
   }
 

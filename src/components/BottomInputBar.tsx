@@ -70,6 +70,12 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const currentText = transcribedText || text;
   const hasText = currentText.trim().length > 0;
   const shouldShowChips = !hasText && quickPrompts.length > 0;
+  const showCustomPlaceholder = !isFocused && !hasText;
+  const singleLineThreshold = 40;
+  const isMultiLine = calculatedInputHeight > singleLineThreshold;
+  const singleLinePadding = !isMultiLine
+    ? Math.max(0, (calculatedInputHeight - Typography.fontSize.md * 1.2) / 2)
+    : 0;
   const estimateHeightForText = React.useCallback((value: string) => {
     const trimmed = value?.trim() || '';
     if (!trimmed.length) return 0;
@@ -217,28 +223,52 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             <Plus color="#10B981" size={20} strokeWidth={2.6} />
           </TouchableOpacity>
 
-          <TextInput
-            ref={inputRef}
-            style={[styles.textInput, { color: theme.colors.textPrimary, height: calculatedInputHeight, textAlign: (!isFocused && !hasText) ? 'center' : 'left', textAlignVertical: (!isFocused && !hasText) ? 'center' : 'top' }, (isLoading || isRecording || isTranscribing) && styles.textInputDisabled]}
-            placeholder={(!isFocused && !hasText) ? placeholder : ''}
-            placeholderTextColor={theme.colors.textTertiary}
-            value={currentText}
-            onChangeText={handleTextChange}
-            onSubmitEditing={handleSubmit}
-            returnKeyType="default"
-            multiline={true}
-            scrollEnabled={false}
-            onFocus={() => setIsFocused(true)}
-            onBlur={() => setIsFocused(false)}
-            onContentSizeChange={(e) => {
-              const newHeight = e.nativeEvent.contentSize.height;
-              if (newHeight !== inputHeight) {
-                setInputHeight(newHeight);
-              }
-            }}
-            maxLength={200}
-            editable={!isLoading && !isRecording && !isTranscribing}
-          />
+          <View style={styles.inputFieldWrapper}>
+            {showCustomPlaceholder && (
+              <Text
+                pointerEvents="none"
+                style={[
+                  styles.customPlaceholder,
+                  { color: theme.colors.textTertiary },
+                ]}
+              >
+                {placeholder}
+              </Text>
+            )}
+            <TextInput
+              ref={inputRef}
+              style={[
+                styles.textInput,
+                {
+                  color: theme.colors.textPrimary,
+                  height: calculatedInputHeight,
+                  lineHeight: !isMultiLine ? calculatedInputHeight - singleLinePadding * 2 : undefined,
+                  textAlignVertical: isMultiLine ? 'top' : 'center',
+                  paddingTop: singleLinePadding,
+                  paddingBottom: singleLinePadding,
+                },
+                (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
+              ]}
+              placeholder={showCustomPlaceholder ? '' : placeholder}
+              placeholderTextColor={theme.colors.textTertiary}
+              value={currentText}
+              onChangeText={handleTextChange}
+              onSubmitEditing={handleSubmit}
+              returnKeyType="default"
+              multiline={true}
+              scrollEnabled={false}
+              onFocus={() => setIsFocused(true)}
+              onBlur={() => setIsFocused(false)}
+              onContentSizeChange={(e) => {
+                const newHeight = e.nativeEvent.contentSize.height;
+                if (newHeight !== inputHeight) {
+                  setInputHeight(newHeight);
+                }
+              }}
+              maxLength={200}
+              editable={!isLoading && !isRecording && !isTranscribing}
+            />
+          </View>
 
           <View style={styles.rightControls}>
             {isRecording ? (
@@ -357,6 +387,19 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
     color: Colors.primaryText,
     paddingVertical: 0, // Remove default padding
+    paddingHorizontal: Spacing.sm,
+  },
+  inputFieldWrapper: {
+    flex: 1,
+    justifyContent: 'center',
+  },
+  customPlaceholder: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.normal,
     paddingHorizontal: Spacing.sm,
   },
   textInputDisabled: {

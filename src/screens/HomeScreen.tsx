@@ -35,10 +35,12 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
 import { FoodLogSection, Meal } from '../components/FoodLogSection';
+import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
-import { parseFoodInput, calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
-import { analyzeFoodWithChatGPT, analyzeFoodFromImage } from '../services/openaiService';
+import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
+import { analyzeFoodWithChatGPT, analyzeFoodFromImage, analyzeExerciseWithChatGPT } from '../services/openaiService';
+import { ParsedExercise, calculateExerciseCalories } from '../utils/exerciseParser';
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
@@ -83,8 +85,9 @@ export const HomeScreen: React.FC = () => {
     currentWeightKg: null,
     targetWeightKg: null,
   });
-  // Store meals by date (YYYY-MM-DD format)
+  // Store meals & exercises by date (YYYY-MM-DD format)
   const [mealsByDate, setMealsByDate] = useState<Record<string, Meal[]>>({});
+  const [exercisesByDate, setExercisesByDate] = useState<Record<string, ExerciseEntry[]>>({});
   const [isAnalyzingFood, setIsAnalyzingFood] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
@@ -119,6 +122,7 @@ export const HomeScreen: React.FC = () => {
   // Get meals for current selected date
   const currentDateKey = getDateKey(selectedDate);
   const currentDayMeals = mealsByDate[currentDateKey] || [];
+  const currentDayExercises = exercisesByDate[currentDateKey] || [];
   
   // Calculate all foods from current day's meals for nutrition totals
   const allLoggedFoods = currentDayMeals.flatMap(meal => meal.foods);
@@ -133,10 +137,17 @@ export const HomeScreen: React.FC = () => {
   };
   // Calories card data (Food, Exercise, Remaining)
   const effectiveDailyCalories = dailyCalories && dailyCalories > 0 ? dailyCalories : 1500;
-  const remainingCalories = Math.max(0, effectiveDailyCalories - currentNutrition.totalCalories);
+  const totalExerciseCalories = currentDayExercises.reduce(
+    (sum, entry) => sum + calculateExerciseCalories(entry.exercises),
+    0
+  );
+  const remainingCalories = Math.max(
+    0,
+    effectiveDailyCalories - currentNutrition.totalCalories + totalExerciseCalories
+  );
   const macros2Data: MacroData = {
     carbs: { current: currentNutrition.totalCalories, target: 0, unit: 'cal' }, // Food calories
-    protein: { current: 0, target: 0, unit: 'cal' }, // Exercise calories
+    protein: { current: totalExerciseCalories, target: 0, unit: 'cal' }, // Exercise calories
     fat: { current: remainingCalories, target: 0, unit: 'cal' } // Remaining calories
   };
   const handleMenuPress = () => {
@@ -356,6 +367,12 @@ export const HomeScreen: React.FC = () => {
     }
   }, [mealsByDate]);
 
+  useEffect(() => {
+    if (Object.keys(exercisesByDate).length > 0) {
+      dataStorage.saveExercises(exercisesByDate);
+    }
+  }, [exercisesByDate]);
+
   // Entry limit persistence
   const ENTRY_COUNT_KEY = '@trackkal:entryCount';
   const FREE_ENTRY_LIMIT = 20;
@@ -420,21 +437,30 @@ export const HomeScreen: React.FC = () => {
         if (Object.keys(savedMeals).length > 0) {
           setMealsByDate(savedMeals);
         }
+
+        // Load exercises
+        const savedExercises = await dataStorage.loadExercises();
+        if (Object.keys(savedExercises).length > 0) {
+          setExercisesByDate(savedExercises);
+        }
         
-        // Validate entry count matches actual meal count (always run)
-        let actualMealCount = 0;
+        // Validate entry count matches actual log count (always run)
+        let actualLogCount = 0;
         Object.values(savedMeals).forEach(meals => {
-          actualMealCount += meals.length;
+          actualLogCount += meals.length;
+        });
+        Object.values(savedExercises).forEach(entries => {
+          actualLogCount += entries.length;
         });
         
         const storedCount = await dataStorage.loadEntryCount();
         
-        if (actualMealCount !== storedCount) {
-          if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualMealCount}`);
+        if (actualLogCount !== storedCount) {
+          if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
           // Auto-fix by setting entry count to actual meal count
-          await dataStorage.saveEntryCount(actualMealCount);
-          await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualMealCount));
-          setEntryCount(actualMealCount);
+          await dataStorage.saveEntryCount(actualLogCount);
+          await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualLogCount));
+          setEntryCount(actualLogCount);
         }
 
         // Load saved prompts (cap to latest 6)
@@ -580,7 +606,8 @@ export const HomeScreen: React.FC = () => {
   const handleInputSubmit = async (text: string) => {
     if (__DEV__) console.log('Input submitted:', text);
 
-    if (!text.trim()) return;
+    const trimmed = text.trim();
+    if (!trimmed) return;
     // Enforce free plan entry limit for new prompts
     if (!(await canAddEntry())) {
       Alert.alert(
@@ -598,9 +625,9 @@ export const HomeScreen: React.FC = () => {
 
     try {
       // Use ChatGPT for real-time food analysis
-      let parsedFoods;
+      let parsedFoods: ParsedFood[] = [];
       try {
-        parsedFoods = await analyzeFoodWithChatGPT(text);
+        parsedFoods = await analyzeFoodWithChatGPT(trimmed);
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           Alert.alert(
@@ -617,7 +644,7 @@ export const HomeScreen: React.FC = () => {
         // Create a new meal entry with the prompt and foods
         const newMeal: Meal = {
           id: `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-          prompt: text.trim(),
+          prompt: trimmed,
           foods: parsedFoods,
           timestamp: Date.now(),
         };
@@ -656,19 +683,54 @@ export const HomeScreen: React.FC = () => {
           }
           // Note: Progress messages are optional and can be noisy, so we're not showing them
         }
-      } else {
-        if (__DEV__) console.log('No foods recognized by ChatGPT:', text);
-        Alert.alert(
-          'No Food Detected',
-          'We couldn\'t recognize any food items in your input. Please try again with a clearer description.',
-          [{ text: 'OK' }]
-        );
+        return;
       }
+
+      // If no foods were recognized, try interpreting as exercise
+      let parsedExercises: ParsedExercise[] = [];
+      try {
+        parsedExercises = await analyzeExerciseWithChatGPT(trimmed);
+      } catch (apiError: any) {
+        if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
+          Alert.alert(
+            'Exercise Analysis Not Configured',
+            'Exercise analysis is not configured. Please contact support.'
+          );
+          setIsAnalyzingFood(false);
+          return;
+        }
+        throw apiError;
+      }
+
+      if (parsedExercises.length > 0) {
+        const newExerciseEntry: ExerciseEntry = {
+          id: `exercise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          prompt: trimmed,
+          exercises: parsedExercises,
+          timestamp: Date.now(),
+        };
+
+        setExercisesByDate((prev) => ({
+          ...prev,
+          [currentDateKey]: [...(prev[currentDateKey] || []), newExerciseEntry],
+        }));
+
+        await incrementEntryCount();
+        await analyticsService.trackExerciseLogged(selectedDate);
+        return;
+      }
+
+      if (__DEV__) console.log('No foods or exercises recognized:', trimmed);
+      Alert.alert(
+        'No Entry Detected',
+        'We couldn’t recognize any foods or exercises. Try adding more detail or separate your entries.',
+        [{ text: 'OK' }]
+      );
     } catch (error) {
       if (__DEV__) console.error('Error processing food input:', error);
       Alert.alert(
         'Error',
-        'Something went wrong while processing your food input. Please try again.',
+        'Something went wrong while processing your log. Please try again.',
         [{ text: 'OK' }]
       );
     } finally {
@@ -781,6 +843,30 @@ export const HomeScreen: React.FC = () => {
               return {
                 ...prev,
                 [currentDateKey]: updatedMeals,
+              };
+            });
+          },
+        },
+      ]
+    );
+  };
+
+  const handleDeleteExerciseEntry = (entryId: string) => {
+    Alert.alert(
+      'Delete Exercise Log',
+      'Remove this exercise entry?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setExercisesByDate((prev) => {
+              const currentEntries = prev[currentDateKey] || [];
+              const updatedEntries = currentEntries.filter((entry) => entry.id !== entryId);
+              return {
+                ...prev,
+                [currentDateKey]: updatedEntries,
               };
             });
           },
@@ -1300,7 +1386,7 @@ export const HomeScreen: React.FC = () => {
     },
     {
       id: 'registration',
-      title: 'Register your TrackKal account',
+      title: 'Register your TrackKcal account',
       description: '+5 free entries and sync across devices.',
       completed: entryTasks.registrationCompleted,
       onPress: handleRegistrationTaskNavigate,
@@ -1445,14 +1531,19 @@ if (showReferral) {
             onDeleteMeal={handleDeleteMeal}
           />
 
+          <ExerciseLogSection
+            entries={currentDayExercises}
+            onDeleteEntry={handleDeleteExerciseEntry}
+          />
+
           {/* Motivational Text - only show if no meals logged for current day */}
-          {currentDayMeals.length === 0 && !hasUserTyped && (
+          {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
             <View style={styles.motivationalTextContainer}>
               <Text style={styles.motivationalTitle}>
                 Ready when you are!
               </Text>
               <Text style={styles.motivationalText}>
-                Type what you've eaten and I'll handle the rest
+                Tell me what you ate or how you moved and I’ll handle the rest
               </Text>
             </View>
           )}
@@ -1480,7 +1571,7 @@ if (showReferral) {
           onQuickPromptPress={handleSelectSavedPrompt}
           onQuickPromptRemove={handleRemoveSavedPrompt}
           placeholder={
-            isAnalyzingFood ? "Analyzing your food..." : 
+            isAnalyzingFood ? "Analyzing your entry..." : 
             isRecording ? "Recording..." : 
             isTranscribing ? "Transcribing..." : 
             "What did you eat or exercise?"
@@ -1532,7 +1623,7 @@ if (showReferral) {
             <View style={styles.analyzingInline}>
               <ActivityIndicator size="small" color="#10B981" />
               <Text style={[styles.analyzingText, { color: Colors.white }]}>
-                Analyzing your food...
+                Analyzing your entry...
               </Text>
             </View>
           </Animated.View>

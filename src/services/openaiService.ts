@@ -1,5 +1,6 @@
 // OpenAI API service for food analysis
 import { ParsedFood } from '../utils/foodNutrition';
+import { ParsedExercise, parseExerciseInput } from '../utils/exerciseParser';
 import { config } from '../config/env';
 import * as FileSystem from 'expo-file-system/legacy';
 
@@ -76,6 +77,31 @@ Example output: [
     "fat": 22
   }
 ]
+`;
+
+const EXERCISE_ANALYSIS_PROMPT = `
+You are a certified fitness coach. Analyze the user's text to identify any exercises or workouts they completed and estimate calories burned.
+
+For each exercise:
+- Identify the movement (e.g., Running, Walking, Cycling, Strength Training).
+- Estimate duration in minutes (convert hours if needed).
+- Classify intensity as "low", "moderate", or "high".
+- Estimate calories burned using reasonable MET values for the activity and intensity.
+
+If the text includes multiple exercises, include each as its own entry.
+
+Return ONLY a JSON array in the following shape:
+[
+  {
+    "name": "Running",
+    "duration_minutes": 30,
+    "intensity": "high",
+    "calories": 320,
+    "notes": "Sunset run with strides"
+  }
+]
+
+If you cannot identify any exercises, return an empty array [].
 `;
 
 export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedFood[]> {
@@ -156,6 +182,72 @@ If you cannot identify any food items, return an empty array: []
     if (__DEV__) console.log('Falling back to local food parsing...');
     const { parseFoodInput } = require('../utils/foodNutrition');
     return parseFoodInput(foodInput);
+  }
+}
+
+export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise<ParsedExercise[]> {
+  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
+    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
+  }
+
+  try {
+    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: config.OPENAI_CONFIG.model,
+        messages: [
+          { role: 'system', content: EXERCISE_ANALYSIS_PROMPT },
+          { role: 'user', content: exerciseInput },
+        ],
+        temperature: Math.min(0.8, Math.max(0.2, config.OPENAI_CONFIG.temperature)),
+        max_tokens: config.OPENAI_CONFIG.max_tokens,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`OpenAI API error: ${response.status}`);
+    }
+
+    const data: OpenAIResponse = await response.json();
+    const content = data.choices[0]?.message?.content;
+    if (!content) {
+      throw new Error('No response from OpenAI');
+    }
+
+    const parsed = JSON.parse(content);
+    if (!Array.isArray(parsed)) {
+      throw new Error('Exercise response is not an array');
+    }
+
+    const exercises: ParsedExercise[] = parsed
+      .map((exercise: any) => ({
+        id: `exercise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        name: exercise.name || 'Exercise',
+        duration_minutes: Math.round(
+          Number(
+            exercise.duration_minutes ??
+              exercise.duration ??
+              exercise.minutes ??
+              exercise.time ??
+              0
+          ) || 0
+        ),
+        intensity: exercise.intensity || 'moderate',
+        calories: Math.round(
+          Number(exercise.calories ?? exercise.calories_burned ?? exercise.energy ?? 0) || 0
+        ),
+        notes: exercise.notes,
+      }))
+      .filter((exercise) => exercise.duration_minutes > 0 || exercise.calories > 0);
+
+    return exercises;
+  } catch (error) {
+    if (__DEV__) console.error('Error analyzing exercise with ChatGPT:', error);
+    return parseExerciseInput(exerciseInput);
   }
 }
 

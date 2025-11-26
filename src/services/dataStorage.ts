@@ -1,9 +1,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Meal } from '../components/FoodLogSection';
+import { ExerciseEntry } from '../components/ExerciseLogSection';
 
 const STORAGE_KEYS = {
   GOALS: '@trackkal:goals',
   MEALS: '@trackkal:meals',
+  EXERCISES: '@trackkal:exercises',
   WEIGHT_ENTRIES: '@trackkal:weightEntries',
   ENTRY_COUNT: '@trackkal:entryCount',
   USER_PLAN: '@trackkal:userPlan',
@@ -152,6 +154,26 @@ export const dataStorage = {
       return data ? JSON.parse(data) : {};
     } catch (error) {
       console.error('Error loading meals:', error);
+      return {};
+    }
+  },
+
+  // Save exercises by date
+  async saveExercises(exercisesByDate: Record<string, ExerciseEntry[]>): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesByDate));
+    } catch (error) {
+      console.error('Error saving exercises:', error);
+    }
+  },
+
+  // Load exercises
+  async loadExercises(): Promise<Record<string, ExerciseEntry[]>> {
+    try {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
+      return data ? JSON.parse(data) : {};
+    } catch (error) {
+      console.error('Error loading exercises:', error);
       return {};
     }
   },

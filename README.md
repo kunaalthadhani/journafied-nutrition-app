@@ -1,4 +1,4 @@
-# TrackKal - Fitness Tracking Mobile App
+# TrackKcal - Fitness Tracking Mobile App
 
 A cross-platform fitness and wellness tracking application built with React Native and Expo, featuring a clean, modern Apple Health-inspired design.
 

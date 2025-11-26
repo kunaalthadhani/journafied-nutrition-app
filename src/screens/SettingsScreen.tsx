@@ -212,7 +212,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const handleAbout = () => {
     Alert.alert(
-      'About TrackKal',
+      'About TrackKcal',
       'Version 1.0.0\n\nA nutrition and fitness tracking app to help you achieve your health goals.',
       [{ text: 'OK' }]
     );
