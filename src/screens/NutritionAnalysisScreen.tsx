@@ -1,10 +1,11 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -12,13 +13,14 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import { analyticsService } from '../services/analyticsService';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
   onRequestLogMeal?: () => void;
+  onRequestLogMealForDate?: (date: Date) => void;
   onRequestSetGoals?: () => void;
   mealsByDate?: Record<string, Meal[]>;
   targetCalories?: number;
@@ -41,6 +43,7 @@ interface DailyNutrition {
 export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = ({
   onBack,
   onRequestLogMeal,
+  onRequestLogMealForDate,
   onRequestSetGoals,
   mealsByDate = {},
   targetCalories: targetCaloriesProp,
@@ -168,6 +171,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const padding = 20;
   const innerWidth = graphWidth - padding * 2;
   const innerHeight = graphHeight - padding * 2;
+  const LINE_DRAW_LENGTH = 1000; // used for left-to-right draw animations
 
   // Find max value across all macronutrients for Y-axis scaling
   const maxProtein = graphData.length > 0 
@@ -193,6 +197,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     date: entry.date,
     calories: entry.calories,
   }));
+
+  // Table-friendly calories history (newest first, respects current time range)
+  const caloriesHistory = useMemo(
+    () => [...caloriesData].sort((a, b) => b.date.getTime() - a.date.getTime()),
+    [caloriesData]
+  );
+
+  // Table-friendly macros history (newest first, respects current time range)
+  const macrosHistory = useMemo(
+    () => [...graphData].sort((a, b) => b.date.getTime() - a.date.getTime()),
+    [graphData]
+  );
 
   const minCalories = caloriesData.length > 0 
     ? Math.min(...caloriesData.map(d => d.calories))
@@ -305,20 +321,68 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
 
+  // Screen-level fade-in for smooth navigation (content only)
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  // Animated paths for calories and macros charts
+  const [caloriesPath, setCaloriesPath] = useState<string>('');
+  const [proteinPath, setProteinPath] = useState<string>('');
+  const [carbsPath, setCarbsPath] = useState<string>('');
+  const [fatPath, setFatPath] = useState<string>('');
+  const caloriesLineProgress = useRef(new Animated.Value(1)).current;
+  const macrosLineProgress = useRef(new Animated.Value(1)).current;
+  const AnimatedPath = useRef(Animated.createAnimatedComponent((Path as any))).current;
+
+  useEffect(() => {
+    Animated.timing(screenOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  // Animate calories line when data changes
+  useEffect(() => {
+    const path = generateCaloriesPath();
+    setCaloriesPath(path);
+
+    caloriesLineProgress.setValue(0);
+    Animated.timing(caloriesLineProgress, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false, // animating SVG strokeDashoffset
+    }).start();
+  }, [JSON.stringify(caloriesData), maxCalories, minCalories, caloriesPadding]);
+
+  // Animate macros lines when data changes
+  useEffect(() => {
+    setProteinPath(generateSmoothPath(graphData.map(d => d.protein)));
+    setCarbsPath(generateSmoothPath(graphData.map(d => d.carbs)));
+    setFatPath(generateSmoothPath(graphData.map(d => d.fat)));
+
+    macrosLineProgress.setValue(0);
+    Animated.timing(macrosLineProgress, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: false,
+    }).start();
+  }, [JSON.stringify(graphData), maxValue]);
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Nutrition Analysis
-        </Text>
-        <View style={styles.headerRight} />
-      </View>
+      <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#10B981" />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+            Nutrition Analysis
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
 
-      <ScrollView 
+        <ScrollView 
         style={styles.content} 
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
@@ -455,6 +519,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               {/* Graph */}
               <View style={styles.graph}>
                 <Svg width={graphWidth} height={graphHeight}>
+                  <Defs>
+                    <LinearGradient id="caloriesGradient" x1="0" y1="0" x2="1" y2="0">
+                      <Stop offset="0%" stopColor="#6EE7B7" />
+                      <Stop offset="50%" stopColor="#10B981" />
+                      <Stop offset="100%" stopColor="#22C55E" />
+                    </LinearGradient>
+                  </Defs>
                   {/* Grid lines */}
                   {[0, 1, 2, 3, 4, 5].map((i) => (
                     <Line
@@ -488,15 +559,22 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     );
                   })()}
 
-                  {/* Calories line path */}
-                  <Path
-                    d={generateCaloriesPath()}
-                    fill="none"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {/* Calories line path with left-to-right draw animation */}
+                  {caloriesPath ? (
+                    <AnimatedPath
+                      d={caloriesPath}
+                      fill="none"
+                      stroke="url(#caloriesGradient)"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                      strokeDashoffset={caloriesLineProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [LINE_DRAW_LENGTH, 0],
+                      })}
+                    />
+                  ) : null}
 
                   {/* Data points */}
                   {caloriesData.map((entry, index) => {
@@ -526,16 +604,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   key={range}
                   style={[
                     styles.timeRangeButton,
-                    timeRange === range && { backgroundColor: '#10B981' },
+                    timeRange === range && styles.timeRangeButtonActive,
                   ]}
                   onPress={() => handleTimeRangeChange(range)}
                 >
                   <Text
                     style={[
                       styles.timeRangeText,
-                      {
-                        color: timeRange === range ? Colors.white : theme.colors.textSecondary,
-                      },
+                      timeRange === range
+                        ? styles.timeRangeTextActive
+                        : { color: theme.colors.textSecondary },
                     ]}
                   >
                     {range}
@@ -548,12 +626,51 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
               {getDateRange()}
             </Text>
+
+            {/* Calories History Table */}
+            {caloriesHistory.length > 0 && (
+              <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                  History
+                </Text>
+                <View style={styles.historyHeaderRow}>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Date
+                  </Text>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Calories
+                  </Text>
+                  <View style={styles.historyHeaderSpacer} />
+                </View>
+                {caloriesHistory.map((entry) => (
+                  <View key={entry.date.toISOString()} style={styles.historyRow}>
+                    <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                      {format(entry.date, 'd MMM yyyy')}
+                    </Text>
+                    <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
+                      {`${entry.calories.toFixed(0)} Kcal`}
+                    </Text>
+                    <View style={styles.historyActions}>
+                      {onRequestLogMealForDate && (
+                        <TouchableOpacity
+                          onPress={() => onRequestLogMealForDate(entry.date)}
+                          style={styles.historyEditButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
         {/* Macros Chart Section */}
         {activeTab === 'Macros' && (
-          <View style={styles.graphContainer}>
+            <View style={styles.graphContainer}>
             {/* Daily Averages */}
             <View style={styles.averagesContainer}>
               <View style={styles.averageItem}>
@@ -604,6 +721,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               {/* Graph */}
               <View style={styles.graph}>
                 <Svg width={graphWidth} height={graphHeight}>
+                  <Defs>
+                    <LinearGradient id="proteinGradient" x1="0" y1="0" x2="1" y2="0">
+                      <Stop offset="0%" stopColor="#6EE7B7" />
+                      <Stop offset="50%" stopColor="#10B981" />
+                      <Stop offset="100%" stopColor="#22C55E" />
+                    </LinearGradient>
+                    <LinearGradient id="carbsGradient" x1="0" y1="0" x2="1" y2="0">
+                      <Stop offset="0%" stopColor="#FECDD3" />
+                      <Stop offset="50%" stopColor="#FB7185" />
+                      <Stop offset="100%" stopColor="#F97373" />
+                    </LinearGradient>
+                    <LinearGradient id="fatGradient" x1="0" y1="0" x2="1" y2="0">
+                      <Stop offset="0%" stopColor="#CBD5F5" />
+                      <Stop offset="50%" stopColor="#64748B" />
+                      <Stop offset="100%" stopColor="#475569" />
+                    </LinearGradient>
+                  </Defs>
                   {/* Grid lines */}
                   {[0, 1, 2, 3, 4, 5].map((i) => (
                     <Line
@@ -666,34 +800,55 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   })()}
 
                   {/* Protein line */}
-                  <Path
-                    d={generateSmoothPath(graphData.map(d => d.protein))}
-                    fill="none"
-                    stroke="#10B981"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {proteinPath ? (
+                    <AnimatedPath
+                      d={proteinPath}
+                      fill="none"
+                      stroke="url(#proteinGradient)"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                      strokeDashoffset={macrosLineProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [LINE_DRAW_LENGTH, 0],
+                      })}
+                    />
+                  ) : null}
 
                   {/* Carbs line */}
-                  <Path
-                    d={generateSmoothPath(graphData.map(d => d.carbs))}
-                    fill="none"
-                    stroke="#FF7E67"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {carbsPath ? (
+                    <AnimatedPath
+                      d={carbsPath}
+                      fill="none"
+                      stroke="url(#carbsGradient)"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                      strokeDashoffset={macrosLineProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [LINE_DRAW_LENGTH, 0],
+                      })}
+                    />
+                  ) : null}
 
                   {/* Fat line */}
-                  <Path
-                    d={generateSmoothPath(graphData.map(d => d.fat))}
-                    fill="none"
-                    stroke="#40514E"
-                    strokeWidth={2}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  />
+                  {fatPath ? (
+                    <AnimatedPath
+                      d={fatPath}
+                      fill="none"
+                      stroke="url(#fatGradient)"
+                      strokeWidth={2}
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                      strokeDashoffset={macrosLineProgress.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [LINE_DRAW_LENGTH, 0],
+                      })}
+                    />
+                  ) : null}
 
                   {/* Data points */}
                   {graphData.map((entry, index) => {
@@ -722,16 +877,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   key={range}
                   style={[
                     styles.timeRangeButton,
-                    timeRange === range && { backgroundColor: '#10B981' },
+                    timeRange === range && styles.timeRangeButtonActive,
                   ]}
                   onPress={() => handleTimeRangeChange(range)}
                 >
                   <Text
                     style={[
                       styles.timeRangeText,
-                      {
-                        color: timeRange === range ? Colors.white : theme.colors.textSecondary,
-                      },
+                      timeRange === range
+                        ? styles.timeRangeTextActive
+                        : { color: theme.colors.textSecondary },
                     ]}
                   >
                     {range}
@@ -744,6 +899,57 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
               {getDateRange()}
             </Text>
+
+            {/* Macros History Table */}
+            {macrosHistory.length > 0 && (
+              <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                  History
+                </Text>
+                <View style={styles.historyHeaderRow}>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Date
+                  </Text>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Protein
+                  </Text>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Carbs
+                  </Text>
+                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                    Fat
+                  </Text>
+                  <View style={styles.historyHeaderSpacer} />
+                </View>
+                {macrosHistory.map((entry) => (
+                  <View key={entry.date.toISOString()} style={styles.historyRow}>
+                    <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                      {format(entry.date, 'd MMM yyyy')}
+                    </Text>
+                    <Text style={[styles.historyCellText, { color: '#10B981' }]}>
+                      {`${entry.protein.toFixed(0)}g`}
+                    </Text>
+                    <Text style={[styles.historyCellText, { color: '#FF7E67' }]}>
+                      {`${entry.carbs.toFixed(0)}g`}
+                    </Text>
+                    <Text style={[styles.historyCellText, { color: '#40514E' }]}>
+                      {`${entry.fat.toFixed(0)}g`}
+                    </Text>
+                    <View style={styles.historyActions}>
+                      {onRequestLogMealForDate && (
+                        <TouchableOpacity
+                          onPress={() => onRequestLogMealForDate(entry.date)}
+                          style={styles.historyEditButton}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
         )}
 
@@ -757,6 +963,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           </>
         )}
       </ScrollView>
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -890,10 +1097,15 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
   },
   graphCard: {
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 16,
     position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
   yAxisContainer: {
     position: 'absolute',
@@ -919,20 +1131,78 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   timeRangeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 16,
     minWidth: 40,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.02)',
   },
   timeRangeText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
   },
+  timeRangeButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
+  },
+  timeRangeTextActive: {
+    color: Colors.white,
+  },
   dateRange: {
     textAlign: 'center',
     fontSize: Typography.fontSize.sm,
     marginBottom: 24,
+  },
+  historyContainer: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    borderColor: Colors.lightBorder,
+  },
+  historyTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  historyHeaderText: {
+    flex: 1,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  historyHeaderSpacer: {
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.lightBorder,
+  },
+  historyCellText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+  },
+  historyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  historyEditButton: {
+    padding: 4,
   },
   infoBox: {
     flexDirection: 'row',

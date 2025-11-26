@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   View,
   Text,
@@ -10,6 +10,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -18,7 +19,7 @@ import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
-import Svg, { Path, Circle, Line } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
 import { dataStorage } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -49,6 +50,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [showLogModal, setShowLogModal] = useState(false);
   const [logWeight, setLogWeight] = useState('');
   const [logDate, setLogDate] = useState(new Date());
+  const [editingEntryIndex, setEditingEntryIndex] = useState<number | null>(null);
+  const [editingWeight, setEditingWeight] = useState<string>('');
   const [insight, setInsight] = useState<string>('');
   const [insightGeneratedDate, setInsightGeneratedDate] = useState<string | null>(null);
   const [goalType, setGoalType] = useState<'lose' | 'maintain' | 'gain' | undefined>(undefined);
@@ -201,6 +204,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const padding = 20;
   const innerWidth = graphWidth - padding * 2;
   const innerHeight = graphHeight - padding * 2;
+  const LINE_DRAW_LENGTH = 1000; // sufficiently large so the whole path can be revealed left-to-right
+
+  // Screen-level fade-in for smooth navigation (content only)
+  const screenOpacity = useRef(new Animated.Value(0)).current;
 
   const minWeight = hasGraphData ? Math.min(...graphData.map(d => d.weight)) : 0;
   const maxWeight = hasGraphData ? Math.max(...graphData.map(d => d.weight)) : 1;
@@ -233,6 +240,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const end = dataToUse[dataToUse.length - 1].date;
     return `${format(start, 'd MMM yyyy')} - ${format(end, 'd MMM yyyy')}`;
   }, [filteredData, weightEntries]);
+
+  // Full history table (all entries, newest first)
+  const historyEntries = useMemo(
+    () => [...weightEntries].sort((a, b) => b.date.getTime() - a.date.getTime()),
+    [weightEntries]
+  );
 
   // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
   const generateSmoothPath = () => {
@@ -277,6 +290,41 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     return path;
   };
 
+  // Tiny animation: fade the chart and draw the line from left to right when data changes
+  const [graphPath, setGraphPath] = useState<string>('');
+  const chartOpacity = useRef(new Animated.Value(1)).current;
+  const lineProgress = useRef(new Animated.Value(1)).current;
+  const AnimatedPath = useRef(Animated.createAnimatedComponent(Path as any)).current;
+
+  useEffect(() => {
+    Animated.timing(screenOpacity, {
+      toValue: 1,
+      duration: 1000,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  useEffect(() => {
+    const newPath = generateSmoothPath();
+    setGraphPath(newPath);
+
+    chartOpacity.setValue(0.15);
+    lineProgress.setValue(0);
+
+    Animated.parallel([
+      Animated.timing(chartOpacity, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(lineProgress, {
+        toValue: 1,
+        duration: 1800,
+        useNativeDriver: false, // animating SVG strokeDashoffset
+      }),
+    ]).start();
+  }, [JSON.stringify(graphData)]);
+
   const handleLogWeight = () => {
     const weight = parseFloat(logWeight);
     if (isNaN(weight) || weight <= 0) {
@@ -298,6 +346,69 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     setLogWeight('');
     setLogDate(new Date());
     setShowLogModal(false);
+  };
+
+  const handleStartEditEntry = (index: number) => {
+    const entry = historyEntries[index];
+    if (!entry) return;
+    setEditingEntryIndex(index);
+    setEditingWeight(convertWeightToDisplay(entry.weight).toFixed(1));
+  };
+
+  const handleCancelEditEntry = () => {
+    setEditingEntryIndex(null);
+    setEditingWeight('');
+  };
+
+  const handleSaveEditEntry = () => {
+    if (editingEntryIndex === null) return;
+    const parsed = parseFloat(editingWeight);
+    if (isNaN(parsed) || parsed <= 0) {
+      Alert.alert('Invalid Weight', 'Please enter a valid weight.');
+      return;
+    }
+
+    const weightKg = convertWeightFromDisplay(parsed, weightUnit);
+
+    setWeightEntries(prev => {
+      // historyEntries is sorted newest-first; map back to original order
+      const sorted = [...prev].sort((a, b) => b.date.getTime() - a.date.getTime());
+      if (!sorted[editingEntryIndex]) return prev;
+      sorted[editingEntryIndex] = { ...sorted[editingEntryIndex], weight: weightKg };
+      // restore ascending order for storage and graph
+      const restored = sorted.sort((a, b) => a.date.getTime() - b.date.getTime());
+      return restored;
+    });
+
+    handleCancelEditEntry();
+  };
+
+  const handleDeleteEntry = (index: number) => {
+    const entry = historyEntries[index];
+    if (!entry) return;
+
+    Alert.alert(
+      'Delete Entry',
+      `Delete weight entry for ${format(entry.date, 'd MMM yyyy')}?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: () => {
+            setWeightEntries(prev => {
+              const sorted = [...prev].sort((a, b) => b.date.getTime() - a.date.getTime());
+              if (!sorted[index]) return prev;
+              sorted.splice(index, 1);
+              return sorted.sort((a, b) => a.date.getTime() - b.date.getTime());
+            });
+            if (editingEntryIndex === index) {
+              handleCancelEditEntry();
+            }
+          },
+        },
+      ]
+    );
   };
 
   const handleTimeRangeChange = (range: TimeRange) => {
@@ -385,9 +496,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   }, [hasGraphData, graphData, insightGeneratedDate, convertWeightToDisplay, getWeightUnitLabel]);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={['top', 'bottom']}
+    >
+      <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
+        {/* Header */}
+        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
@@ -490,7 +605,15 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           <>
             {/* Graph Section */}
             <View style={styles.graphContainer}>
-              <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
+              <View
+                style={[
+                  styles.graphCard,
+                  {
+                    backgroundColor: theme.colors.card,
+                    shadowColor: theme.colors.shadow,
+                  },
+                ]}
+              >
                 {/* Y-axis labels */}
                 <View style={styles.yAxisContainer}>
                   {yAxisTicks.map((value, index) => {
@@ -513,8 +636,15 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 </View>
 
                 {/* Graph */}
-                <View style={styles.graph}>
+                <Animated.View style={[styles.graph, { opacity: chartOpacity }]}>
                   <Svg width={graphWidth} height={graphHeight}>
+                    <Defs>
+                      <LinearGradient id="weightGradient" x1="0" y1="0" x2="1" y2="0">
+                        <Stop offset="0%" stopColor="#6EE7B7" />
+                        <Stop offset="50%" stopColor="#10B981" />
+                        <Stop offset="100%" stopColor="#22C55E" />
+                      </LinearGradient>
+                    </Defs>
                     {/* Grid lines */}
                     {[0, 1, 2, 3, 4, 5].map((i) => (
                       <Line
@@ -529,15 +659,22 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       />
                     ))}
 
-                    {/* Line path */}
-                    <Path
-                      d={generateSmoothPath()}
-                      fill="none"
-                      stroke="#10B981"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                    />
+                    {/* Line path with soft gradient and left-to-right draw animation */}
+                    {graphPath ? (
+                      <AnimatedPath
+                        d={graphPath}
+                        fill="none"
+                        stroke="url(#weightGradient)"
+                        strokeWidth={2.5}
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                        strokeDashoffset={lineProgress.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [LINE_DRAW_LENGTH, 0],
+                        })}
+                      />
+                    ) : null}
 
                     {/* Data points */}
                     {graphData.map((entry, index) => {
@@ -555,7 +692,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       );
                     })}
                   </Svg>
-                </View>
+                </Animated.View>
               </View>
 
               {/* Time Range Selector */}
@@ -565,16 +702,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     key={range}
                     style={[
                       styles.timeRangeButton,
-                      timeRange === range && { backgroundColor: '#10B981' },
+                      timeRange === range && styles.timeRangeButtonActive,
                     ]}
                     onPress={() => handleTimeRangeChange(range)}
                   >
                     <Text
                       style={[
                         styles.timeRangeText,
-                        {
-                          color: timeRange === range ? Colors.white : theme.colors.textSecondary,
-                        },
+                        timeRange === range
+                          ? styles.timeRangeTextActive
+                          : { color: theme.colors.textSecondary },
                       ]}
                     >
                       {range}
@@ -597,6 +734,86 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       {insight}
                     </Text>
                   </View>
+                </View>
+              )}
+
+              {/* History Table */}
+              {historyEntries.length > 0 && (
+                <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                  <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                    History
+                  </Text>
+                  <View style={styles.historyHeaderRow}>
+                    <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                      Date
+                    </Text>
+                    <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                      Weight
+                    </Text>
+                    <View style={styles.historyHeaderSpacer} />
+                  </View>
+                  {historyEntries.map((entry, index) => {
+                    const isEditing = editingEntryIndex === index;
+                    return (
+                      <View key={entry.date.toISOString()} style={styles.historyRow}>
+                        <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                          {format(entry.date, 'd MMM yyyy')}
+                        </Text>
+                        {isEditing ? (
+                          <TextInput
+                            style={[
+                              styles.historyWeightInput,
+                              { color: theme.colors.textPrimary, borderColor: theme.colors.border },
+                            ]}
+                            value={editingWeight}
+                            onChangeText={setEditingWeight}
+                            keyboardType="decimal-pad"
+                          />
+                        ) : (
+                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
+                            {`${convertWeightToDisplay(entry.weight).toFixed(1)} ${getWeightUnitLabel()}`}
+                          </Text>
+                        )}
+                        <View style={styles.historyActions}>
+                          {isEditing ? (
+                            <>
+                              <TouchableOpacity
+                                onPress={handleSaveEditEntry}
+                                style={styles.historyIconButton}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Feather name="check" size={16} color="#10B981" />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={handleCancelEditEntry}
+                                style={styles.historyIconButton}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Feather name="x" size={16} color={theme.colors.textSecondary} />
+                              </TouchableOpacity>
+                            </>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                onPress={() => handleStartEditEntry(index)}
+                                style={styles.historyIconButton}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleDeleteEntry(index)}
+                                style={styles.historyIconButton}
+                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                              >
+                                <Feather name="trash-2" size={14} color="#EF4444" />
+                              </TouchableOpacity>
+                            </>
+                          )}
+                        </View>
+                      </View>
+                    );
+                  })}
                 </View>
               )}
             </View>
@@ -658,6 +875,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           </KeyboardAvoidingView>
         </View>
       </Modal>
+      </Animated.View>
     </SafeAreaView>
   );
 };
@@ -768,10 +986,15 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   graphCard: {
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 16,
+    padding: 18,
     marginBottom: 16,
     position: 'relative',
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.12,
+    shadowRadius: 16,
+    elevation: 8,
   },
   yAxisContainer: {
     position: 'absolute',
@@ -806,15 +1029,25 @@ const styles = StyleSheet.create({
     marginBottom: 8,
   },
   timeRangeButton: {
-    paddingHorizontal: 12,
-    paddingVertical: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
     borderRadius: 16,
     minWidth: 40,
     alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.02)',
+  },
+  timeRangeButtonActive: {
+    backgroundColor: '#10B981',
+    borderColor: '#10B981',
   },
   timeRangeText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
+  },
+  timeRangeTextActive: {
+    color: Colors.white,
   },
   dateRange: {
     textAlign: 'center',
@@ -840,6 +1073,62 @@ const styles = StyleSheet.create({
   insightText: {
     fontSize: Typography.fontSize.xs,
     lineHeight: 16,
+  },
+  historyContainer: {
+    marginTop: 16,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 8,
+    borderColor: Colors.lightBorder,
+  },
+  historyTitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
+    paddingHorizontal: 16,
+    paddingBottom: 4,
+  },
+  historyHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 4,
+  },
+  historyHeaderText: {
+    flex: 1,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  historyHeaderSpacer: {
+    width: 40,
+    alignItems: 'flex-end',
+  },
+  historyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.lightBorder,
+  },
+  historyCellText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+  },
+  historyActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  historyIconButton: {
+    padding: 4,
+  },
+  historyWeightInput: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
   },
   emptyStateContainer: {
     borderWidth: 1,

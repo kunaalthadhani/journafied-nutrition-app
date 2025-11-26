@@ -193,6 +193,12 @@ export const HomeScreen: React.FC = () => {
     setShouldFocusInput(true);
   };
 
+  const handleRequestLogMealForDate = (date: Date) => {
+    setSelectedDate(date);
+    setShowNutritionAnalysis(false);
+    setShouldFocusInput(true);
+  };
+
   const handleSettings = async () => {
     analyticsService.trackSettingsOpen();
     // Reload referral data to ensure it's up to date
@@ -1432,6 +1438,7 @@ export const HomeScreen: React.FC = () => {
       <NutritionAnalysisScreen 
         onBack={handleNutritionAnalysisBack}
         onRequestLogMeal={handleRequestLogMeal}
+        onRequestLogMealForDate={handleRequestLogMealForDate}
         onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
         mealsByDate={mealsByDate}
         targetCalories={goalsSet ? savedGoals.calories : undefined}
