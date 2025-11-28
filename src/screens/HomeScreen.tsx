@@ -368,9 +368,7 @@ export const HomeScreen: React.FC = () => {
 
   // Persist meals whenever mealsByDate changes
   useEffect(() => {
-    if (Object.keys(mealsByDate).length > 0) {
-      dataStorage.saveMeals(mealsByDate);
-    }
+    dataStorage.saveMeals(mealsByDate);
   }, [mealsByDate]);
 
   useEffect(() => {
@@ -648,11 +646,13 @@ export const HomeScreen: React.FC = () => {
 
       if (parsedFoods.length > 0) {
         // Create a new meal entry with the prompt and foods
+        const createdAt = Date.now();
         const newMeal: Meal = {
-          id: `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `meal_${createdAt}_${Math.random().toString(36).substr(2, 9)}`,
           prompt: trimmed,
           foods: parsedFoods,
-          timestamp: Date.now(),
+          timestamp: createdAt,
+          updatedAt: new Date().toISOString(),
         };
 
         // Add meal to the current selected date
@@ -746,20 +746,27 @@ export const HomeScreen: React.FC = () => {
 
   const handleRemoveFood = (foodId: string) => {
     analyticsService.trackFoodItemRemoval();
-    setMealsByDate(prev => {
-      const currentMeals = prev[currentDateKey] || [];
-      const updatedMeals = currentMeals
-        .map(meal => ({
-          ...meal,
-          foods: meal.foods.filter(food => food.id !== foodId)
-        }))
-        .filter(meal => meal.foods.length > 0); // Remove meals with no foods
+      setMealsByDate(prev => {
+        const currentMeals = prev[currentDateKey] || [];
+        const updatedMeals = currentMeals
+          .map(meal => {
+            if (!meal.foods.some(food => food.id === foodId)) {
+              return meal;
+            }
+            const filteredFoods = meal.foods.filter(food => food.id !== foodId);
+            return {
+              ...meal,
+              foods: filteredFoods,
+              updatedAt: new Date().toISOString(),
+            };
+          })
+          .filter(meal => meal.foods.length > 0); // Remove meals with no foods
       
-      return {
-        ...prev,
-        [currentDateKey]: updatedMeals
-      };
-    });
+        return {
+          ...prev,
+          [currentDateKey]: updatedMeals
+        };
+      });
   };
 
   const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
@@ -807,7 +814,7 @@ export const HomeScreen: React.FC = () => {
         const currentMeals = prev[currentDateKey] || [];
         const updatedMeals = currentMeals.map(meal =>
           meal.id === mealId
-            ? { ...meal, prompt: newPrompt, foods: parsedFoods }
+            ? { ...meal, prompt: newPrompt, foods: parsedFoods, updatedAt: new Date().toISOString() }
             : meal
         );
         return {
@@ -1087,12 +1094,14 @@ export const HomeScreen: React.FC = () => {
         const dateKey = getDateKey(selectedDate);
         
         // Create a new meal entry with the image and parsed foods
+        const createdAt = Date.now();
         const newMeal: Meal = {
-          id: `meal_image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: `meal_image_${createdAt}_${Math.random().toString(36).substr(2, 9)}`,
           prompt: `Image`,
           foods: parsedFoods,
-          timestamp: Date.now(),
-          imageUri: uriToAnalyze
+          timestamp: createdAt,
+          imageUri: uriToAnalyze,
+          updatedAt: new Date().toISOString()
         };
         
         // Add meal to the current selected date

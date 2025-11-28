@@ -19,6 +19,7 @@ export interface Meal {
   foods: ParsedFood[];
   timestamp: number;
   imageUri?: string;
+  updatedAt?: string;
 }
 
 interface FoodLogSectionProps {

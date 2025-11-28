@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
+import { Session } from '@supabase/supabase-js';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
@@ -19,6 +20,7 @@ import { dataStorage, AccountInfo, ExtendedGoalData } from '../services/dataStor
 import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { authService } from '../services/authService';
 
 interface AccountScreenProps {
   onBack: () => void;
@@ -28,8 +30,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
   const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [pendingOtpCode, setPendingOtpCode] = useState('');
+  const [otpSent, setOtpSent] = useState(false);
+  const [authStatus, setAuthStatus] = useState<'idle' | 'sending' | 'verifying'>('idle');
+  const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [referralCode, setReferralCode] = useState('');
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
   const [isValidatingCode, setIsValidatingCode] = useState(false);
@@ -56,71 +61,131 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     change: null,
   });
   const [isLoading, setIsLoading] = useState(true);
+  const [authSession, setAuthSession] = useState<Session | null>(null);
 
   const FREE_ENTRY_LIMIT = 20;
 
-  useEffect(() => {
-    const loadAccountData = async () => {
-      setIsLoading(true);
-      try {
-        const info = await dataStorage.loadAccountInfo();
-        setAccountInfo(info);
+  const loadAccountData = React.useCallback(async () => {
+    setIsLoading(true);
+    try {
+      const info = await dataStorage.loadAccountInfo();
+      setAccountInfo(info);
+      if (info?.name) {
+        setName(info.name);
+      }
+      if (info?.email) {
+        setEmailInput(info.email);
+      }
 
-        const [count, planValue, goalsData, weightEntries] = await Promise.all([
-          dataStorage.loadEntryCount(),
-          dataStorage.loadUserPlan(),
-          dataStorage.loadGoals(),
-          dataStorage.loadWeightEntries(),
-        ]);
+      const [count, planValue, goalsData, weightEntries] = await Promise.all([
+        dataStorage.loadEntryCount(),
+        dataStorage.loadUserPlan(),
+        dataStorage.loadGoals(),
+        dataStorage.loadWeightEntries(),
+      ]);
 
-        setEntryCount(count);
-        setPlan(planValue);
-        setGoals(goalsData);
+      setEntryCount(count);
+      setPlan(planValue);
+      setGoals(goalsData);
 
-        if (info?.email) {
-          const earnedEntries = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
-          setTotalEarnedEntries(earnedEntries);
+      if (info?.email) {
+        const earnedEntries = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
+        setTotalEarnedEntries(earnedEntries);
 
-          const codeData = await dataStorage.getReferralCode(info.email);
-          setReferralDetails({
-            code: codeData?.code || null,
-            totalReferrals: codeData?.totalReferrals || 0,
-            entriesFromReferrals: codeData?.totalEarnedEntries ?? earnedEntries,
-          });
-        } else {
-          setTotalEarnedEntries(0);
-          setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
-        }
-
-        const sortedEntries = [...weightEntries].sort(
-          (a, b) => a.date.getTime() - b.date.getTime()
-        );
-
-        const startingWeight = sortedEntries[0]?.weight ?? goalsData?.currentWeightKg ?? null;
-        const currentWeight =
-          sortedEntries[sortedEntries.length - 1]?.weight ?? goalsData?.currentWeightKg ?? null;
-        const goalWeight = goalsData?.targetWeightKg ?? null;
-        const change =
-          startingWeight !== null && currentWeight !== null ? startingWeight - currentWeight : null;
-
-        setWeightSummary({
-          starting: startingWeight,
-          current: currentWeight,
-          goal: goalWeight,
-          change,
+        const codeData = await dataStorage.getReferralCode(info.email);
+        setReferralDetails({
+          code: codeData?.code || null,
+          totalReferrals: codeData?.totalReferrals || 0,
+          entriesFromReferrals: codeData?.totalEarnedEntries ?? earnedEntries,
         });
+      } else {
+        setTotalEarnedEntries(0);
+        setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
+      }
 
-        const tasksStatus = await dataStorage.loadEntryTasks();
-        setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
+      const sortedEntries = [...weightEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
+
+      const startingWeight = sortedEntries[0]?.weight ?? goalsData?.currentWeightKg ?? null;
+      const currentWeight =
+        sortedEntries[sortedEntries.length - 1]?.weight ?? goalsData?.currentWeightKg ?? null;
+      const goalWeight = goalsData?.targetWeightKg ?? null;
+      const change =
+        startingWeight !== null && currentWeight !== null ? startingWeight - currentWeight : null;
+
+      setWeightSummary({
+        starting: startingWeight,
+        current: currentWeight,
+        goal: goalWeight,
+        change,
+      });
+
+      const tasksStatus = await dataStorage.loadEntryTasks();
+      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
+    } catch (error) {
+      console.error('Error loading account data:', error);
+    } finally {
+      setIsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadAccountData();
+  }, [loadAccountData]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const bootstrap = async () => {
+      try {
+        const { data } = await authService.getSession();
+        if (!isMounted) return;
+        setAuthSession(data.session ?? null);
+        if (data.session?.user?.email) {
+          setEmailInput(data.session.user.email);
+          await syncAccountInfoFromSession(data.session, true);
+        }
       } catch (error) {
-        console.error('Error loading account data:', error);
-      } finally {
-        setIsLoading(false);
+        console.warn('Auth session bootstrap failed:', error);
       }
     };
 
-    loadAccountData();
+    bootstrap();
+
+    const { data: authListener } = authService.onAuthStateChange(async (_event, session) => {
+      if (!isMounted) return;
+      setAuthSession(session);
+      if (session?.user?.email) {
+        setEmailInput(session.user.email);
+        await syncAccountInfoFromSession(session);
+      }
+    });
+
+    return () => {
+      isMounted = false;
+      authListener?.subscription.unsubscribe();
+    };
   }, []);
+
+  const syncAccountInfoFromSession = async (session: Session, silent = false) => {
+    const email = session.user.email;
+    if (!email) return;
+
+    const existing = await dataStorage.loadAccountInfo();
+    const merged: AccountInfo = {
+      ...(existing || {}),
+      email,
+      name: existing?.name ?? (name.trim().length ? name.trim() : undefined),
+      phoneNumber: existing?.phoneNumber,
+      supabaseUserId: session.user.id,
+      hasUsedReferralCode: existing?.hasUsedReferralCode,
+    };
+
+    await dataStorage.saveAccountInfo(merged);
+    setAccountInfo(merged);
+    if (!silent && merged.name) {
+      setName(merged.name);
+    }
+  };
 
   const formatWeight = (value: number | null) => {
     if (value === null || value === undefined) {
@@ -152,27 +217,21 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       ? null
       : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries - entryCount);
 
-  const handleResetPassword = () => {
+  const handleClearLocalData = () => {
     Alert.alert(
-      'Reset password',
-      'Password reset from the app is coming soon. For now, you can re-register with the same email to update your password.'
-    );
-  };
-
-  const handleLogout = () => {
-    Alert.alert(
-      'Log out',
-      'Are you sure you want to log out? This will clear all your data.',
+      'Clear local data',
+      'This removes every saved entry from this device. Remote backups stay untouched.',
       [
         {
           text: 'Cancel',
           style: 'cancel',
         },
         {
-          text: 'Log out',
+          text: 'Clear data',
           style: 'destructive',
           onPress: async () => {
             try {
+              await authService.signOut().catch(() => {});
               // Clear all user data from storage
               await dataStorage.saveAccountInfo({});
               await dataStorage.saveMeals({});
@@ -201,9 +260,14 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
               setGoals(null);
               setWeightSummary({ starting: null, current: null, goal: null, change: null });
+              setAuthSession(null);
+              setEmailInput('');
+              setAuthMessage(null);
+              setOtpSent(false);
+              setPendingOtpCode('');
             } catch (error) {
-              console.error('Error during logout:', error);
-              Alert.alert('Error', 'An error occurred during logout. Please try again.');
+              console.error('Error clearing data:', error);
+              Alert.alert('Error', 'Something went wrong while clearing your data. Please try again.');
             }
           },
         },
@@ -211,170 +275,124 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     );
   };
 
-  const handleSignUp = async () => {
-    if (!name.trim() || !email.trim() || !password.trim()) {
-      Alert.alert('Missing info', 'Please fill in name, email, and password.');
+  const handleReferralAfterLogin = async (userEmail: string, userName?: string | null) => {
+    if (!referralCode.trim()) {
+      setReferralCodeError(null);
       return;
     }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email.trim())) {
-      Alert.alert('Invalid Email', 'Please enter a valid email address.');
-      return;
-    }
-
-    // Validate referral code if provided
-    let referralRedemption = null;
-    let hasUsedReferralCode = false;
-    
-    if (referralCode.trim()) {
+    try {
       setIsValidatingCode(true);
       const validation = await referralService.validateReferralCodeForRedemption(
         referralCode.trim(),
-        email.trim()
+        userEmail
       );
 
       if (!validation.valid) {
         setReferralCodeError(validation.error || 'Invalid referral code');
-        setIsValidatingCode(false);
         return;
       }
 
-      // Create redemption record
-      referralRedemption = await referralService.createReferralRedemption(
+      await referralService.createReferralRedemption(
         validation.referralCode!,
-        email.trim(),
-        name.trim()
+        userEmail,
+        userName && userName.trim().length ? userName : 'TrackKcal user'
       );
-      hasUsedReferralCode = true;
+      setReferralCode('');
+      setReferralCodeError(null);
+    } catch (error) {
+      console.error('Referral redemption failed:', error);
+      setReferralCodeError('Unable to apply referral code right now.');
+    } finally {
       setIsValidatingCode(false);
-      
-      // Track analytics (already tracked in createReferralRedemption, but we can track here too if needed)
     }
-
-    // Save account info (in production, password should be hashed)
-    await dataStorage.saveAccountInfo({
-      name: name.trim(),
-      email: email.trim(),
-      passwordHash: password.trim(), // In production, hash this properly
-      hasUsedReferralCode,
-    });
-
-    // Generate referral code for the new user
-    await referralService.getOrCreateReferralCode(email.trim());
-
-    const rewardResult = await dataStorage.completeEntryTask('registration');
-    let registrationMessage = referralRedemption
-      ? 'Your referral code has been applied. Log 5 meals to unlock +10 free entries for you and your friend!'
-      : 'Your account has been created.';
-    if (rewardResult.awarded) {
-      registrationMessage += '\n\nYou unlocked +5 free entries for registering!';
-      const tasksStatus = await dataStorage.loadEntryTasks();
-      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
-    }
-    Alert.alert('Registered', registrationMessage);
-
-    // Call onBack or navigate back
-    onBack();
   };
 
-  const renderRegistrationForm = () => (
-    <View style={styles.content}>
-      <View
-        style={[
-          styles.formCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-        ]}
-      >
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
-        <TextInput
-          style={[
-            styles.input,
-            { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
-          ]}
-          placeholder="Your name"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-          returnKeyType="next"
-        />
+  const handleSendOtp = async () => {
+    const email = emailInput.trim().toLowerCase();
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      setAuthMessage('Enter a valid email address.');
+      return;
+    }
 
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
-        <TextInput
-          style={[
-            styles.input,
-            { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
-          ]}
-          placeholder="you@example.com"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={email}
-          onChangeText={setEmail}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          returnKeyType="next"
-        />
+    try {
+      setAuthStatus('sending');
+      setAuthMessage(null);
+      await authService.sendOtp(email);
+      setOtpSent(true);
+      setAuthMessage('Check your inbox for a 6-digit code.');
+    } catch (error: any) {
+      console.error('OTP send failed:', error);
+      setAuthMessage(error?.message ?? 'Failed to send code. Please try again.');
+    } finally {
+      setAuthStatus('idle');
+    }
+  };
 
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
-        <TextInput
-          style={[
-            styles.input,
-            { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
-          ]}
-          placeholder="Create a password"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={password}
-          onChangeText={setPassword}
-          secureTextEntry
-          autoCapitalize="none"
-          returnKeyType="next"
-        />
+  const handleVerifyOtp = async () => {
+    const email = emailInput.trim().toLowerCase();
+    if (!otpSent) {
+      setAuthMessage('Request a code first.');
+      return;
+    }
+    if (pendingOtpCode.trim().length < 6) {
+      setAuthMessage('Enter the 6-digit code from your email.');
+      return;
+    }
 
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-          Referral Code (Optional)
-        </Text>
-        <TextInput
-          style={[
-            styles.input,
-            {
-              color: theme.colors.textPrimary,
-              borderColor: referralCodeError ? theme.colors.error : theme.colors.border,
-              backgroundColor: theme.colors.input,
-            },
-          ]}
-          placeholder="Enter friend's referral code"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={referralCode}
-          onChangeText={(text) => {
-            setReferralCode(text.toUpperCase().trim());
-            setReferralCodeError(null);
-          }}
-          autoCapitalize="characters"
-          returnKeyType="done"
-          editable={!isValidatingCode}
-        />
-        {referralCodeError && (
-          <Text style={[styles.errorText, { color: theme.colors.error }]}>{referralCodeError}</Text>
-        )}
-        {referralCode && !referralCodeError && (
-          <Text style={[styles.helperText, { color: theme.colors.textTertiary }]}>
-            Enter a friend's code to get +10 free entries after logging 5 meals
-          </Text>
-        )}
+    try {
+      setAuthStatus('verifying');
+      setAuthMessage(null);
+      const { data, error } = await authService.verifyOtp(email, pendingOtpCode.trim());
+      if (error) {
+        throw error;
+      }
+      const session = data.session ?? (await authService.getSession()).data.session;
+      if (!session) {
+        throw new Error('Verification succeeded, but no session was returned.');
+      }
 
-        <TouchableOpacity
-          style={[styles.primaryButton, isValidatingCode && styles.primaryButtonDisabled]}
-          onPress={handleSignUp}
-          disabled={isValidatingCode}
-        >
-          <Text style={styles.primaryButtonText}>
-            {isValidatingCode ? 'Validating...' : 'Sign up'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+      await syncAccountInfoFromSession(session);
+      await dataStorage.pushCachedDataToSupabase();
+      await referralService.getOrCreateReferralCode(email);
+      await handleReferralAfterLogin(email, name.trim() || accountInfo?.name);
+
+      const rewardResult = await dataStorage.completeEntryTask('registration');
+      if (rewardResult.awarded) {
+        setTaskBonusEntries(dataStorage.getEntryTaskBonus(rewardResult.status));
+      }
+
+      setAuthMessage('Success! Your data is now synced to your account.');
+      setOtpSent(false);
+      setPendingOtpCode('');
+      await loadAccountData();
+    } catch (error: any) {
+      console.error('OTP verification failed:', error);
+      setAuthMessage(error?.message ?? 'Verification failed. Double-check the code and try again.');
+    } finally {
+      setAuthStatus('idle');
+    }
+  };
+
+  const handleSignOut = async () => {
+    try {
+      await authService.signOut();
+      setAuthSession(null);
+      setOtpSent(false);
+      setPendingOtpCode('');
+      setAuthMessage('Signed out. Continue in guest mode or log in again anytime.');
+      const guestInfo: AccountInfo = {
+        name: name.trim() || undefined,
+        phoneNumber: accountInfo?.phoneNumber,
+      };
+      await dataStorage.saveAccountInfo(guestInfo);
+      setAccountInfo(guestInfo);
+      await loadAccountData();
+    } catch (error) {
+      console.error('Sign out failed:', error);
+      Alert.alert('Sign out failed', 'Please try again.');
+    }
+  };
 
   const renderSummary = () => (
     <ScrollView
@@ -389,25 +407,115 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
         ]}
       >
+        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+          Account status
+        </Text>
+        <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
+          {authSession?.user?.email
+            ? `Synced to ${authSession.user.email}. Your data is backed up and available on other devices.`
+            : 'Guest mode — data lives on this device. Log in to back it up and sync across devices.'}
+        </Text>
+        {authSession?.user ? (
+          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
+            <Feather name="log-out" size={16} color={Colors.white} />
+            <Text style={styles.signOutButtonText}>Sign out</Text>
+          </TouchableOpacity>
+        ) : (
+          <>
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+            <TextInput
+              style={[
+                styles.input,
+                { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
+              ]}
+              placeholder="you@example.com"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={emailInput}
+              onChangeText={setEmailInput}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              editable={authStatus === 'idle'}
+            />
+            {otpSent && (
+              <>
+                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+                  Verification code
+                </Text>
+                <TextInput
+                  style={[
+                    styles.input,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
+                  ]}
+                  placeholder="Enter 6-digit code"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={pendingOtpCode}
+                  onChangeText={setPendingOtpCode}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+              </>
+            )}
+            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
+              Referral code (optional)
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: theme.colors.textPrimary,
+                  borderColor: referralCodeError ? theme.colors.error : theme.colors.border,
+                  backgroundColor: theme.colors.input,
+                },
+              ]}
+              placeholder="FRIEND10"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={referralCode}
+              onChangeText={(text) => {
+                setReferralCode(text.trim().toUpperCase());
+                setReferralCodeError(null);
+              }}
+              autoCapitalize="characters"
+              editable={!isValidatingCode && authStatus === 'idle'}
+            />
+            {referralCodeError && (
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>{referralCodeError}</Text>
+            )}
+            {authMessage && (
+              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>{authMessage}</Text>
+            )}
+            <TouchableOpacity
+              style={[
+                styles.primaryButton,
+                (authStatus !== 'idle' || isValidatingCode) && styles.primaryButtonDisabled,
+              ]}
+              onPress={otpSent ? handleVerifyOtp : handleSendOtp}
+              disabled={authStatus !== 'idle' || isValidatingCode}
+            >
+              {authStatus !== 'idle' ? (
+                <ActivityIndicator color={Colors.white} />
+              ) : (
+                <Text style={styles.primaryButtonText}>{otpSent ? 'Verify code' : 'Send code'}</Text>
+              )}
+            </TouchableOpacity>
+          </>
+        )}
+      </View>
+
+      <View
+        style={[
+          styles.summaryCard,
+          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+        ]}
+      >
         <View style={styles.profileHeader}>
           <View>
             <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>
               {accountInfo?.name || 'TrackKcal user'}
             </Text>
             <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
-              {accountInfo?.email}
+              {accountInfo?.email || 'guest mode'}
             </Text>
           </View>
-          <TouchableOpacity
-            style={[
-              styles.resetButton,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.input },
-            ]}
-            onPress={handleResetPassword}
-          >
-            <Feather name="refresh-ccw" size={14} color="#10B981" />
-            <Text style={[styles.resetButtonText, { color: '#10B981' }]}>Reset password</Text>
-          </TouchableOpacity>
         </View>
         <View style={styles.planRow}>
           <Text style={[styles.planLabel, { color: theme.colors.textSecondary }]}>Plan</Text>
@@ -519,13 +627,15 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
         </View>
       </View>
 
-      {/* Logout Button */}
+      {/* Clear data button */}
       <TouchableOpacity
         style={[styles.logoutButton, { borderColor: theme.colors.border }]}
-        onPress={handleLogout}
+        onPress={handleClearLocalData}
       >
         <Feather name="log-out" size={18} color={theme.colors.error} />
-        <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>Log out</Text>
+        <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>
+          Clear local data
+        </Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -545,10 +655,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           <ActivityIndicator size="large" color="#10B981" />
           <Text style={{ marginTop: 12, color: theme.colors.textSecondary }}>Loading account…</Text>
         </View>
-      ) : accountInfo ? (
-        renderSummary()
       ) : (
-        renderRegistrationForm()
+        renderSummary()
       )}
     </SafeAreaView>
   );
@@ -652,18 +760,19 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     marginTop: 4,
   },
-  resetButton: {
-    flexDirection: 'row',
+  signOutButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 10,
+    paddingVertical: 12,
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-    borderWidth: 1,
-    gap: 6,
+    justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 8,
+    marginTop: 12,
   },
-  resetButtonText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
+  signOutButtonText: {
+    color: Colors.white,
+    fontWeight: Typography.fontWeight.semiBold,
   },
   planRow: {
     flexDirection: 'row',

@@ -15,12 +15,9 @@ A cross-platform fitness and wellness tracking application built with React Nati
 - **TypeScript Support** for better code quality and development experience
 
 ### 🔄 Coming Soon
-- Data persistence and storage
-- Food and exercise database integration
-- Advanced analytics and charts
-- Goal setting and progress tracking
+- Expanded food and exercise database integrations
 - Social features and sharing
-- Notifications and reminders
+- Push notification scheduling and campaigns
 
 ## 🛠 Tech Stack
 
@@ -44,7 +41,7 @@ A cross-platform fitness and wellness tracking application built with React Nati
 1. **Clone the repository**
    ```bash
    git clone <your-repo-url>
-   cd trackkal-app
+   cd trackkcal-app
    ```
 
 2. **Install dependencies**
@@ -52,12 +49,29 @@ A cross-platform fitness and wellness tracking application built with React Nati
    npm install
    ```
 
-3. **Start the development server**
+3. **Environment variables**
+   Create a `.env` file in the project root with:
+   ```bash
+   EXPO_PUBLIC_OPENAI_API_KEY=<your-openai-key>
+   EXPO_PUBLIC_SUPABASE_URL=<your-supabase-url>
+   EXPO_PUBLIC_SUPABASE_ANON_KEY=<your-supabase-anon-key>
+   ```
+   Restart Expo (`npm start`) after adding or changing these values.
+
+### Supabase Auth setup
+TrackKcal now uses Supabase Auth (email OTP) so guests can upgrade to synced accounts.
+
+1. In the Supabase dashboard, enable **Email OTP** under Authentication → Providers.
+2. Ensure your project has a valid **Site URL** (for Expo dev you can use `https://example.com`, because we verify the 6-digit code inside the app).
+3. Customize the OTP email template if desired; users receive a 6-digit code they enter in the app.
+4. Keep the anon key in `.env` (`EXPO_PUBLIC_SUPABASE_ANON_KEY`)—never commit the service role key.
+
+4. **Start the development server**
    ```bash
    npm start
    ```
 
-4. **Run on your device**
+5. **Run on your device**
    - Scan the QR code with Expo Go app (Android) or Camera app (iOS)
    - Or press `a` for Android emulator / `i` for iOS simulator
 
@@ -107,12 +121,52 @@ src/
 - `npm run ios` - Open iOS app  
 - `npm run web` - Open web version
 
+## 🔄 Data Sync
+
+- Every meal and weight entry now has a stable UUID and `updatedAt` timestamp.
+- Supabase syncs incrementally (per entry upsert/delete), so multiple devices on the same account no longer overwrite each other.
+- Offline edits are queued; once a connection is available the queue flushes automatically.
+- Local storage continues to act as a cache, so the app works fully offline.
+
 ## 🧪 Testing
 
 The app has been tested on:
 - iOS Simulator
 - Expo Go mobile app
 - Various screen sizes and orientations
+
+## 📦 Production Release (Play Store)
+
+1. **Configure secrets**
+   - Base64-encode your Android keystore and set the following environment variables referenced in `eas.json`:
+     - `TRACKKCAL_KEYSTORE_BASE64`
+     - `TRACKKCAL_KEYSTORE_PASSWORD`
+     - `TRACKKCAL_KEY_ALIAS`
+     - `TRACKKCAL_KEY_PASSWORD`
+   - Keep these secrets outside of source control (CI/CD, `.env.local`, etc.).
+
+2. **Verify project health**
+   ```bash
+   npx expo-doctor
+   npm audit
+   ```
+
+3. **Create the production bundle**
+   ```bash
+   npx eas build --platform android --profile production
+   ```
+
+4. **Submit to Play Console**
+   ```bash
+   npx eas submit --platform android --profile production
+   ```
+
+5. **Finalize in Play Console**
+   - Upload privacy policy URL and complete the Data Safety form using `docs/data-safety.md`.
+   - Provide screenshots (phone + 7" tablet), feature graphic, and localized descriptions.
+   - Complete content rating and target audience disclosures.
+
+See `docs/RELEASE.md` for the full checklist.
 
 ## 🤝 Contributing
 

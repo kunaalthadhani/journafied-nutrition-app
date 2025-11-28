@@ -5,6 +5,42 @@ export interface CalorieData {
   target: number;
 }
 
+export interface AppUser {
+  id: string;
+  authUserId?: string;
+  email?: string;
+  displayName?: string;
+  phoneNumber?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SupabaseFoodLog {
+  id?: string;
+  user_id: string;
+  prompt: string;
+  parsed_payload: Record<string, unknown> | null;
+  logged_date: string;
+  total_calories?: number | null;
+  total_protein?: number | null;
+  total_carbs?: number | null;
+  total_fat?: number | null;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}
+
+export interface SupabaseWeightEntry {
+  id?: string;
+  user_id: string;
+  logged_date: string;
+  weight_kg?: number | null;
+  notes?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  deleted_at?: string | null;
+}
+
 export interface MacroData {
   carbs: {
     current: number;

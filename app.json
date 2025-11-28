@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "trackkal-app",
-    "slug": "trackkal-app",
+    "name": "TrackKcal",
+    "slug": "trackkcal-app",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -13,13 +13,16 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
+      "bundleIdentifier": "com.trackkcal.app",
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "This app needs access to your camera to take photos of your food.",
-        "NSPhotoLibraryUsageDescription": "This app needs access to your photo library to upload food images."
+        "NSCameraUsageDescription": "TrackKcal needs camera access so you can capture food photos for logging.",
+        "NSPhotoLibraryUsageDescription": "TrackKcal needs photo library access so you can upload food images to analyze."
       }
     },
     "android": {
+      "package": "com.trackkcal.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
@@ -28,8 +31,8 @@
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "READ_MEDIA_IMAGES",
+        "READ_EXTERNAL_STORAGE"
       ]
     },
     "web": {

@@ -32,8 +32,10 @@ interface WeightTrackerScreenProps {
 }
 
 interface WeightEntry {
+  id?: string;
   date: Date;
   weight: number;
+  updatedAt?: string;
 }
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
@@ -59,7 +61,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   // Sample weight data - in a real app, this would come from storage/API
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
     if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
-      return [{ date: new Date(), weight: initialCurrentWeightKg }];
+      return [{
+        id: `weight_${Date.now()}`,
+        date: new Date(),
+        weight: initialCurrentWeightKg,
+        updatedAt: new Date().toISOString(),
+      }];
     }
     return [];
   });
@@ -123,7 +130,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
       setWeightEntries((prevEntries) => {
         if (prevEntries.length === 0) {
-          return [{ date: new Date(), weight: initialCurrentWeightKg }];
+          return [{
+            id: `weight_${Date.now()}`,
+            date: new Date(),
+            weight: initialCurrentWeightKg,
+            updatedAt: new Date().toISOString(),
+          }];
         }
 
         const alreadyHasInitial = prevEntries.some(entry =>
@@ -135,7 +147,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
         return [
           ...prevEntries,
-          { date: new Date(), weight: initialCurrentWeightKg },
+          {
+            id: `weight_${Date.now()}`,
+            date: new Date(),
+            weight: initialCurrentWeightKg,
+            updatedAt: new Date().toISOString(),
+          },
         ];
       });
     }
@@ -143,9 +160,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   // Persist weight entries whenever they change
   useEffect(() => {
-    if (weightEntries.length > 0) {
-      dataStorage.saveWeightEntries(weightEntries);
-    }
+    dataStorage.saveWeightEntries(weightEntries);
   }, [weightEntries]);
 
   useEffect(() => {
@@ -336,8 +351,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const weightKg = convertWeightFromDisplay(weight, weightUnit);
 
     const newEntry: WeightEntry = {
+      id: `weight_${Date.now()}`,
       date: logDate,
       weight: weightKg, // Store in kg
+      updatedAt: new Date().toISOString(),
     };
 
     setWeightEntries([...weightEntries, newEntry].sort((a, b) => a.date.getTime() - b.date.getTime()));
@@ -374,7 +391,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       // historyEntries is sorted newest-first; map back to original order
       const sorted = [...prev].sort((a, b) => b.date.getTime() - a.date.getTime());
       if (!sorted[editingEntryIndex]) return prev;
-      sorted[editingEntryIndex] = { ...sorted[editingEntryIndex], weight: weightKg };
+      sorted[editingEntryIndex] = {
+        ...sorted[editingEntryIndex],
+        weight: weightKg,
+        updatedAt: new Date().toISOString(),
+      };
       // restore ascending order for storage and graph
       const restored = sorted.sort((a, b) => a.date.getTime() - b.date.getTime());
       return restored;

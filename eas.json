@@ -1,0 +1,33 @@
+{
+  "cli": {
+    "version": ">= 11.0.0"
+  },
+  "build": {
+    "development": {
+      "developmentClient": true,
+      "distribution": "internal",
+      "android": {
+        "gradleCommand": ":app:assembleDebug"
+      }
+    },
+    "preview": {
+      "distribution": "internal"
+    },
+    "production": {
+      "distribution": "store",
+      "env": {
+        "TRACKKCAL_KEYSTORE_BASE64": "",
+        "TRACKKCAL_KEYSTORE_PASSWORD": "",
+        "TRACKKCAL_KEY_ALIAS": "",
+        "TRACKKCAL_KEY_PASSWORD": ""
+      },
+      "android": {
+        "buildType": "app-bundle"
+      }
+    }
+  },
+  "submit": {
+    "production": {}
+  }
+}
+

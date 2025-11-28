@@ -1,6 +1,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Meal } from '../components/FoodLogSection';
 import { ExerciseEntry } from '../components/ExerciseLogSection';
+import { supabaseDataService } from './supabaseDataService';
 
 const STORAGE_KEYS = {
   GOALS: '@trackkal:goals',
@@ -19,6 +20,7 @@ const STORAGE_KEYS = {
   REFERRAL_REWARDS: '@trackkal:referralRewards',
   SAVED_PROMPTS: '@trackkal:savedPrompts',
   ENTRY_TASKS: '@trackkal:entryTasks',
+  SYNC_QUEUE: '@trackkal:syncQueue',
 };
 
 export interface ExtendedGoalData {
@@ -43,11 +45,15 @@ export interface ExtendedGoalData {
 export interface WeightEntry {
   date: string; // ISO string
   weight: number; // in kg
+  id?: string;
+  updatedAt?: string;
 }
 
 export interface AccountInfo {
   name?: string;
   email?: string;
+  phoneNumber?: string;
+  supabaseUserId?: string;
   passwordHash?: string; // Should be hashed, not plain text
   hasUsedReferralCode?: boolean; // Track if user has used a referral code
 }
@@ -117,6 +123,271 @@ export interface EntryTasksStatus {
   registrationCompleted: boolean;
 }
 
+const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.error('Error reading cached account info:', error);
+    return null;
+  }
+};
+
+export type MealSyncPayload = {
+  meal: Meal;
+  dateKey: string;
+};
+
+export type WeightSyncPayload = {
+  id: string;
+  date: string;
+  weight: number;
+  updatedAt: string;
+};
+
+type SyncOperation =
+  | { entity: 'meal'; action: 'upsert'; payload: MealSyncPayload }
+  | { entity: 'meal'; action: 'delete'; payload: { id: string } }
+  | { entity: 'weight'; action: 'upsert'; payload: WeightSyncPayload }
+  | { entity: 'weight'; action: 'delete'; payload: { id: string } };
+
+const readSyncQueue = async (): Promise<SyncOperation[]> => {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.SYNC_QUEUE);
+    if (!data) return [];
+    const parsed = JSON.parse(data);
+    return Array.isArray(parsed) ? parsed : [];
+  } catch (error) {
+    console.error('Error reading sync queue:', error);
+    return [];
+  }
+};
+
+const writeSyncQueue = async (queue: SyncOperation[]): Promise<void> => {
+  try {
+    if (queue.length === 0) {
+      await AsyncStorage.removeItem(STORAGE_KEYS.SYNC_QUEUE);
+    } else {
+      await AsyncStorage.setItem(STORAGE_KEYS.SYNC_QUEUE, JSON.stringify(queue));
+    }
+  } catch (error) {
+    console.error('Error writing sync queue:', error);
+  }
+};
+
+const enqueueSyncOperation = async (op: SyncOperation): Promise<void> => {
+  const queue = await readSyncQueue();
+  queue.push(op);
+  await writeSyncQueue(queue);
+};
+
+const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo) => {
+  switch (op.entity) {
+    case 'meal':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertMeals(accountInfo, [op.payload]);
+      } else {
+        await supabaseDataService.deleteMeals(accountInfo, [op.payload.id]);
+      }
+      break;
+    case 'weight':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertWeightEntries(accountInfo, [op.payload]);
+      } else {
+        await supabaseDataService.deleteWeightEntries(accountInfo, [op.payload.id]);
+      }
+      break;
+  }
+};
+
+const processSyncQueue = async (accountInfo: AccountInfo | null): Promise<void> => {
+  if (!accountInfo?.email) return;
+  const queue = await readSyncQueue();
+  if (queue.length === 0) return;
+
+  const remaining: SyncOperation[] = [];
+  for (let i = 0; i < queue.length; i++) {
+    const op = queue[i];
+    try {
+      await executeSyncOperation(op, accountInfo);
+    } catch (error) {
+      console.error('Deferred sync operation failed:', error);
+      remaining.push(...queue.slice(i)); // include current + remaining ops
+      break;
+    }
+  }
+
+  await writeSyncQueue(remaining);
+};
+
+const ensureMealMetadata = (mealsByDate: Record<string, Meal[]>) => {
+  const now = new Date().toISOString();
+  Object.keys(mealsByDate).forEach((dateKey) => {
+    mealsByDate[dateKey] = mealsByDate[dateKey].map((meal) => ({
+      ...meal,
+      id: meal.id || `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      updatedAt: meal.updatedAt || now,
+    }));
+  });
+};
+
+const flattenMeals = (mealsByDate: Record<string, Meal[]>) => {
+  const map = new Map<string, { meal: Meal; dateKey: string }>();
+  Object.entries(mealsByDate).forEach(([dateKey, meals]) => {
+    meals.forEach((meal) => {
+      map.set(meal.id, { meal, dateKey });
+    });
+  });
+  return map;
+};
+
+const diffMeals = (
+  previous: Record<string, Meal[]>,
+  next: Record<string, Meal[]>
+): { upserts: MealSyncPayload[]; deletions: string[] } => {
+  const prevMap = flattenMeals(previous);
+  const nextMap = flattenMeals(next);
+  const upserts: MealSyncPayload[] = [];
+  const deletions: string[] = [];
+  const now = new Date().toISOString();
+
+  nextMap.forEach(({ meal, dateKey }, id) => {
+    const prev = prevMap.get(id);
+    if (!prev) {
+      upserts.push({ meal: { ...meal, updatedAt: meal.updatedAt || now }, dateKey });
+      return;
+    }
+
+    const prevStr = JSON.stringify(prev.meal);
+    const nextStr = JSON.stringify(meal);
+    if (prevStr !== nextStr) {
+      upserts.push({ meal: { ...meal, updatedAt: now }, dateKey });
+    } else if (!meal.updatedAt && prev.meal.updatedAt) {
+      meal.updatedAt = prev.meal.updatedAt;
+    }
+  });
+
+  prevMap.forEach((_value, id) => {
+    if (!nextMap.has(id)) {
+      deletions.push(id);
+    }
+  });
+
+  return { upserts, deletions };
+};
+
+const mergeMealsCache = (
+  remote: Record<string, Meal[]>,
+  local: Record<string, Meal[]>
+): Record<string, Meal[]> => {
+  ensureMealMetadata(remote);
+  ensureMealMetadata(local);
+  const merged: Record<string, Meal[]> = JSON.parse(JSON.stringify(local));
+  const mergedFlat = flattenMeals(merged);
+  const remoteFlat = flattenMeals(remote);
+
+  remoteFlat.forEach(({ meal, dateKey }, id) => {
+    const existing = mergedFlat.get(id);
+    if (!existing) {
+      merged[dateKey] = [...(merged[dateKey] || []), meal];
+      mergedFlat.set(id, { meal, dateKey });
+      return;
+    }
+
+    const existingUpdated = existing.meal.updatedAt || '';
+    const remoteUpdated = meal.updatedAt || '';
+    if (!existingUpdated || remoteUpdated > existingUpdated) {
+      // Replace existing meal with remote version
+      merged[existing.dateKey] = (merged[existing.dateKey] || []).map((m) =>
+        m.id === meal.id ? meal : m
+      );
+      mergedFlat.set(id, { meal, dateKey: existing.dateKey });
+    }
+  });
+
+  return merged;
+};
+
+const normalizeWeightEntry = (
+  entry: { date: Date; weight: number; id?: string; updatedAt?: string } | WeightEntry
+): WeightEntry => {
+  const dateISO = entry.date instanceof Date ? entry.date.toISOString() : entry.date;
+  const id = 'id' in entry && entry.id ? entry.id : dateISO;
+  const updatedAt =
+    'updatedAt' in entry && entry.updatedAt ? entry.updatedAt : new Date().toISOString();
+  return {
+    id,
+    date: dateISO,
+    weight: entry.weight,
+    updatedAt,
+  };
+};
+
+const diffWeightEntries = (
+  previous: WeightEntry[],
+  next: WeightEntry[]
+): { upserts: WeightSyncPayload[]; deletions: string[] } => {
+  const prevMap = new Map(previous.map((entry) => [entry.id ?? entry.date, entry]));
+  const nextMap = new Map(next.map((entry) => [entry.id ?? entry.date, entry]));
+  const upserts: WeightSyncPayload[] = [];
+  const deletions: string[] = [];
+  const now = new Date().toISOString();
+
+  nextMap.forEach((entry, id) => {
+    const prev = prevMap.get(id);
+    if (!prev) {
+      upserts.push({
+        id,
+        date: entry.date,
+        weight: entry.weight,
+        updatedAt: entry.updatedAt ?? now,
+      });
+      return;
+    }
+
+    if (prev.weight !== entry.weight) {
+      upserts.push({
+        id,
+        date: entry.date,
+        weight: entry.weight,
+        updatedAt: now,
+      });
+    }
+  });
+
+  prevMap.forEach((_entry, id) => {
+    if (!nextMap.has(id)) {
+      deletions.push(id);
+    }
+  });
+
+  return { upserts, deletions };
+};
+
+const mergeWeightEntries = (remote: WeightEntry[], local: WeightEntry[]): WeightEntry[] => {
+  const mergedMap = new Map<string, WeightEntry>();
+  local.forEach((entry) => {
+    const normalized = normalizeWeightEntry(entry);
+    mergedMap.set(normalized.id!, normalized);
+  });
+
+  remote.forEach((entry) => {
+    const normalized = normalizeWeightEntry(entry);
+    const existing = mergedMap.get(normalized.id!);
+    if (!existing) {
+      mergedMap.set(normalized.id!, normalized);
+      return;
+    }
+    const existingUpdated = existing.updatedAt || '';
+    const remoteUpdated = normalized.updatedAt || '';
+    if (!existingUpdated || remoteUpdated > existingUpdated) {
+      mergedMap.set(normalized.id!, normalized);
+    }
+  });
+
+  return Array.from(mergedMap.values());
+};
+
 export const dataStorage = {
   // Save goals with all profile data
   async saveGoals(goals: ExtendedGoalData): Promise<void> {
@@ -141,7 +412,41 @@ export const dataStorage = {
   // Save all meals by date
   async saveMeals(mealsByDate: Record<string, Meal[]>): Promise<void> {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(mealsByDate));
+      const prevSerialized = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
+      const previousMeals: Record<string, Meal[]> = prevSerialized ? JSON.parse(prevSerialized) : {};
+      const nextMeals: Record<string, Meal[]> = JSON.parse(JSON.stringify(mealsByDate));
+
+      ensureMealMetadata(previousMeals);
+      ensureMealMetadata(nextMeals);
+
+      await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(nextMeals));
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (!accountInfo?.email) return;
+
+      const { upserts, deletions } = diffMeals(previousMeals, nextMeals);
+
+      if (upserts.length > 0) {
+        try {
+          await supabaseDataService.upsertMeals(accountInfo, upserts);
+        } catch (error) {
+          console.error('Error syncing meals to Supabase:', error);
+          await Promise.all(upserts.map((payload) =>
+            enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload })
+          ));
+        }
+      }
+
+      if (deletions.length > 0) {
+        try {
+          await supabaseDataService.deleteMeals(accountInfo, deletions);
+        } catch (error) {
+          console.error('Error deleting meals from Supabase:', error);
+          await Promise.all(deletions.map((id) =>
+            enqueueSyncOperation({ entity: 'meal', action: 'delete', payload: { id } })
+          ));
+        }
+      }
     } catch (error) {
       console.error('Error saving meals:', error);
     }
@@ -150,8 +455,23 @@ export const dataStorage = {
   // Load meals
   async loadMeals(): Promise<Record<string, Meal[]>> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      return data ? JSON.parse(data) : {};
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
+      const localMeals: Record<string, Meal[]> = localData ? JSON.parse(localData) : {};
+
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (!accountInfo?.email) {
+        return localMeals;
+      }
+
+      const remoteMeals = await supabaseDataService.fetchMeals(accountInfo);
+      if (remoteMeals && Object.keys(remoteMeals).length > 0) {
+        const merged = mergeMealsCache(remoteMeals, localMeals);
+        await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(merged));
+        return merged;
+      }
+
+      return localMeals;
     } catch (error) {
       console.error('Error loading meals:', error);
       return {};
@@ -181,12 +501,41 @@ export const dataStorage = {
   // Save weight entries
   async saveWeightEntries(entries: Array<{ date: Date; weight: number }>): Promise<void> {
     try {
-      // Convert dates to ISO strings for storage
-      const serialized = entries.map(e => ({
-        date: e.date.toISOString(),
-        weight: e.weight
-      }));
-      await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(serialized));
+      const normalized = entries.map(normalizeWeightEntry);
+      const prevSerialized = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
+      const previous: WeightEntry[] = prevSerialized ? JSON.parse(prevSerialized) : [];
+      await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(normalized));
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (!accountInfo?.email) return;
+
+      const { upserts, deletions } = diffWeightEntries(previous, normalized);
+
+      if (upserts.length > 0) {
+        try {
+          await supabaseDataService.upsertWeightEntries(accountInfo, upserts);
+        } catch (error) {
+          console.error('Error syncing weight entries to Supabase:', error);
+          await Promise.all(
+            upserts.map((payload) =>
+              enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload })
+            )
+          );
+        }
+      }
+
+      if (deletions.length > 0) {
+        try {
+          await supabaseDataService.deleteWeightEntries(accountInfo, deletions);
+        } catch (error) {
+          console.error('Error deleting weight entries from Supabase:', error);
+          await Promise.all(
+            deletions.map((id) =>
+              enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } })
+            )
+          );
+        }
+      }
     } catch (error) {
       console.error('Error saving weight entries:', error);
     }
@@ -196,11 +545,36 @@ export const dataStorage = {
   async loadWeightEntries(): Promise<Array<{ date: Date; weight: number }>> {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return parsed.map((e: WeightEntry) => ({
-        date: new Date(e.date),
-        weight: e.weight
+      const localEntries: WeightEntry[] = data ? JSON.parse(data) : [];
+
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (!accountInfo?.email) {
+        return localEntries.map((entry) => ({
+          id: entry.id,
+          date: new Date(entry.date),
+          weight: entry.weight,
+          updatedAt: entry.updatedAt,
+        }));
+      }
+
+      const remoteEntries = await supabaseDataService.fetchWeightEntries(accountInfo);
+      if (remoteEntries.length > 0) {
+        const merged = mergeWeightEntries(remoteEntries, localEntries);
+        await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(merged));
+        return merged.map((entry) => ({
+          id: entry.id,
+          date: new Date(entry.date),
+          weight: entry.weight,
+          updatedAt: entry.updatedAt,
+        }));
+      }
+
+      return localEntries.map((entry) => ({
+        id: entry.id,
+        date: new Date(entry.date),
+        weight: entry.weight,
+        updatedAt: entry.updatedAt,
       }));
     } catch (error) {
       console.error('Error loading weight entries:', error);
@@ -272,6 +646,19 @@ export const dataStorage = {
   async saveAccountInfo(info: AccountInfo): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(info));
+      if (info?.email) {
+        const remoteProfile = await supabaseDataService.saveAccountToSupabase(info);
+        if (remoteProfile?.id) {
+          const merged: AccountInfo = {
+            ...info,
+            supabaseUserId: info.supabaseUserId ?? remoteProfile.authUserId ?? remoteProfile.id,
+            email: remoteProfile.email ?? info.email,
+            name: info.name ?? remoteProfile.displayName ?? undefined,
+            phoneNumber: info.phoneNumber ?? remoteProfile.phoneNumber ?? undefined,
+          };
+          await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(merged));
+        }
+      }
     } catch (error) {
       console.error('Error saving account info:', error);
     }
@@ -281,7 +668,24 @@ export const dataStorage = {
   async loadAccountInfo(): Promise<AccountInfo | null> {
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
-      return data ? JSON.parse(data) : null;
+      const cached = data ? JSON.parse(data) : null;
+
+      if (cached?.email) {
+        const remote = await supabaseDataService.fetchAccountByEmail(cached.email);
+        if (remote) {
+          const merged: AccountInfo = {
+            ...cached,
+            email: remote.email ?? cached.email,
+            name: remote.displayName ?? cached.name,
+            phoneNumber: remote.phoneNumber ?? cached.phoneNumber,
+            supabaseUserId: remote.id,
+          };
+          await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(merged));
+          return merged;
+        }
+      }
+
+      return cached;
     } catch (error) {
       console.error('Error loading account info:', error);
       return null;
@@ -678,6 +1082,72 @@ export const dataStorage = {
     } catch (error) {
       console.error('Error getting total earned entries from referrals:', error);
       return 0;
+    }
+  },
+
+  async pushCachedDataToSupabase(): Promise<void> {
+    try {
+      const accountInfo = await getCachedAccountInfo();
+      if (!accountInfo?.email) return;
+      await processSyncQueue(accountInfo);
+
+      const mealsData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
+      const meals = mealsData ? JSON.parse(mealsData) : {};
+      ensureMealMetadata(meals);
+      const mealPayloads = Array.from(flattenMeals(meals).values());
+      if (mealPayloads.length) {
+        try {
+          await supabaseDataService.upsertMeals(accountInfo, mealPayloads);
+        } catch (error) {
+          console.error('Bulk meal sync failed, queueing operations:', error);
+          await Promise.all(
+            mealPayloads.map((payload) =>
+              enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload })
+            )
+          );
+        }
+      }
+
+      const weightData = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
+      const parsedWeights: WeightEntry[] = weightData ? JSON.parse(weightData) : [];
+      const normalizedWeights = parsedWeights.map((entry) => ({
+        id: entry.id || entry.date,
+        date: entry.date,
+        weight: entry.weight,
+        updatedAt: entry.updatedAt || new Date().toISOString(),
+      }));
+
+      if (normalizedWeights.length) {
+        try {
+          await supabaseDataService.upsertWeightEntries(
+            accountInfo,
+            normalizedWeights.map((entry) => ({
+              id: entry.id!,
+              date: entry.date,
+              weight: entry.weight,
+              updatedAt: entry.updatedAt!,
+            }))
+          );
+        } catch (error) {
+          console.error('Bulk weight sync failed, queueing operations:', error);
+          await Promise.all(
+            normalizedWeights.map((entry) =>
+              enqueueSyncOperation({
+                entity: 'weight',
+                action: 'upsert',
+                payload: {
+                  id: entry.id!,
+                  date: entry.date,
+                  weight: entry.weight,
+                  updatedAt: entry.updatedAt!,
+                },
+              })
+            )
+          );
+        }
+      }
+    } catch (error) {
+      console.error('Error pushing cached data to Supabase:', error);
     }
   },
 };
