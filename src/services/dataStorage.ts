@@ -2,6 +2,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Meal } from '../components/FoodLogSection';
 import { ExerciseEntry } from '../components/ExerciseLogSection';
 import { supabaseDataService } from './supabaseDataService';
+import { isSupabaseConfigured, supabase } from './supabaseClient';
+import { generateId, ensureUUID } from '../utils/uuid';
 
 const STORAGE_KEYS = {
   GOALS: '@trackkal:goals',
@@ -34,12 +36,15 @@ export interface ExtendedGoalData {
   currentWeightKg: number | null;
   targetWeightKg: number | null;
   age?: number;
-  gender?: 'male' | 'female';
+  gender?: 'male' | 'female' | 'prefer_not_to_say';
   heightCm?: number;
   heightFeet?: number;
   heightInches?: number;
   goal?: 'lose' | 'maintain' | 'gain';
   activityRate?: number;
+  name?: string;
+  trackingGoal?: string;
+  activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }
 
 export interface WeightEntry {
@@ -149,7 +154,22 @@ type SyncOperation =
   | { entity: 'meal'; action: 'upsert'; payload: MealSyncPayload }
   | { entity: 'meal'; action: 'delete'; payload: { id: string } }
   | { entity: 'weight'; action: 'upsert'; payload: WeightSyncPayload }
-  | { entity: 'weight'; action: 'delete'; payload: { id: string } };
+  | { entity: 'weight'; action: 'delete'; payload: { id: string } }
+  | { entity: 'goals'; action: 'upsert'; payload: ExtendedGoalData }
+  | { entity: 'exercise'; action: 'upsert'; payload: ExerciseEntry[] }
+  | { entity: 'exercise'; action: 'delete'; payload: { ids: string[] } }
+  | { entity: 'push_token'; action: 'upsert'; payload: { token: string; deviceInfo?: any } }
+  | { entity: 'push_token'; action: 'revoke'; payload: { token: string } }
+  | { entity: 'push_history'; action: 'upsert'; payload: PushBroadcastRecord }
+  | { entity: 'push_history'; action: 'update_click'; payload: { id: string } }
+  | { entity: 'saved_prompt'; action: 'upsert'; payload: SavedPrompt }
+  | { entity: 'saved_prompt'; action: 'delete'; payload: { id: string } }
+  | { entity: 'preferences'; action: 'upsert'; payload: Preferences }
+  | { entity: 'settings'; action: 'upsert'; payload: { entryCount?: number; userPlan?: 'free' | 'premium'; deviceInfo?: any } }
+  | { entity: 'entry_tasks'; action: 'upsert'; payload: EntryTasksStatus }
+  | { entity: 'referral_code'; action: 'upsert'; payload: ReferralCode }
+  | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
+  | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward };
 
 const readSyncQueue = async (): Promise<SyncOperation[]> => {
   try {
@@ -197,11 +217,74 @@ const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo)
         await supabaseDataService.deleteWeightEntries(accountInfo, [op.payload.id]);
       }
       break;
+    case 'goals':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveNutritionGoals(accountInfo, op.payload);
+      }
+      break;
+    case 'exercise':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertExercises(accountInfo, op.payload);
+      } else {
+        await supabaseDataService.deleteExercises(accountInfo, op.payload.ids);
+      }
+      break;
+    case 'push_token':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertPushToken(accountInfo, op.payload.token, op.payload.deviceInfo);
+      } else {
+        await supabaseDataService.revokePushToken(accountInfo, op.payload.token);
+      }
+      break;
+    case 'push_history':
+      if (op.action === 'upsert') {
+        await supabaseDataService.savePushHistory(accountInfo, op.payload);
+      } else {
+        await supabaseDataService.updatePushHistoryClick(accountInfo, op.payload.id);
+      }
+      break;
+    case 'saved_prompt':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertSavedPrompt(accountInfo, op.payload);
+      } else {
+        await supabaseDataService.deleteSavedPrompt(accountInfo, op.payload.id);
+      }
+      break;
+    case 'preferences':
+      if (op.action === 'upsert') {
+        await supabaseDataService.savePreferences(accountInfo, op.payload);
+      }
+      break;
+    case 'settings':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveUserSettings(accountInfo, op.payload);
+      }
+      break;
+    case 'entry_tasks':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveEntryTasks(accountInfo, op.payload);
+      }
+      break;
+    case 'referral_code':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveReferralCode(accountInfo, op.payload);
+      }
+      break;
+    case 'referral_redemption':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveReferralRedemption(accountInfo, op.payload);
+      }
+      break;
+    case 'referral_reward':
+      if (op.action === 'upsert') {
+        await supabaseDataService.saveReferralReward(accountInfo, op.payload);
+      }
+      break;
   }
 };
 
 const processSyncQueue = async (accountInfo: AccountInfo | null): Promise<void> => {
-  if (!accountInfo?.email) return;
+  if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
   const queue = await readSyncQueue();
   if (queue.length === 0) return;
 
@@ -225,7 +308,7 @@ const ensureMealMetadata = (mealsByDate: Record<string, Meal[]>) => {
   Object.keys(mealsByDate).forEach((dateKey) => {
     mealsByDate[dateKey] = mealsByDate[dateKey].map((meal) => ({
       ...meal,
-      id: meal.id || `meal_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: ensureUUID(meal.id),
       updatedAt: meal.updatedAt || now,
     }));
   });
@@ -393,6 +476,21 @@ export const dataStorage = {
   async saveGoals(goals: ExtendedGoalData): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveNutritionGoals(accountInfo, goals);
+        } catch (error) {
+          console.error('Error syncing goals to Supabase:', error);
+          // Add to sync queue for retry
+          await enqueueSyncOperation({ entity: 'goals', action: 'upsert', payload: goals });
+        }
+      } else {
+        // If not logged in, add to sync queue for when they log in
+        await enqueueSyncOperation({ entity: 'goals', action: 'upsert', payload: goals });
+      }
     } catch (error) {
       console.error('Error saving goals:', error);
     }
@@ -401,8 +499,40 @@ export const dataStorage = {
   // Load goals
   async loadGoals(): Promise<ExtendedGoalData | null> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
-      return data ? JSON.parse(data) : null;
+      // Load from local storage first (for offline support)
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
+      const localGoals: ExtendedGoalData | null = localData ? JSON.parse(localData) : null;
+
+      // If user is logged in, fetch from Supabase and merge
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteGoals = await supabaseDataService.fetchNutritionGoals(accountInfo);
+          if (remoteGoals) {
+            // Merge: remote takes precedence, but keep local if remote is missing fields
+            const merged: ExtendedGoalData = {
+              ...localGoals,
+              ...remoteGoals,
+              // Preserve local values if remote doesn't have them
+              calories: remoteGoals.calories || localGoals?.calories || 1500,
+              proteinPercentage: remoteGoals.proteinPercentage || localGoals?.proteinPercentage || 30,
+              carbsPercentage: remoteGoals.carbsPercentage || localGoals?.carbsPercentage || 45,
+              fatPercentage: remoteGoals.fatPercentage || localGoals?.fatPercentage || 25,
+              proteinGrams: remoteGoals.proteinGrams || localGoals?.proteinGrams || 0,
+              carbsGrams: remoteGoals.carbsGrams || localGoals?.carbsGrams || 0,
+              fatGrams: remoteGoals.fatGrams || localGoals?.fatGrams || 0,
+            };
+            // Save merged data back to local storage
+            await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (error) {
+          console.error('Error fetching goals from Supabase:', error);
+          // Return local data if remote fetch fails
+        }
+      }
+
+      return localGoals;
     } catch (error) {
       console.error('Error loading goals:', error);
       return null;
@@ -422,7 +552,7 @@ export const dataStorage = {
       await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(nextMeals));
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
-      if (!accountInfo?.email) return;
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
 
       const { upserts, deletions } = diffMeals(previousMeals, nextMeals);
 
@@ -460,7 +590,7 @@ export const dataStorage = {
 
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
-      if (!accountInfo?.email) {
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
         return localMeals;
       }
 
@@ -482,6 +612,22 @@ export const dataStorage = {
   async saveExercises(exercisesByDate: Record<string, ExerciseEntry[]>): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesByDate));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const allExercises = Object.values(exercisesByDate).flat();
+          await supabaseDataService.upsertExercises(accountInfo, allExercises);
+        } catch (error) {
+          console.error('Error syncing exercises to Supabase:', error);
+          const allExercises = Object.values(exercisesByDate).flat();
+          await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
+        }
+      } else {
+        const allExercises = Object.values(exercisesByDate).flat();
+        await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
+      }
     } catch (error) {
       console.error('Error saving exercises:', error);
     }
@@ -490,8 +636,31 @@ export const dataStorage = {
   // Load exercises
   async loadExercises(): Promise<Record<string, ExerciseEntry[]>> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
-      return data ? JSON.parse(data) : {};
+      // Load from local storage first (for offline support)
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
+      const localExercises: Record<string, ExerciseEntry[]> = localData ? JSON.parse(localData) : {};
+
+      // If user is logged in, fetch from Supabase and merge
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteExercises = await supabaseDataService.fetchExercises(accountInfo);
+          if (remoteExercises && Object.keys(remoteExercises).length > 0) {
+            // Merge: remote takes precedence for dates that exist in both
+            const merged: Record<string, ExerciseEntry[]> = { ...localExercises };
+            Object.keys(remoteExercises).forEach((dateKey) => {
+              merged[dateKey] = remoteExercises[dateKey];
+            });
+            await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (error) {
+          console.error('Error fetching exercises from Supabase:', error);
+        }
+      }
+
+      return localExercises;
     } catch (error) {
       console.error('Error loading exercises:', error);
       return {};
@@ -507,7 +676,7 @@ export const dataStorage = {
       await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(normalized));
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
-      if (!accountInfo?.email) return;
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
 
       const { upserts, deletions } = diffWeightEntries(previous, normalized);
 
@@ -549,7 +718,7 @@ export const dataStorage = {
 
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
-      if (!accountInfo?.email) {
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
         return localEntries.map((entry) => ({
           id: entry.id,
           date: new Date(entry.date),
@@ -586,6 +755,19 @@ export const dataStorage = {
   async saveEntryCount(count: number): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_COUNT, String(count));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveUserSettings(accountInfo, { entryCount: count });
+        } catch (error) {
+          console.error('Error syncing entry count to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { entryCount: count } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { entryCount: count } });
+      }
     } catch (error) {
       console.error('Error saving entry count:', error);
     }
@@ -594,8 +776,26 @@ export const dataStorage = {
   // Load entry count
   async loadEntryCount(): Promise<number> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_COUNT);
-      return data ? parseInt(data, 10) || 0 : 0;
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_COUNT);
+      const localCount = localData ? parseInt(localData, 10) || 0 : 0;
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteSettings = await supabaseDataService.fetchUserSettings(accountInfo);
+          if (remoteSettings && remoteSettings.entryCount !== undefined) {
+            await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_COUNT, String(remoteSettings.entryCount));
+            return remoteSettings.entryCount;
+          }
+        } catch (error) {
+          console.error('Error fetching entry count from Supabase:', error);
+        }
+      }
+
+      return localCount;
     } catch (error) {
       console.error('Error loading entry count:', error);
       return 0;
@@ -606,6 +806,19 @@ export const dataStorage = {
   async saveUserPlan(plan: 'free' | 'premium'): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, plan);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveUserSettings(accountInfo, { userPlan: plan });
+        } catch (error) {
+          console.error('Error syncing user plan to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { userPlan: plan } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { userPlan: plan } });
+      }
     } catch (error) {
       console.error('Error saving user plan:', error);
     }
@@ -614,8 +827,26 @@ export const dataStorage = {
   // Load user plan
   async loadUserPlan(): Promise<'free' | 'premium'> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.USER_PLAN);
-      return (data === 'premium' ? 'premium' : 'free');
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.USER_PLAN);
+      const localPlan = (localData === 'premium' ? 'premium' : 'free') as 'free' | 'premium';
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteSettings = await supabaseDataService.fetchUserSettings(accountInfo);
+          if (remoteSettings && remoteSettings.userPlan) {
+            await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, remoteSettings.userPlan);
+            return remoteSettings.userPlan;
+          }
+        } catch (error) {
+          console.error('Error fetching user plan from Supabase:', error);
+        }
+      }
+
+      return localPlan;
     } catch (error) {
       console.error('Error loading user plan:', error);
       return 'free';
@@ -626,6 +857,19 @@ export const dataStorage = {
   async saveDeviceInfo(info: any): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_INFO, JSON.stringify(info));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveUserSettings(accountInfo, { deviceInfo: info });
+        } catch (error) {
+          console.error('Error syncing device info to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { deviceInfo: info } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { deviceInfo: info } });
+      }
     } catch (error) {
       console.error('Error saving device info:', error);
     }
@@ -634,8 +878,26 @@ export const dataStorage = {
   // Load device info
   async loadDeviceInfo(): Promise<any | null> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_INFO);
-      return data ? JSON.parse(data) : null;
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_INFO);
+      const localInfo = localData ? JSON.parse(localData) : null;
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteSettings = await supabaseDataService.fetchUserSettings(accountInfo);
+          if (remoteSettings && remoteSettings.deviceInfo) {
+            await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_INFO, JSON.stringify(remoteSettings.deviceInfo));
+            return remoteSettings.deviceInfo;
+          }
+        } catch (error) {
+          console.error('Error fetching device info from Supabase:', error);
+        }
+      }
+
+      return localInfo;
     } catch (error) {
       console.error('Error loading device info:', error);
       return null;
@@ -696,6 +958,19 @@ export const dataStorage = {
   async savePreferences(prefs: Preferences): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(prefs));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.savePreferences(accountInfo, prefs);
+        } catch (error) {
+          console.error('Error syncing preferences to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
+      }
     } catch (error) {
       console.error('Error saving preferences:', error);
     }
@@ -704,8 +979,26 @@ export const dataStorage = {
   // Load preferences
   async loadPreferences(): Promise<Preferences | null> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
-      return data ? JSON.parse(data) : null;
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
+      const localPrefs: Preferences | null = localData ? JSON.parse(localData) : null;
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remotePrefs = await supabaseDataService.fetchPreferences(accountInfo);
+          if (remotePrefs) {
+            await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(remotePrefs));
+            return remotePrefs;
+          }
+        } catch (error) {
+          console.error('Error fetching preferences from Supabase:', error);
+        }
+      }
+
+      return localPrefs;
     } catch (error) {
       console.error('Error loading preferences:', error);
       return null;
@@ -715,10 +1008,28 @@ export const dataStorage = {
   // Push notification tokens helpers
   async loadPushTokens(): Promise<string[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKENS);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKENS);
+      const localTokens: string[] = localData ? (Array.isArray(JSON.parse(localData)) ? JSON.parse(localData) : []) : [];
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteTokens = await supabaseDataService.fetchPushTokens(accountInfo);
+          if (remoteTokens && remoteTokens.length > 0) {
+            // Merge: combine local and remote, remove duplicates
+            const merged = Array.from(new Set([...localTokens, ...remoteTokens]));
+            await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKENS, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (error) {
+          console.error('Error fetching push tokens from Supabase:', error);
+        }
+      }
+
+      return localTokens;
     } catch (error) {
       console.error('Error loading push tokens:', error);
       return [];
@@ -728,6 +1039,31 @@ export const dataStorage = {
   async savePushTokens(tokens: string[]): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKENS, JSON.stringify(tokens));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          // Upsert all active tokens
+          await Promise.all(
+            tokens.map((token) => supabaseDataService.upsertPushToken(accountInfo, token))
+          );
+        } catch (error) {
+          console.error('Error syncing push tokens to Supabase:', error);
+          // Queue individual token operations
+          await Promise.all(
+            tokens.map((token) =>
+              enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } })
+            )
+          );
+        }
+      } else {
+        await Promise.all(
+          tokens.map((token) =>
+            enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } })
+          )
+        );
+      }
     } catch (error) {
       console.error('Error saving push tokens:', error);
     }
@@ -739,6 +1075,19 @@ export const dataStorage = {
       if (!existing.includes(token)) {
         const updated = [...existing, token];
         await this.savePushTokens(updated);
+        
+        // Also sync individual token
+        const accountInfo = await getCachedAccountInfo();
+        if (accountInfo?.supabaseUserId) {
+          try {
+            await supabaseDataService.upsertPushToken(accountInfo, token);
+          } catch (error) {
+            console.error('Error syncing push token to Supabase:', error);
+            await enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } });
+          }
+        } else {
+          await enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } });
+        }
       }
     } catch (error) {
       console.error('Error adding push token:', error);
@@ -750,6 +1099,19 @@ export const dataStorage = {
       const existing = await this.loadPushTokens();
       const updated = existing.filter(t => t !== token);
       await this.savePushTokens(updated);
+      
+      // Revoke token in Supabase
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.revokePushToken(accountInfo, token);
+        } catch (error) {
+          console.error('Error revoking push token in Supabase:', error);
+          await enqueueSyncOperation({ entity: 'push_token', action: 'revoke', payload: { token } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'push_token', action: 'revoke', payload: { token } });
+      }
     } catch (error) {
       console.error('Error removing push token:', error);
     }
@@ -758,10 +1120,35 @@ export const dataStorage = {
   // Push broadcast history helpers
   async loadPushHistory(): Promise<PushBroadcastRecord[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_HISTORY);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_HISTORY);
+      const localHistory: PushBroadcastRecord[] = localData
+        ? (Array.isArray(JSON.parse(localData)) ? JSON.parse(localData) : [])
+        : [];
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteHistory = await supabaseDataService.fetchPushHistory(accountInfo);
+          if (remoteHistory && remoteHistory.length > 0) {
+            // Merge: combine local and remote, remote takes precedence for same IDs
+            const mergedMap = new Map<string, PushBroadcastRecord>();
+            localHistory.forEach((record) => mergedMap.set(record.id, record));
+            remoteHistory.forEach((record) => mergedMap.set(record.id, record));
+            const merged = Array.from(mergedMap.values()).sort(
+              (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            );
+            await AsyncStorage.setItem(STORAGE_KEYS.PUSH_HISTORY, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (error) {
+          console.error('Error fetching push history from Supabase:', error);
+        }
+      }
+
+      return localHistory;
     } catch (error) {
       console.error('Error loading push history:', error);
       return [];
@@ -781,6 +1168,19 @@ export const dataStorage = {
       const existing = await this.loadPushHistory();
       const updated = [record, ...existing];
       await this.savePushHistory(updated);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.savePushHistory(accountInfo, record);
+        } catch (error) {
+          console.error('Error syncing push history to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'push_history', action: 'upsert', payload: record });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'push_history', action: 'upsert', payload: record });
+      }
     } catch (error) {
       console.error('Error adding push history record:', error);
     }
@@ -795,6 +1195,19 @@ export const dataStorage = {
           : record
       );
       await this.savePushHistory(updated);
+      
+      // Sync click update to Supabase
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.updatePushHistoryClick(accountInfo, id);
+        } catch (error) {
+          console.error('Error syncing push history click to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'push_history', action: 'update_click', payload: { id } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'push_history', action: 'update_click', payload: { id } });
+      }
     } catch (error) {
       console.error('Error incrementing push history clicks:', error);
     }
@@ -803,12 +1216,39 @@ export const dataStorage = {
   // Saved prompt helpers
   async loadSavedPrompts(): Promise<SavedPrompt[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed)
-        ? parsed.filter((item: SavedPrompt) => typeof item?.id === 'string' && typeof item?.text === 'string')
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
+      const localPrompts: SavedPrompt[] = localData
+        ? (Array.isArray(JSON.parse(localData))
+            ? JSON.parse(localData).filter(
+                (item: SavedPrompt) => typeof item?.id === 'string' && typeof item?.text === 'string'
+              )
+            : [])
         : [];
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remotePrompts = await supabaseDataService.fetchSavedPrompts(accountInfo);
+          if (remotePrompts && remotePrompts.length > 0) {
+            // Merge: remote takes precedence for same IDs
+            const mergedMap = new Map<string, SavedPrompt>();
+            localPrompts.forEach((prompt) => mergedMap.set(prompt.id, prompt));
+            remotePrompts.forEach((prompt) => mergedMap.set(prompt.id, prompt));
+            const merged = Array.from(mergedMap.values()).sort(
+              (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+            );
+            await AsyncStorage.setItem(STORAGE_KEYS.SAVED_PROMPTS, JSON.stringify(merged));
+            return merged;
+          }
+        } catch (error) {
+          console.error('Error fetching saved prompts from Supabase:', error);
+        }
+      }
+
+      return localPrompts;
     } catch (error) {
       console.error('Error loading saved prompts:', error);
       return [];
@@ -828,6 +1268,19 @@ export const dataStorage = {
       const existing = await this.loadSavedPrompts();
       const updated = [prompt, ...existing];
       await this.saveSavedPrompts(updated);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.upsertSavedPrompt(accountInfo, prompt);
+        } catch (error) {
+          console.error('Error syncing saved prompt to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'saved_prompt', action: 'upsert', payload: prompt });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'saved_prompt', action: 'upsert', payload: prompt });
+      }
     } catch (error) {
       console.error('Error adding saved prompt:', error);
     }
@@ -838,6 +1291,19 @@ export const dataStorage = {
       const existing = await this.loadSavedPrompts();
       const updated = existing.filter(prompt => prompt.id !== id);
       await this.saveSavedPrompts(updated);
+      
+      // Delete from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.deleteSavedPrompt(accountInfo, id);
+        } catch (error) {
+          console.error('Error deleting saved prompt from Supabase:', error);
+          await enqueueSyncOperation({ entity: 'saved_prompt', action: 'delete', payload: { id } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'saved_prompt', action: 'delete', payload: { id } });
+      }
     } catch (error) {
       console.error('Error removing saved prompt:', error);
     }
@@ -846,15 +1312,28 @@ export const dataStorage = {
   // Entry task reward helpers
   async loadEntryTasks(): Promise<EntryTasksStatus> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
-      if (!data) {
-        return { customPlanCompleted: false, registrationCompleted: false };
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
+      const localTasks: EntryTasksStatus = localData
+        ? JSON.parse(localData)
+        : { customPlanCompleted: false, registrationCompleted: false };
+
+      // If user is logged in, fetch from Supabase
+      const accountInfo = await getCachedAccountInfo();
+      await processSyncQueue(accountInfo);
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteTasks = await supabaseDataService.fetchEntryTasks(accountInfo);
+          if (remoteTasks) {
+            await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(remoteTasks));
+            return remoteTasks;
+          }
+        } catch (error) {
+          console.error('Error fetching entry tasks from Supabase:', error);
+        }
       }
-      const parsed = JSON.parse(data);
-      return {
-        customPlanCompleted: !!parsed.customPlanCompleted,
-        registrationCompleted: !!parsed.registrationCompleted,
-      };
+
+      return localTasks;
     } catch (error) {
       console.error('Error loading entry tasks:', error);
       return { customPlanCompleted: false, registrationCompleted: false };
@@ -864,6 +1343,19 @@ export const dataStorage = {
   async saveEntryTasks(status: EntryTasksStatus): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(status));
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveEntryTasks(accountInfo, status);
+        } catch (error) {
+          console.error('Error syncing entry tasks to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: status });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: status });
+      }
     } catch (error) {
       console.error('Error saving entry tasks:', error);
     }
@@ -899,10 +1391,13 @@ export const dataStorage = {
   // Referral code storage methods
   async loadReferralCodes(): Promise<ReferralCode[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_CODES);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_CODES);
+      const localCodes: ReferralCode[] = localData ? (Array.isArray(JSON.parse(localData)) ? JSON.parse(localData) : []) : [];
+
+      // Note: Referral codes are global, not per-user, so we don't fetch all from Supabase here
+      // Individual lookups use getReferralCode/getReferralCodeByCode which check Supabase
+      return localCodes;
     } catch (error) {
       console.error('Error loading referral codes:', error);
       return [];
@@ -919,6 +1414,18 @@ export const dataStorage = {
 
   async getReferralCode(userId: string): Promise<ReferralCode | null> {
     try {
+      // Try Supabase first if we have account info
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteCode = await supabaseDataService.fetchReferralCode(accountInfo, userId);
+          if (remoteCode) return remoteCode;
+        } catch (error) {
+          console.error('Error fetching referral code from Supabase:', error);
+        }
+      }
+      
+      // Fallback to local
       const codes = await this.loadReferralCodes();
       return codes.find(c => c.userId === userId) || null;
     } catch (error) {
@@ -929,6 +1436,17 @@ export const dataStorage = {
 
   async getReferralCodeByCode(code: string): Promise<ReferralCode | null> {
     try {
+      // Try Supabase first
+      if (isSupabaseConfigured() && supabase) {
+        try {
+          const remoteCode = await supabaseDataService.fetchReferralCodeByCode(code);
+          if (remoteCode) return remoteCode;
+        } catch (error) {
+          console.error('Error fetching referral code by code from Supabase:', error);
+        }
+      }
+      
+      // Fallback to local
       const codes = await this.loadReferralCodes();
       return codes.find(c => c.code === code.toUpperCase()) || null;
     } catch (error) {
@@ -947,6 +1465,19 @@ export const dataStorage = {
         codes.push(referralCode);
       }
       await this.saveReferralCodes(codes);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveReferralCode(accountInfo, referralCode);
+        } catch (error) {
+          console.error('Error syncing referral code to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'referral_code', action: 'upsert', payload: referralCode });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'referral_code', action: 'upsert', payload: referralCode });
+      }
     } catch (error) {
       console.error('Error saving referral code:', error);
     }
@@ -968,10 +1499,14 @@ export const dataStorage = {
   // Referral redemption storage methods
   async loadReferralRedemptions(): Promise<ReferralRedemption[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REDEMPTIONS);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REDEMPTIONS);
+      const localRedemptions: ReferralRedemption[] = localData
+        ? (Array.isArray(JSON.parse(localData)) ? JSON.parse(localData) : [])
+        : [];
+
+      // Note: Redemptions are fetched per-user via getReferralRedemptionsForUser which checks Supabase
+      return localRedemptions;
     } catch (error) {
       console.error('Error loading referral redemptions:', error);
       return [];
@@ -991,6 +1526,19 @@ export const dataStorage = {
       const redemptions = await this.loadReferralRedemptions();
       redemptions.push(redemption);
       await this.saveReferralRedemptions(redemptions);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveReferralRedemption(accountInfo, redemption);
+        } catch (error) {
+          console.error('Error syncing referral redemption to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'referral_redemption', action: 'upsert', payload: redemption });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'referral_redemption', action: 'upsert', payload: redemption });
+      }
     } catch (error) {
       console.error('Error saving referral redemption:', error);
     }
@@ -998,6 +1546,25 @@ export const dataStorage = {
 
   async getReferralRedemptionsForUser(email: string, type: 'referrer' | 'referee'): Promise<ReferralRedemption[]> {
     try {
+      // Try Supabase first if we have account info
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.email && accountInfo.email.toLowerCase() === email.toLowerCase()) {
+        try {
+          const remoteRedemptions = await supabaseDataService.fetchReferralRedemptions(accountInfo, type);
+          if (remoteRedemptions && remoteRedemptions.length > 0) {
+            // Merge with local
+            const localRedemptions = await this.loadReferralRedemptions();
+            const mergedMap = new Map<string, ReferralRedemption>();
+            localRedemptions.forEach((r) => mergedMap.set(r.id, r));
+            remoteRedemptions.forEach((r) => mergedMap.set(r.id, r));
+            return Array.from(mergedMap.values());
+          }
+        } catch (error) {
+          console.error('Error fetching referral redemptions from Supabase:', error);
+        }
+      }
+      
+      // Fallback to local
       const redemptions = await this.loadReferralRedemptions();
       if (type === 'referrer') {
         return redemptions.filter(r => r.referrerEmail.toLowerCase() === email.toLowerCase());
@@ -1026,10 +1593,14 @@ export const dataStorage = {
   // Referral reward storage methods
   async loadReferralRewards(): Promise<ReferralReward[]> {
     try {
-      const data = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REWARDS);
-      if (!data) return [];
-      const parsed = JSON.parse(data);
-      return Array.isArray(parsed) ? parsed : [];
+      // Load from local storage first
+      const localData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REWARDS);
+      const localRewards: ReferralReward[] = localData
+        ? (Array.isArray(JSON.parse(localData)) ? JSON.parse(localData) : [])
+        : [];
+
+      // Note: Rewards are fetched per-user via loadReferralRewardsForUser which checks Supabase
+      return localRewards;
     } catch (error) {
       console.error('Error loading referral rewards:', error);
       return [];
@@ -1049,6 +1620,19 @@ export const dataStorage = {
       const rewards = await this.loadReferralRewards();
       rewards.push(reward);
       await this.saveReferralRewards(rewards);
+      
+      // Sync to Supabase if user is logged in
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          await supabaseDataService.saveReferralReward(accountInfo, reward);
+        } catch (error) {
+          console.error('Error syncing referral reward to Supabase:', error);
+          await enqueueSyncOperation({ entity: 'referral_reward', action: 'upsert', payload: reward });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'referral_reward', action: 'upsert', payload: reward });
+      }
     } catch (error) {
       console.error('Error saving referral reward:', error);
     }
@@ -1056,6 +1640,25 @@ export const dataStorage = {
 
   async loadReferralRewardsForUser(userId: string): Promise<ReferralReward[]> {
     try {
+      // Try Supabase first if we have account info
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try {
+          const remoteRewards = await supabaseDataService.fetchReferralRewards(accountInfo, userId);
+          if (remoteRewards && remoteRewards.length > 0) {
+            // Merge with local
+            const localRewards = await this.loadReferralRewards();
+            const mergedMap = new Map<string, ReferralReward>();
+            localRewards.forEach((r) => mergedMap.set(r.id, r));
+            remoteRewards.forEach((r) => mergedMap.set(r.id, r));
+            return Array.from(mergedMap.values());
+          }
+        } catch (error) {
+          console.error('Error fetching referral rewards from Supabase:', error);
+        }
+      }
+      
+      // Fallback to local
       const rewards = await this.loadReferralRewards();
       return rewards.filter(r => r.userId.toLowerCase() === userId.toLowerCase());
     } catch (error) {
@@ -1088,9 +1691,10 @@ export const dataStorage = {
   async pushCachedDataToSupabase(): Promise<void> {
     try {
       const accountInfo = await getCachedAccountInfo();
-      if (!accountInfo?.email) return;
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
       await processSyncQueue(accountInfo);
 
+      // Sync meals
       const mealsData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
       const meals = mealsData ? JSON.parse(mealsData) : {};
       ensureMealMetadata(meals);
@@ -1108,6 +1712,7 @@ export const dataStorage = {
         }
       }
 
+      // Sync weight entries
       const weightData = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
       const parsedWeights: WeightEntry[] = weightData ? JSON.parse(weightData) : [];
       const normalizedWeights = parsedWeights.map((entry) => ({
@@ -1142,6 +1747,179 @@ export const dataStorage = {
                   updatedAt: entry.updatedAt!,
                 },
               })
+            )
+          );
+        }
+      }
+
+      // Sync exercises
+      const exercisesData = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
+      const exercises = exercisesData ? JSON.parse(exercisesData) : {};
+      const allExercises = Object.values(exercises).flat() as ExerciseEntry[];
+      if (allExercises.length > 0) {
+        try {
+          await supabaseDataService.upsertExercises(accountInfo, allExercises);
+        } catch (error) {
+          console.error('Bulk exercise sync failed, queueing operations:', error);
+          await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
+        }
+      }
+
+      // Sync goals
+      const goalsData = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
+      if (goalsData) {
+        try {
+          const goals = JSON.parse(goalsData) as ExtendedGoalData;
+          await supabaseDataService.saveNutritionGoals(accountInfo, goals);
+        } catch (error) {
+          console.error('Bulk goals sync failed, queueing operation:', error);
+          const goals = JSON.parse(goalsData) as ExtendedGoalData;
+          await enqueueSyncOperation({ entity: 'goals', action: 'upsert', payload: goals });
+        }
+      }
+
+      // Sync push tokens
+      const pushTokensData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKENS);
+      if (pushTokensData) {
+        try {
+          const tokens = JSON.parse(pushTokensData) as string[];
+          await Promise.all(tokens.map((token) => supabaseDataService.upsertPushToken(accountInfo, token)));
+        } catch (error) {
+          console.error('Bulk push token sync failed, queueing operations:', error);
+          const tokens = JSON.parse(pushTokensData) as string[];
+          await Promise.all(
+            tokens.map((token) =>
+              enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } })
+            )
+          );
+        }
+      }
+
+      // Sync push history
+      const pushHistoryData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_HISTORY);
+      if (pushHistoryData) {
+        try {
+          const history = JSON.parse(pushHistoryData) as PushBroadcastRecord[];
+          await Promise.all(history.map((record) => supabaseDataService.savePushHistory(accountInfo, record)));
+        } catch (error) {
+          console.error('Bulk push history sync failed, queueing operations:', error);
+          const history = JSON.parse(pushHistoryData) as PushBroadcastRecord[];
+          await Promise.all(
+            history.map((record) =>
+              enqueueSyncOperation({ entity: 'push_history', action: 'upsert', payload: record })
+            )
+          );
+        }
+      }
+
+      // Sync saved prompts
+      const savedPromptsData = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
+      if (savedPromptsData) {
+        try {
+          const prompts = JSON.parse(savedPromptsData) as SavedPrompt[];
+          await Promise.all(prompts.map((prompt) => supabaseDataService.upsertSavedPrompt(accountInfo, prompt)));
+        } catch (error) {
+          console.error('Bulk saved prompts sync failed, queueing operations:', error);
+          const prompts = JSON.parse(savedPromptsData) as SavedPrompt[];
+          await Promise.all(
+            prompts.map((prompt) =>
+              enqueueSyncOperation({ entity: 'saved_prompt', action: 'upsert', payload: prompt })
+            )
+          );
+        }
+      }
+
+      // Sync preferences
+      const preferencesData = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
+      if (preferencesData) {
+        try {
+          const prefs = JSON.parse(preferencesData) as Preferences;
+          await supabaseDataService.savePreferences(accountInfo, prefs);
+        } catch (error) {
+          console.error('Bulk preferences sync failed, queueing operation:', error);
+          const prefs = JSON.parse(preferencesData) as Preferences;
+          await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
+        }
+      }
+
+      // Sync user settings (entry count, user plan, device info)
+      const entryCountData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_COUNT);
+      const userPlanData = await AsyncStorage.getItem(STORAGE_KEYS.USER_PLAN);
+      const deviceInfoData = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_INFO);
+      const settings: any = {};
+      if (entryCountData) settings.entryCount = parseInt(entryCountData, 10) || 0;
+      if (userPlanData) settings.userPlan = userPlanData === 'premium' ? 'premium' : 'free';
+      if (deviceInfoData) settings.deviceInfo = JSON.parse(deviceInfoData);
+      if (Object.keys(settings).length > 0) {
+        try {
+          await supabaseDataService.saveUserSettings(accountInfo, settings);
+        } catch (error) {
+          console.error('Bulk user settings sync failed, queueing operation:', error);
+          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: settings });
+        }
+      }
+
+      // Sync entry tasks
+      const entryTasksData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
+      if (entryTasksData) {
+        try {
+          const tasks = JSON.parse(entryTasksData) as EntryTasksStatus;
+          await supabaseDataService.saveEntryTasks(accountInfo, tasks);
+        } catch (error) {
+          console.error('Bulk entry tasks sync failed, queueing operation:', error);
+          const tasks = JSON.parse(entryTasksData) as EntryTasksStatus;
+          await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: tasks });
+        }
+      }
+
+      // Sync referral codes
+      const referralCodesData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_CODES);
+      if (referralCodesData) {
+        try {
+          const codes = JSON.parse(referralCodesData) as ReferralCode[];
+          await Promise.all(codes.map((code) => supabaseDataService.saveReferralCode(accountInfo, code)));
+        } catch (error) {
+          console.error('Bulk referral codes sync failed, queueing operations:', error);
+          const codes = JSON.parse(referralCodesData) as ReferralCode[];
+          await Promise.all(
+            codes.map((code) =>
+              enqueueSyncOperation({ entity: 'referral_code', action: 'upsert', payload: code })
+            )
+          );
+        }
+      }
+
+      // Sync referral redemptions
+      const referralRedemptionsData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REDEMPTIONS);
+      if (referralRedemptionsData) {
+        try {
+          const redemptions = JSON.parse(referralRedemptionsData) as ReferralRedemption[];
+          await Promise.all(
+            redemptions.map((redemption) => supabaseDataService.saveReferralRedemption(accountInfo, redemption))
+          );
+        } catch (error) {
+          console.error('Bulk referral redemptions sync failed, queueing operations:', error);
+          const redemptions = JSON.parse(referralRedemptionsData) as ReferralRedemption[];
+          await Promise.all(
+            redemptions.map((redemption) =>
+              enqueueSyncOperation({ entity: 'referral_redemption', action: 'upsert', payload: redemption })
+            )
+          );
+        }
+      }
+
+      // Sync referral rewards
+      const referralRewardsData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REWARDS);
+      if (referralRewardsData) {
+        try {
+          const rewards = JSON.parse(referralRewardsData) as ReferralReward[];
+          await Promise.all(rewards.map((reward) => supabaseDataService.saveReferralReward(accountInfo, reward)));
+        } catch (error) {
+          console.error('Bulk referral rewards sync failed, queueing operations:', error);
+          const rewards = JSON.parse(referralRewardsData) as ReferralReward[];
+          await Promise.all(
+            rewards.map((reward) =>
+              enqueueSyncOperation({ entity: 'referral_reward', action: 'upsert', payload: reward })
             )
           );
         }

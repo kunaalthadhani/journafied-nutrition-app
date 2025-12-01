@@ -123,10 +123,25 @@ src/
 
 ## 🔄 Data Sync
 
-- Every meal and weight entry now has a stable UUID and `updatedAt` timestamp.
-- Supabase syncs incrementally (per entry upsert/delete), so multiple devices on the same account no longer overwrite each other.
+**ALL data types now sync to Supabase when users are logged in:**
+
+- **Meals & Exercises**: Every entry has a stable UUID and `updatedAt` timestamp. Supabase syncs incrementally (per entry upsert/delete), so multiple devices on the same account no longer overwrite each other.
+- **Weight Entries**: Synced with incremental updates, soft deletes supported.
+- **Nutrition Goals**: Custom plan data (calories, macros, and profile information like name, age, gender, height, weight, goals, activity level) is synced to the `nutrition_goals` table. Only one active goal per user is maintained.
+- **User Preferences**: Weight unit, notification settings, meal reminders synced to `user_preferences` table.
+- **User Settings**: Entry count, user plan (free/premium), device info synced to `user_settings` table.
+- **Entry Tasks**: Custom plan and registration completion status synced to `entry_tasks` table.
+- **Push Tokens & History**: Notification tokens and broadcast history synced to `push_tokens` and `push_history` tables.
+- **Saved Prompts**: User's saved meal prompts synced to `saved_prompts` table.
+- **Referral System**: Codes, redemptions, and rewards all synced to respective tables (`referral_codes`, `referral_redemptions`, `referral_rewards`).
+
+**Offline Support:**
 - Offline edits are queued; once a connection is available the queue flushes automatically.
 - Local storage continues to act as a cache, so the app works fully offline.
+- Guest mode: All data stored locally, automatically synced when user logs in.
+
+**Admin Dashboard Ready:**
+- All user data is accessible in Supabase for analytics, user management, and data export.
 
 ## 🧪 Testing
 

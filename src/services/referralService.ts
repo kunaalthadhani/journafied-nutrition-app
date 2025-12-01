@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import { analyticsService } from './analyticsService';
 import * as Notifications from 'expo-notifications';
 import { notificationService } from './notificationService';
+import { generateId } from '../utils/uuid';
 
 /**
  * Generates a unique alphanumeric referral code (8-10 uppercase characters)
@@ -154,7 +155,7 @@ export const referralService = {
     refereeName: string
   ): Promise<ReferralRedemption> {
     const deviceId = Device.modelName || 'unknown';
-    const redemptionId = `redemption_${Date.now()}_${Math.random().toString(36).slice(2, 9)}`;
+    const redemptionId = generateId();
 
     const redemption: ReferralRedemption = {
       id: redemptionId,
@@ -254,7 +255,7 @@ export const referralService = {
 
         // Award to referee only
         const refereeReward: ReferralReward = {
-          id: `reward_${Date.now()}_referee_${Math.random().toString(36).slice(2, 9)}`,
+          id: generateId(),
           userId: pendingRedemption.refereeEmail,
           earnedAt: new Date().toISOString(),
           entriesAwarded: 10,
@@ -280,7 +281,7 @@ export const referralService = {
 
       // Award to referee
       const refereeReward: ReferralReward = {
-        id: `reward_${Date.now()}_referee_${Math.random().toString(36).slice(2, 9)}`,
+        id: generateId(),
         userId: pendingRedemption.refereeEmail,
         earnedAt: new Date().toISOString(),
         entriesAwarded: 10,
@@ -291,7 +292,7 @@ export const referralService = {
 
       // Award to referrer
       const referrerReward: ReferralReward = {
-        id: `reward_${Date.now()}_referrer_${Math.random().toString(36).slice(2, 9)}`,
+        id: generateId(),
         userId: pendingRedemption.referrerEmail,
         earnedAt: new Date().toISOString(),
         entriesAwarded: 10,

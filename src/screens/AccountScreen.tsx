@@ -8,11 +8,14 @@ import {
   Alert,
   ScrollView,
   ActivityIndicator,
+  Linking,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Feather } from '@expo/vector-icons';
 import { Session } from '@supabase/supabase-js';
+import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
@@ -320,7 +323,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       setAuthMessage(null);
       await authService.sendOtp(email);
       setOtpSent(true);
-      setAuthMessage('Check your inbox for a 6-digit code.');
+      setAuthMessage('Check your inbox for a verification code.');
     } catch (error: any) {
       console.error('OTP send failed:', error);
       setAuthMessage(error?.message ?? 'Failed to send code. Please try again.');
@@ -336,7 +339,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       return;
     }
     if (pendingOtpCode.trim().length < 6) {
-      setAuthMessage('Enter the 6-digit code from your email.');
+      setAuthMessage('Enter the verification code from your email.');
       return;
     }
 
@@ -434,6 +437,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               onChangeText={setEmailInput}
               keyboardType="email-address"
               autoCapitalize="none"
+              autoComplete="email"
+              autoCorrect={false}
+              textContentType="emailAddress"
+              importantForAutofill="yes"
               editable={authStatus === 'idle'}
             />
             {otpSent && (
@@ -446,12 +453,15 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
                     styles.input,
                     { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
                   ]}
-                  placeholder="Enter 6-digit code"
+                  placeholder="Enter verification code"
                   placeholderTextColor={theme.colors.textTertiary}
                   value={pendingOtpCode}
                   onChangeText={setPendingOtpCode}
                   keyboardType="number-pad"
-                  maxLength={6}
+                  maxLength={10}
+                  autoComplete="one-time-code"
+                  textContentType="oneTimeCode"
+                  importantForAutofill="yes"
                 />
               </>
             )}
@@ -500,6 +510,66 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           </>
         )}
       </View>
+
+      {/* Your Referral Code Card - Only show when logged in */}
+      {authSession?.user && referralDetails.code && (
+        <View
+          style={[
+            styles.summaryCard,
+            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+          ]}
+        >
+          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            Your Referral Code
+          </Text>
+          <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
+            Share your code with friends to earn free entries!
+          </Text>
+          <View style={styles.referralCodeContainer}>
+            <Text style={[styles.referralCodeText, { color: theme.colors.textPrimary }]}>
+              {referralDetails.code}
+            </Text>
+            <TouchableOpacity
+              style={[styles.copyCodeButton, { backgroundColor: theme.colors.input }]}
+              onPress={async () => {
+                try {
+                  await Clipboard.setStringAsync(referralDetails.code!);
+                  Alert.alert('Copied!', 'Referral code copied to clipboard.');
+                } catch (error) {
+                  console.error('Error copying code:', error);
+                  Alert.alert('Error', 'Failed to copy code.');
+                }
+              }}
+            >
+              <Feather name="copy" size={16} color="#10B981" />
+            </TouchableOpacity>
+          </View>
+          <TouchableOpacity
+            style={[styles.whatsappButton, { backgroundColor: '#25D366' }]}
+            onPress={async () => {
+              try {
+                const message = `Join me on TrackKcal! Use my referral code ${referralDetails.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
+                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
+                const canOpen = await Linking.canOpenURL(whatsappUrl);
+                if (canOpen) {
+                  await Linking.openURL(whatsappUrl);
+                  if (accountInfo?.email) {
+                    await analyticsService.trackReferralCodeShared(accountInfo.email, 'share');
+                  }
+                } else {
+                  Alert.alert('WhatsApp not installed', 'Please install WhatsApp to share your referral code.');
+                }
+              } catch (error) {
+                console.error('Error opening WhatsApp:', error);
+                Alert.alert('Error', 'Could not open WhatsApp. Please try again.');
+              }
+            }}
+          >
+            <Feather name="message-circle" size={18} color={Colors.white} />
+            <Text style={styles.whatsappButtonText}>Share via WhatsApp</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <View
         style={[
@@ -877,6 +947,40 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   logoutButtonText: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  referralCodeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: 'rgba(20, 184, 166, 0.1)',
+    borderRadius: 10,
+  },
+  referralCodeText: {
+    fontSize: 24,
+    fontWeight: Typography.fontWeight.bold,
+    letterSpacing: 2,
+    fontFamily: 'monospace',
+    marginRight: 12,
+  },
+  copyCodeButton: {
+    padding: 8,
+    borderRadius: 8,
+  },
+  whatsappButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 10,
+    gap: 8,
+  },
+  whatsappButtonText: {
+    color: Colors.white,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },

@@ -3,6 +3,7 @@ import { ParsedFood } from '../utils/foodNutrition';
 import { ParsedExercise, parseExerciseInput } from '../utils/exerciseParser';
 import { config } from '../config/env';
 import * as FileSystem from 'expo-file-system/legacy';
+import { generateId } from '../utils/uuid';
 
 interface OpenAIResponse {
   choices: {
@@ -167,10 +168,10 @@ If you cannot identify any food items, return an empty array: []
     // Parse the JSON response
     const parsedFoods = JSON.parse(content);
     
-    // Add unique IDs to each food item
+    // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
     const foodsWithIds = parsedFoods.map((food: any) => ({
       ...food,
-      id: `chatgpt_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: food.id || generateId(),
     }));
 
     return foodsWithIds;
@@ -225,7 +226,7 @@ export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise
 
     const exercises: ParsedExercise[] = parsed
       .map((exercise: any) => ({
-        id: `exercise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+        id: generateId(),
         name: exercise.name || 'Exercise',
         duration_minutes: Math.round(
           Number(
@@ -371,10 +372,10 @@ If you cannot identify any food items, return an empty array: []
       throw new Error('Failed to parse OpenAI response as JSON');
     }
     
-    // Add unique IDs to each food item
+    // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
     const foodsWithIds = parsedFoods.map((food: any) => ({
       ...food,
-      id: `image_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      id: food.id || generateId(),
     }));
 
     if (__DEV__) console.log('Returning parsed foods:', foodsWithIds.length);

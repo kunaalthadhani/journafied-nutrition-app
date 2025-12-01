@@ -12,7 +12,7 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { CalorieCalculatorModal, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
+import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
 
 interface SetGoalsScreenProps {
   onBack: () => void;
@@ -33,12 +33,15 @@ interface GoalData {
   currentWeightKg: number | null;
   targetWeightKg: number | null;
   age?: number;
-  gender?: 'male' | 'female';
+  gender?: 'male' | 'female' | 'prefer_not_to_say';
   heightCm?: number;
   heightFeet?: number;
   heightInches?: number;
   goal?: 'lose' | 'maintain' | 'gain';
   activityRate?: number;
+  name?: string;
+  trackingGoal?: string;
+  activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }
 
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
@@ -57,12 +60,15 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(initialGoals?.currentWeightKg ?? null);
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(initialGoals?.targetWeightKg ?? null);
   const [age, setAge] = useState<number | undefined>(initialGoals?.age);
-  const [gender, setGender] = useState<'male' | 'female' | undefined>(initialGoals?.gender);
+  const [gender, setGender] = useState<'male' | 'female' | 'prefer_not_to_say' | undefined>(initialGoals?.gender);
   const [heightCm, setHeightCm] = useState<number | undefined>(initialGoals?.heightCm);
   const [heightFeet, setHeightFeet] = useState<number | undefined>(initialGoals?.heightFeet);
   const [heightInches, setHeightInches] = useState<number | undefined>(initialGoals?.heightInches);
   const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain' | undefined>(initialGoals?.goal);
   const [activityRate, setActivityRate] = useState<number | undefined>(initialGoals?.activityRate);
+  const [name, setName] = useState<string | undefined>(initialGoals?.name);
+  const [trackingGoal, setTrackingGoal] = useState<string | undefined>(initialGoals?.trackingGoal);
+  const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'very' | undefined>(initialGoals?.activityLevel);
 
   // Calculate grams based on calories per gram
   const calculateMacros = () => {
@@ -100,8 +106,15 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.heightInches !== undefined) setHeightInches(result.heightInches);
     if (result.goal !== undefined) setGoal(result.goal);
     if (result.activityRate !== undefined) setActivityRate(result.activityRate);
+    if (result.name !== undefined) setName(result.name);
+    if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
+    if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
     setShowCalculator(false);
     onCustomPlanCompleted?.();
+  };
+
+  const handleCalculatorBack = () => {
+    setShowCalculator(false);
   };
 
   const handleProteinChange = (value: number) => {
@@ -146,11 +159,23 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       heightInches,
       goal,
       activityRate,
+      name,
+      trackingGoal,
+      activityLevel,
     };
     onSave(goalData);
     onBack();
   };
 
+
+  if (showCalculator) {
+    return (
+      <CalorieCalculatorScreen
+        onBack={handleCalculatorBack}
+        onCalculated={handleCalculatedCalories}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
@@ -181,7 +206,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
               Create Custom Plan
             </Text>
             <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
-              Answer a few questions and we’ll set everything for you.
+              Answer a few questions and we'll set everything for you.
             </Text>
           </View>
         </TouchableOpacity>
@@ -202,7 +227,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             </View>
           </View>
           <Text style={[styles.calorieHelperText, { color: theme.colors.textSecondary }]}>
-            Use “Create Custom Plan” above to calculate automatically.
+            Use "Create Custom Plan" above to calculate automatically.
           </Text>
         </View>
 
@@ -356,12 +381,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           <Text style={styles.saveGoalsText}>Save Goals</Text>
         </TouchableOpacity>
       </View>
-
-      <CalorieCalculatorModal
-        visible={showCalculator}
-        onClose={() => setShowCalculator(false)}
-        onCalculated={handleCalculatedCalories}
-      />
     </SafeAreaView>
   );
 };

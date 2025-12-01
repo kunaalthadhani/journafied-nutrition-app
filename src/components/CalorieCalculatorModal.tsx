@@ -1,17 +1,18 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
-  Modal,
   TextInput,
   ScrollView,
   TouchableWithoutFeedback,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
+  Animated,
 } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
@@ -20,36 +21,45 @@ import { usePreferences } from '../contexts/PreferencesContext';
 
 export interface CalorieCalculationResult {
   calories: number;
+  name?: string;
+  trackingGoal?: string;
   currentWeightKg?: number;
   targetWeightKg?: number;
   age?: number;
-  gender?: 'male' | 'female';
+  gender?: 'male' | 'female' | 'prefer_not_to_say';
   heightCm?: number;
   heightFeet?: number;
   heightInches?: number;
   goal?: 'lose' | 'maintain' | 'gain';
   activityRate?: number;
+  activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }
 
-interface CalorieCalculatorModalProps {
-  visible: boolean;
-  onClose: () => void;
+interface CalorieCalculatorScreenProps {
+  onBack: () => void;
   onCalculated: (result: CalorieCalculationResult) => void;
 }
 
 type Goal = 'lose' | 'maintain' | 'gain';
-type Gender = 'male' | 'female';
+type Gender = 'male' | 'female' | 'prefer_not_to_say';
 type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
 
-export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
-  visible,
-  onClose,
+export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
+  onBack,
   onCalculated
 }) => {
   const theme = useTheme();
   const { weightUnit: preferredWeightUnit } = usePreferences();
   const [currentStep, setCurrentStep] = useState(1);
+  
+  // Name question state
+  const [name, setName] = useState('');
+  
+  // Tracking goal question state
+  const [trackingGoal, setTrackingGoal] = useState<string | null>(null);
+  const [trackingGoalOther, setTrackingGoalOther] = useState('');
+  
   const [goal, setGoal] = useState<Goal | null>(null);
   
   // Gender question state
@@ -81,11 +91,26 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   // Rate question state
   const [selectedRate, setSelectedRate] = useState<number | null>(null);
   
+  // Activity level question state
+  const [activityLevel, setActivityLevel] = useState<string | null>(null);
+  
   // Calculated calories state
   const [calculatedCalories, setCalculatedCalories] = useState<number | null>(null);
 
-  const totalSteps = 7;
+  // Screen animation
+  const screenOpacity = useRef(new Animated.Value(0)).current;
+
+  const totalSteps = 10;
   const progress = (currentStep / totalSteps) * 100;
+
+  // Animate screen fade in on mount
+  useEffect(() => {
+    Animated.timing(screenOpacity, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+  }, []);
 
   // Helper functions for calculations
   const convertWeightToKg = (weight: string, unit: WeightUnit): number => {
@@ -114,7 +139,10 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   };
 
   const calculateDailyCalories = (): number => {
-    if (!weight || !age || !gender || !selectedRate) return 1500;
+    if (!weight || !age || !selectedRate) return 1500;
+    // If gender is 'prefer_not_to_say', default to male for calculations
+    const genderForCalc = gender === 'prefer_not_to_say' ? 'male' : gender;
+    if (!genderForCalc) return 1500;
 
     // Convert height to cm
     let heightInCm = 0;
@@ -132,14 +160,19 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
 
     // Calculate BMR using Mifflin-St Jeor Equation
     let bmr = 0;
-    if (gender === 'male') {
+    if (genderForCalc === 'male') {
       bmr = 88.362 + (13.397 * weightKg) + (4.799 * heightInCm) - (5.677 * ageNum);
     } else {
       bmr = 447.593 + (9.247 * weightKg) + (3.098 * heightInCm) - (4.330 * ageNum);
     }
 
-    // Apply activity factor (assuming sedentary to lightly active)
-    const tdee = bmr * 1.4; // Moderate activity level
+    // Apply activity factor based on user selection
+    let activityMultiplier = 1.4; // Default to moderate
+    if (activityLevel === 'sedentary') activityMultiplier = 1.2;
+    else if (activityLevel === 'light') activityMultiplier = 1.375;
+    else if (activityLevel === 'moderate') activityMultiplier = 1.55;
+    else if (activityLevel === 'very') activityMultiplier = 1.725;
+    const tdee = bmr * activityMultiplier;
 
     // Adjust for weight goal
     let calorieAdjustment = 0;
@@ -153,7 +186,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
     const finalCalories = Math.round(tdee + calorieAdjustment);
     
     // Ensure minimum safe calories (1200 for women, 1500 for men)
-    const minCalories = gender === 'female' ? 1200 : 1500;
+    const minCalories = genderForCalc === 'female' ? 1200 : 1500;
     return Math.max(finalCalories, minCalories);
   };
 
@@ -187,6 +220,19 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       
       return { rate, label, sublabel };
     });
+  };
+
+  const handleNameNext = () => {
+    if (name.trim() !== '' && currentStep < totalSteps) {
+      setCurrentStep(currentStep + 1);
+    }
+  };
+
+  const handleTrackingGoalSelect = (selectedGoal: string) => {
+    setTrackingGoal(selectedGoal);
+    if (selectedGoal !== 'other') {
+      setTrackingGoalOther('');
+    }
   };
 
   const handleGoalSelect = (selectedGoal: Goal) => {
@@ -229,7 +275,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   };
 
   const handleCompleteCalculation = () => {
-    if (selectedRate !== null) {
+    if (selectedRate !== null && activityLevel !== null) {
       // Calculate the daily calories based on all inputs
       const dailyCalories = calculateDailyCalories();
       setCalculatedCalories(dailyCalories);
@@ -258,8 +304,14 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
         heightInchesValue = inches || undefined;
       }
 
+      const trackingGoalValue = trackingGoal === 'other' 
+        ? trackingGoalOther.trim() 
+        : trackingGoal;
+
       onCalculated({
         calories: calculatedCalories,
+        name: name.trim() || undefined,
+        trackingGoal: trackingGoalValue || undefined,
         currentWeightKg: currentWeightKgValue || undefined,
         targetWeightKg: targetWeightKgValue || undefined,
         age: age ? parseInt(age) : undefined,
@@ -269,6 +321,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
         heightInches: heightInchesValue,
         goal: goal || undefined,
         activityRate: selectedRate !== null ? selectedRate : undefined,
+        activityLevel: activityLevel as 'sedentary' | 'light' | 'moderate' | 'very' | undefined,
       });
     }
     handleClose();
@@ -276,7 +329,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
 
   const handleCancelCalories = () => {
     // Go back to Set Goals screen without saving
-    onClose();
+    onBack();
   };
 
   const handlePrevious = () => {
@@ -287,6 +340,9 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
 
   const handleClose = () => {
     setCurrentStep(1);
+    setName('');
+    setTrackingGoal(null);
+    setTrackingGoalOther('');
     setGoal(null);
     setGender(null);
     setHeightUnit('cm');
@@ -299,8 +355,9 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
     setTargetWeightUnit('kg');
     setTargetWeight('');
     setSelectedRate(null);
+    setActivityLevel(null);
     setCalculatedCalories(null);
-    onClose();
+    onBack();
   };
 
   const renderQuestion = () => {
@@ -308,7 +365,233 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       case 1:
         return (
           <View style={styles.questionContainer}>
-            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your goal?</Text>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              What's your name?
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              We'll use this to personalize your plan. What should we call you?
+            </Text>
+            <View style={styles.heightInputContainer}>
+              <TextInput
+                style={[
+                  styles.heightInput,
+                  { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input }
+                ]}
+                value={name}
+                onChangeText={setName}
+                placeholder="Enter your name"
+                placeholderTextColor={theme.colors.textTertiary}
+                autoFocus
+                autoCapitalize="words"
+              />
+            </View>
+          </View>
+        );
+      case 2:
+        return (
+          <View style={styles.questionContainer}>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              What's your goal with tracking?
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              What brings you here? This helps us tailor your experience.
+            </Text>
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'understand' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('understand')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'understand' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Understand my eating habits
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'track' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('track')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'track' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Track calories & macros
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'accountable' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('accountable')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'accountable' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Stay accountable
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'improve' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('improve')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'improve' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Improve overall eating
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'exploring' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('exploring')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'exploring' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Just exploring
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: trackingGoal === 'other' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleTrackingGoalSelect('other')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: trackingGoal === 'other' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Other
+                </Text>
+              </TouchableOpacity>
+            </View>
+            
+            {trackingGoal === 'other' && (
+              <View style={styles.heightInputContainer}>
+                <TextInput
+                  style={[
+                    styles.heightInput,
+                    { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input }
+                  ]}
+                  value={trackingGoalOther}
+                  onChangeText={setTrackingGoalOther}
+                  placeholder="Please specify"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  autoFocus
+                />
+              </View>
+            )}
+          </View>
+        );
+      case 3:
+        return (
+          <View style={styles.questionContainer}>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              What's your gender?
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              Just for accurate nutrition calculations.
+            </Text>
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: gender === 'male' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleGenderSelect('male')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: gender === 'male' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Male
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: gender === 'female' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleGenderSelect('female')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: gender === 'female' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Female
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: gender === 'prefer_not_to_say' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => handleGenderSelect('prefer_not_to_say')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: gender === 'prefer_not_to_say' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Prefer not to say
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        );
+      case 4:
+        return (
+          <View style={styles.questionContainer}>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              How old are you?
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              Nutrition needs change with age — this helps us personalize your insights.
+            </Text>
+            <View style={styles.heightInputContainer}>
+              <TextInput
+                style={[
+                  styles.heightInput,
+                  { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input }
+                ]}
+                value={age}
+                onChangeText={setAge}
+                placeholder="25"
+                placeholderTextColor={theme.colors.textTertiary}
+                keyboardType="numeric"
+                maxLength={3}
+                autoFocus
+              />
+            </View>
+          </View>
+        );
+      case 5:
+        return (
+          <View style={styles.questionContainer}>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your body goal?</Text>
             <View style={styles.optionsContainer}>
               <TouchableOpacity
                 style={[
@@ -357,47 +640,13 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             </View>
           </View>
         );
-      case 2:
-        return (
-          <View style={styles.questionContainer}>
-            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your gender?</Text>
-            <View style={styles.optionsContainer}>
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: gender === 'male' ? '#10B981' : theme.colors.card }
-                ]}
-                onPress={() => handleGenderSelect('male')}
-              >
-                <Text style={[
-                  styles.optionText,
-                  { color: gender === 'male' ? Colors.white : theme.colors.textSecondary }
-                ]}>
-                  Male
-                </Text>
-              </TouchableOpacity>
-              
-              <TouchableOpacity
-                style={[
-                  styles.optionButton,
-                  { backgroundColor: gender === 'female' ? '#10B981' : theme.colors.card }
-                ]}
-                onPress={() => handleGenderSelect('female')}
-              >
-                <Text style={[
-                  styles.optionText,
-                  { color: gender === 'female' ? Colors.white : theme.colors.textSecondary }
-                ]}>
-                  Female
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        );
-      case 3:
+      case 6:
         return (
           <View style={styles.questionContainer}>
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your height?</Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              This helps with calorie and metabolism estimates.
+            </Text>
             
             {/* Unit Selector */}
             <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
@@ -490,10 +739,13 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             </View>
           </View>
         );
-      case 4:
+      case 7:
         return (
           <View style={styles.questionContainer}>
-            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your weight?</Text>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your current weight?</Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              Only for calculation accuracy — we never judge or compare.
+            </Text>
             
             {/* Unit Selector */}
             <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
@@ -549,33 +801,15 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             </View>
           </View>
         );
-      case 5:
+      case 8:
         return (
           <View style={styles.questionContainer}>
-            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What is your age?</Text>
-            
-            {/* Age Input */}
-            <View style={styles.heightInputContainer}>
-              <TextInput
-                style={[
-                  styles.heightInput,
-                  { color: theme.colors.textPrimary, borderColor: theme.colors.border }
-                ]}
-                value={age}
-                onChangeText={setAge}
-                placeholder="25"
-                placeholderTextColor={theme.colors.textTertiary}
-                keyboardType="numeric"
-                maxLength={3}
-                autoFocus
-              />
-            </View>
-          </View>
-        );
-      case 6:
-        return (
-          <View style={styles.questionContainer}>
-            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>What's your target weight?</Text>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              Do you have a target weight? (optional)
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              Share it only if it helps you stay focused — totally optional.
+            </Text>
             
             {/* Unit Selector */}
             <View style={[styles.unitSelectorContainer, { backgroundColor: theme.colors.input, borderColor: '#10B981', borderWidth: 1 }]}>
@@ -618,7 +852,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               <TextInput
                 style={[
                   styles.heightInput,
-                  { color: theme.colors.textPrimary, borderColor: theme.colors.border }
+                  { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input }
                 ]}
                 value={targetWeight}
                 onChangeText={setTargetWeight}
@@ -631,7 +865,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
             </View>
           </View>
         );
-      case 7:
+      case 9:
         return (
           <View style={styles.questionContainer}>
             <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
@@ -666,6 +900,78 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
                   </Text>
                 </TouchableOpacity>
               ))}
+            </View>
+          </View>
+        );
+      case 10:
+        return (
+          <View style={styles.questionContainer}>
+            <Text style={[styles.questionText, { color: theme.colors.textPrimary }]}>
+              What's your typical daily activity level?
+            </Text>
+            <Text style={[styles.subText, { color: theme.colors.textSecondary }]}>
+              This helps us estimate your daily calorie burn more accurately.
+            </Text>
+            <View style={styles.optionsContainer}>
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: activityLevel === 'sedentary' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => setActivityLevel('sedentary')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: activityLevel === 'sedentary' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Mostly sitting
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: activityLevel === 'light' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => setActivityLevel('light')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: activityLevel === 'light' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Lightly active
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: activityLevel === 'moderate' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => setActivityLevel('moderate')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: activityLevel === 'moderate' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Moderately active
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[
+                  styles.optionButton,
+                  { backgroundColor: activityLevel === 'very' ? '#10B981' : theme.colors.card }
+                ]}
+                onPress={() => setActivityLevel('very')}
+              >
+                <Text style={[
+                  styles.optionText,
+                  { color: activityLevel === 'very' ? Colors.white : theme.colors.textSecondary }
+                ]}>
+                  Very active
+                </Text>
+              </TouchableOpacity>
             </View>
           </View>
         );
@@ -706,7 +1012,7 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   };
 
   const renderNavigationButtons = () => {
-    // Step 1 - only goal selection, only Next button
+    // Step 1 - Name input
     if (currentStep === 1) {
       return (
         <View style={styles.fixedNavigationContainer}>
@@ -714,22 +1020,51 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: !goal ? theme.colors.border : '#10B981' }
+              { backgroundColor: name.trim() === '' ? theme.colors.border : '#10B981' }
             ]}
-            onPress={() => goal && setCurrentStep(currentStep + 1)}
-            disabled={!goal}
+            onPress={handleNameNext}
+            disabled={name.trim() === ''}
           >
             <Text style={[
               styles.nextButtonText,
-              { color: !goal ? theme.colors.textSecondary : Colors.white }
+              { color: name.trim() === '' ? theme.colors.textSecondary : Colors.white }
             ]}>Next</Text>
           </TouchableOpacity>
         </View>
       );
     }
     
-    // Step 2 - Gender question
+    // Step 2 - Tracking goal
     if (currentStep === 2) {
+      const isValid = trackingGoal !== null && (trackingGoal !== 'other' || trackingGoalOther.trim() !== '');
+      return (
+        <View style={styles.fixedNavigationContainer}>
+          <TouchableOpacity
+            style={[styles.previousButton, { borderColor: theme.colors.border }]}
+            onPress={handlePrevious}
+          >
+            <Text style={[styles.previousButtonText, { color: theme.colors.textSecondary }]}>Previous</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              { backgroundColor: !isValid ? theme.colors.border : '#10B981' }
+            ]}
+            onPress={() => isValid && setCurrentStep(currentStep + 1)}
+            disabled={!isValid}
+          >
+            <Text style={[
+              styles.nextButtonText,
+              { color: !isValid ? theme.colors.textSecondary : Colors.white }
+            ]}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    // Step 3 - Gender question
+    if (currentStep === 3) {
       return (
         <View style={styles.fixedNavigationContainer}>
           <TouchableOpacity
@@ -756,8 +1091,64 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       );
     }
     
-    // Step 3 - Height question
-    if (currentStep === 3) {
+    // Step 4 - Age question
+    if (currentStep === 4) {
+      return (
+        <View style={styles.fixedNavigationContainer}>
+          <TouchableOpacity
+            style={[styles.previousButton, { borderColor: theme.colors.border }]}
+            onPress={handlePrevious}
+          >
+            <Text style={[styles.previousButtonText, { color: theme.colors.textSecondary }]}>Previous</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              { backgroundColor: age.trim() === '' ? theme.colors.border : '#10B981' }
+            ]}
+            onPress={handleAgeNext}
+            disabled={age.trim() === ''}
+          >
+            <Text style={[
+              styles.nextButtonText,
+              { color: age.trim() === '' ? theme.colors.textSecondary : Colors.white }
+            ]}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    // Step 5 - Goal selection
+    if (currentStep === 5) {
+      return (
+        <View style={styles.fixedNavigationContainer}>
+          <TouchableOpacity
+            style={[styles.previousButton, { borderColor: theme.colors.border }]}
+            onPress={handlePrevious}
+          >
+            <Text style={[styles.previousButtonText, { color: theme.colors.textSecondary }]}>Previous</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              { backgroundColor: !goal ? theme.colors.border : '#10B981' }
+            ]}
+            onPress={() => goal && setCurrentStep(currentStep + 1)}
+            disabled={!goal}
+          >
+            <Text style={[
+              styles.nextButtonText,
+              { color: !goal ? theme.colors.textSecondary : Colors.white }
+            ]}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    // Step 6 - Height question
+    if (currentStep === 6) {
       const isValid = heightUnit === 'cm' 
         ? heightCm.trim() !== '' 
         : (heightFeetInput.trim() !== '' && heightInchesInput.trim() !== '');
@@ -788,8 +1179,8 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       );
     }
     
-    // Step 4 - Weight question
-    if (currentStep === 4) {
+    // Step 7 - Weight question
+    if (currentStep === 7) {
       return (
         <View style={styles.fixedNavigationContainer}>
           <TouchableOpacity
@@ -816,8 +1207,8 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
       );
     }
     
-    // Step 5 - Age question
-    if (currentStep === 5) {
+    // Step 8 - Target weight question (optional)
+    if (currentStep === 8) {
       return (
         <View style={styles.fixedNavigationContainer}>
           <TouchableOpacity
@@ -830,50 +1221,23 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <TouchableOpacity
             style={[
               styles.nextButton,
-              { backgroundColor: age.trim() === '' ? theme.colors.border : '#10B981' }
-            ]}
-            onPress={handleAgeNext}
-            disabled={age.trim() === ''}
-          >
-            <Text style={[
-              styles.nextButtonText,
-              { color: age.trim() === '' ? theme.colors.textSecondary : Colors.white }
-            ]}>Next</Text>
-          </TouchableOpacity>
-        </View>
-      );
-    }
-    
-    // Step 6 - Target weight question
-    if (currentStep === 6) {
-      return (
-        <View style={styles.fixedNavigationContainer}>
-          <TouchableOpacity
-            style={[styles.previousButton, { borderColor: theme.colors.border }]}
-            onPress={handlePrevious}
-          >
-            <Text style={[styles.previousButtonText, { color: theme.colors.textSecondary }]}>Previous</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={[
-              styles.nextButton,
-              { backgroundColor: targetWeight.trim() === '' ? theme.colors.border : '#10B981' }
+              { backgroundColor: '#10B981' }
             ]}
             onPress={handleTargetWeightNext}
-            disabled={targetWeight.trim() === ''}
           >
             <Text style={[
               styles.nextButtonText,
-              { color: targetWeight.trim() === '' ? theme.colors.textSecondary : Colors.white }
-            ]}>Next</Text>
+              { color: Colors.white }
+            ]}>
+              {targetWeight.trim() === '' ? 'Skip' : 'Next'}
+            </Text>
           </TouchableOpacity>
         </View>
       );
     }
     
-    // Step 7 - Rate question
-    if (currentStep === 7) {
+    // Step 9 - Rate question
+    if (currentStep === 9) {
       return (
         <View style={styles.fixedNavigationContainer}>
           <TouchableOpacity
@@ -888,12 +1252,44 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
               styles.nextButton,
               { backgroundColor: selectedRate === null ? theme.colors.border : '#10B981' }
             ]}
-            onPress={handleCompleteCalculation}
+            onPress={() => {
+              if (selectedRate !== null && currentStep < totalSteps) {
+                setCurrentStep(currentStep + 1);
+              }
+            }}
             disabled={selectedRate === null}
           >
             <Text style={[
               styles.nextButtonText,
               { color: selectedRate === null ? theme.colors.textSecondary : Colors.white }
+            ]}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      );
+    }
+    
+    // Step 10 - Activity level question
+    if (currentStep === 10) {
+      return (
+        <View style={styles.fixedNavigationContainer}>
+          <TouchableOpacity
+            style={[styles.previousButton, { borderColor: theme.colors.border }]}
+            onPress={handlePrevious}
+          >
+            <Text style={[styles.previousButtonText, { color: theme.colors.textSecondary }]}>Previous</Text>
+          </TouchableOpacity>
+          
+          <TouchableOpacity
+            style={[
+              styles.nextButton,
+              { backgroundColor: activityLevel === null ? theme.colors.border : '#10B981' }
+            ]}
+            onPress={handleCompleteCalculation}
+            disabled={activityLevel === null}
+          >
+            <Text style={[
+              styles.nextButtonText,
+              { color: activityLevel === null ? theme.colors.textSecondary : Colors.white }
             ]}>Complete</Text>
           </TouchableOpacity>
         </View>
@@ -904,31 +1300,22 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
   };
 
   return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="slide"
-      onRequestClose={handleClose}
-    >
-      <KeyboardAvoidingView
-        style={styles.modalOverlay}
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-      >
-        <TouchableOpacity
-          style={StyleSheet.absoluteFill}
-          activeOpacity={1}
-          onPress={handleClose}
-        />
-        <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-          {/* Header with close button */}
-          <View style={styles.modalHeader}>
-            <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-              Calculate Daily Calories
-            </Text>
-            <TouchableOpacity onPress={handleClose} style={styles.closeButton}>
-              <Feather name="x" size={24} color="#10B981" />
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+      <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+        >
+          {/* Header with back button */}
+          <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+              <Feather name="arrow-left" size={24} color="#10B981" />
             </TouchableOpacity>
+            <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+              Create Custom Plan
+            </Text>
+            <View style={styles.headerRight} />
           </View>
 
           {/* Progress Bar */}
@@ -959,40 +1346,46 @@ export const CalorieCalculatorModal: React.FC<CalorieCalculatorModalProps> = ({
           <View style={[styles.navigationButtonsWrapper, { borderTopColor: theme.colors.border }]}>
             {renderNavigationButtons()}
           </View>
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
+        </KeyboardAvoidingView>
+      </Animated.View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
-  modalOverlay: {
+  safeArea: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'flex-end',
   },
-  modalContent: {
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 24,
-    paddingBottom: 32,
-    height: '85%',
+  container: {
+    flex: 1,
   },
-  modalHeader: {
+  header: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 24,
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 16,
+    borderBottomWidth: 1,
   },
-  modalTitle: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.semiBold,
+  backButton: {
+    padding: 8,
+    zIndex: 1,
   },
-  closeButton: {
-    padding: 4,
+  headerTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.medium,
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    textAlign: 'center',
+  },
+  headerRight: {
+    width: 40,
   },
   progressContainer: {
-    marginBottom: 24,
+    paddingHorizontal: 24,
+    paddingTop: 16,
+    paddingBottom: 24,
   },
   progressBar: {
     height: 4,
@@ -1012,7 +1405,7 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 0,
+    paddingHorizontal: 24,
     paddingBottom: 20,
   },
   questionWrapper: {
@@ -1132,8 +1525,10 @@ const styles = StyleSheet.create({
   },
   navigationButtonsWrapper: {
     borderTopWidth: 1,
+    paddingHorizontal: 24,
     paddingTop: 20,
     paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+    backgroundColor: 'transparent',
   },
   fixedNavigationContainer: {
     flexDirection: 'row',

@@ -23,6 +23,7 @@ import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-nativ
 import { dataStorage } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { generateId } from '../utils/uuid';
 
 interface WeightTrackerScreenProps {
   onBack: () => void;
@@ -62,7 +63,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
     if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
       return [{
-        id: `weight_${Date.now()}`,
+        id: generateId(),
         date: new Date(),
         weight: initialCurrentWeightKg,
         updatedAt: new Date().toISOString(),
@@ -131,7 +132,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       setWeightEntries((prevEntries) => {
         if (prevEntries.length === 0) {
           return [{
-            id: `weight_${Date.now()}`,
+            id: generateId(),
             date: new Date(),
             weight: initialCurrentWeightKg,
             updatedAt: new Date().toISOString(),
@@ -148,7 +149,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         return [
           ...prevEntries,
           {
-            id: `weight_${Date.now()}`,
+            id: generateId(),
             date: new Date(),
             weight: initialCurrentWeightKg,
             updatedAt: new Date().toISOString(),
@@ -351,7 +352,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const weightKg = convertWeightFromDisplay(weight, weightUnit);
 
     const newEntry: WeightEntry = {
-      id: `weight_${Date.now()}`,
+      id: generateId(),
       date: logDate,
       weight: weightKg, // Store in kg
       updatedAt: new Date().toISOString(),

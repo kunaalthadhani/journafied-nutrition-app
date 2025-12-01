@@ -58,24 +58,43 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onQuickPromptRemove,
 }) => {
   const [text, setText] = React.useState('');
+  const [isUserTyping, setIsUserTyping] = React.useState(false);
+  const [isFocused, setIsFocused] = React.useState(false);
+  const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const heightUpdateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
   const translateY = React.useRef(new Animated.Value(0)).current;
   const [inputHeight, setInputHeight] = React.useState(0);
-  const calculatedInputHeight = Math.min(150, Math.max(28, inputHeight));
-  const [isFocused, setIsFocused] = React.useState(false);
   const inputRef = React.useRef<TextInput>(null);
   
-  // Use transcribed text or manual text input
-  const currentText = transcribedText || text;
+  // FIXED: Memoize calculated values to prevent recalculation loops
+  const calculatedInputHeight = React.useMemo(
+    () => Math.min(150, Math.max(28, inputHeight)),
+    [inputHeight]
+  );
+  
+  // FIXED: Always use local text state - transcribedText only syncs when text is empty
+  // This ensures user typing is always shown immediately
+  const currentText = text;
   const hasText = currentText.trim().length > 0;
   const shouldShowChips = !hasText && quickPrompts.length > 0;
-  const showCustomPlaceholder = !isFocused && !hasText;
+  // FIXED: Use native placeholder on Android to prevent glitching
+  const showCustomPlaceholder = Platform.OS === 'ios' && !isFocused && !hasText;
+  
   const singleLineThreshold = 40;
   const isMultiLine = calculatedInputHeight > singleLineThreshold;
-  const singleLinePadding = !isMultiLine
-    ? Math.max(0, (calculatedInputHeight - Typography.fontSize.md * 1.2) / 2)
-    : 0;
+  
+  // FIXED: Use completely fixed values for single-line to prevent any recalculation
+  const baseSingleLineHeight = 28; // Fixed base height for single line
+  const fixedSingleLinePadding = Math.max(0, (baseSingleLineHeight - Typography.fontSize.md * 1.2) / 2);
+  
+  // FIXED: Calculate padding based on actual state, but use fixed value for placeholder
+  const singleLinePadding = isMultiLine ? 0 : fixedSingleLinePadding;
+  
+  // FIXED: Placeholder uses completely fixed values that never change
+  const placeholderTop = fixedSingleLinePadding;
+  const placeholderLineHeight = baseSingleLineHeight - fixedSingleLinePadding * 2;
   const estimateHeightForText = React.useCallback((value: string) => {
     const trimmed = value?.trim() || '';
     if (!trimmed.length) return 0;
@@ -92,16 +111,50 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     if (currentText.trim() && onSubmit && !isLoading && !isRecording && !isTranscribing) {
       onSubmit(currentText.trim());
       setText('');
+      setIsUserTyping(false);
       // Clear transcribed text if available
       if (onTranscribedTextChange) {
         onTranscribedTextChange('');
+      }
+      // Clear any pending typing timeout
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = null;
       }
     }
   };
   
   const handleTextChange = (newText: string) => {
     setText(newText);
-    setInputHeight(newText.length === 0 ? 0 : estimateHeightForText(newText));
+    setIsUserTyping(true); // Mark that user is actively typing
+    
+    // FIXED: Debounce height calculation to prevent rapid updates
+    if (heightUpdateTimeoutRef.current) {
+      clearTimeout(heightUpdateTimeoutRef.current);
+    }
+    
+    const newHeight = newText.length === 0 ? 0 : estimateHeightForText(newText);
+    
+    // FIXED: On Android, don't update height when empty to prevent style recalculation glitches
+    if (newText.length === 0) {
+      // Only update height on iOS when empty, Android keeps stable height
+      if (Platform.OS === 'ios') {
+        setInputHeight(0);
+      }
+      // On Android, don't update to prevent placeholder glitching
+    } else if (Math.abs(newHeight - inputHeight) > 5) {
+      // Use same threshold as onContentSizeChange for consistency
+      setInputHeight(newHeight);
+    } else {
+      // For small changes, debounce the update
+      heightUpdateTimeoutRef.current = setTimeout(() => {
+        if (Math.abs(newHeight - inputHeight) > 1) {
+          setInputHeight(newHeight);
+        }
+        heightUpdateTimeoutRef.current = null;
+      }, 150);
+    }
+    
     if (newText.length > 0) {
       onUserTyping?.();
     }
@@ -109,6 +162,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     if (transcribedText && onTranscribedTextChange) {
       onTranscribedTextChange('');
     }
+    // Reset typing timeout - if user stops typing for 1 second, allow transcribed text
+    if (typingTimeoutRef.current) {
+      clearTimeout(typingTimeoutRef.current);
+    }
+    typingTimeoutRef.current = setTimeout(() => {
+      setIsUserTyping(false);
+      typingTimeoutRef.current = null;
+    }, 1000);
   };
 
   useEffect(() => {
@@ -141,9 +202,33 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     };
   }, [insets.bottom, translateY]);
 
+  // Sync transcribedText to local state when it changes (only if text is empty)
   useEffect(() => {
-    setInputHeight(transcribedText.length === 0 ? 0 : estimateHeightForText(transcribedText));
-  }, [transcribedText, estimateHeightForText]);
+    // Only sync transcribedText if local text is completely empty
+    if (text.length === 0 && transcribedText && transcribedText.trim().length > 0) {
+      setText(transcribedText);
+      // FIXED: Debounce height update for transcribed text to prevent jumps
+      const newHeight = estimateHeightForText(transcribedText);
+      if (Math.abs(newHeight - inputHeight) > 2) {
+        setInputHeight(newHeight);
+      }
+    } else if (text.length === 0 && transcribedText && transcribedText.length === 0 && inputHeight > 0) {
+      // Reset height if both are empty
+      setInputHeight(0);
+    }
+  }, [transcribedText, estimateHeightForText, inputHeight, text.length]);
+
+  // Cleanup timeouts on unmount
+  useEffect(() => {
+    return () => {
+      if (typingTimeoutRef.current) {
+        clearTimeout(typingTimeoutRef.current);
+      }
+      if (heightUpdateTimeoutRef.current) {
+        clearTimeout(heightUpdateTimeoutRef.current);
+      }
+    };
+  }, []);
 
   // Auto-focus when requested
   useEffect(() => {
@@ -223,13 +308,28 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             <Plus color="#10B981" size={20} strokeWidth={2.6} />
           </TouchableOpacity>
 
-          <View style={styles.inputFieldWrapper}>
+          <TouchableOpacity
+            style={styles.inputFieldWrapper}
+            activeOpacity={1}
+            onPress={() => {
+              // FIXED: Explicitly focus TextInput on Android when wrapper is tapped
+              if (Platform.OS === 'android' && inputRef.current && !isLoading && !isRecording && !isTranscribing) {
+                inputRef.current.focus();
+              }
+            }}
+          >
             {showCustomPlaceholder && (
               <Text
                 pointerEvents="none"
                 style={[
                   styles.customPlaceholder,
-                  { color: theme.colors.textTertiary },
+                  {
+                    color: theme.colors.textTertiary,
+                    // FIXED: Use completely fixed values that never change
+                    top: placeholderTop,
+                    bottom: placeholderTop,
+                    lineHeight: placeholderLineHeight,
+                  },
                 ]}
               >
                 {placeholder}
@@ -241,11 +341,23 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 styles.textInput,
                 {
                   color: theme.colors.textPrimary,
-                  height: calculatedInputHeight,
-                  lineHeight: !isMultiLine ? calculatedInputHeight - singleLinePadding * 2 : undefined,
+                  // FIXED: Use fixed height on Android when empty to prevent placeholder glitching
+                  height: Platform.OS === 'android' && !hasText 
+                    ? baseSingleLineHeight  // Fixed height when empty on Android
+                    : (calculatedInputHeight || baseSingleLineHeight),
+                  lineHeight: !isMultiLine 
+                    ? (Platform.OS === 'android' && !hasText
+                        ? baseSingleLineHeight - fixedSingleLinePadding * 2  // Fixed lineHeight on Android when empty
+                        : calculatedInputHeight - singleLinePadding * 2)
+                    : undefined,
                   textAlignVertical: isMultiLine ? 'top' : 'center',
-                  paddingTop: singleLinePadding,
-                  paddingBottom: singleLinePadding,
+                  // FIXED: Use fixed padding on Android when empty to prevent glitching
+                  paddingTop: Platform.OS === 'android' && !hasText 
+                    ? fixedSingleLinePadding 
+                    : singleLinePadding,
+                  paddingBottom: Platform.OS === 'android' && !hasText 
+                    ? fixedSingleLinePadding 
+                    : singleLinePadding,
                 },
                 (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
               ]}
@@ -257,18 +369,57 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               returnKeyType="default"
               multiline={true}
               scrollEnabled={false}
-              onFocus={() => setIsFocused(true)}
-              onBlur={() => setIsFocused(false)}
+              blurOnSubmit={false}
+              onFocus={() => {
+                setIsFocused(true);
+                // Keep user typing state when focused
+                if (text.length > 0) {
+                  setIsUserTyping(true);
+                }
+              }}
+              onBlur={() => {
+                setIsFocused(false);
+                // Reset typing state after a short delay to allow transcribed text
+                setTimeout(() => {
+                  setIsUserTyping(false);
+                }, 200);
+              }}
               onContentSizeChange={(e) => {
                 const newHeight = e.nativeEvent.contentSize.height;
-                if (newHeight !== inputHeight) {
+                // FIXED: Only update if height change is significant (>5px) to prevent glitching
+                // Also debounce to prevent rapid-fire updates
+                if (heightUpdateTimeoutRef.current) {
+                  clearTimeout(heightUpdateTimeoutRef.current);
+                }
+                if (Math.abs(newHeight - inputHeight) > 5) {
                   setInputHeight(newHeight);
+                } else {
+                  // Debounce small changes
+                  heightUpdateTimeoutRef.current = setTimeout(() => {
+                    if (Math.abs(newHeight - inputHeight) > 1) {
+                      setInputHeight(newHeight);
+                    }
+                    heightUpdateTimeoutRef.current = null;
+                  }, 150);
                 }
               }}
               maxLength={200}
               editable={!isLoading && !isRecording && !isTranscribing}
+              keyboardType="default"
+              textContentType="none"
+              autoCorrect={true}
+              autoCapitalize="sentences"
+              importantForAutofill="no"
+              showSoftInputOnFocus={true}
+              focusable={true}
+              onPressIn={() => {
+                // FIXED: Ensure focus on Android when TextInput is pressed directly
+                if (Platform.OS === 'android' && inputRef.current && !isLoading && !isRecording && !isTranscribing) {
+                  inputRef.current.focus();
+                }
+              }}
             />
-          </View>
+          </TouchableOpacity>
 
           <View style={styles.rightControls}>
             {isRecording ? (
@@ -392,15 +543,22 @@ const styles = StyleSheet.create({
   inputFieldWrapper: {
     flex: 1,
     justifyContent: 'center',
+    position: 'relative',
+    // FIXED: Allow touches to pass through to TextInput on Android
+    ...(Platform.OS === 'android' && { pointerEvents: 'box-none' }),
   },
   customPlaceholder: {
     position: 'absolute',
-    left: 0,
-    right: 0,
+    left: Spacing.sm,
+    right: Spacing.sm,
     textAlign: 'center',
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    paddingHorizontal: Spacing.sm,
+    alignItems: 'center',
+    justifyContent: 'center',
+    // Prevent glitching by using stable positioning
+    marginTop: 0,
+    marginBottom: 0,
   },
   textInputDisabled: {
     color: Colors.tertiaryText,

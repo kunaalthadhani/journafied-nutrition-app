@@ -53,6 +53,7 @@ import { referralService } from '../services/referralService';
 import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform, AppState } from 'react-native';
+import { generateId } from '../utils/uuid';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -386,7 +387,7 @@ export const HomeScreen: React.FC = () => {
   const createSavedPrompt = (text: string): SavedPrompt => {
     const timestamp = new Date().toISOString();
     return {
-      id: `prompt_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`,
+      id: generateId(),
       text,
       createdAt: timestamp,
       updatedAt: timestamp,
@@ -648,7 +649,7 @@ export const HomeScreen: React.FC = () => {
         // Create a new meal entry with the prompt and foods
         const createdAt = Date.now();
         const newMeal: Meal = {
-          id: `meal_${createdAt}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId(),
           prompt: trimmed,
           foods: parsedFoods,
           timestamp: createdAt,
@@ -710,7 +711,7 @@ export const HomeScreen: React.FC = () => {
 
       if (parsedExercises.length > 0) {
         const newExerciseEntry: ExerciseEntry = {
-          id: `exercise_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId(),
           prompt: trimmed,
           exercises: parsedExercises,
           timestamp: Date.now(),
@@ -1096,7 +1097,7 @@ export const HomeScreen: React.FC = () => {
         // Create a new meal entry with the image and parsed foods
         const createdAt = Date.now();
         const newMeal: Meal = {
-          id: `meal_image_${createdAt}_${Math.random().toString(36).substr(2, 9)}`,
+          id: generateId(),
           prompt: `Image`,
           foods: parsedFoods,
           timestamp: createdAt,

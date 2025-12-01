@@ -6,13 +6,20 @@ Use this document when completing the Google Play Data Safety questionnaire and 
 | Data Type | Purpose | Stored On Device | Sent Off Device | Notes |
 | --- | --- | --- | --- | --- |
 | Food entries (text + nutrition) | Core functionality (tracking) | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Synced securely to Supabase so you can access logs across devices. |
-| Exercise entries | Core functionality | Yes | No | Stored locally for statistics. |
+| Exercise entries | Core functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Synced to Supabase when user is logged in. |
 | Weight entries | Core functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Synced so weight history is backed up remotely. |
-| Goals / custom plans | Core functionality | Yes | No | Includes target calories & macros only. |
-| Push tokens | App functionality (notifications) | Yes | Yes (Expo push service) | Required to deliver reminders; token is stored with Expo's push service only. |
-| Referral tasks & bonus entries | App functionality | Yes | No | Tracks completion state for incentives. |
+| Goals / custom plans | Core functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Includes target calories, macros, and profile data (name, age, gender, height, weight, goals, activity level). Synced to Supabase when user is logged in. |
+| User preferences | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Weight unit, notification settings, meal reminders. Synced to Supabase when user is logged in. |
+| User settings | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Entry count, user plan (free/premium), device info. Synced to Supabase when user is logged in. |
+| Entry tasks | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Tracks completion state for custom plan and registration tasks. Synced to Supabase when user is logged in. |
+| Push tokens | App functionality (notifications) | Yes (AsyncStorage + Supabase) | Yes (Supabase + Expo push service) | Required to deliver reminders; synced to Supabase and stored with Expo's push service. |
+| Push history | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Broadcast notification history. Synced to Supabase when user is logged in. |
+| Saved prompts | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | User's saved meal prompts. Synced to Supabase when user is logged in. |
+| Referral codes | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | User referral codes. Synced to Supabase when user is logged in. |
+| Referral redemptions | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Referral code usage tracking. Synced to Supabase when user is logged in. |
+| Referral rewards | App functionality | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Bonus entries earned from referrals. Synced to Supabase when user is logged in. |
 | Photos taken for analysis | Core functionality | Temporarily (cache) | Yes (OpenAI API) | Images are uploaded to OpenAI for nutrition parsing; not retained by TrackKcal servers. |
-| Phone numbers | Account management | Yes | No | Stored locally/Supabase for account lookups; never shared with third parties. |
+| Phone numbers | Account management | Yes (AsyncStorage + Supabase) | Yes (Supabase) | Stored in Supabase for account lookups; never shared with third parties. |
 | Email address | Authentication & sync | Yes (AsyncStorage + Supabase) | Yes (Supabase Auth) | Used to send OTP codes and link logs across devices. |
 
 ## Data Sharing
