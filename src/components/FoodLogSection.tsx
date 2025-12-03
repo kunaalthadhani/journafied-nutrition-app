@@ -29,6 +29,7 @@ interface FoodLogSectionProps {
   savedPrompts?: SavedPrompt[];
   onToggleSavePrompt?: (meal: Meal) => void;
   onDeleteMeal?: (mealId: string) => void;
+  onUpdateFood?: (mealId: string, updatedFood: ParsedFood) => void;
 }
 
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
@@ -38,10 +39,12 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   savedPrompts = [],
   onToggleSavePrompt,
   onDeleteMeal,
+  onUpdateFood,
 }) => {
   const theme = useTheme();
   const [animatedMeals, setAnimatedMeals] = useState<Set<string>>(new Set());
   const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
+  const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
@@ -54,12 +57,15 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
     return map;
   }, [savedPrompts]);
 
-  const handleFoodPress = (food: ParsedFood) => {
-    setSelectedFood(food);
+  const handleFoodPress = (mealId: string, food: ParsedFood) => {
+    // Work on a shallow copy so edits don't apply until saved
+    setSelectedFood({ ...food });
+    setSelectedMealId(mealId);
   };
 
   const handleCloseModal = () => {
     setSelectedFood(null);
+    setSelectedMealId(null);
   };
 
   const handleStartEditPrompt = (meal: Meal) => {
@@ -206,7 +212,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
           <TouchableOpacity 
                     key={food.id} 
                     style={styles.foodItem}
-                    onPress={() => handleFoodPress(food)}
+                    onPress={() => handleFoodPress(meal.id, food)}
                     activeOpacity={0.7}
                   >
                     <View style={styles.foodNameRow}>
@@ -229,9 +235,11 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     
                     <AnimatedSpan
                       delay={baseDelay + 100}
-                      style={{ color: '#10B981', fontSize: 12 }}
+                      style={{ color: '#10B981', fontSize: 12, flexShrink: 1 }}
+                      numberOfLines={1}
+                      ellipsizeMode="tail"
                     >
-                      {`  Calories: ${food.calories} | Protein: ${food.protein}g | Carbs: ${food.carbs}g | Fat: ${food.fat}g`}
+                      {`Calories: ${food.calories} | Protein: ${food.protein}g | Carbs: ${food.carbs}g | Fat: ${food.fat}g`}
                     </AnimatedSpan>
           </TouchableOpacity>
                 );
@@ -284,6 +292,22 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
           >
             {selectedFood && (
               <>
+                {/*
+                  Derive calories from macros so that when protein/carbs/fat
+                  are edited, calories automatically reflect the new values.
+                  1g protein = 4 kcal, 1g carbs = 4 kcal, 1g fat = 9 kcal.
+                */}
+                {(() => {
+                  const p = Number(selectedFood.protein || 0);
+                  const c = Number(selectedFood.carbs || 0);
+                  const f = Number(selectedFood.fat || 0);
+                  const derivedCalories = Math.max(0, Math.round(p * 4 + c * 4 + f * 9));
+                  if (selectedFood.calories !== derivedCalories) {
+                    // Keep local copy in sync so UI always shows the derived value
+                    setSelectedFood({ ...selectedFood, calories: derivedCalories });
+                  }
+                  return null;
+                })()}
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
                     {selectedFood.name}
@@ -298,44 +322,121 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                 
                 <View style={styles.modalNutrition}>
                   <Text style={[styles.nutritionLabel, { color: theme.colors.textSecondary }]}>
-                    Nutrition per {selectedFood.weight_g}g
+                    Edit nutrition for this food
                   </Text>
                   <View style={styles.nutritionGrid}>
                     <View style={styles.nutritionItem}>
+                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
+                        Calories
+                      </Text>
                       <Text style={[styles.nutritionValue, { color: theme.colors.textPrimary }]}>
                         {selectedFood.calories}
                       </Text>
                       <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        Calories
+                        kcal
                       </Text>
                     </View>
                     <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionValue, { color: theme.colors.textPrimary }]}>
-                        {selectedFood.protein}g
-                      </Text>
                       <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
                         Protein
                       </Text>
+                      <TextInput
+                        style={[
+                          styles.nutritionValueInput,
+                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
+                        ]}
+                        keyboardType="numeric"
+                        value={String(selectedFood.protein ?? '')}
+                        onChangeText={(text) =>
+                          setSelectedFood(prev =>
+                            prev ? { ...prev, protein: Number(text) || 0 } : prev
+                          )
+                        }
+                      />
+                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
+                        g
+                      </Text>
                     </View>
                     <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionValue, { color: theme.colors.textPrimary }]}>
-                        {selectedFood.carbs}g
-                      </Text>
                       <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
                         Carbs
                       </Text>
+                      <TextInput
+                        style={[
+                          styles.nutritionValueInput,
+                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
+                        ]}
+                        keyboardType="numeric"
+                        value={String(selectedFood.carbs ?? '')}
+                        onChangeText={(text) =>
+                          setSelectedFood(prev =>
+                            prev ? { ...prev, carbs: Number(text) || 0 } : prev
+                          )
+                        }
+                      />
+                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
+                        g
+                      </Text>
                     </View>
                     <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionValue, { color: theme.colors.textPrimary }]}>
-                        {selectedFood.fat}g
-                      </Text>
                       <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
                         Fat
                       </Text>
+                      <TextInput
+                        style={[
+                          styles.nutritionValueInput,
+                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
+                        ]}
+                        keyboardType="numeric"
+                        value={String(selectedFood.fat ?? '')}
+                        onChangeText={(text) =>
+                          setSelectedFood(prev =>
+                            prev ? { ...prev, fat: Number(text) || 0 } : prev
+                          )
+                        }
+                      />
+                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
+                        g
+                      </Text>
                     </View>
-                </View>
+                  </View>
                 </View>
 
+                {onUpdateFood && selectedMealId && (
+                  <View
+                    style={{
+                      marginTop: Spacing.md,
+                      flexDirection: 'row',
+                      justifyContent: 'flex-end',
+                      columnGap: 8,
+                    }}
+                  >
+                    <TouchableOpacity
+                      style={styles.modalButtonSecondary}
+                      onPress={handleCloseModal}
+                    >
+                      <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.modalButtonPrimary}
+                      onPress={() => {
+                        if (selectedFood && onUpdateFood && selectedMealId) {
+                          const p = Number(selectedFood.protein || 0);
+                          const c = Number(selectedFood.carbs || 0);
+                          const f = Number(selectedFood.fat || 0);
+                          const derivedCalories = Math.max(0, Math.round(p * 4 + c * 4 + f * 9));
+                          onUpdateFood(selectedMealId, {
+                            ...selectedFood,
+                            calories: derivedCalories,
+                          });
+                        }
+                        handleCloseModal();
+                      }}
+                    >
+                      <Text style={styles.modalButtonPrimaryText}>Save</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
               </>
             )}
           </TouchableOpacity>
@@ -444,16 +545,16 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
   },
   modalContent: {
-    width: '90%',
-    maxWidth: 400,
-    borderRadius: 12,
+    width: '94%',
+    maxWidth: 420,
+    borderRadius: 20,
     borderWidth: 1,
     padding: Spacing.lg,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowColor: '#0F172A',
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.18,
+    shadowRadius: 24,
+    elevation: 10,
   },
   modalHeader: {
     flexDirection: 'row',
@@ -478,19 +579,55 @@ const styles = StyleSheet.create({
   },
   nutritionGrid: {
     flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexWrap: 'wrap',
+    justifyContent: 'space-between',
     paddingVertical: Spacing.sm,
   },
   nutritionItem: {
-    alignItems: 'center',
+    alignItems: 'flex-start',
+    marginVertical: Spacing.xs,
   },
   nutritionValue: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.semiBold,
     marginBottom: 4,
   },
+  nutritionValueInput: {
+    minWidth: 60,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    textAlign: 'center',
+    fontSize: Typography.fontSize.md,
+    marginVertical: 4,
+  },
   nutritionUnit: {
     fontSize: Typography.fontSize.xs,
+  },
+  modalButtonPrimary: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    backgroundColor: '#10B981',
+  },
+  modalButtonPrimaryText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  modalButtonSecondary: {
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.4)',
+    backgroundColor: 'rgba(15, 23, 42, 0.02)',
+  },
+  modalButtonSecondaryText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    color: Colors.secondaryText,
   },
 });
 

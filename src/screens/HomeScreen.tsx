@@ -10,6 +10,8 @@ import {
   Animated,
   Easing,
   Alert,
+  KeyboardAvoidingView,
+  BackHandler,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -540,6 +542,84 @@ export const HomeScreen: React.FC = () => {
       analyticsService.trackAppClose();
     };
   }, []);
+
+  // Handle Android hardware back button to navigate within the app instead of exiting
+  useEffect(() => {
+    const onBackPress = () => {
+      // Close any open overlay / sub-screen first
+      if (photoModalVisible) {
+        setPhotoModalVisible(false);
+        return true;
+      }
+      if (showAdminPush) {
+        setShowAdminPush(false);
+        return true;
+      }
+      if (showSubscription) {
+        setShowSubscription(false);
+        return true;
+      }
+      if (showSettings) {
+        setShowSettings(false);
+        return true;
+      }
+      if (showWeightTracker) {
+        setShowWeightTracker(false);
+        return true;
+      }
+      if (showNutritionAnalysis) {
+        setShowNutritionAnalysis(false);
+        return true;
+      }
+      if (showSetGoals) {
+        setShowSetGoals(false);
+        return true;
+      }
+      if (showAccount) {
+        setShowAccount(false);
+        return true;
+      }
+      if (showAbout) {
+        setShowAbout(false);
+        return true;
+      }
+      if (showReferral) {
+        setShowReferral(false);
+        return true;
+      }
+      if (showFreeEntries) {
+        setShowFreeEntries(false);
+        return true;
+      }
+      if (showCalendar) {
+        setShowCalendar(false);
+        return true;
+      }
+      if (menuVisible) {
+        setMenuVisible(false);
+        return true;
+      }
+      // At the true home screen; allow default behavior (exit app)
+      return false;
+    };
+
+    const subscription = BackHandler.addEventListener('hardwareBackPress', onBackPress);
+    return () => subscription.remove();
+  }, [
+    photoModalVisible,
+    showAdminPush,
+    showSubscription,
+    showSettings,
+    showWeightTracker,
+    showNutritionAnalysis,
+    showSetGoals,
+    showAccount,
+    showAbout,
+    showReferral,
+    showFreeEntries,
+    showCalendar,
+    menuVisible,
+  ]);
 
   useEffect(() => {
     (async () => {
@@ -1530,15 +1610,22 @@ if (showReferral) {
           onScrollEnable={setScrollEnabled}
         />
 
-        {/* Scrollable Content for logs */}
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.scrollContent}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          scrollEnabled={scrollEnabled}
+        {/* Main content + input bar move together with the keyboard */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={0}
         >
-          {/* Food Log Section */}
+          {/* Scrollable Content for logs */}
+          <ScrollView
+            style={styles.scrollView}
+            contentContainerStyle={styles.scrollContent}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            scrollEnabled={scrollEnabled}
+            keyboardShouldPersistTaps="handled"
+          >
+            {/* Food Log Section */}
           <FoodLogSection 
             meals={currentDayMeals}
             onRemoveFood={handleRemoveFood}
@@ -1546,54 +1633,75 @@ if (showReferral) {
             savedPrompts={savedPrompts}
             onToggleSavePrompt={handleToggleSavePrompt}
             onDeleteMeal={handleDeleteMeal}
+            onUpdateFood={(mealId, updatedFood) => {
+              setMealsByDate(prev => {
+                const currentMeals = prev[currentDateKey] || [];
+                const updatedMeals = currentMeals.map(meal => {
+                  if (meal.id !== mealId) return meal;
+                  const updatedFoods = meal.foods.map(food =>
+                    food.id === updatedFood.id ? updatedFood : food
+                  );
+                  return {
+                    ...meal,
+                    foods: updatedFoods,
+                    updatedAt: new Date().toISOString(),
+                  };
+                });
+                return {
+                  ...prev,
+                  [currentDateKey]: updatedMeals,
+                };
+              });
+            }}
           />
 
-          <ExerciseLogSection
-            entries={currentDayExercises}
-            onDeleteEntry={handleDeleteExerciseEntry}
+            <ExerciseLogSection
+              entries={currentDayExercises}
+              onDeleteEntry={handleDeleteExerciseEntry}
+            />
+
+            {/* Motivational Text - only show if no meals logged for current day */}
+            {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
+              <View style={styles.motivationalTextContainer}>
+                <Text style={styles.motivationalTitle}>
+                  Ready when you are!
+                </Text>
+                <Text style={styles.motivationalText}>
+                  Tell me what you ate or how you moved and I’ll handle the rest
+                </Text>
+              </View>
+            )}
+
+            {/* Bottom spacing to account for input bar height */}
+            <View style={styles.bottomSpacer} />
+          </ScrollView>
+
+          {/* Bottom Input Bar */}
+          <BottomInputBar
+            onSubmit={handleInputSubmit}
+            onPlusPress={handlePlusPress}
+            onMicPress={handleMicPress}
+            isLoading={isAnalyzingFood}
+            isRecording={isRecording}
+            isTranscribing={isTranscribing}
+            transcribedText={transcribedText}
+            onTranscribedTextChange={setTranscribedText}
+            onUserTyping={() => {
+              setHasUserTyped(true);
+              setShouldFocusInput(false);
+            }}
+            autoFocus={shouldFocusInput}
+            quickPrompts={savedPrompts}
+            onQuickPromptPress={handleSelectSavedPrompt}
+            onQuickPromptRemove={handleRemoveSavedPrompt}
+            placeholder={
+              isAnalyzingFood ? "Analyzing your entry..." : 
+              isRecording ? "Recording..." : 
+              isTranscribing ? "Transcribing..." : 
+              "What did you eat or exercise?"
+            }
           />
-
-          {/* Motivational Text - only show if no meals logged for current day */}
-          {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
-            <View style={styles.motivationalTextContainer}>
-              <Text style={styles.motivationalTitle}>
-                Ready when you are!
-              </Text>
-              <Text style={styles.motivationalText}>
-                Tell me what you ate or how you moved and I’ll handle the rest
-              </Text>
-            </View>
-          )}
-
-          {/* Bottom spacing to account for fixed input bar */}
-          <View style={styles.bottomSpacer} />
-        </ScrollView>
-
-        {/* Fixed Bottom Input Bar */}
-        <BottomInputBar
-          onSubmit={handleInputSubmit}
-          onPlusPress={handlePlusPress}
-          onMicPress={handleMicPress}
-          isLoading={isAnalyzingFood}
-          isRecording={isRecording}
-          isTranscribing={isTranscribing}
-          transcribedText={transcribedText}
-          onTranscribedTextChange={setTranscribedText}
-          onUserTyping={() => {
-            setHasUserTyped(true);
-            setShouldFocusInput(false);
-          }}
-          autoFocus={shouldFocusInput}
-          quickPrompts={savedPrompts}
-          onQuickPromptPress={handleSelectSavedPrompt}
-          onQuickPromptRemove={handleRemoveSavedPrompt}
-          placeholder={
-            isAnalyzingFood ? "Analyzing your entry..." : 
-            isRecording ? "Recording..." : 
-            isTranscribing ? "Transcribing..." : 
-            "What did you eat or exercise?"
-          }
-        />
+        </KeyboardAvoidingView>
 
         <SidebarMenu
           visible={menuVisible}

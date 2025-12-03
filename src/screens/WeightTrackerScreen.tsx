@@ -19,7 +19,7 @@ import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { dataStorage } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -58,6 +58,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [insight, setInsight] = useState<string>('');
   const [insightGeneratedDate, setInsightGeneratedDate] = useState<string | null>(null);
   const [goalType, setGoalType] = useState<'lose' | 'maintain' | 'gain' | undefined>(undefined);
+  const [displayedInsight, setDisplayedInsight] = useState<string>(''); // typewriter text
+  const [graphAnimationDone, setGraphAnimationDone] = useState(false);
 
   // Sample weight data - in a real app, this would come from storage/API
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
@@ -227,24 +229,49 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   const minWeight = hasGraphData ? Math.min(...graphData.map(d => d.weight)) : 0;
   const maxWeight = hasGraphData ? Math.max(...graphData.map(d => d.weight)) : 1;
-  const weightRange = hasGraphData ? Math.max(maxWeight - minWeight, 0) : 0;
-  const weightPadding = hasGraphData ? Math.max(weightRange * 0.1, 1) : 1;
-  const axisMinWeight = hasGraphData ? minWeight - weightPadding : 0;
-  const axisMaxWeight = hasGraphData ? maxWeight + weightPadding : 5;
-  const axisWeightRange = Math.max(axisMaxWeight - axisMinWeight, 1);
 
-  // Compute "nice" Y-axis ticks based on current data
-  const generateYAxisTicks = () => {
-    const desiredTicks = 6;
-    if (desiredTicks <= 1) {
-      return [axisMinWeight];
+  // Simple, deterministic Y‑axis scaling so ticks, grid lines, and points line up exactly.
+  const { axisMinWeight, axisMaxWeight, axisWeightRange, yAxisTicks } = React.useMemo(() => {
+    if (!hasGraphData) {
+      const min = 0;
+      const max = 5;
+      const range = max - min || 1;
+      return {
+        axisMinWeight: min,
+        axisMaxWeight: max,
+        axisWeightRange: range,
+        yAxisTicks: [0, 1, 2, 3, 4, 5],
+      };
     }
 
-    const step = axisWeightRange / (desiredTicks - 1);
-    return Array.from({ length: desiredTicks }, (_, i) => axisMinWeight + step * i);
-  };
+    const rawRange = Math.max(maxWeight - minWeight, 0);
+    const padding = Math.max(rawRange * 0.1, 1);
+    let minAxis = Math.floor(minWeight - padding);
+    let maxAxis = Math.ceil(maxWeight + padding);
+    if (minAxis === maxAxis) {
+      // Ensure non‑zero span
+      minAxis -= 1;
+      maxAxis += 1;
+    }
+    const range = Math.max(maxAxis - minAxis, 1);
 
-  const yAxisTicks = generateYAxisTicks();
+    // Choose an integer step so labels are whole numbers and dots land exactly on grid lines.
+    const approxStep = Math.max(1, Math.round(range / 5));
+    const ticks: number[] = [];
+    for (let v = minAxis; v <= maxAxis; v += approxStep) {
+      ticks.push(v);
+    }
+    if (ticks[ticks.length - 1] !== maxAxis) {
+      ticks.push(maxAxis);
+    }
+
+    return {
+      axisMinWeight: minAxis,
+      axisMaxWeight: maxAxis,
+      axisWeightRange: range,
+      yAxisTicks: ticks,
+    };
+  }, [hasGraphData, minWeight, maxWeight]);
 
   // Compute date range from filtered data - updates when filteredData changes
   const dateRange = useMemo(() => {
@@ -324,8 +351,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const newPath = generateSmoothPath();
     setGraphPath(newPath);
 
+    // Reset animation state whenever graph data changes
     chartOpacity.setValue(0.15);
     lineProgress.setValue(0);
+    setGraphAnimationDone(false);
 
     Animated.parallel([
       Animated.timing(chartOpacity, {
@@ -338,7 +367,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         duration: 1800,
         useNativeDriver: false, // animating SVG strokeDashoffset
       }),
-    ]).start();
+    ]).start(() => {
+      // Mark graph animation as complete so we can start the typewriter insight
+      setGraphAnimationDone(true);
+    });
   }, [JSON.stringify(graphData)]);
 
   const handleLogWeight = () => {
@@ -489,13 +521,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         // Stable weight
         insightText = 'Your weight has been stable. Great consistency! Keep maintaining your current routine.';
       } else if (weightChange > 0.5) {
-        // Gaining weight
-        const weeklyGain = convertWeightToDisplay(Math.abs(weeklyChange));
-        insightText = `You've gained ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period (${weeklyGain.toFixed(1)} ${getWeightUnitLabel()}/week).`;
+        // Gaining weight (weekly rate removed from brackets per design)
+        insightText = `You've gained ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period.`;
       } else if (weightChange < -0.5) {
-        // Losing weight
-        const weeklyLoss = convertWeightToDisplay(Math.abs(weeklyChange));
-        insightText = `You've lost ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period (${weeklyLoss.toFixed(1)} ${getWeightUnitLabel()}/week). Keep up the great progress!`;
+        // Losing weight (weekly rate removed from brackets per design)
+        insightText = `You've lost ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period. Keep up the great progress!`;
       } else {
         // Small change
         insightText = 'Your weight shows minimal change. Small fluctuations are normal and expected.';
@@ -506,6 +536,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
     const insightText = generateInsight();
     setInsight(insightText);
+    // Reset displayed text; it will be animated in after the graph finishes drawing
+    setDisplayedInsight('');
     setInsightGeneratedDate(today);
     
     // Save insight to storage so it persists across app restarts
@@ -517,6 +549,27 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     });
   }, [hasGraphData, graphData, insightGeneratedDate, convertWeightToDisplay, getWeightUnitLabel]);
 
+  // Typewriter effect for the insight text that starts after the graph animation completes
+  useEffect(() => {
+    if (!graphAnimationDone || !insight) {
+      return;
+    }
+
+    let index = 0;
+    setDisplayedInsight('');
+    const interval = setInterval(() => {
+      index += 1;
+      setDisplayedInsight(insight.slice(0, index));
+      if (index >= insight.length) {
+        clearInterval(interval);
+      }
+    }, 20); // ~50 characters per second
+
+    return () => {
+      clearInterval(interval);
+    };
+  }, [graphAnimationDone, insight]);
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
@@ -525,19 +578,28 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Weight Tracker</Text>
-        <View style={styles.headerRight} />
-      </View>
+          <TouchableOpacity onPress={onBack} style={styles.backButton}>
+            <Feather name="arrow-left" size={24} color="#10B981" />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+            Weight Tracker
+          </Text>
+          <View style={styles.headerRight} />
+        </View>
 
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-      >
+        {/* Main scrollable content; moves above keyboard when editing rows */}
+        <KeyboardAvoidingView
+          style={{ flex: 1 }}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+        >
+        <ScrollView 
+          style={styles.content} 
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
+          keyboardShouldPersistTaps="handled"
+        >
         {!hasEntries && (
           <View
             style={[
@@ -636,28 +698,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   },
                 ]}
               >
-                {/* Y-axis labels */}
-                <View style={styles.yAxisContainer}>
-                  {yAxisTicks.map((value, index) => {
-                    const ratio = Math.max(0, Math.min(1, (value - axisMinWeight) / axisWeightRange));
-                    return (
-                      <Text
-                        key={index}
-                        style={[
-                          styles.yAxisLabel,
-                          {
-                            color: theme.colors.textTertiary,
-                            top: padding + innerHeight - (ratio * innerHeight) - 8,
-                          },
-                        ]}
-                      >
-                        {convertWeightToDisplay(value).toFixed(0)}
-                      </Text>
-                    );
-                  })}
-                </View>
-
-                {/* Graph */}
+                {/* Graph with inline Y-axis labels */}
                 <Animated.View style={[styles.graph, { opacity: chartOpacity }]}>
                   <Svg width={graphWidth} height={graphHeight}>
                     <Defs>
@@ -667,19 +708,40 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         <Stop offset="100%" stopColor="#22C55E" />
                       </LinearGradient>
                     </Defs>
-                    {/* Grid lines */}
-                    {[0, 1, 2, 3, 4, 5].map((i) => (
-                      <Line
-                        key={i}
-                        x1={padding}
-                        y1={padding + (i / 5) * innerHeight}
-                        x2={graphWidth - padding}
-                        y2={padding + (i / 5) * innerHeight}
-                        stroke={theme.colors.border}
-                        strokeWidth={0.5}
-                        strokeDasharray="2,2"
-                      />
-                    ))}
+                    {/* Grid lines + Y-axis labels aligned to tick values */}
+                    {yAxisTicks.map((value, index) => {
+                      const ratio = Math.max(
+                        0,
+                        Math.min(1, (value - axisMinWeight) / axisWeightRange)
+                      );
+                      const y = padding + innerHeight - ratio * innerHeight;
+                      return (
+                        <React.Fragment key={index}>
+                          <Line
+                            x1={padding}
+                            y1={y}
+                            x2={graphWidth - padding}
+                            y2={y}
+                            stroke={theme.colors.border}
+                            strokeWidth={0.5}
+                            strokeDasharray="2,2"
+                          />
+                          <SvgText
+                            // Slightly inside the chart so the full label (e.g. "106")
+                            // is visible on both platforms, with a small visual gap
+                            // (≈4px) between the label and the dotted grid line.
+                            x={padding + 4}
+                            y={y}
+                            fontSize={Typography.fontSize.xs}
+                            fill={theme.colors.textTertiary}
+                            textAnchor="end"
+                            alignmentBaseline="middle"
+                          >
+                            {convertWeightToDisplay(value).toFixed(0)}
+                          </SvgText>
+                        </React.Fragment>
+                      );
+                    })}
 
                     {/* Line path with soft gradient and left-to-right draw animation */}
                     {graphPath ? (
@@ -747,13 +809,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {dateRange}
               </Text>
 
-              {/* Insights below date range */}
+              {/* Insights below date range (typewriter after graph animation) */}
               {insight && (
                 <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
                   <Feather name="info" size={16} color="#10B981" />
                   <View style={styles.insightTextContainer}>
                     <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
-                      {insight}
+                      {displayedInsight || (graphAnimationDone ? insight : '')}
                     </Text>
                   </View>
                 </View>
@@ -842,19 +904,20 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
           </>
         )}
-      </ScrollView>
+        </ScrollView>
+        </KeyboardAvoidingView>
 
-      {/* Log Weight Button */}
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity
-          style={[styles.logButton, { backgroundColor: '#10B981' }]}
-          onPress={() => setShowLogModal(true)}
-        >
-          <Text style={styles.logButtonText}>Log Weight</Text>
-        </TouchableOpacity>
-      </View>
+        {/* Log Weight Button (fixed at bottom, not moved by KeyboardAvoidingView) */}
+        <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.logButton, { backgroundColor: '#10B981' }]}
+            onPress={() => setShowLogModal(true)}
+          >
+            <Text style={styles.logButtonText}>Log Weight</Text>
+          </TouchableOpacity>
+        </View>
 
-      {/* Log Weight Modal */}
+        {/* Log Weight Modal */}
       <Modal
         visible={showLogModal}
         transparent
@@ -1017,26 +1080,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 16,
     elevation: 8,
-  },
-  yAxisContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: 40,
-    height: '100%',
-  },
-  yAxisRightContainer: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    width: 40,
-    height: '100%',
-    alignItems: 'flex-end',
-  },
-  yAxisLabel: {
-    fontSize: Typography.fontSize.xs,
-    position: 'absolute',
-    right: 8,
   },
   graph: {
     marginLeft: 40,

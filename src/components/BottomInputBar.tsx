@@ -5,9 +5,6 @@ import {
   TextInput,
   StyleSheet,
   TouchableOpacity,
-  Keyboard,
-  Animated,
-  Easing,
   Platform,
   ScrollView,
 } from 'react-native';
@@ -64,7 +61,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const heightUpdateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const translateY = React.useRef(new Animated.Value(0)).current;
   const [inputHeight, setInputHeight] = React.useState(0);
   const inputRef = React.useRef<TextInput>(null);
   
@@ -172,36 +168,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     }, 1000);
   };
 
-  useEffect(() => {
-    const showEvent = Platform.OS === 'ios' ? 'keyboardWillShow' : 'keyboardDidShow';
-    const hideEvent = Platform.OS === 'ios' ? 'keyboardWillHide' : 'keyboardDidHide';
-
-    const showSub = Keyboard.addListener(showEvent, (event) => {
-      const keyboardHeight = event?.endCoordinates?.height ?? 0;
-      const offset = keyboardHeight - insets.bottom;
-      Animated.timing(translateY, {
-        toValue: -offset,
-        duration: 250,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    });
-
-    const hideSub = Keyboard.addListener(hideEvent, () => {
-      Animated.timing(translateY, {
-        toValue: 0,
-        duration: 260,
-        easing: Easing.out(Easing.cubic),
-        useNativeDriver: true,
-      }).start();
-    });
-
-    return () => {
-      showSub.remove();
-      hideSub.remove();
-    };
-  }, [insets.bottom, translateY]);
-
   // Sync transcribedText to local state when it changes (only if text is empty)
   useEffect(() => {
     // Only sync transcribedText if local text is completely empty
@@ -241,13 +207,12 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   }, [autoFocus]);
 
   return (
-    <Animated.View
+    <View
       style={[
         styles.keyboardContainer,
         {
           backgroundColor: theme.colors.background,
           paddingBottom: insets.bottom > 0 ? insets.bottom : Platform.OS === 'ios' ? 20 : 12,
-          transform: [{ translateY }],
         },
       ]}
     >
@@ -458,16 +423,13 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </View>
         </View>
       </View>
-    </Animated.View>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   keyboardContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
+    width: '100%',
     paddingHorizontal: 16,
   },
   container: {

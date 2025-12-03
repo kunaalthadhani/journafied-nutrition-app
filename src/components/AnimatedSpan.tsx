@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { Animated, Text, TextStyle } from 'react-native';
+import { Animated, Text, TextStyle, TextProps } from 'react-native';
 import { useTheme } from '../constants/theme';
 
 interface AnimatedSpanProps {
@@ -7,6 +7,8 @@ interface AnimatedSpanProps {
   style?: TextStyle;
   className?: string; // For NativeWind compatibility
   delay?: number; // milliseconds delay before animation
+  numberOfLines?: number;
+  ellipsizeMode?: TextProps['ellipsizeMode'];
 }
 
 export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
@@ -14,6 +16,8 @@ export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
   style,
   className,
   delay = 0,
+  numberOfLines,
+  ellipsizeMode,
 }) => {
   const theme = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
@@ -50,6 +54,8 @@ export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
         },
         style,
       ]}
+      numberOfLines={numberOfLines}
+      ellipsizeMode={ellipsizeMode}
     >
       {children}
     </Animated.Text>

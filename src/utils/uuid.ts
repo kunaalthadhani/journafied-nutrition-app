@@ -1,3 +1,6 @@
+// Polyfill for crypto.getRandomValues in React Native environments
+// Must be imported before using the `uuid` library.
+import 'react-native-get-random-values';
 import { v4 as uuidv4 } from 'uuid';
 
 /**
@@ -32,4 +35,5 @@ export function ensureUUID(id: string | undefined | null): string {
   // Note: This means old string IDs will get new UUIDs, which is fine for new entries
   return generateId();
 }
+
 
