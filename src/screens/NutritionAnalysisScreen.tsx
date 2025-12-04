@@ -331,6 +331,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const [fatPath, setFatPath] = useState<string>('');
   const caloriesLineProgress = useRef(new Animated.Value(1)).current;
   const macrosLineProgress = useRef(new Animated.Value(1)).current;
+  const caloriesChartOpacity = useRef(new Animated.Value(1)).current;
+  const macrosChartOpacity = useRef(new Animated.Value(1)).current;
   const AnimatedPath = useRef(Animated.createAnimatedComponent((Path as any))).current;
 
   useEffect(() => {
@@ -346,12 +348,22 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const path = generateCaloriesPath();
     setCaloriesPath(path);
 
+    // Reset animation state - fade chart in while drawing line
+    caloriesChartOpacity.setValue(0.15);
     caloriesLineProgress.setValue(0);
-    Animated.timing(caloriesLineProgress, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: false, // animating SVG strokeDashoffset
-    }).start();
+
+    Animated.parallel([
+      Animated.timing(caloriesChartOpacity, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(caloriesLineProgress, {
+        toValue: 1,
+        duration: 1800,
+        useNativeDriver: false, // animating SVG strokeDashoffset
+      }),
+    ]).start();
   }, [JSON.stringify(caloriesData), maxCalories, minCalories, caloriesPadding]);
 
   // Animate macros lines when data changes
@@ -360,12 +372,22 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     setCarbsPath(generateSmoothPath(graphData.map(d => d.carbs)));
     setFatPath(generateSmoothPath(graphData.map(d => d.fat)));
 
+    // Reset animation state - fade chart in while drawing lines
+    macrosChartOpacity.setValue(0.15);
     macrosLineProgress.setValue(0);
-    Animated.timing(macrosLineProgress, {
-      toValue: 1,
-      duration: 1000,
-      useNativeDriver: false,
-    }).start();
+
+    Animated.parallel([
+      Animated.timing(macrosChartOpacity, {
+        toValue: 1,
+        duration: 350,
+        useNativeDriver: true,
+      }),
+      Animated.timing(macrosLineProgress, {
+        toValue: 1,
+        duration: 1800,
+        useNativeDriver: false,
+      }),
+    ]).start();
   }, [JSON.stringify(graphData), maxValue]);
 
   return (
@@ -490,7 +512,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         {/* Calories Chart Section */}
         {activeTab === 'Calories' && (
           <View style={styles.graphContainer}>
-            <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
+            <Animated.View style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: caloriesChartOpacity }]}>
               {/* Y-axis labels */}
               <View style={styles.yAxisContainer}>
                 {(() => {
@@ -595,7 +617,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   })}
                 </Svg>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Time Range Selector */}
             <View style={styles.timeRangeContainer}>
@@ -696,7 +718,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               </View>
             </View>
 
-            <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
+            <Animated.View style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: macrosChartOpacity }]}>
               {/* Y-axis labels */}
               <View style={styles.yAxisContainer}>
                 {[0, 1, 2, 3, 4, 5].map((i) => {
@@ -868,7 +890,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   })}
                 </Svg>
               </View>
-            </View>
+            </Animated.View>
 
             {/* Time Range Selector */}
             <View style={styles.timeRangeContainer}>

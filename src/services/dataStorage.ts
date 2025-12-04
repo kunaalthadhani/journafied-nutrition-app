@@ -1418,7 +1418,7 @@ export const dataStorage = {
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
         try {
-          const remoteCode = await supabaseDataService.fetchReferralCode(accountInfo, userId);
+          const remoteCode = await supabaseDataService.fetchReferralCode(accountInfo);
           if (remoteCode) return remoteCode;
         } catch (error) {
           console.error('Error fetching referral code from Supabase:', error);

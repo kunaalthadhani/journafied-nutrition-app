@@ -12,10 +12,33 @@ const ensureClient = () => {
 export const authService = {
   async sendOtp(email: string) {
     ensureClient();
+    const normalizedEmail = email.trim().toLowerCase();
+
+    // 1. Try to create the user first (if they don't exist).
+    // We don't rely on this to send any email; we just want a user record.
+    try {
+      await supabase!.auth.signUp({
+        email: normalizedEmail,
+        // Dummy password to satisfy Supabase; UX remains passwordless.
+        password: 'TEMP_PASSWORD_DO_NOT_USE_123!',
+        options: {
+          emailRedirectTo: undefined,
+        },
+      });
+    } catch (error: any) {
+      const msg = error?.message?.toString().toLowerCase() ?? '';
+      // Ignore "already registered" / "user already exists" errors.
+      if (!msg.includes('already') || !msg.includes('registered')) {
+        throw error;
+      }
+    }
+
+    // 2. Now send a CODE-ONLY OTP email.
+    // shouldCreateUser: false => always send token, no magic link flow.
     return supabase!.auth.signInWithOtp({
-      email,
+      email: normalizedEmail,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: false,
         emailRedirectTo: undefined,
       },
     });

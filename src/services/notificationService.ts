@@ -63,9 +63,16 @@ export const notificationService = {
         (Constants as any)?.manifest?.extra?.eas?.projectId ??
         (Constants as any)?.manifest2?.extra?.eas?.projectId;
 
-      const expoTokenResponse = await Notifications.getExpoPushTokenAsync(
-        projectId ? { projectId } : undefined
-      );
+      if (!projectId) {
+        console.warn(
+          '[notifications] Registration error: No "projectId" found in Expo config. ' +
+            'If you are running a bare or custom dev client, set EAS projectId or EXPO_PUBLIC_EAS_PROJECT_ID. ' +
+            'Skipping push token registration for now.'
+        );
+        return { status: 'error', error: 'Missing projectId in Expo config' };
+      }
+
+      const expoTokenResponse = await Notifications.getExpoPushTokenAsync({ projectId });
 
       const token = expoTokenResponse.data;
       if (!token) {

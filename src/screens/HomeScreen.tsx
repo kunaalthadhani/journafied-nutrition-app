@@ -285,6 +285,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenReferral = () => {
+    setMenuVisible(false);
     setShowReferral(true);
   };
 
@@ -1580,9 +1581,25 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-if (showReferral) {
-  return <ReferralScreen onBack={handleReferralBack} />;
-}
+  if (showReferral) {
+    const isLoggedIn = !!accountInfo?.email;
+    const isPremium = userPlan === 'premium';
+    const remaining = isPremium
+      ? null
+      : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries - entryCount);
+
+    return (
+      <ReferralScreen
+        isLoggedIn={isLoggedIn}
+        userEmail={accountInfo?.email || null}
+        referralCode={referralCode}
+        totalEarnedEntriesFromReferrals={totalEarnedEntries}
+        remainingEntries={remaining}
+        onBack={handleReferralBack}
+        onLoginPress={handleAccount}
+      />
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>

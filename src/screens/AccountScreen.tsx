@@ -33,6 +33,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
   const [name, setName] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
   const [emailInput, setEmailInput] = useState('');
   const [pendingOtpCode, setPendingOtpCode] = useState('');
   const [otpSent, setOtpSent] = useState(false);
@@ -41,6 +42,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const [referralCode, setReferralCode] = useState('');
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
   const [isValidatingCode, setIsValidatingCode] = useState(false);
+  const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [nameError, setNameError] = useState(false);
+  const [emailError, setEmailError] = useState(false);
+  const [termsError, setTermsError] = useState(false);
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [entryCount, setEntryCount] = useState(0);
   const [plan, setPlan] = useState<'free' | 'premium'>('free');
@@ -78,6 +83,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       }
       if (info?.email) {
         setEmailInput(info.email);
+      }
+      if (info?.phoneNumber) {
+        setPhoneInput(info.phoneNumber);
       }
 
       const [count, planValue, goalsData, weightEntries] = await Promise.all([
@@ -178,7 +186,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       ...(existing || {}),
       email,
       name: existing?.name ?? (name.trim().length ? name.trim() : undefined),
-      phoneNumber: existing?.phoneNumber,
+      phoneNumber: phoneInput.trim().length
+        ? phoneInput.trim()
+        : existing?.phoneNumber,
       supabaseUserId: session.user.id,
       hasUsedReferralCode: existing?.hasUsedReferralCode,
     };
@@ -187,6 +197,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     setAccountInfo(merged);
     if (!silent && merged.name) {
       setName(merged.name);
+    }
+    if (!silent) {
+      setPhoneInput(merged.phoneNumber || '');
     }
   };
 
@@ -313,14 +326,48 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const handleSendOtp = async () => {
     const email = emailInput.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    let hasError = false;
+
+    if (!name.trim().length) {
+      setNameError(true);
+      hasError = true;
+    } else {
+      setNameError(false);
+    }
+
     if (!emailRegex.test(email)) {
-      setAuthMessage('Enter a valid email address.');
+      setEmailError(true);
+      hasError = true;
+    } else {
+      setEmailError(false);
+    }
+
+    if (!hasAcceptedTerms) {
+      setTermsError(true);
+      hasError = true;
+    } else {
+      setTermsError(false);
+    }
+
+    if (hasError) {
       return;
     }
 
     try {
       setAuthStatus('sending');
       setAuthMessage(null);
+
+      // Save provisional account info (name, email, phone) before sending OTP
+      const existing = await dataStorage.loadAccountInfo();
+      const provisional: AccountInfo = {
+        ...(existing || {}),
+        name: name.trim(),
+        email,
+        phoneNumber: phoneInput.trim() || undefined,
+      };
+      await dataStorage.saveAccountInfo(provisional);
+      setAccountInfo(provisional);
+
       await authService.sendOtp(email);
       setOtpSent(true);
       setAuthMessage('Check your inbox for a verification code.');
@@ -357,7 +404,15 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
 
       await syncAccountInfoFromSession(session);
       await dataStorage.pushCachedDataToSupabase();
-      await referralService.getOrCreateReferralCode(email);
+
+      // Generate or fetch referral code and update UI immediately
+      const referralCodeValue = await referralService.getOrCreateReferralCode(email);
+      setReferralDetails((prev) => ({
+        code: referralCodeValue,
+        totalReferrals: prev?.totalReferrals ?? 0,
+        entriesFromReferrals: prev?.entriesFromReferrals ?? 0,
+      }));
+
       await handleReferralAfterLogin(email, name.trim() || accountInfo?.name);
 
       const rewardResult = await dataStorage.completeEntryTask('registration');
@@ -371,7 +426,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       await loadAccountData();
     } catch (error: any) {
       console.error('OTP verification failed:', error);
-      setAuthMessage(error?.message ?? 'Verification failed. Double-check the code and try again.');
+      // Always show a clear, user-friendly message when the code is invalid or expired
+      setAuthMessage('The verification code is incorrect or has expired. Please check it and try again.');
     } finally {
       setAuthStatus('idle');
     }
@@ -386,7 +442,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       setAuthMessage('Signed out. Continue in guest mode or log in again anytime.');
       const guestInfo: AccountInfo = {
         name: name.trim() || undefined,
-        phoneNumber: accountInfo?.phoneNumber,
+        phoneNumber: phoneInput.trim() || accountInfo?.phoneNumber,
       };
       await dataStorage.saveAccountInfo(guestInfo);
       setAccountInfo(guestInfo);
@@ -403,6 +459,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       contentContainerStyle={styles.summaryContent}
       showsVerticalScrollIndicator={false}
       removeClippedSubviews={false}
+      keyboardShouldPersistTaps="handled"
     >
       <View
         style={[
@@ -410,14 +467,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
         ]}
       >
-        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-          Account status
-        </Text>
-        <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
-          {authSession?.user?.email
-            ? `Synced to ${authSession.user.email}. Your data is backed up and available on other devices.`
-            : 'Guest mode — data lives on this device. Log in to back it up and sync across devices.'}
-        </Text>
         {authSession?.user ? (
           <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
             <Feather name="log-out" size={16} color={Colors.white} />
@@ -425,16 +474,95 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           </TouchableOpacity>
         ) : (
           <>
-            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                { color: theme.colors.textPrimary, marginBottom: 4 },
+              ]}
+            >
+              Sign in or create account
+            </Text>
+            <Text
+              style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 8 }]}
+            >
+              use your name email and phone to log in or set up a new TrackKcal account
+            </Text>
+
+            <Text style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}>
+              Name
+            </Text>
             <TextInput
               style={[
                 styles.input,
-                { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
+                {
+                  color: theme.colors.textPrimary,
+                  borderColor: nameError ? theme.colors.error : theme.colors.border,
+                  backgroundColor: theme.colors.input,
+                },
+              ]}
+              placeholder="Your name"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={name}
+              onChangeText={(text) => {
+                setName(text);
+                if (nameError && text.trim().length) {
+                  setNameError(false);
+                }
+              }}
+              autoComplete="name"
+              textContentType="name"
+              autoCapitalize="words"
+              autoCorrect={false}
+              editable={authStatus === 'idle'}
+            />
+
+            <Text
+              style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}
+            >
+              Phone number
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: theme.colors.textPrimary,
+                  borderColor: theme.colors.border,
+                  backgroundColor: theme.colors.input,
+                },
+              ]}
+              placeholder="Your phone number"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={phoneInput}
+              onChangeText={setPhoneInput}
+              keyboardType="phone-pad"
+              autoComplete="tel"
+              textContentType="telephoneNumber"
+              autoCapitalize="none"
+              autoCorrect={false}
+              editable={authStatus === 'idle'}
+            />
+
+            <Text style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}>
+              Email
+            </Text>
+            <TextInput
+              style={[
+                styles.input,
+                {
+                  color: theme.colors.textPrimary,
+                  borderColor: emailError ? theme.colors.error : theme.colors.border,
+                  backgroundColor: theme.colors.input,
+                },
               ]}
               placeholder="you@example.com"
               placeholderTextColor={theme.colors.textTertiary}
               value={emailInput}
-              onChangeText={setEmailInput}
+              onChangeText={(text) => {
+                setEmailInput(text);
+                if (emailError && text.trim().length) {
+                  setEmailError(false);
+                }
+              }}
               keyboardType="email-address"
               autoCapitalize="none"
               autoComplete="email"
@@ -465,8 +593,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
                 />
               </>
             )}
-            <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-              Referral code (optional)
+            <Text
+              style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}
+            >
+              Referral code
+            </Text>
+            <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+              both you and your friend get extra entries
             </Text>
             <TextInput
               style={[
@@ -487,6 +620,43 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               autoCapitalize="characters"
               editable={!isValidatingCode && authStatus === 'idle'}
             />
+            <View style={styles.termsRow}>
+              <TouchableOpacity
+                style={[
+                  styles.checkbox,
+                  { borderColor: termsError ? theme.colors.error : theme.colors.border },
+                ]}
+                onPress={() => {
+                  setHasAcceptedTerms((prev) => {
+                    const next = !prev;
+                    if (next) {
+                      setTermsError(false);
+                    }
+                    return next;
+                  });
+                }}
+                activeOpacity={0.7}
+              >
+                {hasAcceptedTerms && <View style={styles.checkboxInner} />}
+              </TouchableOpacity>
+              <Text
+                style={[styles.helperText, { color: theme.colors.textSecondary, flex: 1 }]}
+              >
+                I accept the{' '}
+                <Text
+                  style={{ color: '#10B981', textDecorationLine: 'underline' }}
+                  onPress={() => {
+                    try {
+                      Linking.openURL('https://www.trackkcal.com/termsandconditions');
+                    } catch (e) {
+                      console.warn('Failed to open terms URL', e);
+                    }
+                  }}
+                >
+                  Terms and Conditions
+                </Text>
+              </Text>
+            </View>
             {referralCodeError && (
               <Text style={[styles.errorText, { color: theme.colors.error }]}>{referralCodeError}</Text>
             )}
@@ -768,10 +938,12 @@ const styles = StyleSheet.create({
     marginTop: 16,
   },
   label: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
+    fontSize: Typography.fontSize.md,
     marginTop: 8,
     marginBottom: 6,
+  },
+  labelBold: {
+    fontWeight: Typography.fontWeight.semiBold,
   },
   input: {
     borderWidth: 1,
@@ -804,6 +976,24 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     marginTop: 4,
     marginBottom: 4,
+  },
+  termsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  checkbox: {
+    width: 18,
+    height: 18,
+    borderRadius: 4,
+    borderWidth: 1,
+    marginRight: 8,
+  },
+  checkboxInner: {
+    flex: 1,
+    margin: 2,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
   },
   loadingState: {
     flex: 1,
@@ -863,7 +1053,7 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.medium,
   },
   sectionTitle: {
-    fontSize: Typography.fontSize.md,
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.semiBold,
   },
   statsGrid: {

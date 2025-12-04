@@ -1,286 +1,249 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   TouchableOpacity,
-  Share,
+  ScrollView,
   Alert,
-  ActivityIndicator,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import * as Clipboard from 'expo-clipboard';
+import * as Linking from 'expo-linking';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
-import { dataStorage, ReferralCode, ReferralRedemption } from '../services/dataStorage';
-import { referralService } from '../services/referralService';
-import { analyticsService } from '../services/analyticsService';
-import { format } from 'date-fns';
-import * as Clipboard from 'expo-clipboard';
+import { ReferralRedemption, ReferralReward, dataStorage } from '../services/dataStorage';
 
 interface ReferralScreenProps {
+  isLoggedIn: boolean;
+  userEmail: string | null;
+  referralCode: string | null;
+  totalEarnedEntriesFromReferrals: number;
+  remainingEntries: number | null;
   onBack: () => void;
+  onLoginPress: () => void;
 }
 
-export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
+export const ReferralScreen: React.FC<ReferralScreenProps> = ({
+  isLoggedIn,
+  userEmail,
+  referralCode,
+  totalEarnedEntriesFromReferrals,
+  remainingEntries,
+  onBack,
+  onLoginPress,
+}) => {
   const theme = useTheme();
-  const [referralCode, setReferralCode] = useState<ReferralCode | null>(null);
   const [redemptions, setRedemptions] = useState<ReferralRedemption[]>([]);
-  const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
-  const [isLoading, setIsLoading] = useState(true);
+  const [rewards, setRewards] = useState<ReferralReward[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
-    loadReferralData();
-  }, []);
-
-  const loadReferralData = async () => {
-    try {
+    const loadReferralData = async () => {
+      if (!isLoggedIn || !userEmail) return;
       setIsLoading(true);
-      const accountInfo = await dataStorage.loadAccountInfo();
-      if (!accountInfo?.email) {
-        Alert.alert('Error', 'Please log in to view your referral code.');
-        onBack();
-        return;
+      try {
+        const [referrerRedemptions, refereeRedemptions, allRewards] = await Promise.all([
+          dataStorage.getReferralRedemptionsForUser(userEmail, 'referrer'),
+          dataStorage.getReferralRedemptionsForUser(userEmail, 'referee'),
+          dataStorage.getReferralRewardsForUser(userEmail),
+        ]);
+        const combinedRedemptions = [...referrerRedemptions, ...refereeRedemptions];
+        combinedRedemptions.sort(
+          (a, b) => new Date(b.redeemedAt).getTime() - new Date(a.redeemedAt).getTime()
+        );
+        setRedemptions(combinedRedemptions);
+        setRewards(allRewards);
+      } catch (error) {
+        console.error('Error loading referral history:', error);
+      } finally {
+        setIsLoading(false);
       }
+    };
 
-      // Load user's referral code
-      const code = await dataStorage.getReferralCode(accountInfo.email);
-      setReferralCode(code);
+    loadReferralData();
+  }, [isLoggedIn, userEmail]);
 
-      // Load user's redemptions (as referrer)
-      const userRedemptions = await dataStorage.getReferralRedemptionsForUser(
-        accountInfo.email,
-        'referrer'
-      );
-      setRedemptions(userRedemptions);
+  const rows = useMemo(() => {
+    if (!redemptions.length) return [];
+    return redemptions.map((r) => {
+      const earnedForThis =
+        rewards
+          .filter((rw) => rw.relatedRedemptionId === r.id)
+          .reduce((sum, rw) => sum + (rw.entriesAwarded || 0), 0) || 0;
+      return {
+        id: r.id,
+        friendName: r.refereeName || r.refereeEmail || 'friend',
+        entries: earnedForThis,
+        status: r.status,
+      };
+    });
+  }, [redemptions, rewards]);
 
-      // Load total earned entries
-      const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-      setTotalEarnedEntries(earned);
-    } catch (error) {
-      console.error('Error loading referral data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
-  const handleShareCode = async () => {
+  const handleCopyCode = () => {
     if (!referralCode) return;
-
-    try {
-      const accountInfo = await dataStorage.loadAccountInfo();
-      const shareMessage = `Join me on TrackKcal! Use my referral code ${referralCode.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
-
-      await Share.share({
-        message: shareMessage,
-        title: 'Join TrackKcal with my referral code',
-      });
-
-      // Track share event
-      if (accountInfo?.email) {
-        await analyticsService.trackReferralCodeShared(accountInfo.email, 'share');
-      }
-    } catch (error) {
-      console.error('Error sharing:', error);
-    }
+    Clipboard.setStringAsync(referralCode)
+      .then(() => {
+        Alert.alert('Copied', 'Referral code copied to clipboard');
+      })
+      .catch(() => {});
   };
 
-  const handleCopyCode = async () => {
+  const handleShareWhatsApp = () => {
     if (!referralCode) return;
-
-    try {
-      await Clipboard.setStringAsync(referralCode.code);
-      Alert.alert('Copied!', `Referral code ${referralCode.code} copied to clipboard.`);
-
-      const accountInfo = await dataStorage.loadAccountInfo();
-      if (accountInfo?.email) {
-        await analyticsService.trackReferralCodeShared(accountInfo.email, 'copy');
-      }
-    } catch (error) {
-      console.error('Error copying to clipboard:', error);
-      Alert.alert('Error', 'Failed to copy code to clipboard.');
-    }
+    const message = `Join me on TrackKcal use my referral code ${referralCode} to get free extra entries`;
+    const url = `whatsapp://send?text=${encodeURIComponent(message)}`;
+    Linking.openURL(url).catch(() => {
+      Alert.alert('WhatsApp not available', 'Install WhatsApp to share your code');
+    });
   };
-
-  const successfulReferrals = redemptions.filter((r) => r.status === 'completed');
-  const pendingReferrals = redemptions.filter((r) => r.status === 'pending');
-
-  if (isLoading) {
-    return (
-      <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#10B981" />
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      {/* Header */}
+    <SafeAreaView
+      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      edges={['top', 'bottom']}
+    >
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
           <Feather name="arrow-left" size={24} color="#10B981" />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Invite Friends
-        </Text>
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Referral</Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-      >
-        {/* Referral Code Card */}
-        <View
-          style={[
-            styles.codeCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
-            Your Referral Code
+      {!isLoggedIn || !userEmail ? (
+        <View style={styles.centerContent}>
+          <Text style={[styles.loginTitle, { color: theme.colors.textPrimary }]}>
+            You need to be logged in to view your referral code
           </Text>
-          <View style={styles.codeContainer}>
-            <Text style={[styles.codeText, { color: theme.colors.textPrimary }]}>
-              {referralCode?.code || 'Loading...'}
-            </Text>
-            <TouchableOpacity
-              style={[styles.copyButton, { backgroundColor: theme.colors.input }]}
-              onPress={handleCopyCode}
-            >
-              <Feather name="copy" size={18} color="#10B981" />
-              <Text style={[styles.copyButtonText, { color: '#10B981' }]}>Copy</Text>
-            </TouchableOpacity>
-          </View>
+          <Text style={[styles.loginSubtitle, { color: theme.colors.textSecondary }]}>
+            log in to get your code and free entries when friends join
+          </Text>
           <TouchableOpacity
-            style={[styles.shareButton, { backgroundColor: '#10B981' }]}
-            onPress={handleShareCode}
+            style={styles.primaryButton}
+            onPress={onLoginPress}
+            activeOpacity={0.85}
           >
-            <Feather name="share-2" size={18} color={Colors.white} />
-            <Text style={styles.shareButtonText}>Share Referral Code</Text>
+            <Text style={styles.primaryButtonText}>Log in</Text>
           </TouchableOpacity>
         </View>
-
-        {/* Stats Card */}
-        <View
-          style={[
-            styles.statsCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-          ]}
+      ) : (
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
         >
-          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
-            Your Stats
-          </Text>
-          <View style={styles.statsGrid}>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
-                {successfulReferrals.length}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-                Friends Joined
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
-                +{totalEarnedEntries}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-                Entries Earned
-              </Text>
-            </View>
-            <View style={styles.statItem}>
-              <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
-                {pendingReferrals.length}
-              </Text>
-              <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-                Pending
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Instructions */}
-        <View
-          style={[
-            styles.instructionsCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-          ]}
-        >
-          <Feather name="info" size={20} color="#10B981" />
-          <Text style={[styles.instructionsText, { color: theme.colors.textSecondary }]}>
-            Share your code with friends. When they sign up and log 5 meals, you both get +10 free
-            entries!
-          </Text>
-        </View>
-
-        {/* Referrals List */}
-        {redemptions.length > 0 && (
           <View
             style={[
-              styles.referralsCard,
-              { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+              styles.card,
+              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
-              Your Referrals
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              Your referral code
             </Text>
-            {redemptions.map((redemption) => (
-              <View
-                key={redemption.id}
-                style={[styles.referralItem, { borderBottomColor: theme.colors.border }]}
+            <Text style={[styles.codeText, { color: theme.colors.textPrimary }]}>
+              {referralCode || 'loading'}
+            </Text>
+            <Text style={[styles.helper, { color: theme.colors.textSecondary }]}>
+              share this with friends each friend who logs meals unlocks free entries for both of you
+            </Text>
+            <View style={styles.actionsRow}>
+              <TouchableOpacity
+                style={[styles.actionButton, { backgroundColor: '#25D366' }]}
+                onPress={handleShareWhatsApp}
+                activeOpacity={0.85}
               >
-                <View style={styles.referralItemHeader}>
-                  <Text style={[styles.referralName, { color: theme.colors.textPrimary }]}>
-                    {redemption.refereeName}
-                  </Text>
-                  <View
-                    style={[
-                      styles.statusBadge,
-                      {
-                        backgroundColor:
-                          redemption.status === 'completed'
-                            ? '#22C55E'
-                            : redemption.status === 'pending'
-                            ? '#F59E0B'
-                            : theme.colors.input,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.statusText,
-                        {
-                          color:
-                            redemption.status === 'completed'
-                              ? Colors.white
-                              : theme.colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      {redemption.status === 'completed'
-                        ? 'Completed'
-                        : redemption.status === 'pending'
-                        ? `${redemption.mealsLogged}/5 meals`
-                        : 'Failed'}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[styles.referralDate, { color: theme.colors.textTertiary }]}>
-                  Joined {format(new Date(redemption.redeemedAt), 'MMM d, yyyy')}
+                <Feather name="message-circle" size={16} color={Colors.white} />
+                <Text style={styles.actionButtonText}>Share on WhatsApp</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.iconButton, { backgroundColor: theme.colors.input }]}
+                onPress={handleCopyCode}
+              >
+                <Feather name="copy" size={16} color="#10B981" />
+              </TouchableOpacity>
+            </View>
+          </View>
+
+          <View
+            style={[
+              styles.card,
+              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              Free entries
+            </Text>
+            <View style={styles.freeRow}>
+              <View>
+                <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
+                  From referrals
+                </Text>
+                <Text style={[styles.freeValue, { color: '#10B981' }]}>
+                  +{totalEarnedEntriesFromReferrals}
                 </Text>
               </View>
-            ))}
+              {remainingEntries !== null && (
+                <View style={styles.freeRight}>
+                  <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
+                    Remaining entries
+                  </Text>
+                  <Text style={[styles.freeValue, { color: theme.colors.textPrimary }]}>
+                    {remainingEntries}
+                  </Text>
+                </View>
+              )}
+            </View>
           </View>
-        )}
 
-        <View style={styles.bottomSpacer} />
-      </ScrollView>
+          <View
+            style={[
+              styles.card,
+              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+            ]}
+          >
+            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+              Referral history
+            </Text>
+            {isLoading ? (
+              <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+                loading history
+              </Text>
+            ) : rows.length === 0 ? (
+              <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+                no referrals yet share your code to start earning entries
+              </Text>
+            ) : (
+              <View style={styles.table}>
+                <View style={styles.tableHeader}>
+                  <Text style={[styles.tableHeaderText, { color: theme.colors.textSecondary }]}>
+                    Friend
+                  </Text>
+                  <Text style={[styles.tableHeaderText, { color: theme.colors.textSecondary }]}>
+                    Entries
+                  </Text>
+                </View>
+                {rows.map((row) => (
+                  <View key={row.id} style={styles.tableRow}>
+                    <Text style={[styles.tableCellText, { color: theme.colors.textPrimary }]}>
+                      {row.friendName}
+                    </Text>
+                    <Text style={[styles.tableCellText, { color: '#10B981' }]}>
+                      {row.entries > 0 ? `+${row.entries}` : '+0'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
+          </View>
+
+          <View style={styles.bottomSpacer} />
+        </ScrollView>
+      )}
     </SafeAreaView>
   );
 };
@@ -288,11 +251,6 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({ onBack }) => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   header: {
     flexDirection: 'row',
@@ -306,143 +264,147 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    fontSize: Typography.fontSize.xl,
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.semiBold,
   },
   headerRight: {
-    width: 40,
+    width: 32,
   },
   content: {
     flex: 1,
-    paddingHorizontal: 16,
   },
-  codeCard: {
+  contentContainer: {
+    padding: 16,
+    gap: 16,
+  },
+  card: {
     borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 16,
-    alignItems: 'center',
+    borderRadius: 16,
+    padding: 16,
   },
   sectionTitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  codeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 16,
-    width: '100%',
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: 8,
   },
   codeText: {
-    fontSize: 32,
+    fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.bold,
     letterSpacing: 4,
-    flex: 1,
-    textAlign: 'center',
-    fontFamily: 'monospace',
+    marginBottom: 8,
   },
-  copyButton: {
+  helper: {
+    fontSize: Typography.fontSize.sm,
+    marginBottom: 12,
+  },
+  actionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginLeft: 12,
+    justifyContent: 'space-between',
+    gap: 8,
   },
-  copyButtonText: {
-    marginLeft: 6,
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  shareButton: {
+  actionButton: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: 14,
-    paddingHorizontal: 24,
-    borderRadius: 10,
-    width: '100%',
+    gap: 6,
+    paddingVertical: 10,
+    paddingHorizontal: 14,
+    borderRadius: 999,
   },
-  shareButtonText: {
+  actionButtonText: {
     color: Colors.white,
-    fontSize: Typography.fontSize.md,
+    fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
-    marginLeft: 8,
   },
-  statsCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 16,
-  },
-  statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  statItem: {
+  iconButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 999,
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  statValue: {
-    fontSize: 28,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: 4,
-  },
-  statLabel: {
-    fontSize: Typography.fontSize.sm,
-    textAlign: 'center',
-  },
-  instructionsCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 16,
-    marginTop: 16,
+  freeRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-  },
-  instructionsText: {
-    flex: 1,
-    marginLeft: 12,
-    fontSize: Typography.fontSize.sm,
-    lineHeight: 20,
-  },
-  referralsCard: {
-    borderWidth: 1,
-    borderRadius: 12,
-    padding: 20,
-    marginTop: 16,
-  },
-  referralItem: {
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  referralItemHeader: {
-    flexDirection: 'row',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
+    marginTop: 4,
   },
-  referralName: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
+  freeLabel: {
+    fontSize: Typography.fontSize.sm,
   },
-  statusBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
+  freeValue: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.bold,
+    marginTop: 4,
+  },
+  freeRight: {
+    alignItems: 'flex-end',
+  },
+  table: {
+    marginTop: 8,
     borderRadius: 12,
+    overflow: 'hidden',
+    borderWidth: 1,
+    borderColor: 'rgba(148, 163, 184, 0.4)',
   },
-  statusText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.medium,
+  tableHeader: {
+    flexDirection: 'row',
+    backgroundColor: 'rgba(15, 23, 42, 0.04)',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
   },
-  referralDate: {
+  tableHeaderText: {
+    flex: 1,
     fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.semiBold,
+    textTransform: 'uppercase',
+    letterSpacing: 0.6,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(148, 163, 184, 0.2)',
+  },
+  tableCellText: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
   },
   bottomSpacer: {
     height: 32,
   },
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  loginTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+    textAlign: 'center',
+    marginBottom: 8,
+  },
+  loginSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  primaryButton: {
+    backgroundColor: '#10B981',
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+  },
+  primaryButtonText: {
+    color: Colors.white,
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
 });
+
+export default ReferralScreen;
 
 

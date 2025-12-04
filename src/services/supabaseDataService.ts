@@ -909,13 +909,16 @@ export const supabaseDataService = {
     }
   },
 
-  async fetchReferralCode(accountInfo: AccountInfo | null, userId: string): Promise<ReferralCode | null> {
-    if (!isSupabaseConfigured() || !supabase) return null;
+  async fetchReferralCode(accountInfo: AccountInfo | null): Promise<ReferralCode | null> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo) return null;
+
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return null;
 
     const { data, error } = await supabase
       .from('referral_codes')
       .select('*')
-      .eq('user_id', userId)
+      .eq('user_id', user.id)
       .maybeSingle();
 
     if (error && error.code !== 'PGRST116') {
