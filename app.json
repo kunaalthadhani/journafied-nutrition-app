@@ -17,7 +17,10 @@
       "supportsTablet": true,
       "infoPlist": {
         "NSCameraUsageDescription": "TrackKcal needs camera access so you can capture food photos for logging.",
-        "NSPhotoLibraryUsageDescription": "TrackKcal needs photo library access so you can upload food images to analyze."
+        "NSPhotoLibraryUsageDescription": "TrackKcal needs photo library access so you can upload food images to analyze.",
+        "NSMicrophoneUsageDescription": "TrackKcal needs microphone access for voice logging of meals.",
+        "NSHealthShareUsageDescription": "TrackKcal uses Health data to improve calorie tracking.",
+        "NSHealthUpdateUsageDescription": "TrackKcal writes food data to Health app."
       }
     },
     "android": {
@@ -32,7 +35,9 @@
       "permissions": [
         "CAMERA",
         "READ_MEDIA_IMAGES",
-        "READ_EXTERNAL_STORAGE"
+        "READ_EXTERNAL_STORAGE",
+        "RECORD_AUDIO",
+        "ACTIVITY_RECOGNITION"
       ]
     },
     "web": {

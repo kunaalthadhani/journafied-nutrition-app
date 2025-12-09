@@ -63,13 +63,13 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const insets = useSafeAreaInsets();
   const [inputHeight, setInputHeight] = React.useState(0);
   const inputRef = React.useRef<TextInput>(null);
-  
+
   // FIXED: Memoize calculated values to prevent recalculation loops
   const calculatedInputHeight = React.useMemo(
     () => Math.min(150, Math.max(28, inputHeight)),
     [inputHeight]
   );
-  
+
   // FIXED: Always use local text state - transcribedText only syncs when text is empty
   // This ensures user typing is always shown immediately
   const currentText = text;
@@ -77,17 +77,17 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const shouldShowChips = !hasText && quickPrompts.length > 0;
   // FIXED: Use native placeholder on Android to prevent glitching
   const showCustomPlaceholder = Platform.OS === 'ios' && !isFocused && !hasText;
-  
+
   const singleLineThreshold = 40;
   const isMultiLine = calculatedInputHeight > singleLineThreshold;
-  
+
   // FIXED: Use completely fixed values for single-line to prevent any recalculation
   const baseSingleLineHeight = 28; // Fixed base height for single line
   const fixedSingleLinePadding = Math.max(0, (baseSingleLineHeight - Typography.fontSize.md * 1.2) / 2);
-  
+
   // FIXED: Calculate padding based on actual state, but use fixed value for placeholder
   const singleLinePadding = isMultiLine ? 0 : fixedSingleLinePadding;
-  
+
   // FIXED: Placeholder uses completely fixed values that never change
   const placeholderTop = fixedSingleLinePadding;
   const placeholderLineHeight = baseSingleLineHeight - fixedSingleLinePadding * 2;
@@ -119,18 +119,18 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
       }
     }
   };
-  
+
   const handleTextChange = (newText: string) => {
     setText(newText);
     setIsUserTyping(true); // Mark that user is actively typing
-    
+
     // FIXED: Debounce height calculation to prevent rapid updates
     if (heightUpdateTimeoutRef.current) {
       clearTimeout(heightUpdateTimeoutRef.current);
     }
-    
+
     const newHeight = newText.length === 0 ? 0 : estimateHeightForText(newText);
-    
+
     // FIXED: On Android, don't update height when empty to prevent style recalculation glitches
     if (newText.length === 0) {
       // Only update height on iOS when empty, Android keeps stable height
@@ -150,7 +150,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
         heightUpdateTimeoutRef.current = null;
       }, 150);
     }
-    
+
     if (newText.length > 0) {
       onUserTyping?.();
     }
@@ -264,13 +264,13 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </View>
         )}
         <View style={[styles.inputContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
-          <TouchableOpacity 
+          <TouchableOpacity
             onPress={onPlusPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             disabled={isLoading || isRecording || isTranscribing}
             style={styles.plusIconButton}
           >
-            <Plus color="#10B981" size={20} strokeWidth={2.6} />
+            <Plus color={theme.colors.textPrimary} size={20} strokeWidth={2.4} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -284,21 +284,11 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             }}
           >
             {showCustomPlaceholder && (
-              <Text
-                pointerEvents="none"
-                style={[
-                  styles.customPlaceholder,
-                  {
-                    color: theme.colors.textTertiary,
-                    // FIXED: Use completely fixed values that never change
-                    top: placeholderTop,
-                    bottom: placeholderTop,
-                    lineHeight: placeholderLineHeight,
-                  },
-                ]}
-              >
-                {placeholder}
-              </Text>
+              <View style={styles.placeholderContainer} pointerEvents="none">
+                <Text style={[styles.customPlaceholder, { color: theme.colors.textTertiary }]}>
+                  {placeholder}
+                </Text>
+              </View>
             )}
             <TextInput
               ref={inputRef}
@@ -307,21 +297,21 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 {
                   color: theme.colors.textPrimary,
                   // FIXED: Use fixed height on Android when empty to prevent placeholder glitching
-                  height: Platform.OS === 'android' && !hasText 
+                  height: Platform.OS === 'android' && !hasText
                     ? baseSingleLineHeight  // Fixed height when empty on Android
                     : (calculatedInputHeight || baseSingleLineHeight),
-                  lineHeight: !isMultiLine 
+                  lineHeight: !isMultiLine
                     ? (Platform.OS === 'android' && !hasText
-                        ? baseSingleLineHeight - fixedSingleLinePadding * 2  // Fixed lineHeight on Android when empty
-                        : calculatedInputHeight - singleLinePadding * 2)
+                      ? baseSingleLineHeight - fixedSingleLinePadding * 2  // Fixed lineHeight on Android when empty
+                      : calculatedInputHeight - singleLinePadding * 2)
                     : undefined,
                   textAlignVertical: isMultiLine ? 'top' : 'center',
                   // FIXED: Use fixed padding on Android when empty to prevent glitching
-                  paddingTop: Platform.OS === 'android' && !hasText 
-                    ? fixedSingleLinePadding 
+                  paddingTop: Platform.OS === 'android' && !hasText
+                    ? fixedSingleLinePadding
                     : singleLinePadding,
-                  paddingBottom: Platform.OS === 'android' && !hasText 
-                    ? fixedSingleLinePadding 
+                  paddingBottom: Platform.OS === 'android' && !hasText
+                    ? fixedSingleLinePadding
                     : singleLinePadding,
                 },
                 (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
@@ -389,7 +379,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           <View style={styles.rightControls}>
             {isRecording ? (
               // Stop recording button
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.circleButton,
                   { backgroundColor: theme.colors.error }
@@ -398,25 +388,25 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 disabled={isLoading || isTranscribing}
               >
-              <StopCircle size={18} color={Colors.white} strokeWidth={2.6} />
+                <StopCircle size={18} color={theme.colors.background} strokeWidth={2.4} />
               </TouchableOpacity>
             ) : (
               // Send or mic button
-              <TouchableOpacity 
+              <TouchableOpacity
                 style={[
                   styles.circleButton,
-                  { backgroundColor: hasText ? '#10B981' : theme.colors.input }
+                  { backgroundColor: hasText ? theme.colors.primary : theme.colors.input }
                 ]}
                 onPress={hasText ? handleSubmit : onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 disabled={isLoading || isTranscribing}
               >
                 {isTranscribing ? (
-                  <Loader size={18} color={hasText ? Colors.white : '#10B981'} strokeWidth={2.6} />
+                  <Loader size={18} color={hasText ? theme.colors.background : theme.colors.textSecondary} strokeWidth={2.4} />
                 ) : hasText ? (
-                  <Send size={18} color={Colors.white} strokeWidth={2.6} />
+                  <Send size={18} color={theme.colors.background} strokeWidth={2.4} />
                 ) : (
-                  <Mic size={18} color="#10B981" strokeWidth={2.6} />
+                  <Mic size={18} color={theme.colors.textPrimary} strokeWidth={2.4} />
                 )}
               </TouchableOpacity>
             )}
@@ -447,9 +437,9 @@ const styles = StyleSheet.create({
   quickPromptChip: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8, // Shadcn style: slightly rounded
     borderWidth: 1,
     marginRight: Spacing.sm,
   },
@@ -464,23 +454,20 @@ const styles = StyleSheet.create({
     lineHeight: Typography.fontSize.sm * 1.4,
   },
   quickPromptRemove: {
-    padding: 4,
+    padding: 2,
+    opacity: 0.5,
   },
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 30,
-    paddingHorizontal: 12,
+    backgroundColor: Colors.white, // Always white clean background
+    borderRadius: 12, // Standard radius
+    paddingHorizontal: 8,
     paddingVertical: 6,
-    minHeight: 56,
+    minHeight: 52,
     borderWidth: 1,
-    borderColor: Colors.lightBorder,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 6,
-    elevation: 3,
+    borderColor: Colors.zinc200, // Explicit zinc for predictability
+    // No shadow for shadcn look, commonly just border
   },
   leftControls: {
     flexDirection: 'row',
@@ -498,45 +485,44 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.primaryText,
-    paddingVertical: 0, // Remove default padding
+    color: Colors.zinc900,
+    paddingVertical: 0,
     paddingHorizontal: Spacing.sm,
   },
   inputFieldWrapper: {
     flex: 1,
     justifyContent: 'center',
     position: 'relative',
-    // FIXED: Allow touches to pass through to TextInput on Android
     ...(Platform.OS === 'android' && { pointerEvents: 'box-none' }),
   },
-  customPlaceholder: {
+  placeholderContainer: {
     position: 'absolute',
-    left: Spacing.sm,
-    right: Spacing.sm,
-    textAlign: 'center',
+    top: 0,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    justifyContent: 'center',
+    paddingLeft: Spacing.sm, // Align with input text
+  },
+  customPlaceholder: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    alignItems: 'center',
-    justifyContent: 'center',
-    // Prevent glitching by using stable positioning
-    marginTop: 0,
-    marginBottom: 0,
   },
   textInputDisabled: {
-    color: Colors.tertiaryText,
+    color: Colors.zinc400,
     opacity: 0.6,
   },
   recordingButton: {
-    backgroundColor: Colors.error, // Red background when recording
+    backgroundColor: Colors.error,
   },
   circleButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 8, // Rounded square for buttons often in shadcn, or full circle. Let's stick to circle for action buttons.
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 1,
-    borderColor: Colors.lightBorder,
+    // borderWidth: 1,
+    // borderColor: Colors.lightBorder,
   },
   micButton: {
     padding: Spacing.xs,
@@ -549,14 +535,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   sendBubble: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
   plusIconButton: {
-    padding: Spacing.xs,
-    marginRight: Spacing.xs,
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 4,
   },
 });

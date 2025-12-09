@@ -26,10 +26,10 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
       {/* Header with icon and title */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Feather 
-            name="pie-chart" 
-            size={18} 
-            color="#9C27B0" 
+          <Feather
+            name="pie-chart"
+            size={18}
+            color={Colors.black}
           />
         </View>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Calories</Text>
@@ -38,13 +38,13 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
       {/* Three-column layout */}
       <View style={styles.statsContainer}>
         <View style={styles.statColumn}>
-          <NumberTicker 
-            value={data.carbs.current} 
+          <NumberTicker
+            value={data.carbs.current}
             duration={800}
-            style={[
+            style={StyleSheet.flatten([
               styles.fractionText,
               { color: theme.colors.textPrimary },
-            ]}
+            ])}
           />
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
             Food
@@ -52,8 +52,8 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
         </View>
 
         <View style={[styles.statColumn, styles.middleColumn]}>
-          <NumberTicker 
-            value={data.protein.current} 
+          <NumberTicker
+            value={data.protein.current}
             duration={800}
             style={[styles.fractionText, { color: theme.colors.textPrimary }]}
           />
@@ -63,8 +63,8 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
         </View>
 
         <View style={styles.statColumn}>
-          <NumberTicker 
-            value={data.fat.current} 
+          <NumberTicker
+            value={data.fat.current}
             duration={800}
             style={[styles.fractionText, { color: theme.colors.textPrimary }]}
           />

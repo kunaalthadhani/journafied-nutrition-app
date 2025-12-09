@@ -1,30 +1,49 @@
 export const Colors = {
-  // Base / foreground (shadcn-inspired: slate + neutral)
+  // Zinc Palette (Shadcn Neutral)
   white: '#FFFFFF',
-  background: '#F8FAFC', // slate-50
+  black: '#000000',
+
+  // Light Mode Primitives
+  zinc50: '#FAFAFA',
+  zinc100: '#F4F4F5',
+  zinc200: '#E4E4E7',
+  zinc300: '#D4D4D8',
+  zinc400: '#A1A1AA',
+  zinc500: '#71717A',
+  zinc600: '#52525B',
+  zinc700: '#3F3F46',
+  zinc800: '#27272A',
+  zinc900: '#18181B',
+  zinc950: '#09090B',
+
+  // Semantic mappings (Light Mode approx)
+  background: '#FFFFFF',      // cleaner white background
   cardBackground: '#FFFFFF',
-  inputBackground: '#F1F5F9', // slate-100
 
-  // Border / ring
-  lightBorder: '#E5E7EB', // gray-200
-  border: '#E5E7EB',
-  ring: '#94A3B8', // slate-400
+  // Inputs usually fairly light in shadcn
+  inputBackground: '#FFFFFF',
 
-  // Text colors
-  primaryText: '#0F172A', // slate-900
-  secondaryText: '#475569', // slate-600
-  tertiaryText: '#94A3B8', // slate-400
+  // Borders
+  border: '#E4E4E7', // zinc-200
+  lightBorder: '#F4F4F5', // zinc-100
+  ring: '#18181B', // zinc-900 (primary ring)
 
-  // Accents (keep green cue; use slightly deeper tone for borders)
-  activeGreen: '#ECFDF5', // emerald-50
-  activeGreenBorder: '#10B981', // emerald-500
+  // Text
+  primaryText: '#09090B', // zinc-950
+  secondaryText: '#71717A', // zinc-500
+  tertiaryText: '#A1A1AA', // zinc-400
 
-  // Shadow colors (subtle)
-  shadow: 'rgba(2, 6, 23, 0.08)', // slate-950 with low opacity
+  // Action / Accents (Minimalist Black/White usually, but we keep a "Success" green)
+  primary: '#18181B', // zinc-900
+  primaryForeground: '#FAFAFA', // zinc-50
 
-  // Status colors (align to Tailwind palette)
-  success: '#10B981', // emerald-500
-  warning: '#F59E0B', // amber-500
-  error: '#EF4444', // red-500
-  info: '#3B82F6', // blue-500
+  // Functional Colors
+  success: '#10B981', // emerald-500 (kept for health context)
+  successBg: '#ECFDF5', // emerald-50
+  warning: '#F59E0B',
+  error: '#EF4444',
+  info: '#3B82F6',
+
+  // Shadows
+  shadow: 'rgba(0, 0, 0, 0.04)', // Very subtle
 };

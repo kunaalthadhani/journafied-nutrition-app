@@ -14,7 +14,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
   const theme = useTheme();
 
   const handleLink = (url: string) => {
-    Linking.openURL(url).catch(() => {});
+    Linking.openURL(url).catch(() => { });
   };
 
   return (
@@ -22,14 +22,14 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About</Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
@@ -40,15 +40,15 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
           <Text style={[styles.description, { color: theme.colors.textSecondary }]}>TrackKcal helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
         </View>
 
-        <View style={[styles.section, { borderColor: theme.colors.border }]}> 
+        <View style={[styles.section, { borderColor: theme.colors.border }]}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Links</Text>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/privacy')}>
-            <Feather name="shield" size={18} color="#10B981" />
+            <Feather name="shield" size={18} color={theme.colors.textPrimary} />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Privacy Policy</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/terms')}>
-            <Feather name="file-text" size={18} color="#10B981" />
+            <Feather name="file-text" size={18} color={theme.colors.textPrimary} />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Terms of Service</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
           </TouchableOpacity>

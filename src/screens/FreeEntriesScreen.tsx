@@ -32,7 +32,7 @@ export const FreeEntriesScreen: React.FC<FreeEntriesScreenProps> = ({ tasks, onB
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Get Free Entries</Text>
         <View style={styles.headerRight} />
@@ -74,18 +74,18 @@ export const FreeEntriesScreen: React.FC<FreeEntriesScreenProps> = ({ tasks, onB
             <View
               style={[
                 styles.taskStatus,
-                { backgroundColor: task.completed ? '#DCFCE7' : '#E0F2FE' },
+                { backgroundColor: task.completed ? theme.colors.primary : 'transparent', borderWidth: task.completed ? 0 : 1, borderColor: theme.colors.border },
               ]}
             >
               {task.completed ? (
                 <>
-                  <Feather name="check" size={14} color="#15803D" />
-                  <Text style={[styles.taskStatusText, { color: '#15803D' }]}>Done</Text>
+                  <Feather name="check" size={14} color={theme.colors.primaryForeground} />
+                  <Text style={[styles.taskStatusText, { color: theme.colors.primaryForeground }]}>Done</Text>
                 </>
               ) : (
                 <>
-                  <Text style={[styles.taskStatusText, { color: '#0369A1' }]}>+5</Text>
-                  <Feather name="chevron-right" size={16} color="#0369A1" />
+                  <Text style={[styles.taskStatusText, { color: theme.colors.primary }]}>+5</Text>
+                  <Feather name="chevron-right" size={16} color={theme.colors.primary} />
                 </>
               )}
             </View>

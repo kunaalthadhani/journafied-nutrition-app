@@ -1,16 +1,20 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Menu, ChevronDown, TrendingUp, BarChart3 } from 'lucide-react-native';
-import { Colors } from '../constants/colors';
+
+import { Menu, TrendingUp, BarChart3, Calendar } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
+
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 interface TopNavigationBarProps {
   onMenuPress?: () => void;
   onCalendarPress?: () => void;
   onWeightTrackerPress?: () => void;
   onNutritionAnalysisPress?: () => void;
+  userName?: string;
+  // selectedDate is no longer needed for display in header, but kept in props if needed elsewhere or legacy, 
+  // though we will remove it from display logic.
   selectedDate?: string;
 }
 
@@ -19,93 +23,93 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onCalendarPress,
   onWeightTrackerPress,
   onNutritionAnalysisPress,
-  selectedDate = "October 28, 2025"
+  userName = "Guest"
 }) => {
   const theme = useTheme();
-  return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.card }]} edges={['left', 'right']}>
-      <View style={[styles.container, { backgroundColor: theme.colors.card, borderBottomColor: theme.colors.border }] }>
-        {/* Left: Hamburger Menu */}
-        <TouchableOpacity 
-          style={styles.iconContainer} 
-          onPress={onMenuPress}
-          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-        >
-          <Menu color="#10B981" size={24} strokeWidth={2.6} />
-        </TouchableOpacity>
+  const insets = useSafeAreaInsets();
 
-        {/* Center: Date Picker */}
-        <TouchableOpacity 
-          style={styles.dateContainer}
-          onPress={onCalendarPress}
-          activeOpacity={0.7}
-        >
-          <Text style={[styles.dateText, { color: theme.colors.textPrimary }]}>
-            {selectedDate}
+  return (
+    <View style={[styles.safeArea, { backgroundColor: theme.colors.background, paddingTop: insets.top }]}>
+      <View style={[styles.container, { borderBottomColor: theme.colors.border }]}>
+        {/* Left Section: Menu + Greeting */}
+        <View style={styles.leftSection}>
+          <TouchableOpacity
+            style={styles.iconContainer}
+            onPress={onMenuPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Menu color={theme.colors.textPrimary} size={20} strokeWidth={2} />
+          </TouchableOpacity>
+
+          <Text style={[styles.greetingText, { color: theme.colors.textPrimary }]}>
+            Hi {userName},
           </Text>
-          <ChevronDown color="#10B981" size={16} strokeWidth={2.6} style={styles.chevronIcon} />
-        </TouchableOpacity>
+        </View>
 
         {/* Right: Icons */}
         <View style={styles.rightIconsContainer}>
-          <TouchableOpacity 
-            style={styles.iconContainer} 
+          {/* Calendar Icon */}
+          <TouchableOpacity
+            style={styles.iconContainer}
+            onPress={onCalendarPress}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Calendar color={theme.colors.textPrimary} size={20} strokeWidth={2} />
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.iconContainer}
             onPress={onWeightTrackerPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <TrendingUp color="#10B981" size={22} strokeWidth={2.6} />
+            <TrendingUp color={theme.colors.textPrimary} size={20} strokeWidth={2} />
           </TouchableOpacity>
-          <TouchableOpacity 
-            style={styles.iconContainer} 
+
+          <TouchableOpacity
+            style={styles.iconContainer}
             onPress={onNutritionAnalysisPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <BarChart3 color="#10B981" size={22} strokeWidth={2.6} />
+            <BarChart3 color={theme.colors.textPrimary} size={20} strokeWidth={2} />
           </TouchableOpacity>
         </View>
       </View>
-    </SafeAreaView>
+    </View>
   );
 };
 
 const styles = StyleSheet.create({
   safeArea: {
-    backgroundColor: Colors.white,
+    // Background set via props
   },
   container: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    height: 60,
-    backgroundColor: Colors.cardBackground,
+    height: 52,
+    backgroundColor: 'transparent',
     borderBottomWidth: 1,
-    borderBottomColor: Colors.lightBorder,
+  },
+  leftSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
   },
   iconContainer: {
-    width: 44,
-    height: 44,
+    width: 40,
+    height: 40,
     alignItems: 'center',
     justifyContent: 'center',
   },
   rightIconsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 0,
   },
-  dateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-  },
-  dateText: {
+  greetingText: {
     fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-    color: Colors.primaryText,
-    marginRight: 6,
-  },
-  chevronIcon: {
-    marginTop: 1,
+    fontWeight: Typography.fontWeight.semiBold,
+    // No extra margin needed if we want it tight next to the icon container space
+    marginLeft: 0,
   },
 });

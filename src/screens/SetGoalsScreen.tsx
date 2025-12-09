@@ -9,6 +9,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -43,6 +44,12 @@ interface GoalData {
   trackingGoal?: string;
   activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }
+
+const MACRO_COLORS = {
+  protein: '#3b82f6', // Blue 500
+  carbs: '#f59e0b',   // Amber 500
+  fat: '#ec4899',     // Pink 500
+};
 
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
@@ -181,207 +188,177 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+        <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]} pointerEvents="none">
-          Set Goals
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          Nutrition Goals
         </Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         style={styles.content}
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
       >
+        {/* Custom Plan Hero Card */}
+        {/* Custom Plan Button (Simplified) */}
         <TouchableOpacity
-          style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
           onPress={handleStartCustomPlan}
-          activeOpacity={0.85}
+          activeOpacity={0.7}
+          style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
         >
-          <View>
-            <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
-              Create Custom Plan
-            </Text>
-            <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
-              Answer a few questions and we'll set everything for you.
-            </Text>
-          </View>
-        </TouchableOpacity>
-        {/* Daily Calories */}
-        <View style={styles.caloriesSection}>
-          <View 
-            style={[styles.calorieBox, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-          >
-            <View style={styles.calorieContent}>
-              <Text style={[styles.calorieNumber, { color: theme.colors.textPrimary }]}>
-                {calories === 0 ? 'Calculated target' : calories}
+          <View style={styles.customPlanContent}>
+            <View style={[styles.iconBox, { backgroundColor: theme.colors.secondaryBg }]}>
+              <Feather name="zap" size={20} color={theme.colors.textPrimary} />
+            </View>
+            <View style={styles.customPlanTextContainer}>
+              <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
+                Create Custom Plan
               </Text>
-              {calories > 0 && (
-                <Text style={[styles.calorieLabel, { color: theme.colors.textPrimary }]}>
-                  calories
-                </Text>
-              )}
+              <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
+                AI-powered macro calculation
+              </Text>
             </View>
           </View>
-          <Text style={[styles.calorieHelperText, { color: theme.colors.textSecondary }]}>
-            Use "Create Custom Plan" above to calculate automatically.
-          </Text>
+          <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Daily Calories Section */}
+        <View style={styles.sectionContainer}>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>DAILY TARGET</Text>
+          <View style={[
+            styles.caloriesCard,
+            {
+              backgroundColor: theme.colors.card,
+              borderColor: theme.colors.border,
+              shadowColor: theme.colors.shadow,
+            }
+          ]}>
+            <View style={styles.caloriesHeader}>
+              <Text style={[styles.caloriesValue, { color: theme.colors.textPrimary }]}>
+                {calories}
+              </Text>
+              <Text style={[styles.caloriesUnit, { color: theme.colors.textSecondary }]}>kcal</Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.editCaloriesButton, { backgroundColor: theme.colors.secondaryBg }]}
+              // For now, custom plan is the primary way, but maybe visual "touch" implies editability
+              onPress={handleStartCustomPlan}
+            >
+              <Text style={[styles.editCaloriesText, { color: theme.colors.textSecondary }]}>Recalculate</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Macros Section */}
-        <View style={styles.macrosSection}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-            Macronutrient Distribution
-          </Text>
-          
-          {/* Total Percentage Indicator */}
-          <View style={[
-            styles.totalContainer,
-            { backgroundColor: totalPercentage === 100 ? '#E6F7F5' : '#FFE5E5' }
-          ]}>
-            <Text style={[styles.totalText, { color: theme.colors.textPrimary }]}>
-              Total: {totalPercentage}% {totalPercentage === 100 ? '✓' : '⚠️'}
-            </Text>
+        <View style={styles.sectionContainer}>
+          <View style={styles.macroHeaderRow}>
+            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>MACRO DISTRIBUTION</Text>
+            <View style={[
+              styles.totalBadge,
+              { backgroundColor: totalPercentage === 100 ? theme.colors.successBg : theme.colors.error + '15' }
+            ]}>
+              <Text style={[
+                styles.totalBadgeText,
+                { color: totalPercentage === 100 ? theme.colors.success : theme.colors.error }
+              ]}>
+                {totalPercentage}% Total
+              </Text>
+            </View>
           </View>
 
           {/* Protein Card */}
-          <View style={[styles.macroCard, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.macroCardHeader}>
-              <Text style={[styles.macroCardTitle, { color: theme.colors.textPrimary }]}>
-                Protein
-              </Text>
-              <Text style={[styles.macroCardValue, { color: theme.colors.textSecondary }]}>
-                {proteinGrams}g ({proteinPercentage}%)
-              </Text>
-            </View>
-            <View style={styles.macroCardContent}>
-              <View style={styles.macroPercentageRow}>
-                <Text style={[styles.macroCardPercentage, { color: theme.colors.textPrimary }]}>
-                  {proteinPercentage}%
-                </Text>
-                <View style={styles.macroCardControls}>
-                  <TouchableOpacity 
-                    style={[styles.controlButton, { marginRight: 8 }]}
-                    onPress={() => handleProteinChange(Math.max(0, proteinPercentage - 5))}
-                  >
-                    <Feather name="minus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.controlButton}
-                    onPress={() => handleProteinChange(Math.min(100, proteinPercentage + 5))}
-                  >
-                    <Feather name="plus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
-                  <View style={[styles.progressFill, { 
-                    width: `${proteinPercentage}%`,
-                    backgroundColor: '#10B981'
-                  }]} />
-                </View>
-              </View>
-            </View>
-          </View>
+          <MacroCard
+            label="Protein"
+            color={MACRO_COLORS.protein}
+            percentage={proteinPercentage}
+            gramValue={proteinGrams}
+            onChange={handleProteinChange}
+            theme={theme}
+          />
 
           {/* Carbs Card */}
-          <View style={[styles.macroCard, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.macroCardHeader}>
-              <Text style={[styles.macroCardTitle, { color: theme.colors.textPrimary }]}>
-                Carbohydrates
-              </Text>
-              <Text style={[styles.macroCardValue, { color: theme.colors.textSecondary }]}>
-                {carbsGrams}g ({carbsPercentage}%)
-              </Text>
-            </View>
-            <View style={styles.macroCardContent}>
-              <View style={styles.macroPercentageRow}>
-                <Text style={[styles.macroCardPercentage, { color: theme.colors.textPrimary }]}>
-                  {carbsPercentage}%
-                </Text>
-                <View style={styles.macroCardControls}>
-                  <TouchableOpacity 
-                    style={[styles.controlButton, { marginRight: 8 }]}
-                    onPress={() => handleCarbsChange(Math.max(0, carbsPercentage - 5))}
-                  >
-                    <Feather name="minus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.controlButton}
-                    onPress={() => handleCarbsChange(Math.min(100, carbsPercentage + 5))}
-                  >
-                    <Feather name="plus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
-                  <View style={[styles.progressFill, { 
-                    width: `${carbsPercentage}%`,
-                    backgroundColor: '#FF7E67'
-                  }]} />
-                </View>
-              </View>
-            </View>
-          </View>
+          <MacroCard
+            label="Carbs"
+            color={MACRO_COLORS.carbs}
+            percentage={carbsPercentage}
+            gramValue={carbsGrams}
+            onChange={handleCarbsChange}
+            theme={theme}
+          />
 
           {/* Fat Card */}
-          <View style={[styles.macroCard, { backgroundColor: theme.colors.card }]}>
-            <View style={styles.macroCardHeader}>
-              <Text style={[styles.macroCardTitle, { color: theme.colors.textPrimary }]}>
-                Fat
-              </Text>
-              <Text style={[styles.macroCardValue, { color: theme.colors.textSecondary }]}>
-                {fatGrams}g ({fatPercentage}%)
-              </Text>
-            </View>
-            <View style={styles.macroCardContent}>
-              <View style={styles.macroPercentageRow}>
-                <Text style={[styles.macroCardPercentage, { color: theme.colors.textPrimary }]}>
-                  {fatPercentage}%
-                </Text>
-                <View style={styles.macroCardControls}>
-                  <TouchableOpacity 
-                    style={[styles.controlButton, { marginRight: 8 }]}
-                    onPress={() => handleFatChange(Math.max(0, fatPercentage - 5))}
-                  >
-                    <Feather name="minus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                  <TouchableOpacity 
-                    style={styles.controlButton}
-                    onPress={() => handleFatChange(Math.min(100, fatPercentage + 5))}
-                  >
-                    <Feather name="plus" size={16} color="#10B981" />
-                  </TouchableOpacity>
-                </View>
-              </View>
-              <View style={styles.progressBarContainer}>
-                <View style={[styles.progressBar, { backgroundColor: theme.colors.border }]}>
-                  <View style={[styles.progressFill, { 
-                    width: `${fatPercentage}%`,
-                    backgroundColor: '#40514E'
-                  }]} />
-                </View>
-              </View>
-            </View>
-          </View>
+          <MacroCard
+            label="Fat"
+            color={MACRO_COLORS.fat}
+            percentage={fatPercentage}
+            gramValue={fatGrams}
+            onChange={handleFatChange}
+            theme={theme}
+          />
         </View>
       </ScrollView>
 
-      {/* Save Goals Button */}
-      <View style={styles.saveButtonContainer}>
+      {/* Save Button */}
+      <View style={[styles.footer, { backgroundColor: theme.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }]}>
         <TouchableOpacity
-          style={[styles.saveGoalsButton, { backgroundColor: '#10B981' }]}
+          style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
           onPress={handleSave}
+          activeOpacity={0.8}
         >
-          <Text style={styles.saveGoalsText}>Save Goals</Text>
+          <Text style={[styles.saveButtonText, { color: theme.colors.primaryForeground }]}>Save Changes</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
+  );
+};
+
+// Subcomponent for Macro Card to reduce repetition
+interface MacroCardProps {
+  label: string;
+  color: string;
+  percentage: number;
+  gramValue: number;
+  onChange: (val: number) => void;
+  theme: any;
+}
+
+const MacroCard: React.FC<MacroCardProps> = ({ label, color, percentage, gramValue, onChange, theme }) => {
+  return (
+    <View style={[styles.macroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+      <View style={styles.macroTopRow}>
+        <View style={styles.macroLabelContainer}>
+          <View style={[styles.macroDot, { backgroundColor: color }]} />
+          <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
+        </View>
+        <Text style={[styles.macroGrams, { color: theme.colors.textSecondary }]}>{gramValue}g</Text>
+      </View>
+
+      <View style={styles.sliderContainer}>
+        <TouchableOpacity
+          style={[styles.adjustButton, { borderColor: theme.colors.border }]}
+          onPress={() => onChange(percentage - 5)}
+        >
+          <Feather name="minus" size={16} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+
+        <View style={styles.progressSection}>
+          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.secondaryBg }]}>
+            <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
+          </View>
+          <Text style={[styles.percentageText, { color: theme.colors.textPrimary }]}>{percentage}%</Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.adjustButton, { borderColor: theme.colors.border }]}
+          onPress={() => onChange(percentage + 5)}
+        >
+          <Feather name="plus" size={16} color={theme.colors.textPrimary} />
+        </TouchableOpacity>
+      </View>
+    </View>
   );
 };
 
@@ -394,185 +371,201 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
+    paddingVertical: 12,
     borderBottomWidth: 1,
   },
-  backButton: {
-    padding: 8,
-    zIndex: 1,
-  },
   headerTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    textAlign: 'center',
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  backButton: {
+    padding: 4,
   },
   headerRight: {
-    width: 40,
+    width: 32,
   },
   content: {
     flex: 1,
   },
   contentContainer: {
-    paddingHorizontal: 16,
+    padding: 20,
     paddingBottom: 100,
   },
-  caloriesSection: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 24,
-  },
-  calorieBox: {
-    borderRadius: 8,
-    padding: 16,
-    minWidth: 180,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 1,
-    position: 'relative',
-  },
-  calorieContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  calorieNumber: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: 2,
-  },
-  calorieLabel: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.normal,
-  },
-  calculatorIcon: {
-    position: 'absolute',
-    top: 8,
-    right: 8,
-    opacity: 0.6,
-  },
-  calorieHelperText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.normal,
-    marginTop: 8,
-    textAlign: 'center',
-  },
   customPlanButton: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    marginBottom: 24,
+    borderRadius: 12,
     borderWidth: 1,
-    borderRadius: 16,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    marginTop: 16,
-    marginBottom: 8,
+    padding: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  customPlanContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 12,
+    flex: 1,
+  },
+  iconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  customPlanTextContainer: {
+    flex: 1,
   },
   customPlanTitle: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: 2,
   },
   customPlanSubtitle: {
     fontSize: Typography.fontSize.sm,
-    marginTop: 4,
   },
-  macrosSection: {
-    marginTop: 20,
+  sectionContainer: {
+    marginBottom: 28,
   },
   sectionTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: 16,
-  },
-  totalContainer: {
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    borderRadius: 8,
-    marginBottom: 20,
-    alignItems: 'center',
-  },
-  totalText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  macroCard: {
-    borderRadius: 8,
-    padding: 12,
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+    letterSpacing: 1,
     marginBottom: 12,
+    textTransform: 'uppercase',
   },
-  macroCardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  caloriesCard: {
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  caloriesHeader: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
     marginBottom: 8,
   },
-  macroCardTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
+  caloriesValue: {
+    fontSize: 48,
+    fontWeight: '800', // heavy weight
+    letterSpacing: -1,
   },
-  macroCardValue: {
+  caloriesUnit: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.medium,
+    marginLeft: 6,
+  },
+  editCaloriesButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 6,
+    borderRadius: 20,
+    marginTop: 8,
+  },
+  editCaloriesText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
   },
-  macroCardContent: {
-    marginBottom: 0,
+  macroHeaderRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 12,
   },
-  macroPercentageRow: {
+  totalBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  totalBadgeText: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  macroCard: {
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+  },
+  macroTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  macroLabelContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: 8,
+    gap: 8,
   },
-  macroCardPercentage: {
+  macroDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  macroLabel: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
-  macroCardControls: {
+  macroGrams: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  sliderContainer: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
+    alignItems: 'center',
+    gap: 12,
   },
-  progressBarContainer: {
-    width: '100%',
-  },
-  progressBar: {
-    width: '100%',
-    height: 8,
-    borderRadius: 4,
-    overflow: 'hidden',
-  },
-  progressFill: {
-    height: '100%',
-    borderRadius: 4,
-  },
-  controlButton: {
-    width: 28,
-    height: 28,
+  adjustButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    borderWidth: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 6,
-    backgroundColor: 'rgba(0, 0, 0, 0.05)',
   },
-  saveButtonContainer: {
+  progressSection: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  progressBarBg: {
+    width: '100%',
+    height: 12,
+    borderRadius: 6,
+    overflow: 'hidden',
+    marginBottom: 6,
+  },
+  progressBarFill: {
+    height: '100%',
+    borderRadius: 6,
+  },
+  percentageText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  footer: {
     position: 'absolute',
     bottom: 0,
     left: 0,
     right: 0,
-    paddingHorizontal: 16,
-    paddingVertical: 16,
+    padding: 16,
     paddingBottom: 32,
-    backgroundColor: 'transparent',
+    borderTopWidth: 1,
+    borderTopColor: 'transparent', // using shadow/blur usually, but keep simple
   },
-  saveGoalsButton: {
-    paddingVertical: 16,
-    borderRadius: 12,
+  saveButton: {
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  saveGoalsText: {
-    color: Colors.white,
+  saveButtonText: {
     fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
+    fontWeight: Typography.fontWeight.bold,
   },
 });

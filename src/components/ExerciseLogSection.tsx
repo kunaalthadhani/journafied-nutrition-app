@@ -5,7 +5,6 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { ParsedExercise } from '../utils/exerciseParser';
-import { Terminal } from './Terminal';
 import { TypingAnimation } from './TypingAnimation';
 import { useTheme } from '../constants/theme';
 
@@ -33,47 +32,47 @@ export const ExerciseLogSection: React.FC<ExerciseLogSectionProps> = ({
 
   return (
     <View style={styles.container}>
-      {entries.map((entry, entryIndex) => (
-        <Terminal key={entry.id} style={styles.terminal}>
-          <View style={styles.promptRow}>
-            <TypingAnimation
-              speed={22}
-              style={[styles.promptText, { color: theme.colors.textSecondary }]}
-            >
-              {`> ${entry.prompt}`}
-            </TypingAnimation>
+      {entries.map((entry) => (
+        <View key={entry.id} style={[styles.entryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.headerRow, { borderBottomColor: theme.colors.border }]}>
+            <Text style={[styles.promptText, { color: theme.colors.textSecondary }]}>
+              {entry.prompt}
+            </Text>
             {onDeleteEntry && (
               <TouchableOpacity
                 style={styles.deleteButton}
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 onPress={() => onDeleteEntry(entry.id)}
               >
-                <Feather name="trash-2" size={14} color="#EF4444" />
+                <Feather name="trash-2" size={14} color={theme.colors.error} />
               </TouchableOpacity>
             )}
           </View>
 
-          {entry.exercises.map((exercise, exerciseIndex) => {
-            const delay = 400 + entryIndex * 600 + exerciseIndex * 200;
-            return (
-              <View key={exercise.id} style={styles.exerciseRow}>
-                <TypingAnimation
-                  speed={24}
-                  delay={delay}
-                  style={[styles.exerciseName, { color: '#10B981' }]}
-                >
-                  {exercise.name}
-                </TypingAnimation>
-                <Text style={[styles.exerciseMeta, { color: theme.colors.textSecondary }]}>
-                  {`${exercise.duration_minutes} min • ${String(exercise.intensity).toUpperCase()}`}
-                </Text>
+          <View style={styles.exerciseList}>
+            {entry.exercises.map((exercise, idx) => (
+              <View
+                key={`${exercise.id}-${idx}`}
+                style={[
+                  styles.exerciseItem,
+                  idx < entry.exercises.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                ]}
+              >
+                <View style={styles.exerciseInfo}>
+                  <Text style={[styles.exerciseName, { color: theme.colors.textPrimary }]}>
+                    {exercise.name}
+                  </Text>
+                  <Text style={[styles.exerciseMeta, { color: theme.colors.textSecondary }]}>
+                    {`${exercise.duration_minutes} min • ${String(exercise.intensity).toUpperCase()}`}
+                  </Text>
+                </View>
                 <Text style={[styles.exerciseCalories, { color: theme.colors.textPrimary }]}>
-                  {`${exercise.calories} kcal burned`}
+                  {`${exercise.calories} kcal`}
                 </Text>
               </View>
-            );
-          })}
-        </Terminal>
+            ))}
+          </View>
+        </View>
       ))}
     </View>
   );
@@ -84,43 +83,53 @@ const styles = StyleSheet.create({
     marginTop: Spacing.md,
     paddingHorizontal: Spacing.sm,
   },
-  terminal: {
+  entryCard: {
     marginBottom: Spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
   },
-  promptRow: {
+  headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: 8,
-    gap: 8,
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.02)',
+    borderBottomWidth: 1,
   },
   promptText: {
     flex: 1,
     fontSize: Typography.fontSize.sm,
+    fontStyle: 'italic',
   },
   deleteButton: {
     padding: 4,
   },
-  exerciseRow: {
-    borderWidth: 1,
-    borderColor: Colors.lightBorder,
-    borderRadius: 12,
-    padding: 12,
-    marginBottom: 8,
-    backgroundColor: Colors.cardBackground,
+  exerciseList: {
+    paddingVertical: 4,
+  },
+  exerciseItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  exerciseInfo: {
+    flex: 1,
+    marginRight: 16,
   },
   exerciseName: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  exerciseMeta: {
-    marginTop: 4,
-    fontSize: Typography.fontSize.sm,
-  },
-  exerciseCalories: {
-    marginTop: 4,
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
+    marginBottom: 2,
+  },
+  exerciseMeta: {
+    fontSize: Typography.fontSize.xs,
+  },
+  exerciseCalories: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.semiBold,
   },
 });
 

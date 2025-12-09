@@ -23,14 +23,14 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Premium</Text>
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
@@ -42,15 +42,15 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
 
           <View style={styles.features}>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color="#10B981" />
+              <Feather name="check-circle" size={18} color={theme.colors.primary} />
               <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Ad-Free Experience</Text>
             </View>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color="#10B981" />
+              <Feather name="check-circle" size={18} color={theme.colors.primary} />
               <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Unlimited Entries & History</Text>
             </View>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color="#10B981" />
+              <Feather name="check-circle" size={18} color={theme.colors.primary} />
               <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Priority Features & Updates</Text>
             </View>
           </View>
@@ -61,13 +61,13 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => setSelectedPlan('annual')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'annual' ? '#10B981' : theme.colors.border, backgroundColor: theme.colors.card }]}
+            style={[styles.planOption, { borderColor: selectedPlan === 'annual' ? theme.colors.primary : theme.colors.border, backgroundColor: theme.colors.card }]}
           >
             <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'annual' ? '#10B981' : theme.colors.border, backgroundColor: selectedPlan === 'annual' ? '#10B981' : 'transparent' }]} />
+              <View style={[styles.radio, { borderColor: selectedPlan === 'annual' ? theme.colors.primary : theme.colors.border, backgroundColor: selectedPlan === 'annual' ? theme.colors.primary : 'transparent' }]} />
               <Text style={[styles.planTitle, { color: theme.colors.textPrimary }]}>Annual</Text>
-              <View style={styles.badge}>
-                <Text style={styles.badgeText}>Best Value</Text>
+              <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
+                <Text style={[styles.badgeText, { color: theme.colors.primaryForeground }]}>Best Value</Text>
               </View>
             </View>
             <Text style={[styles.planPrice, { color: theme.colors.textPrimary }]}>AED7.50/mo</Text>
@@ -77,10 +77,10 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => setSelectedPlan('monthly')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'monthly' ? '#10B981' : theme.colors.border, backgroundColor: theme.colors.card }]}
+            style={[styles.planOption, { borderColor: selectedPlan === 'monthly' ? theme.colors.primary : theme.colors.border, backgroundColor: theme.colors.card }]}
           >
             <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'monthly' ? '#10B981' : theme.colors.border, backgroundColor: selectedPlan === 'monthly' ? '#10B981' : 'transparent' }]} />
+              <View style={[styles.radio, { borderColor: selectedPlan === 'monthly' ? theme.colors.primary : theme.colors.border, backgroundColor: selectedPlan === 'monthly' ? theme.colors.primary : 'transparent' }]} />
               <Text style={[styles.planTitle, { color: theme.colors.textPrimary }]}>Monthly</Text>
             </View>
             <Text style={[styles.planPrice, { color: theme.colors.textPrimary }]}>AED24.99/mo</Text>
@@ -93,8 +93,8 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
 
       {/* Sticky bottom actions */}
       <View style={[styles.stickyFooter, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
-        <TouchableOpacity style={styles.ctaButton} activeOpacity={0.9} onPress={() => onSubscribe(selectedPlan)}>
-          <Text style={styles.ctaText}>Continue</Text>
+        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: theme.colors.primary }]} activeOpacity={0.9} onPress={() => onSubscribe(selectedPlan)}>
+          <Text style={[styles.ctaText, { color: theme.colors.primaryForeground }]}>Continue</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.restoreButton} onPress={onRestore}>
           <Text style={[styles.restoreText, { color: theme.colors.textSecondary }]}>Restore purchases</Text>
@@ -131,11 +131,11 @@ const styles = StyleSheet.create({
   planPrice: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold, marginTop: 4 },
   planSubText: { fontSize: Typography.fontSize.xs },
   radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
-  badge: { marginLeft: 'auto', backgroundColor: '#10B981', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { color: Colors.white, fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.semiBold },
+  badge: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
+  badgeText: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.semiBold },
   stickyFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1 },
-  ctaButton: { backgroundColor: '#10B981', borderRadius: 12, alignItems: 'center', paddingVertical: 14 },
-  ctaText: { color: Colors.white, fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
+  ctaButton: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
+  ctaText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
   restoreButton: { alignItems: 'center', marginTop: 10 },
   restoreText: { fontSize: Typography.fontSize.sm },
 });

@@ -11,6 +11,8 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Dimensions,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -19,7 +21,7 @@ import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Rect, G } from 'react-native-svg';
 import { dataStorage } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -88,11 +90,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     hasMultipleEntries && startingWeight !== null && currentWeight !== null
       ? currentWeight - startingWeight // Positive = gained, Negative = lost
       : null;
-  
+
   // Determine label and value based on goal type
   const isGainGoal = goalType === 'gain';
   const changeLabel = isGainGoal ? 'Gain' : 'Drop';
-  const changeValue = weightChangeFromStart !== null 
+  const changeValue = weightChangeFromStart !== null
     ? (isGainGoal ? weightChangeFromStart : -weightChangeFromStart) // For gain: show positive, for lose: show positive (drop)
     : null;
 
@@ -105,13 +107,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       } else if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
         setWeightEntries([{ date: new Date(), weight: initialCurrentWeightKg }]);
       }
-      
+
       // Load goal type
       const savedGoals = await dataStorage.loadGoals();
       if (savedGoals?.goal) {
         setGoalType(savedGoals.goal);
       }
-      
+
       // Load saved insight if it was generated today
       try {
         const savedInsightData = await AsyncStorage.getItem('@trackkal:weightInsight');
@@ -176,7 +178,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const filteredData = useMemo(() => {
     const now = new Date();
     let startDate: Date;
-    
+
     switch (timeRange) {
       case '1W':
         startDate = subDays(now, 7);
@@ -199,7 +201,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       default:
         startDate = subYears(now, 1);
     }
-    
+
     // Filter and sort by date to ensure chronological order
     const filtered = weightEntries
       .filter(entry => {
@@ -209,7 +211,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         return entryDate >= startDateDay;
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime());
-    
+
     return filtered;
   }, [timeRange, weightEntries]);
 
@@ -219,18 +221,51 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   // Calculate graph dimensions and points
   const graphWidth = 300;
   const graphHeight = 260;
-  const padding = 20;
+  const padding = 40;
   const innerWidth = graphWidth - padding * 2;
   const innerHeight = graphHeight - padding * 2;
   const LINE_DRAW_LENGTH = 1000; // sufficiently large so the whole path can be revealed left-to-right
 
-  // Screen-level fade-in for smooth navigation (content only)
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  // Screen-level slide-up for smooth navigation
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(onBack);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dy > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          handleClose();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const minWeight = hasGraphData ? Math.min(...graphData.map(d => d.weight)) : 0;
   const maxWeight = hasGraphData ? Math.max(...graphData.map(d => d.weight)) : 1;
 
-  // Simple, deterministic Y‑axis scaling so ticks, grid lines, and points line up exactly.
+  // ... (rest of simple axis logic unchanged) ... //
   const { axisMinWeight, axisMaxWeight, axisWeightRange, yAxisTicks } = React.useMemo(() => {
     if (!hasGraphData) {
       const min = 0;
@@ -273,12 +308,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     };
   }, [hasGraphData, minWeight, maxWeight]);
 
-  // Compute date range from filtered data - updates when filteredData changes
+  // ... (rest of dateRange) ... //
   const dateRange = useMemo(() => {
-    // Use filteredData for date range (already sorted)
     const dataToUse = filteredData.length > 0 ? filteredData : weightEntries;
     if (dataToUse.length === 0) return '';
-    // Data is already sorted, so first and last are correct
     const start = dataToUse[0].date;
     const end = dataToUse[dataToUse.length - 1].date;
     return `${format(start, 'd MMM yyyy')} - ${format(end, 'd MMM yyyy')}`;
@@ -290,32 +323,71 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     [weightEntries]
   );
 
-  // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
-  const generateSmoothPath = () => {
-    if (graphData.length === 0) return '';
-
-    const points = graphData.map((entry, index) => {
+  // Points calculation for graph plotting and interaction mapping
+  const graphPoints = useMemo(() => {
+    if (graphData.length === 0) return [];
+    return graphData.map((entry, index) => {
       const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
       const normalizedWeight = (entry.weight - axisMinWeight) / axisWeightRange;
       const y = padding + innerHeight - (normalizedWeight * innerHeight);
-      return { x, y };
+      return { x, y, data: entry };
+    });
+  }, [graphData, axisMinWeight, axisWeightRange, innerWidth, innerHeight]);
+
+  const [scrubbingIndex, setScrubbingIndex] = useState<number | null>(null);
+
+  const graphPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+      onPanResponderMove: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+      onPanResponderRelease: () => {
+        setScrubbingIndex(null);
+      },
+      onPanResponderTerminate: () => {
+        setScrubbingIndex(null);
+      },
+    })
+  ).current;
+
+  const handleTouch = (x: number) => {
+    if (graphPoints.length === 0) return;
+
+    // Find closest point by X coordinate
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    // Optimize search if needed, but for <365 points linear scan is fine
+    graphPoints.forEach((p, i) => {
+      const diff = Math.abs(x - p.x);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
     });
 
-    if (points.length === 1) {
-      return `M ${points[0].x} ${points[0].y}`;
-    }
+    setScrubbingIndex(closestIndex);
+  };
 
-    if (points.length === 2) {
-      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
-    }
+  // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
+  const generateSmoothPath = () => {
+    if (graphPoints.length === 0) return '';
+    if (graphPoints.length === 1) return `M ${graphPoints[0].x} ${graphPoints[0].y}`;
+    if (graphPoints.length === 2) return `M ${graphPoints[0].x} ${graphPoints[0].y} L ${graphPoints[1].x} ${graphPoints[1].y}`;
 
-    let path = `M ${points[0].x} ${points[0].y}`;
-
-    for (let i = 0; i < points.length - 1; i++) {
-      const current = points[i];
-      const next = points[i + 1];
-      const prev = i > 0 ? points[i - 1] : current;
-      const after = i < points.length - 2 ? points[i + 2] : next;
+    let path = `M ${graphPoints[0].x} ${graphPoints[0].y}`;
+    for (let i = 0; i < graphPoints.length - 1; i++) {
+      const current = graphPoints[i];
+      const next = graphPoints[i + 1];
+      const after = i < graphPoints.length - 2 ? graphPoints[i + 2] : next;
+      const prev = i > 0 ? graphPoints[i - 1] : current;
 
       const dx1 = next.x - prev.x;
       const dy1 = next.y - prev.y;
@@ -329,7 +401,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
-
     return path;
   };
 
@@ -340,10 +411,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const AnimatedPath = useRef(Animated.createAnimatedComponent(Path as any)).current;
 
   useEffect(() => {
-    Animated.timing(screenOpacity, {
-      toValue: 1,
-      duration: 1000,
+    Animated.spring(slideAnim, {
+      toValue: 0,
       useNativeDriver: true,
+      damping: 20,
+      stiffness: 90,
     }).start();
   }, []);
 
@@ -495,25 +567,25 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const generateInsight = () => {
       const weights = graphData.map(entry => entry.weight);
       const dates = graphData.map(entry => entry.date);
-      
+
       // Calculate trend
       const firstWeight = weights[0];
       const lastWeight = weights[weights.length - 1];
       const weightChange = lastWeight - firstWeight;
       const weightChangeAbs = Math.abs(weightChange);
       const daysDiff = (dates[dates.length - 1].getTime() - dates[0].getTime()) / (1000 * 60 * 60 * 24);
-      
+
       // Calculate variability (standard deviation)
       const avgWeight = weights.reduce((sum, w) => sum + w, 0) / weights.length;
       const variance = weights.reduce((sum, w) => sum + Math.pow(w - avgWeight, 2), 0) / weights.length;
       const stdDev = Math.sqrt(variance);
       const variability = stdDev / avgWeight; // Coefficient of variation
-      
+
       // Calculate rate of change
       const weeklyChange = daysDiff > 0 ? (weightChange / daysDiff) * 7 : 0;
-      
+
       let insightText = '';
-      
+
       if (variability > 0.02) {
         // High variability
         insightText = 'Your weight is fluctuating. Consider tracking hydration and sleep patterns to identify patterns.';
@@ -530,7 +602,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         // Small change
         insightText = 'Your weight shows minimal change. Small fluctuations are normal and expected.';
       }
-      
+
       return insightText;
     };
 
@@ -539,7 +611,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     // Reset displayed text; it will be animated in after the graph finishes drawing
     setDisplayedInsight('');
     setInsightGeneratedDate(today);
-    
+
     // Save insight to storage so it persists across app restarts
     AsyncStorage.setItem('@trackkal:weightInsight', JSON.stringify({
       insight: insightText,
@@ -570,16 +642,20 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     };
   }, [graphAnimationDone, insight]);
 
+
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
       edges={['top', 'bottom']}
     >
-      <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
+      <Animated.View
+        style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
+        {...panResponder.panHandlers}
+      >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color="#10B981" />
+          <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+            <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Weight Tracker
@@ -593,324 +669,393 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
-        <ScrollView 
-          style={styles.content} 
-          contentContainerStyle={{ flexGrow: 1 }}
-          showsVerticalScrollIndicator={false}
-          removeClippedSubviews={false}
-          keyboardShouldPersistTaps="handled"
-        >
-        {!hasEntries && (
-          <View
-            style={[
-              styles.emptyStateContainer,
-              { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-            ]}
+          <ScrollView
+            style={styles.content}
+            contentContainerStyle={{ flexGrow: 1 }}
+            showsVerticalScrollIndicator={false}
+            removeClippedSubviews={false}
+            keyboardShouldPersistTaps="handled"
           >
-            <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
-              Let’s set your goals
-            </Text>
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-              Add your targets to start tracking your weight journey.
-            </Text>
-            <TouchableOpacity
-              style={[styles.emptyStateButton, { backgroundColor: '#10B981' }]}
-              onPress={() => {
-                if (onRequestSetGoals) {
-                  onRequestSetGoals();
-                } else {
-                  setShowLogModal(true);
-                }
-              }}
-              activeOpacity={0.85}
-            >
-              <Text style={styles.emptyStateButtonText}>
-                {onRequestSetGoals ? 'Set Goals' : 'Log Weight'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Weight Summary */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {currentWeight !== null 
-                ? `${convertWeightToDisplay(currentWeight).toFixed(1)} ${getWeightUnitLabel()}` 
-                : '--'}
-            </Text>
-          <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Current</Text>
-          </View>
-          <View style={styles.summaryItem}>
-          <View style={styles.changeContainer}>
-            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {changeValue !== null 
-                  ? `${convertWeightToDisplay(Math.abs(changeValue)).toFixed(1)} ${getWeightUnitLabel()}` 
-                  : '--'}
-            </Text>
-              {changeValue !== null && changeValue > 0.05 && (
-              <Feather 
-                name={isGainGoal ? "trending-up" : "trending-down"} 
-                size={16} 
-                color={isGainGoal ? "#10B981" : "#10B981"} 
-                style={styles.trendIcon} 
-              />
-            )}
-              {changeValue !== null && changeValue < -0.05 && (
-              <Feather 
-                name={isGainGoal ? "trending-down" : "trending-up"} 
-                size={16} 
-                color="#F97316" 
-                style={styles.trendIcon} 
-              />
-            )}
-          </View>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>{changeLabel}</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            {targetWeightValue > 0 ? (
-              <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {`${convertWeightToDisplay(targetWeightValue).toFixed(1)} ${getWeightUnitLabel()}`}
-              </Text>
-            ) : (
-              <TouchableOpacity
-                style={styles.setGoalLink}
-                onPress={() => onRequestSetGoals?.()}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.setGoalText}>Set Goal</Text>
-              </TouchableOpacity>
-            )}
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
-          </View>
-        </View>
-
-        {hasGraphData && (
-          <>
-            {/* Graph Section */}
-            <View style={styles.graphContainer}>
+            {!hasEntries && (
               <View
                 style={[
-                  styles.graphCard,
-                  {
-                    backgroundColor: theme.colors.card,
-                    shadowColor: theme.colors.shadow,
-                  },
+                  styles.emptyStateContainer,
+                  { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
                 ]}
               >
-                {/* Graph with inline Y-axis labels */}
-                <Animated.View style={[styles.graph, { opacity: chartOpacity }]}>
-                  <Svg width={graphWidth} height={graphHeight}>
-                    <Defs>
-                      <LinearGradient id="weightGradient" x1="0" y1="0" x2="1" y2="0">
-                        <Stop offset="0%" stopColor="#6EE7B7" />
-                        <Stop offset="50%" stopColor="#10B981" />
-                        <Stop offset="100%" stopColor="#22C55E" />
-                      </LinearGradient>
-                    </Defs>
-                    {/* Grid lines + Y-axis labels aligned to tick values */}
-                    {yAxisTicks.map((value, index) => {
-                      const ratio = Math.max(
-                        0,
-                        Math.min(1, (value - axisMinWeight) / axisWeightRange)
-                      );
-                      const y = padding + innerHeight - ratio * innerHeight;
-                      return (
-                        <React.Fragment key={index}>
-                          <Line
-                            x1={padding}
-                            y1={y}
-                            x2={graphWidth - padding}
-                            y2={y}
-                            stroke={theme.colors.border}
-                            strokeWidth={0.5}
-                            strokeDasharray="2,2"
-                          />
-                          <SvgText
-                            // Slightly inside the chart so the full label (e.g. "106")
-                            // is visible on both platforms, with a small visual gap
-                            // (≈4px) between the label and the dotted grid line.
-                            x={padding + 4}
-                            y={y}
-                            fontSize={Typography.fontSize.xs}
-                            fill={theme.colors.textTertiary}
-                            textAnchor="end"
-                            alignmentBaseline="middle"
-                          >
-                            {convertWeightToDisplay(value).toFixed(0)}
-                          </SvgText>
-                        </React.Fragment>
-                      );
-                    })}
-
-                    {/* Line path with soft gradient and left-to-right draw animation */}
-                    {graphPath ? (
-                      <AnimatedPath
-                        d={graphPath}
-                        fill="none"
-                        stroke="url(#weightGradient)"
-                        strokeWidth={2.5}
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
-                        strokeDashoffset={lineProgress.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: [LINE_DRAW_LENGTH, 0],
-                        })}
-                      />
-                    ) : null}
-
-                    {/* Data points */}
-                    {graphData.map((entry, index) => {
-                      const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
-                      const normalizedWeight = (entry.weight - axisMinWeight) / axisWeightRange;
-                      const y = padding + innerHeight - (normalizedWeight * innerHeight);
-                      return (
-                        <Circle
-                          key={index}
-                          cx={x}
-                          cy={y}
-                          r={4}
-                          fill="#10B981"
-                        />
-                      );
-                    })}
-                  </Svg>
-                </Animated.View>
-              </View>
-
-              {/* Time Range Selector */}
-              <View style={styles.timeRangeContainer}>
-                {timeRanges.map((range) => (
-                  <TouchableOpacity
-                    key={range}
-                    style={[
-                      styles.timeRangeButton,
-                      timeRange === range && styles.timeRangeButtonActive,
-                    ]}
-                    onPress={() => handleTimeRangeChange(range)}
-                  >
-                    <Text
-                      style={[
-                        styles.timeRangeText,
-                        timeRange === range
-                          ? styles.timeRangeTextActive
-                          : { color: theme.colors.textSecondary },
-                      ]}
-                    >
-                      {range}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-
-              {/* Date Range */}
-              <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
-                {dateRange}
-              </Text>
-
-              {/* Insights below date range (typewriter after graph animation) */}
-              {insight && (
-                <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
-                  <Feather name="info" size={16} color="#10B981" />
-                  <View style={styles.insightTextContainer}>
-                    <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
-                      {displayedInsight || (graphAnimationDone ? insight : '')}
-                    </Text>
-                  </View>
-                </View>
-              )}
-
-              {/* History Table */}
-              {historyEntries.length > 0 && (
-                <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
-                  <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
-                    History
+                <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
+                  Let’s set your goals
+                </Text>
+                <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                  Add your targets to start tracking your weight journey.
+                </Text>
+                <TouchableOpacity
+                  style={[styles.emptyStateButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={() => {
+                    if (onRequestSetGoals) {
+                      onRequestSetGoals();
+                    } else {
+                      setShowLogModal(true);
+                    }
+                  }}
+                  activeOpacity={0.85}
+                >
+                  <Text style={[styles.emptyStateButtonText, { color: theme.colors.primaryForeground }]}>
+                    {onRequestSetGoals ? 'Set Goals' : 'Log Weight'}
                   </Text>
-                  <View style={styles.historyHeaderRow}>
-                    <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                      Date
-                    </Text>
-                    <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                      Weight
-                    </Text>
-                    <View style={styles.historyHeaderSpacer} />
-                  </View>
-                  {historyEntries.map((entry, index) => {
-                    const isEditing = editingEntryIndex === index;
-                    return (
-                      <View key={entry.date.toISOString()} style={styles.historyRow}>
-                        <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
-                          {format(entry.date, 'd MMM yyyy')}
-                        </Text>
-                        {isEditing ? (
-                          <TextInput
-                            style={[
-                              styles.historyWeightInput,
-                              { color: theme.colors.textPrimary, borderColor: theme.colors.border },
-                            ]}
-                            value={editingWeight}
-                            onChangeText={setEditingWeight}
-                            keyboardType="decimal-pad"
-                          />
-                        ) : (
-                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
-                            {`${convertWeightToDisplay(entry.weight).toFixed(1)} ${getWeightUnitLabel()}`}
-                          </Text>
-                        )}
-                        <View style={styles.historyActions}>
-                          {isEditing ? (
-                            <>
-                              <TouchableOpacity
-                                onPress={handleSaveEditEntry}
-                                style={styles.historyIconButton}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Feather name="check" size={16} color="#10B981" />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={handleCancelEditEntry}
-                                style={styles.historyIconButton}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Feather name="x" size={16} color={theme.colors.textSecondary} />
-                              </TouchableOpacity>
-                            </>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                onPress={() => handleStartEditEntry(index)}
-                                style={styles.historyIconButton}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleDeleteEntry(index)}
-                                style={styles.historyIconButton}
-                                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                              >
-                                <Feather name="trash-2" size={14} color="#EF4444" />
-                              </TouchableOpacity>
-                            </>
-                          )}
-                        </View>
-                      </View>
-                    );
-                  })}
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Weight Summary - Hero Cards */}
+            <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 24, marginTop: 8 }}>
+              {/* Current Weight Hero */}
+              <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Current</Text>
+                <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                  {currentWeight !== null
+                    ? `${convertWeightToDisplay(currentWeight).toFixed(1)}`
+                    : '--'}
+                  <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>{getWeightUnitLabel()}</Text>
+                </Text>
+              </View>
+
+              {/* Change Hero */}
+              <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>{changeLabel}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  {changeValue !== null && changeValue > 0.05 && (
+                    <Feather name={isGainGoal ? "trending-up" : "trending-down"} size={16} color={isGainGoal ? theme.colors.success : theme.colors.error} />
+                  )}
+                  {changeValue !== null && changeValue < -0.05 && (
+                    <Feather name={isGainGoal ? "trending-down" : "trending-up"} size={16} color={isGainGoal ? theme.colors.error : theme.colors.success} />
+                  )}
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {changeValue !== null
+                      ? `${convertWeightToDisplay(Math.abs(changeValue)).toFixed(1)}`
+                      : '--'}
+                  </Text>
                 </View>
-              )}
+              </View>
+
+              {/* Target Hero */}
+              <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Target</Text>
+                {targetWeightValue > 0 ? (
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {`${convertWeightToDisplay(targetWeightValue).toFixed(1)}`}
+                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>{getWeightUnitLabel()}</Text>
+                  </Text>
+                ) : (
+                  <TouchableOpacity
+                    onPress={() => onRequestSetGoals?.()}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4 }}>Set Goal</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
 
-          </>
-        )}
-        </ScrollView>
+            {hasGraphData && (
+              <>
+                {/* Graph Section */}
+                <View style={styles.graphContainer}>
+                  <View
+                    style={[
+                      styles.graphCard,
+                      {
+                        backgroundColor: theme.colors.card,
+                        shadowColor: theme.colors.shadow,
+                      },
+                    ]}
+                    {...graphPanResponder.panHandlers}
+                  >
+                    {/* Scrubbing Tooltip Overlay */}
+                    {scrubbingIndex !== null && graphPoints[scrubbingIndex] && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: graphPoints[scrubbingIndex].x - 60, // Center approx
+                          top: graphPoints[scrubbingIndex].y - 70,
+                          width: 120,
+                          alignItems: 'center',
+                          zIndex: 10,
+                          pointerEvents: 'none', // Allow touch through
+                        }}
+                      >
+                        <View style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 8,
+                          padding: 8,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 3,
+                          alignItems: 'center'
+                        }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>
+                            {format(graphPoints[scrubbingIndex].data.date, 'MMM d, yyyy')}
+                          </Text>
+                          <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>
+                            {convertWeightToDisplay(graphPoints[scrubbingIndex].data.weight).toFixed(1)} {getWeightUnitLabel()}
+                          </Text>
+                        </View>
+                        {/* Little triangle arrow at bottom */}
+                        <View style={{
+                          width: 0,
+                          height: 0,
+                          borderLeftWidth: 6,
+                          borderRightWidth: 6,
+                          borderTopWidth: 6,
+                          borderLeftColor: 'transparent',
+                          borderRightColor: 'transparent',
+                          borderTopColor: theme.colors.border,
+                          marginTop: -1
+                        }} />
+                        <View style={{
+                          width: 0,
+                          height: 0,
+                          borderLeftWidth: 5,
+                          borderRightWidth: 5,
+                          borderTopWidth: 5,
+                          borderLeftColor: 'transparent',
+                          borderRightColor: 'transparent',
+                          borderTopColor: theme.colors.card,
+                          marginTop: -7
+                        }} />
+                      </View>
+                    )}
+
+                    {/* Graph with inline Y-axis labels */}
+                    <Animated.View style={[styles.graph, { opacity: chartOpacity }]}>
+                      <Svg width={graphWidth} height={graphHeight}>
+                        {/* Grid lines + Y-axis labels aligned to tick values */}
+                        {yAxisTicks.map((value, index) => {
+                          const ratio = Math.max(
+                            0,
+                            Math.min(1, (value - axisMinWeight) / axisWeightRange)
+                          );
+                          const y = padding + innerHeight - ratio * innerHeight;
+                          return (
+                            <React.Fragment key={index}>
+                              <Line
+                                x1={padding}
+                                y1={y}
+                                x2={graphWidth - padding}
+                                y2={y}
+                                stroke={theme.colors.border}
+                                strokeWidth={0.5}
+                                strokeDasharray="2,2"
+                              />
+                              <SvgText
+                                x={padding - 6}
+                                y={y + 3}
+                                fontSize={10}
+                                fill={theme.colors.textTertiary}
+                                textAnchor="end"
+                              >
+                                {convertWeightToDisplay(value).toFixed(0)}
+                              </SvgText>
+                            </React.Fragment>
+                          );
+                        })}
+
+                        {/* Line path with solid color and left-to-right draw animation */}
+                        {graphPath ? (
+                          <AnimatedPath
+                            d={graphPath}
+                            fill="none"
+                            stroke={theme.colors.primary}
+                            strokeWidth={3}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDashoffset={lineProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [LINE_DRAW_LENGTH, 0],
+                            })}
+                          />
+                        ) : null}
+
+                        {/* Data points (dots) - only show if few points to avoid clutter, or if highlighted */}
+                        {graphData.length < 20 && graphData.map((entry, index) => {
+                          if (!graphPoints[index]) return null;
+                          const { x, y } = graphPoints[index];
+                          return (
+                            <Circle
+                              key={index}
+                              cx={x}
+                              cy={y}
+                              r={4}
+                              fill={theme.colors.card}
+                              stroke={theme.colors.primary}
+                              strokeWidth={2}
+                            />
+                          );
+                        })}
+
+                        {/* Scrubber Active Cursor - Highlighted Line and Big Dot */}
+                        {scrubbingIndex !== null && graphPoints[scrubbingIndex] && (
+                          <>
+                            <Line
+                              x1={graphPoints[scrubbingIndex].x}
+                              y1={padding}
+                              x2={graphPoints[scrubbingIndex].x}
+                              y2={graphHeight - padding}
+                              stroke={theme.colors.textSecondary}
+                              strokeWidth={1}
+                              strokeDasharray="4,4"
+                            />
+                            <Circle
+                              cx={graphPoints[scrubbingIndex].x}
+                              cy={graphPoints[scrubbingIndex].y}
+                              r={6}
+                              fill={theme.colors.primary}
+                              stroke={theme.colors.card}
+                              strokeWidth={3}
+                            />
+                          </>
+                        )}
+                      </Svg>
+                    </Animated.View>
+                  </View>
+
+                  {/* Time Range Selector */}
+                  <View style={styles.timeRangeContainer}>
+                    {timeRanges.map((range) => (
+                      <TouchableOpacity
+                        key={range}
+                        style={[
+                          styles.timeRangeButton,
+                          timeRange === range && [styles.timeRangeButtonActive, { backgroundColor: theme.colors.primary }],
+                        ]}
+                        onPress={() => handleTimeRangeChange(range)}
+                      >
+                        <Text
+                          style={[
+                            styles.timeRangeText,
+                            timeRange === range
+                              ? [styles.timeRangeTextActive, { color: theme.colors.primaryForeground }]
+                              : { color: theme.colors.textSecondary },
+                          ]}
+                        >
+                          {range}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Date Range */}
+                  <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                    {dateRange}
+                  </Text>
+
+                  {/* Insights below date range (typewriter after graph animation) */}
+                  {insight && (
+                    <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
+                      <Feather name="info" size={16} color={theme.colors.textSecondary} />
+                      <View style={styles.insightTextContainer}>
+                        <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
+                          {displayedInsight || (graphAnimationDone ? insight : '')}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+
+                  {/* History Table */}
+                  {historyEntries.length > 0 && (
+                    <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                        History
+                      </Text>
+                      <View style={styles.historyHeaderRow}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Date
+                        </Text>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Weight
+                        </Text>
+                        <View style={styles.historyHeaderSpacer} />
+                      </View>
+                      {historyEntries.map((entry, index) => {
+                        const isEditing = editingEntryIndex === index;
+                        return (
+                          <View key={entry.date.toISOString()} style={styles.historyRow}>
+                            <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                              {format(entry.date, 'd MMM yyyy')}
+                            </Text>
+                            {isEditing ? (
+                              <TextInput
+                                style={[
+                                  styles.historyWeightInput,
+                                  { color: theme.colors.textPrimary, borderColor: theme.colors.border },
+                                ]}
+                                value={editingWeight}
+                                onChangeText={setEditingWeight}
+                                keyboardType="decimal-pad"
+                              />
+                            ) : (
+                              <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
+                                {`${convertWeightToDisplay(entry.weight).toFixed(1)} ${getWeightUnitLabel()}`}
+                              </Text>
+                            )}
+                            <View style={styles.historyActions}>
+                              {isEditing ? (
+                                <>
+                                  <TouchableOpacity
+                                    onPress={handleSaveEditEntry}
+                                    style={styles.historyIconButton}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Feather name="check" size={16} color={theme.colors.primary} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={handleCancelEditEntry}
+                                    style={styles.historyIconButton}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Feather name="x" size={16} color={theme.colors.textSecondary} />
+                                  </TouchableOpacity>
+                                </>
+                              ) : (
+                                <>
+                                  <TouchableOpacity
+                                    onPress={() => handleStartEditEntry(index)}
+                                    style={styles.historyIconButton}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                                  </TouchableOpacity>
+                                  <TouchableOpacity
+                                    onPress={() => handleDeleteEntry(index)}
+                                    style={styles.historyIconButton}
+                                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+                                  >
+                                    <Feather name="trash-2" size={14} color={theme.colors.textSecondary} />
+                                  </TouchableOpacity>
+                                </>
+                              )}
+                            </View>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
+                </View>
+
+              </>
+            )}
+          </ScrollView>
         </KeyboardAvoidingView>
 
         {/* Log Weight Button (fixed at bottom, not moved by KeyboardAvoidingView) */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
-            style={[styles.logButton, { backgroundColor: '#10B981' }]}
+            style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
             onPress={() => setShowLogModal(true)}
           >
             <Text style={styles.logButtonText}>Log Weight</Text>
@@ -918,48 +1063,48 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         </View>
 
         {/* Log Weight Modal */}
-      <Modal
-        visible={showLogModal}
-        transparent
-        animationType="slide"
-        onRequestClose={() => setShowLogModal(false)}
-      >
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity
-            style={StyleSheet.absoluteFill}
-            activeOpacity={1}
-            onPress={() => setShowLogModal(false)}
-          />
-          <KeyboardAvoidingView
-            behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-            keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
-          >
-            <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Log Weight</Text>
-                <TouchableOpacity onPress={() => setShowLogModal(false)}>
-                  <Feather name="x" size={24} color="#10B981" />
+        <Modal
+          visible={showLogModal}
+          transparent
+          animationType="slide"
+          onRequestClose={() => setShowLogModal(false)}
+        >
+          <View style={styles.modalOverlay}>
+            <TouchableOpacity
+              style={StyleSheet.absoluteFill}
+              activeOpacity={1}
+              onPress={() => setShowLogModal(false)}
+            />
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 20}
+            >
+              <View style={[styles.modalContent, { backgroundColor: theme.colors.card }]}>
+                <View style={styles.modalHeader}>
+                  <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>Log Weight</Text>
+                  <TouchableOpacity onPress={() => setShowLogModal(false)}>
+                    <Feather name="x" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+                <TextInput
+                  style={[styles.weightInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                  placeholder={`Enter weight (${getWeightUnitLabel()})`}
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={logWeight}
+                  onChangeText={setLogWeight}
+                  keyboardType="decimal-pad"
+                  autoFocus
+                />
+                <TouchableOpacity
+                  style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
+                  onPress={handleLogWeight}
+                >
+                  <Text style={styles.modalButtonText}>Save</Text>
                 </TouchableOpacity>
               </View>
-              <TextInput
-                style={[styles.weightInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
-                placeholder={`Enter weight (${getWeightUnitLabel()})`}
-                placeholderTextColor={theme.colors.textTertiary}
-                value={logWeight}
-                onChangeText={setLogWeight}
-                keyboardType="decimal-pad"
-                autoFocus
-              />
-              <TouchableOpacity
-                style={[styles.modalButton, { backgroundColor: '#10B981' }]}
-                onPress={handleLogWeight}
-              >
-                <Text style={styles.modalButtonText}>Save</Text>
-              </TouchableOpacity>
-            </View>
-          </KeyboardAvoidingView>
-        </View>
-      </Modal>
+            </KeyboardAvoidingView>
+          </View>
+        </Modal>
       </Animated.View>
     </SafeAreaView>
   );
@@ -991,13 +1136,35 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'center',
     alignItems: 'center',
-    paddingVertical: 8,
+    marginBottom: 8,
     gap: 16,
+    paddingVertical: 8,
+  },
+  heroCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  heroLabel: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  heroValue: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
   },
   legendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
   },
   legendDot: {
     width: 8,
@@ -1011,45 +1178,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 16,
   },
-  summaryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 24,
-  },
-  summaryItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: Typography.fontSize.xxl,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: Typography.fontSize.sm,
-  },
-  setGoalLink: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#10B981',
-    marginBottom: 4,
-  },
-  setGoalText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    color: '#10B981',
-    textAlign: 'center',
-  },
-  changeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-  },
-  trendIcon: {
-    marginTop: 2,
-  },
+
   tabContainer: {
     flexDirection: 'row',
     borderRadius: 8,
@@ -1104,8 +1233,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(15, 23, 42, 0.02)',
   },
   timeRangeButtonActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    // Colors handled inline via theme
   },
   timeRangeText: {
     fontSize: Typography.fontSize.sm,

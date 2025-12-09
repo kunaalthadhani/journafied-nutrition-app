@@ -44,15 +44,11 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
       style={[
         {
           color: theme.colors.textPrimary,
-          fontFamily: 'monospace',
         },
         style,
       ]}
     >
       {displayText}
-      {!isComplete && (
-        <Text style={{ opacity: 0.5 }}>▊</Text> // Cursor
-      )}
     </Text>
   );
 };

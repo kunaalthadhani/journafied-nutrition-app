@@ -68,10 +68,8 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
         onPressOut={handlePressOut}
         activeOpacity={0.8}
       >
-        <Feather 
-          name={icon as any} 
-          size={20} 
-          color="#10B981" 
+        <Feather
+          color={theme.colors.textPrimary}
         />
         <Text
           style={[
@@ -104,14 +102,13 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
-  const [containerHeight, setContainerHeight] = useState(SCREEN_HEIGHT);
   const [secretTapCount, setSecretTapCount] = useState(0);
   const secretTimerRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Initialize slideAnim with a default value, then update when dimensions are available
   const slideAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.75 || -300)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
-  
+
   // Update slide anim initial value when dimensions change
   useEffect(() => {
     const sidebarWidth = SCREEN_WIDTH * 0.75;
@@ -119,13 +116,6 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
       slideAnim.setValue(-sidebarWidth);
     }
   }, [SCREEN_WIDTH, visible]);
-  
-  const handleContainerLayout = (event: any) => {
-    const { height } = event.nativeEvent.layout;
-    if (height > 0 && height !== containerHeight) {
-      setContainerHeight(height);
-    }
-  };
 
   useEffect(() => {
     const sidebarWidth = SCREEN_WIDTH * 0.75;
@@ -250,7 +240,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
       animationType="none"
       onRequestClose={onClose}
     >
-      <View style={styles.container} onLayout={handleContainerLayout}>
+      <View style={styles.container}>
         <TouchableOpacity
           style={StyleSheet.absoluteFill}
           activeOpacity={1}
@@ -269,7 +259,6 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             styles.sidebar,
             {
               width: SIDEBAR_WIDTH,
-              height: containerHeight,
               backgroundColor: theme.colors.card,
               borderRightColor: theme.colors.border,
               transform: [{ translateX: slideAnim }],
@@ -290,7 +279,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   style={styles.closeButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Feather name="x" size={24} color="#10B981" />
+                  <Feather name="x" size={24} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
               </View>
 
@@ -349,6 +338,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: 0,
     top: 0,
+    bottom: 0,
     borderRightWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 2, height: 0 },

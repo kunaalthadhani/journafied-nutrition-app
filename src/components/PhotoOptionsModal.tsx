@@ -5,15 +5,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   Modal,
-  Dimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { ChevronDown, ChevronRight, Camera, Image } from 'lucide-react-native';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
-
-const { width: SCREEN_WIDTH } = Dimensions.get('window');
+// Removed unused animatable import
 
 interface PhotoOptionsModalProps {
   visible: boolean;
@@ -32,16 +30,6 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
 }) => {
   const theme = useTheme();
 
-  const handleTakePhoto = () => {
-    console.log('PhotoOptionsModal: handleTakePhoto called');
-    onTakePhoto();
-  };
-
-  const handleUploadPhoto = () => {
-    console.log('PhotoOptionsModal: handleUploadPhoto called');
-    onUploadPhoto();
-  };
-
   return (
     <Modal
       visible={visible}
@@ -55,86 +43,56 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity
             onPress={onClose}
-            style={styles.backButton}
+            style={styles.closeButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="arrow-left" size={24} color="#10B981" />
+            <ChevronDown size={28} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-            Upload Image
+            Add Image
           </Text>
-          <View style={styles.backButton} />
+          <View style={styles.closeButton} />
         </View>
 
-        {/* Upload Area */}
-        <View style={styles.uploadSection}>
-                <TouchableOpacity 
-            style={[
-              styles.uploadArea,
-              {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.accent,
-                borderStyle: 'dashed',
-              },
-            ]}
-            onPress={handleUploadPhoto}
-            activeOpacity={0.8}
-                >
-            <View style={styles.uploadContent}>
-              <View style={[styles.cloudIconContainer, { backgroundColor: theme.colors.accentBg }]}>
-                <Feather name="upload-cloud" size={48} color="#10B981" />
-                  </View>
-              <Text style={[styles.uploadText, { color: theme.colors.textPrimary }]}>
-                Drag & drop your image OR
-              </Text>
-                <TouchableOpacity 
-                onPress={handleUploadPhoto}
-                  activeOpacity={0.7}
-                style={styles.browseButton}
-              >
-                <Text style={[styles.browseText, { color: theme.colors.info }]}>
-                  Browse files
-                </Text>
-              </TouchableOpacity>
-                  </View>
-                </TouchableOpacity>
+        {/* Options */}
+        <View style={styles.content}>
+          <TouchableOpacity
+            style={[styles.optionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            onPress={() => {
+              onClose();
+              setTimeout(onTakePhoto, 300); // Allow modal to close first
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconContainer, { backgroundColor: theme.colors.textPrimary }]}>
+              <Camera size={24} color={theme.colors.background} />
+            </View>
+            <View style={styles.textContainer}>
+              <Text style={[styles.optionTitle, { color: theme.colors.textPrimary }]}>Take Photo</Text>
+              <Text style={[styles.optionDescription, { color: theme.colors.textSecondary }]}>Use your camera to capture food</Text>
+            </View>
+            <ChevronRight size={20} color={theme.colors.textTertiary} />
+          </TouchableOpacity>
 
-          {/* Alternative: Take Picture */}
-          <View style={styles.alternativeSection}>
-            <View style={styles.divider}>
-              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
-              <Text style={[styles.dividerText, { color: theme.colors.textSecondary }]}>OR</Text>
-              <View style={[styles.dividerLine, { backgroundColor: theme.colors.border }]} />
+          <TouchableOpacity
+            style={[styles.optionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            onPress={() => {
+              onClose();
+              setTimeout(onUploadPhoto, 300);
+            }}
+            activeOpacity={0.7}
+          >
+            <View style={[styles.iconContainer, { backgroundColor: theme.colors.textPrimary }]}>
+              <Image size={24} color={theme.colors.background} />
             </View>
-                
-                <TouchableOpacity 
-              style={[
-                styles.takePhotoButton,
-                {
-                  backgroundColor: theme.colors.card,
-                  borderColor: theme.colors.border,
-                },
-              ]}
-              onPress={handleTakePhoto}
-              activeOpacity={0.8}
-                >
-              <View style={styles.takePhotoContent}>
-                <View style={[styles.cameraIconContainer, { backgroundColor: theme.colors.accentBg }]}>
-                  <Feather name="camera" size={32} color="#10B981" />
-                </View>
-                <View style={styles.takePhotoTextContainer}>
-                  <Text style={[styles.takePhotoTitle, { color: theme.colors.textPrimary }]}>
-                    Take Picture
-                  </Text>
-                  <Text style={[styles.takePhotoSubtitle, { color: theme.colors.textSecondary }]}>
-                    Use your camera to capture an image
-                  </Text>
-                </View>
-                <Feather name="chevron-right" size={20} color="#10B981" />
-              </View>
-                </TouchableOpacity>
-              </View>
+            <View style={styles.textContainer}>
+              <Text style={[styles.optionTitle, { color: theme.colors.textPrimary }]}>Choose from Library</Text>
+              <Text style={[styles.optionDescription, { color: theme.colors.textSecondary }]}>Select an existing photo</Text>
             </View>
+            <ChevronRight size={20} color={theme.colors.textTertiary} />
+          </TouchableOpacity>
+        </View>
+
       </SafeAreaView>
     </Modal>
   );
@@ -150,10 +108,10 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingHorizontal: Spacing.lg,
     paddingVertical: Spacing.md,
-    borderBottomWidth: 1,
-    height: 60,
-    },
-  backButton: {
+    // borderBottomWidth: 1, // Clean look, maybe no border needed or make it subtle
+    marginBottom: Spacing.md,
+  },
+  closeButton: {
     width: 40,
     height: 40,
     alignItems: 'center',
@@ -162,95 +120,41 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.semiBold,
-    flex: 1,
-    textAlign: 'center',
   },
-  uploadSection: {
-    flex: 1,
+  content: {
+    paddingHorizontal: Spacing.lg,
+    gap: Spacing.md,
+  },
+  optionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
     padding: Spacing.lg,
-  },
-  uploadArea: {
-    width: '100%',
-    minHeight: 200,
     borderRadius: 16,
-    borderWidth: 2,
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: Spacing.xl,
-    marginBottom: Spacing.lg,
-  },
-  uploadContent: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cloudIconContainer: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  uploadText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-    marginBottom: Spacing.sm,
-    textAlign: 'center',
-  },
-  browseButton: {
-    paddingVertical: Spacing.xs,
-    paddingHorizontal: Spacing.md,
-  },
-  browseText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  alternativeSection: {
-    width: '100%',
-  },
-  divider: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginVertical: Spacing.lg,
-  },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-  },
-  dividerText: {
-    marginHorizontal: Spacing.md,
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  takePhotoButton: {
-    width: '100%',
-    borderRadius: 12,
     borderWidth: 1,
-    padding: Spacing.lg,
+    // Minimal shadow
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
   },
-  takePhotoContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  cameraIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
+  iconContainer: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: Spacing.md,
   },
-  takePhotoTextContainer: {
+  textContainer: {
     flex: 1,
   },
-  takePhotoTitle: {
+  optionTitle: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
     marginBottom: 4,
   },
-  takePhotoSubtitle: {
+  optionDescription: {
     fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.normal,
   },
 });
-

@@ -48,7 +48,6 @@ export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
       style={[
         {
           color: theme.colors.textPrimary,
-          fontFamily: 'monospace',
           opacity,
           transform: [{ translateY }],
         },

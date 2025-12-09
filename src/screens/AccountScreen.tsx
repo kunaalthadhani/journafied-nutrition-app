@@ -247,7 +247,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           style: 'destructive',
           onPress: async () => {
             try {
-              await authService.signOut().catch(() => {});
+              await authService.signOut().catch(() => { });
               // Clear all user data from storage
               await dataStorage.saveAccountInfo({});
               await dataStorage.saveMeals({});
@@ -267,7 +267,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               await dataStorage.saveUserPlan('free');
               // Clear entry count from AsyncStorage as well
               await AsyncStorage.setItem('@trackkal:entryCount', '0');
-              
+
               // Reset state to show registration form
               setAccountInfo(null);
               setEntryCount(0);
@@ -644,7 +644,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
               >
                 I accept the{' '}
                 <Text
-                  style={{ color: '#10B981', textDecorationLine: 'underline' }}
+                  style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}
                   onPress={() => {
                     try {
                       Linking.openURL('https://www.trackkcal.com/termsandconditions');
@@ -711,11 +711,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
                 }
               }}
             >
-              <Feather name="copy" size={16} color="#10B981" />
+              <Feather name="copy" size={16} color={theme.colors.textPrimary} />
             </TouchableOpacity>
           </View>
           <TouchableOpacity
-            style={[styles.whatsappButton, { backgroundColor: '#25D366' }]}
+            style={[styles.whatsappButton, { backgroundColor: theme.colors.primary }]}
             onPress={async () => {
               try {
                 const message = `Join me on TrackKcal! Use my referral code ${referralDetails.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
@@ -762,7 +762,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           <View
             style={[
               styles.planBadge,
-              { backgroundColor: plan === 'premium' ? '#10B981' : theme.colors.input },
+              { backgroundColor: plan === 'premium' ? theme.colors.primary : theme.colors.input },
             ]}
           >
             <Text

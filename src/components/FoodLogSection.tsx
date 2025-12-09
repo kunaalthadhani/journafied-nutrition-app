@@ -1,15 +1,11 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
-import { Border } from '../constants/border';
 import { ParsedFood } from '../utils/foodNutrition';
-import { Terminal } from './Terminal';
-import { TypingAnimation } from './TypingAnimation';
-import { AnimatedSpan } from './AnimatedSpan';
 import { useTheme } from '../constants/theme';
 import { SavedPrompt } from '../services/dataStorage';
 
@@ -32,6 +28,30 @@ interface FoodLogSectionProps {
   onUpdateFood?: (mealId: string, updatedFood: ParsedFood) => void;
 }
 
+const AnimatedBookmarkButton = ({ isSaved, onPress, theme }: { isSaved: boolean, onPress: () => void, theme: any }) => {
+  const scale = React.useRef(new Animated.Value(1)).current;
+
+  const handlePress = () => {
+    Animated.sequence([
+      Animated.timing(scale, { toValue: 1.4, duration: 150, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
+      Animated.timing(scale, { toValue: 1, duration: 150, useNativeDriver: true, easing: Easing.in(Easing.ease) })
+    ]).start();
+    onPress();
+  };
+
+  return (
+    <TouchableOpacity onPress={handlePress} style={styles.iconButton}>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        {isSaved ? (
+          <BookmarkCheck size={14} color={theme.colors.textPrimary} />
+        ) : (
+          <BookmarkPlus size={14} color={theme.colors.textSecondary} />
+        )}
+      </Animated.View>
+    </TouchableOpacity>
+  );
+};
+
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   meals,
   onRemoveFood,
@@ -42,8 +62,8 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   onUpdateFood,
 }) => {
   const theme = useTheme();
-  const [animatedMeals, setAnimatedMeals] = useState<Set<string>>(new Set());
   const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
+  const [baseFood, setBaseFood] = useState<ParsedFood | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
@@ -58,13 +78,14 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   }, [savedPrompts]);
 
   const handleFoodPress = (mealId: string, food: ParsedFood) => {
-    // Work on a shallow copy so edits don't apply until saved
     setSelectedFood({ ...food });
+    setBaseFood({ ...food }); // Snapshot for scaling
     setSelectedMealId(mealId);
   };
 
   const handleCloseModal = () => {
     setSelectedFood(null);
+    setBaseFood(null);
     setSelectedMealId(null);
   };
 
@@ -96,183 +117,120 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
     setEditedPrompt('');
   };
 
-  // Track which meals have completed their animation
-  React.useEffect(() => {
-    if (meals.length === 0) return;
-    
-    const timers: NodeJS.Timeout[] = [];
-    
-    meals.forEach((meal) => {
-      if (!animatedMeals.has(meal.id)) {
-        // Mark as animated after a delay (allows animations to complete)
-        const timer = setTimeout(() => {
-          setAnimatedMeals((prev) => new Set(prev).add(meal.id));
-        }, 1000 + meal.foods.length * 400);
-        timers.push(timer);
-      }
-    });
-    
-    return () => {
-      timers.forEach(timer => clearTimeout(timer));
-    };
-  }, [meals, animatedMeals]);
-
   if (meals.length === 0) {
     return null;
   }
 
   return (
     <>
-    <View style={styles.container}>
-        {meals.map((meal, mealIndex) => {
+      <View style={styles.container}>
+        {meals.map((meal) => {
           return (
-            <Terminal key={meal.id} style={styles.terminal}>
-              {/* Prompt with typing animation - only show if not an image */}
-              {!meal.imageUri && (
-                <View style={styles.promptRow}>
-                  {editingMealId === meal.id ? (
-                    <>
-                      <TextInput
-                        value={editedPrompt}
-                        onChangeText={setEditedPrompt}
-                        style={[
-                          styles.promptInput,
-                          {
-                            color: theme.colors.textPrimary,
-                            borderColor: theme.colors.border,
-                            backgroundColor: theme.colors.input,
-                          },
-                        ]}
-                        autoFocus
-                        returnKeyType="send"
-                        blurOnSubmit
-                        enablesReturnKeyAutomatically
-                        onSubmitEditing={handleSavePrompt}
-                        placeholder="Edit prompt"
-                        placeholderTextColor={theme.colors.textTertiary}
-                      />
-                      <TouchableOpacity
-                        onPress={handleCancelEditPrompt}
-                        style={styles.promptActionButton}
-                        hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
+            <View key={meal.id} style={[styles.mealCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              {/* Header with Prompt / Image */}
+              <View style={[styles.cardHeader, { borderBottomColor: theme.colors.border }]}>
+                {meal.imageUri ? (
+                  <View style={styles.imageHeader}>
+                    <Image
+                      source={{ uri: meal.imageUri }}
+                      style={[styles.thumbnail, { borderColor: theme.colors.border }]}
+                      resizeMode="cover"
+                    />
+                    <View style={styles.imageHeaderText}>
+                      <Text
+                        style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
+                        numberOfLines={2}
                       >
-                        <Feather name="x" size={14} color={theme.colors.textSecondary} />
-                      </TouchableOpacity>
-                    </>
-                  ) : (
-                    <>
-                      <View style={styles.promptTextWrapper}>
-                        <TypingAnimation 
-                          speed={20}
-                          style={[styles.promptText, { color: theme.colors.textSecondary }]}
-                        >
-                          {`> ${meal.prompt}`}
-                        </TypingAnimation>
+                        {meal.prompt || "Food from image"}
+                      </Text>
+                    </View>
+                  </View>
+                ) : (
+                  <View style={styles.promptRow}>
+                    {editingMealId === meal.id ? (
+                      <View style={styles.editContainer}>
+                        <TextInput
+                          value={editedPrompt}
+                          onChangeText={setEditedPrompt}
+                          style={[
+                            styles.promptInput,
+                            {
+                              color: theme.colors.textPrimary,
+                              borderColor: theme.colors.border,
+                              backgroundColor: theme.colors.input,
+                            },
+                          ]}
+                          autoFocus
+                          returnKeyType="send"
+                          blurOnSubmit
+                          onSubmitEditing={handleSavePrompt}
+                        />
+                        <TouchableOpacity onPress={handleCancelEditPrompt} style={styles.iconButton}>
+                          <Feather name="x" size={14} color={theme.colors.textSecondary} />
+                        </TouchableOpacity>
+                      </View>
+                    ) : (
+                      <View style={styles.promptDisplay}>
+                        <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
+                          {meal.prompt}
+                        </Text>
                         <View style={styles.promptActions}>
                           {onToggleSavePrompt && (
-                            <TouchableOpacity
-                              style={styles.bookmarkButton}
+                            <AnimatedBookmarkButton
+                              isSaved={savedPromptLookup.has(meal.prompt.trim().toLowerCase())}
                               onPress={() => onToggleSavePrompt(meal)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
-                              {savedPromptLookup.has(meal.prompt.trim().toLowerCase()) ? (
-                                <BookmarkCheck size={16} color="#10B981" strokeWidth={2.6} />
-                              ) : (
-                                <BookmarkPlus size={16} color={theme.colors.textSecondary} strokeWidth={2.6} />
-                              )}
-                            </TouchableOpacity>
+                              theme={theme}
+                            />
                           )}
                           {onEditMealPrompt && (
-                            <TouchableOpacity
-                              style={styles.editIconButton}
-                              onPress={() => handleStartEditPrompt(meal)}
-                              hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                            >
+                            <TouchableOpacity onPress={() => handleStartEditPrompt(meal)} style={styles.iconButton}>
                               <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
                             </TouchableOpacity>
                           )}
                         </View>
                       </View>
-                      {isMealUpdating && editingMealId === meal.id && (
-                        <Text style={[styles.updatingText, { color: theme.colors.textTertiary }]}>
-                          updating…
-                        </Text>
-                      )}
-                    </>
-                  )}
-                </View>
-              )}
-              
-              {/* Food Items with animated spans */}
-              {meal.foods.map((food, foodIndex) => {
-                const baseDelay = 500 + (mealIndex * 1000) + (foodIndex * 300);
-                const isFirstFood = foodIndex === 0;
-        
-        return (
-          <TouchableOpacity 
-                    key={food.id} 
-                    style={styles.foodItem}
-                    onPress={() => handleFoodPress(meal.id, food)}
-                    activeOpacity={0.7}
-                  >
-                    <View style={styles.foodNameRow}>
-                      <View style={styles.foodNameContainer}>
-                        <AnimatedSpan
-                          delay={baseDelay}
-                          style={{ color: '#10B981', marginBottom: 4 }}
-                        >
-                          {`${food.name} (${food.weight_g}g)`}
-                        </AnimatedSpan>
-                      </View>
-                      {isFirstFood && meal.imageUri && (
-                        <Image 
-                          source={{ uri: meal.imageUri }} 
-                          style={[styles.thumbnail, { borderColor: theme.colors.border }]}
-                          resizeMode="cover"
-                        />
-                      )}
-                    </View>
-                    
-                    <AnimatedSpan
-                      delay={baseDelay + 100}
-                      style={{ color: '#10B981', fontSize: 12, flexShrink: 1 }}
-                      numberOfLines={1}
-                      ellipsizeMode="tail"
-                    >
-                      {`Calories: ${food.calories} | Protein: ${food.protein}g | Carbs: ${food.carbs}g | Fat: ${food.fat}g`}
-                    </AnimatedSpan>
-          </TouchableOpacity>
-                );
-              })}
-
-              {/* Footer actions */}
-              <View style={styles.mealFooter}>
-                {meal.foods.length > 0 && (
-                  <TypingAnimation
-                    speed={30}
-                    style={{ 
-                      color: theme.colors.textSecondary, 
-                      fontSize: 12 
-                    }}
-                  >
-                    {`Success! Added ${meal.foods.length} food item${meal.foods.length > 1 ? 's' : ''}.`}
-                  </TypingAnimation>
+                    )}
+                  </View>
                 )}
                 {onDeleteMeal && (
                   <TouchableOpacity
-                    style={styles.deleteButton}
+                    style={styles.deleteMealButton}
                     onPress={() => onDeleteMeal(meal.id)}
-                    hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   >
-                    <Feather name="trash-2" size={14} color="#EF4444" />
+                    <Feather name="trash-2" size={14} color={theme.colors.error} />
                   </TouchableOpacity>
                 )}
               </View>
-            </Terminal>
+
+              {/* Food List */}
+              <View style={styles.foodList}>
+                {meal.foods.map((food, idx) => (
+                  <TouchableOpacity
+                    key={`${food.id}-${idx}`}
+                    style={[
+                      styles.foodItem,
+                      idx < meal.foods.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                    ]}
+                    onPress={() => handleFoodPress(meal.id, food)}
+                  >
+                    <View style={styles.foodInfo}>
+                      <Text style={[styles.foodName, { color: theme.colors.textPrimary }]}>
+                        {food.name}
+                        <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
+                      </Text>
+                      <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
+                        {food.calories} kcal · P:{food.protein} C:{food.carbs} F:{food.fat}
+                      </Text>
+                    </View>
+                    <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
           );
         })}
-              </View>
-              
+      </View>
+
       {/* Food Analysis Modal */}
       <Modal
         visible={selectedFood !== null}
@@ -292,22 +250,6 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
           >
             {selectedFood && (
               <>
-                {/*
-                  Derive calories from macros so that when protein/carbs/fat
-                  are edited, calories automatically reflect the new values.
-                  1g protein = 4 kcal, 1g carbs = 4 kcal, 1g fat = 9 kcal.
-                */}
-                {(() => {
-                  const p = Number(selectedFood.protein || 0);
-                  const c = Number(selectedFood.carbs || 0);
-                  const f = Number(selectedFood.fat || 0);
-                  const derivedCalories = Math.max(0, Math.round(p * 4 + c * 4 + f * 9));
-                  if (selectedFood.calories !== derivedCalories) {
-                    // Keep local copy in sync so UI always shows the derived value
-                    setSelectedFood({ ...selectedFood, calories: derivedCalories });
-                  }
-                  return null;
-                })()}
                 <View style={styles.modalHeader}>
                   <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
                     {selectedFood.name}
@@ -316,124 +258,86 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     onPress={handleCloseModal}
                     style={styles.closeButton}
                   >
-                    <Feather name="x" size={24} color="#10B981" />
+                    <Feather name="x" size={20} color={theme.colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
-                
+
                 <View style={styles.modalNutrition}>
                   <Text style={[styles.nutritionLabel, { color: theme.colors.textSecondary }]}>
-                    Edit nutrition for this food
+                    Edit nutrition
                   </Text>
                   <View style={styles.nutritionGrid}>
                     <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        Calories
-                      </Text>
-                      <Text style={[styles.nutritionValue, { color: theme.colors.textPrimary }]}>
-                        {selectedFood.calories}
-                      </Text>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        kcal
-                      </Text>
-                    </View>
-                    <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        Protein
-                      </Text>
+                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>Calories</Text>
                       <TextInput
-                        style={[
-                          styles.nutritionValueInput,
-                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
-                        ]}
+                        style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                         keyboardType="numeric"
-                        value={String(selectedFood.protein ?? '')}
-                        onChangeText={(text) =>
-                          setSelectedFood(prev =>
-                            prev ? { ...prev, protein: Number(text) || 0 } : prev
-                          )
-                        }
+                        value={String(selectedFood.calories)}
+                        onChangeText={(text) => {
+                          const newCalories = Number(text) || 0;
+                          const oldCalories = baseFood?.calories || 1; // avoid div by 0
+                          const ratio = newCalories / oldCalories;
+
+                          setSelectedFood({
+                            ...selectedFood,
+                            calories: newCalories,
+                            protein: parseFloat(((baseFood?.protein || 0) * ratio).toFixed(1)),
+                            carbs: parseFloat(((baseFood?.carbs || 0) * ratio).toFixed(1)),
+                            fat: parseFloat(((baseFood?.fat || 0) * ratio).toFixed(1)),
+                          });
+                        }}
                       />
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        g
-                      </Text>
                     </View>
-                    <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        Carbs
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.nutritionValueInput,
-                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
-                        ]}
-                        keyboardType="numeric"
-                        value={String(selectedFood.carbs ?? '')}
-                        onChangeText={(text) =>
-                          setSelectedFood(prev =>
-                            prev ? { ...prev, carbs: Number(text) || 0 } : prev
-                          )
-                        }
-                      />
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        g
-                      </Text>
-                    </View>
-                    <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        Fat
-                      </Text>
-                      <TextInput
-                        style={[
-                          styles.nutritionValueInput,
-                          { color: theme.colors.textPrimary, borderColor: theme.colors.border },
-                        ]}
-                        keyboardType="numeric"
-                        value={String(selectedFood.fat ?? '')}
-                        onChangeText={(text) =>
-                          setSelectedFood(prev =>
-                            prev ? { ...prev, fat: Number(text) || 0 } : prev
-                          )
-                        }
-                      />
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>
-                        g
-                      </Text>
-                    </View>
+                    {['Protein', 'Carbs', 'Fat'].map((label) => {
+                      const key = label.toLowerCase() as keyof ParsedFood;
+                      return (
+                        <View key={label} style={styles.nutritionItem}>
+                          <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>{label}</Text>
+                          <TextInput
+                            style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                            keyboardType="numeric"
+                            value={String(selectedFood[key] ?? '')}
+                            onChangeText={(text) => {
+                              const newVal = Number(text) || 0;
+                              const updatedFood = { ...selectedFood, [key]: newVal };
+                              // Auto-update calories if macro changes (Bidirectional convenience)
+                              const p = Number(key === 'protein' ? newVal : updatedFood.protein || 0);
+                              const c = Number(key === 'carbs' ? newVal : updatedFood.carbs || 0);
+                              const f = Number(key === 'fat' ? newVal : updatedFood.fat || 0);
+                              updatedFood.calories = Math.round(p * 4 + c * 4 + f * 9);
+                              setSelectedFood(updatedFood);
+                            }}
+                          />
+                        </View>
+                      );
+                    })}
                   </View>
                 </View>
 
                 {onUpdateFood && selectedMealId && (
-                  <View
-                    style={{
-                      marginTop: Spacing.md,
-                      flexDirection: 'row',
-                      justifyContent: 'flex-end',
-                      columnGap: 8,
-                    }}
-                  >
+                  <View style={styles.modalActions}>
                     <TouchableOpacity
-                      style={styles.modalButtonSecondary}
+                      style={[styles.modalButtonSecondary, { borderColor: theme.colors.border }]}
                       onPress={handleCloseModal}
                     >
-                      <Text style={styles.modalButtonSecondaryText}>Cancel</Text>
+                      <Text style={[styles.modalButtonSecondaryText, { color: theme.colors.textSecondary }]}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={styles.modalButtonPrimary}
+                      style={[styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
                       onPress={() => {
                         if (selectedFood && onUpdateFood && selectedMealId) {
                           const p = Number(selectedFood.protein || 0);
                           const c = Number(selectedFood.carbs || 0);
                           const f = Number(selectedFood.fat || 0);
-                          const derivedCalories = Math.max(0, Math.round(p * 4 + c * 4 + f * 9));
                           onUpdateFood(selectedMealId, {
                             ...selectedFood,
-                            calories: derivedCalories,
+                            calories: Math.max(0, Math.round(p * 4 + c * 4 + f * 9)),
                           });
                         }
                         handleCloseModal();
                       }}
                     >
-                      <Text style={styles.modalButtonPrimaryText}>Save</Text>
+                      <Text style={[styles.modalButtonPrimaryText, { color: theme.colors.primaryForeground }]}>Save</Text>
                     </TouchableOpacity>
                   </View>
                 )}
@@ -451,119 +355,126 @@ const styles = StyleSheet.create({
     marginBottom: Spacing.lg,
     paddingHorizontal: Spacing.sm,
   },
-  promptRow: {
+  mealCard: {
+    marginBottom: Spacing.md,
+    borderRadius: 12,
+    borderWidth: 1,
+    overflow: 'hidden',
+  },
+  cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    marginBottom: 8,
-  },
-  promptTextWrapper: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  promptText: {
-    flex: 1,
-    fontSize: 12,
-  },
-  promptActions: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginLeft: 8,
-    gap: 4,
-  },
-  editIconButton: {
-    padding: 4,
-  },
-  bookmarkButton: {
-    padding: 4,
-  },
-  promptInput: {
-    flex: 1,
-    fontSize: 12,
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 8,
-    minHeight: 36,
-  },
-  promptActionButton: {
-    padding: 4,
-    marginLeft: 6,
-  },
-  updatingText: {
-    marginTop: 4,
-    fontSize: 11,
-    fontStyle: 'italic',
-  },
-  terminal: {
-    marginBottom: Spacing.md,
-    fontFamily: 'monospace',
-  },
-  foodItem: {
-    marginBottom: Spacing.sm,
-    paddingVertical: 4,
-    borderRadius: 4,
-  },
-  foodNameRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
     justifyContent: 'space-between',
+    padding: 12,
+    backgroundColor: 'rgba(0,0,0,0.02)', // slight tint for header
+    borderBottomWidth: 1,
   },
-  foodNameContainer: {
+  imageHeader: {
     flexDirection: 'row',
     alignItems: 'center',
+    flex: 1,
+  },
+  imageHeaderText: {
+    marginLeft: 10,
     flex: 1,
   },
   thumbnail: {
-    width: 60,
-    height: 60,
-    borderRadius: 8,
+    width: 40,
+    height: 40,
+    borderRadius: 6,
     borderWidth: 1,
-    marginLeft: Spacing.sm,
   },
-  mealFooter: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
+  promptRow: {
+    flex: 1,
+    marginRight: 8,
   },
-  deleteButton: {
+  promptDisplay: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+  },
+  promptText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    lineHeight: 20,
+  },
+  promptActions: {
+    flexDirection: 'row',
+    marginLeft: 6,
+    gap: 6,
+  },
+  editContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    flex: 1,
+  },
+  promptInput: {
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    borderWidth: 1,
+    borderRadius: 6,
     paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: 'rgba(239, 68, 68, 0.2)',
-    backgroundColor: 'rgba(239, 68, 68, 0.08)',
+    paddingHorizontal: 8,
+    marginRight: 6,
+  },
+  iconButton: {
+    padding: 2,
+  },
+  deleteMealButton: {
+    padding: 4,
+    opacity: 0.7,
+  },
+  foodList: {
+    paddingVertical: 4,
+  },
+  foodItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  foodInfo: {
+    flex: 1,
+  },
+  foodName: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    marginBottom: 2,
+  },
+  foodWeight: {
+    fontWeight: Typography.fontWeight.normal,
+  },
+  foodMacros: {
+    fontSize: Typography.fontSize.xs,
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.4)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: Spacing.lg,
   },
   modalContent: {
-    width: '94%',
-    maxWidth: 420,
-    borderRadius: 20,
+    width: '100%',
+    maxWidth: 400,
+    borderRadius: 16,
     borderWidth: 1,
-    padding: Spacing.lg,
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.18,
-    shadowRadius: 24,
-    elevation: 10,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 5,
   },
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: Spacing.md,
+    marginBottom: 20,
   },
   modalTitle: {
-    fontSize: Typography.fontSize.xl,
+    fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.semiBold,
     flex: 1,
   },
@@ -571,63 +482,62 @@ const styles = StyleSheet.create({
     padding: 4,
   },
   modalNutrition: {
-    marginBottom: Spacing.md,
+    marginBottom: 24,
   },
   nutritionLabel: {
     fontSize: Typography.fontSize.sm,
-    marginBottom: Spacing.sm,
+    marginBottom: 12,
   },
   nutritionGrid: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
     justifyContent: 'space-between',
-    paddingVertical: Spacing.sm,
+    gap: 8,
   },
   nutritionItem: {
-    alignItems: 'flex-start',
-    marginVertical: Spacing.xs,
+    flex: 1,
+    alignItems: 'center',
   },
   nutritionValue: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: 4,
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+    marginTop: 4,
   },
   nutritionValueInput: {
-    minWidth: 60,
+    width: '100%',
     borderWidth: 1,
-    borderRadius: 8,
-    paddingVertical: 4,
-    paddingHorizontal: 8,
+    borderRadius: 6,
+    paddingVertical: 6,
+    paddingHorizontal: 4,
     textAlign: 'center',
     fontSize: Typography.fontSize.md,
-    marginVertical: 4,
+    marginTop: 4,
   },
   nutritionUnit: {
     fontSize: Typography.fontSize.xs,
   },
-  modalButtonPrimary: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#10B981',
-  },
-  modalButtonPrimaryText: {
-    color: Colors.white,
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
   },
   modalButtonSecondary: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.4)',
-    backgroundColor: 'rgba(15, 23, 42, 0.02)',
   },
   modalButtonSecondaryText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.secondaryText,
+  },
+  modalButtonPrimary: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 6,
+  },
+  modalButtonPrimaryText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
   },
 });
 

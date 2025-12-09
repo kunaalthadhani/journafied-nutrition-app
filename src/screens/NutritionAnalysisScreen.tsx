@@ -6,6 +6,8 @@ import {
   ScrollView,
   TouchableOpacity,
   Animated,
+  Dimensions,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -65,18 +67,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Transform mealsByDate into DailyNutrition format
   const nutritionData = useMemo<DailyNutrition[]>(() => {
     const dailyData: DailyNutrition[] = [];
-    
+
     // Iterate through all dates with meals
     Object.keys(mealsByDate).forEach((dateKey) => {
       const meals = mealsByDate[dateKey];
       if (!meals || meals.length === 0) return;
-      
+
       // Aggregate all foods from all meals for this date
       let totalCalories = 0;
       let totalProtein = 0;
       let totalCarbs = 0;
       let totalFat = 0;
-      
+
       meals.forEach((meal) => {
         meal.foods.forEach((food) => {
           totalCalories += food.calories || 0;
@@ -85,10 +87,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           totalFat += food.fat || 0;
         });
       });
-      
+
       // Parse the date key (YYYY-MM-DD) into a Date object
       const date = parseISO(dateKey);
-      
+
       dailyData.push({
         date,
         calories: totalCalories,
@@ -97,7 +99,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         fat: totalFat,
       });
     });
-    
+
     // Sort by date (oldest first)
     return dailyData.sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [mealsByDate]);
@@ -106,7 +108,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const getFilteredData = () => {
     const now = new Date();
     let startDate: Date;
-    
+
     switch (timeRange) {
       case '1W':
         startDate = subDays(now, 7);
@@ -129,7 +131,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       default:
         startDate = subDays(now, 7);
     }
-    
+
     return nutritionData.filter(entry => entry.date >= startDate);
   };
 
@@ -157,10 +159,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   const averageCalories = hasLoggedMeals
     ? Math.round(
-        graphData.reduce((sum, entry) => {
-          return sum + entry.calories;
-        }, 0) / graphData.length
-      )
+      graphData.reduce((sum, entry) => {
+        return sum + entry.calories;
+      }, 0) / graphData.length
+    )
     : null;
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
   const hasTargetCalories = targetCalories !== undefined;
@@ -174,7 +176,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const LINE_DRAW_LENGTH = 1000; // used for left-to-right draw animations
 
   // Find max value across all macronutrients for Y-axis scaling
-  const maxProtein = graphData.length > 0 
+  const maxProtein = graphData.length > 0
     ? Math.max(...graphData.map(d => d.protein), targetProtein ?? 0)
     : (targetProtein ?? 0);
   const maxCarbs = graphData.length > 0
@@ -210,7 +212,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     [graphData]
   );
 
-  const minCalories = caloriesData.length > 0 
+  const minCalories = caloriesData.length > 0
     ? Math.min(...caloriesData.map(d => d.calories))
     : 0;
   const maxCalories = caloriesData.length > 0
@@ -222,7 +224,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Generate smooth bezier curve path for a line with improved smoothness
   const generateSmoothPath = (values: number[]) => {
     if (values.length === 0) return '';
-    
+
     const points = values.map((value, index) => {
       const x = padding + (index / (values.length - 1 || 1)) * innerWidth;
       const normalizedValue = value / maxValue;
@@ -240,38 +242,38 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
     // Create smooth bezier curve with better control points
     let path = `M ${points[0].x} ${points[0].y}`;
-    
+
     for (let i = 0; i < points.length - 1; i++) {
       const current = points[i];
       const next = points[i + 1];
       const prev = i > 0 ? points[i - 1] : current;
       const after = i < points.length - 2 ? points[i + 2] : next;
-      
+
       // Calculate smooth control points using Catmull-Rom-like approach
       const dx1 = next.x - prev.x;
       const dy1 = next.y - prev.y;
       const dx2 = after.x - current.x;
       const dy2 = after.y - current.y;
-      
+
       // Control points for smooth curve
       const cp1x = current.x + dx1 / 6;
       const cp1y = current.y + dy1 / 6;
       const cp2x = next.x - dx2 / 6;
       const cp2y = next.y - dy2 / 6;
-      
+
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
-    
+
     return path;
   };
 
   // Generate smooth path for calories chart with improved smoothness
   const generateCaloriesPath = () => {
     if (caloriesData.length === 0) return '';
-    
+
     const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
     const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-    
+
     const points = caloriesData.map((entry, index) => {
       const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
       const normalizedCalories = (entry.calories - minCal) / (maxCal - minCal);
@@ -289,28 +291,28 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
     // Create smooth bezier curve with better control points
     let path = `M ${points[0].x} ${points[0].y}`;
-    
+
     for (let i = 0; i < points.length - 1; i++) {
       const current = points[i];
       const next = points[i + 1];
       const prev = i > 0 ? points[i - 1] : current;
       const after = i < points.length - 2 ? points[i + 2] : next;
-      
+
       // Calculate smooth control points using Catmull-Rom-like approach
       const dx1 = next.x - prev.x;
       const dy1 = next.y - prev.y;
       const dx2 = after.x - current.x;
       const dy2 = after.y - current.y;
-      
+
       // Control points for smooth curve
       const cp1x = current.x + dx1 / 6;
       const cp1y = current.y + dy1 / 6;
       const cp2x = next.x - dx2 / 6;
       const cp2y = next.y - dy2 / 6;
-      
+
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
-    
+
     return path;
   };
 
@@ -321,8 +323,41 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
 
-  // Screen-level fade-in for smooth navigation (content only)
-  const screenOpacity = useRef(new Animated.Value(0)).current;
+  // Screen-level slide-up for smooth navigation
+  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+
+  const handleClose = () => {
+    Animated.timing(slideAnim, {
+      toValue: Dimensions.get('window').height,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(onBack);
+  };
+
+  const panResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gestureState) => {
+        return gestureState.dy > 5;
+      },
+      onPanResponderMove: (_, gestureState) => {
+        if (gestureState.dy > 0) {
+          slideAnim.setValue(gestureState.dy);
+        }
+      },
+      onPanResponderRelease: (_, gestureState) => {
+        if (gestureState.dy > 100 || gestureState.vy > 0.5) {
+          handleClose();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            bounciness: 4,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   // Animated paths for calories and macros charts
   const [caloriesPath, setCaloriesPath] = useState<string>('');
@@ -335,11 +370,68 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const macrosChartOpacity = useRef(new Animated.Value(1)).current;
   const AnimatedPath = useRef(Animated.createAnimatedComponent((Path as any))).current;
 
+  // Scrubbing Interaction Logic
+  const [scrubbingIndex, setScrubbingIndex] = useState<number | null>(null);
+
+  // Calculate X coordinates for all data points (shared across both tabs)
+  const scrubbingPoints = useMemo(() => {
+    const data = activeTab === 'Calories' ? caloriesData : graphData;
+    if (data.length === 0) return [];
+
+    return data.map((entry, index) => {
+      const x = padding + (index / (data.length - 1 || 1)) * innerWidth;
+      // For Y, we don't strictly need it for the X-scrubbing, but it helps for positioning the tooltip bubble near the "data".
+      // For Macros, we might just position it at the top or follow the Protein line?
+      // Let's position it near the top of the graph (padding + 20) to avoid overlapping the busy lines.
+      const y = padding + 20;
+      return { x, y, data: entry, index };
+    });
+  }, [caloriesData, graphData, activeTab, innerWidth, padding]);
+
+  const graphPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onStartShouldSetPanResponderCapture: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponderCapture: () => true,
+      onPanResponderGrant: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+      onPanResponderMove: (evt) => {
+        handleTouch(evt.nativeEvent.locationX);
+      },
+      onPanResponderRelease: () => {
+        setScrubbingIndex(null);
+      },
+      onPanResponderTerminate: () => {
+        setScrubbingIndex(null);
+      },
+    })
+  ).current;
+
+  const handleTouch = (x: number) => {
+    if (scrubbingPoints.length === 0) return;
+
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    scrubbingPoints.forEach((p, i) => {
+      const diff = Math.abs(x - p.x);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    });
+
+    setScrubbingIndex(closestIndex);
+  };
+
   useEffect(() => {
-    Animated.timing(screenOpacity, {
-      toValue: 1,
-      duration: 1000,
+    Animated.spring(slideAnim, {
+      toValue: 0,
       useNativeDriver: true,
+      damping: 20,
+      stiffness: 90,
     }).start();
   }, []);
 
@@ -392,11 +484,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <Animated.View style={{ flex: 1, opacity: screenOpacity }}>
+      <Animated.View
+        style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
+        {...panResponder.panHandlers}
+      >
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-          <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color="#10B981" />
+          <TouchableOpacity onPress={handleClose} style={styles.backButton}>
+            <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Nutrition Analysis
@@ -404,587 +499,671 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <View style={styles.headerRight} />
         </View>
 
-        <ScrollView 
-        style={styles.content} 
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-      >
-        {!hasLoggedMeals && (
-          <View
-            style={[
-              styles.emptyStateContainer,
-              { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-            ]}
-          >
-            <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
-              Log your first meal
-            </Text>
-            <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
-              Start tracking your nutrition by logging your meals.
-            </Text>
-            <TouchableOpacity
-              style={[styles.emptyStateButton, { backgroundColor: '#10B981' }]}
-              onPress={() => {
-                if (onRequestLogMeal) {
-                  onRequestLogMeal();
-                } else {
-                  onBack();
-                }
-              }}
-              activeOpacity={0.85}
+        <ScrollView
+          style={styles.content}
+          contentContainerStyle={{ flexGrow: 1 }}
+          showsVerticalScrollIndicator={false}
+          removeClippedSubviews={false}
+        >
+          {!hasLoggedMeals && (
+            <View
+              style={[
+                styles.emptyStateContainer,
+                { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+              ]}
             >
-              <Text style={styles.emptyStateButtonText}>
-                Log Meal
+              <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
+                Log your first meal
               </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Calorie Summary */}
-        <View style={styles.summaryContainer}>
-          <View style={styles.summaryItem}>
-            <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-              {averageCalories !== null ? `${averageCalories} Kcal` : '--'}
-            </Text>
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Average</Text>
-          </View>
-          <View style={styles.summaryItem}>
-            {hasTargetCalories ? (
-              <Text style={[styles.summaryValue, { color: theme.colors.textPrimary }]}>
-                {`${targetCalories} Kcal`}
+              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+                Start tracking your nutrition by logging your meals.
               </Text>
-            ) : (
               <TouchableOpacity
-                style={styles.setGoalLink}
-                onPress={handleSetGoalPress}
-                activeOpacity={0.8}
+                style={[styles.emptyStateButton, { backgroundColor: theme.colors.primary }]}
+                onPress={() => {
+                  if (onRequestLogMeal) {
+                    onRequestLogMeal();
+                  } else {
+                    onBack();
+                  }
+                }}
+                activeOpacity={0.85}
               >
-                <Text style={[styles.setGoalText, { color: '#10B981' }]}>Set Goal</Text>
+                <Text style={[styles.emptyStateButtonText, { color: theme.colors.primaryForeground }]}>
+                  Log Meal
+                </Text>
               </TouchableOpacity>
+            </View>
+          )}
+
+          {/* Dynamic Hero Summary */}
+          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 24, marginTop: 8 }}>
+            {activeTab === 'Calories' ? (
+              <>
+                {/* Average Calories Hero */}
+                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Average</Text>
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {averageCalories !== null ? `${averageCalories}` : '--'}
+                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
+                  </Text>
+                </View>
+
+                {/* Target Calories Hero */}
+                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Target</Text>
+                  {hasTargetCalories ? (
+                    <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                      {`${targetCalories}`}
+                      <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
+                    </Text>
+                  ) : (
+                    <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.7}>
+                      <Text style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4 }}>Set Goal</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
+              </>
+            ) : (
+              <>
+                {/* Protein Hero */}
+                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Protein</Text>
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {averageProtein !== null ? `${averageProtein.toFixed(0)}` : '--'}
+                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
+                  </Text>
+                </View>
+
+                {/* Carbs Hero */}
+                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#EAB308' }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Carbs</Text>
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {averageCarbs !== null ? `${averageCarbs.toFixed(0)}` : '--'}
+                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
+                  </Text>
+                </View>
+
+                {/* Fat Hero */}
+                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Fat</Text>
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                    {averageFat !== null ? `${averageFat.toFixed(0)}` : '--'}
+                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
+                  </Text>
+                </View>
+              </>
             )}
-            <Text style={[styles.summaryLabel, { color: theme.colors.textSecondary }]}>Target</Text>
           </View>
-        </View>
 
-        {hasLoggedMeals && (
-          <>
-            {/* Tab Navigation */}
-        <View style={[styles.tabContainer, { backgroundColor: theme.colors.input }]}>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'Calories' && { backgroundColor: '#10B981' },
-            ]}
-            onPress={() => setActiveTab('Calories')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color: activeTab === 'Calories' ? Colors.white : theme.colors.textSecondary,
-                },
-              ]}
-            >
-              Calories
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.tab,
-              activeTab === 'Macros' && { backgroundColor: '#10B981' },
-            ]}
-            onPress={() => setActiveTab('Macros')}
-          >
-            <Text
-              style={[
-                styles.tabText,
-                {
-                  color: activeTab === 'Macros' ? Colors.white : theme.colors.textSecondary,
-                },
-              ]}
-            >
-              Macros
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Calories Chart Section */}
-        {activeTab === 'Calories' && (
-          <View style={styles.graphContainer}>
-            <Animated.View style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: caloriesChartOpacity }]}>
-              {/* Y-axis labels */}
-              <View style={styles.yAxisContainer}>
-                {(() => {
-                  const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                  const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-                  return [0, 1, 2, 3, 4, 5].map((i) => {
-                    const value = maxCal - (i / 5) * (maxCal - minCal);
-                    return (
-                      <Text
-                        key={i}
-                        style={[
-                          styles.yAxisLabel,
-                          {
-                            color: theme.colors.textTertiary,
-                            top: padding + (i / 5) * innerHeight - 8,
-                          },
-                        ]}
-                      >
-                        {value.toFixed(0)}
-                      </Text>
-                    );
-                  });
-                })()}
-              </View>
-
-              {/* Graph */}
-              <View style={styles.graph}>
-                <Svg width={graphWidth} height={graphHeight}>
-                  <Defs>
-                    <LinearGradient id="caloriesGradient" x1="0" y1="0" x2="1" y2="0">
-                      <Stop offset="0%" stopColor="#6EE7B7" />
-                      <Stop offset="50%" stopColor="#10B981" />
-                      <Stop offset="100%" stopColor="#22C55E" />
-                    </LinearGradient>
-                  </Defs>
-                  {/* Grid lines */}
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <Line
-                      key={i}
-                      x1={padding}
-                      y1={padding + (i / 5) * innerHeight}
-                      x2={graphWidth - padding}
-                      y2={padding + (i / 5) * innerHeight}
-                      stroke={theme.colors.border}
-                      strokeWidth={0.5}
-                      strokeDasharray="2,2"
-                    />
-                  ))}
-
-                  {/* Target line */}
-                  {hasTargetCalories && (() => {
-                    const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                    const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-                    const targetY = padding + innerHeight - ((targetCalories! - minCal) / (maxCal - minCal)) * innerHeight;
-                    return (
-                      <Line
-                        x1={padding}
-                        y1={targetY}
-                        x2={graphWidth - padding}
-                        y2={targetY}
-                        stroke="#10B981"
-                        strokeWidth={1}
-                        strokeDasharray="4,4"
-                        opacity={0.5}
-                      />
-                    );
-                  })()}
-
-                  {/* Calories line path with left-to-right draw animation */}
-                  {caloriesPath ? (
-                    <AnimatedPath
-                      d={caloriesPath}
-                      fill="none"
-                      stroke="url(#caloriesGradient)"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
-                      strokeDashoffset={caloriesLineProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [LINE_DRAW_LENGTH, 0],
-                      })}
-                    />
-                  ) : null}
-
-                  {/* Data points */}
-                  {caloriesData.map((entry, index) => {
-                    const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
-                    const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                    const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-                    const normalizedCalories = (entry.calories - minCal) / (maxCal - minCal);
-                    const y = padding + innerHeight - (normalizedCalories * innerHeight);
-                    return (
-                      <Circle
-                        key={index}
-                        cx={x}
-                        cy={y}
-                        r={4}
-                        fill="#10B981"
-                      />
-                    );
-                  })}
-                </Svg>
-              </View>
-            </Animated.View>
-
-            {/* Time Range Selector */}
-            <View style={styles.timeRangeContainer}>
-              {timeRanges.map((range) => (
+          {hasLoggedMeals && (
+            <React.Fragment>
+              {/* Tab Navigation */}
+              <View style={[styles.tabContainer, { backgroundColor: theme.colors.input }]}>
                 <TouchableOpacity
-                  key={range}
                   style={[
-                    styles.timeRangeButton,
-                    timeRange === range && styles.timeRangeButtonActive,
+                    styles.tab,
+                    activeTab === 'Calories' && { backgroundColor: theme.colors.primary },
                   ]}
-                  onPress={() => handleTimeRangeChange(range)}
+                  onPress={() => setActiveTab('Calories')}
                 >
                   <Text
                     style={[
-                      styles.timeRangeText,
-                      timeRange === range
-                        ? styles.timeRangeTextActive
-                        : { color: theme.colors.textSecondary },
+                      styles.tabText,
+                      {
+                        color: activeTab === 'Calories' ? theme.colors.primaryForeground : theme.colors.textSecondary,
+                      },
                     ]}
                   >
-                    {range}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Date Range */}
-            <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
-              {getDateRange()}
-            </Text>
-
-            {/* Calories History Table */}
-            {caloriesHistory.length > 0 && (
-              <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
-                <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
-                  History
-                </Text>
-                <View style={styles.historyHeaderRow}>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                    Date
-                  </Text>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
                     Calories
                   </Text>
-                  <View style={styles.historyHeaderSpacer} />
-                </View>
-                {caloriesHistory.map((entry) => (
-                  <View key={entry.date.toISOString()} style={styles.historyRow}>
-                    <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
-                      {format(entry.date, 'd MMM yyyy')}
-                    </Text>
-                    <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
-                      {`${entry.calories.toFixed(0)} Kcal`}
-                    </Text>
-                    <View style={styles.historyActions}>
-                      {onRequestLogMealForDate && (
-                        <TouchableOpacity
-                          onPress={() => onRequestLogMealForDate(entry.date)}
-                          style={styles.historyEditButton}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
-        )}
-
-        {/* Macros Chart Section */}
-        {activeTab === 'Macros' && (
-            <View style={styles.graphContainer}>
-            {/* Daily Averages */}
-            <View style={styles.averagesContainer}>
-              <View style={styles.averageItem}>
-                <View style={[styles.averageDot, { backgroundColor: '#10B981' }]} />
-                <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Protein:</Text>
-                <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageProtein !== null ? `${averageProtein.toFixed(0)}g` : '--'}
-                </Text>
-              </View>
-              <View style={styles.averageItem}>
-                <View style={[styles.averageDot, { backgroundColor: '#FF7E67' }]} />
-                <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Carbs:</Text>
-                <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageCarbs !== null ? `${averageCarbs.toFixed(0)}g` : '--'}
-                </Text>
-              </View>
-              <View style={styles.averageItem}>
-                <View style={[styles.averageDot, { backgroundColor: '#40514E' }]} />
-                <Text style={[styles.averageLabel, { color: theme.colors.textSecondary }]}>Fat:</Text>
-                <Text style={[styles.averageValue, { color: theme.colors.textPrimary }]}>
-                  {averageFat !== null ? `${averageFat.toFixed(0)}g` : '--'}
-                </Text>
-              </View>
-            </View>
-
-            <Animated.View style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: macrosChartOpacity }]}>
-              {/* Y-axis labels */}
-              <View style={styles.yAxisContainer}>
-                {[0, 1, 2, 3, 4, 5].map((i) => {
-                  const value = maxValue - (i / 5) * maxValue;
-                  return (
-                    <Text
-                      key={i}
-                      style={[
-                        styles.yAxisLabel,
-                        {
-                          color: theme.colors.textTertiary,
-                          top: padding + (i / 5) * innerHeight - 8,
-                        },
-                      ]}
-                    >
-                      {value.toFixed(0)}g
-                    </Text>
-                  );
-                })}
-              </View>
-
-              {/* Graph */}
-              <View style={styles.graph}>
-                <Svg width={graphWidth} height={graphHeight}>
-                  <Defs>
-                    <LinearGradient id="proteinGradient" x1="0" y1="0" x2="1" y2="0">
-                      <Stop offset="0%" stopColor="#6EE7B7" />
-                      <Stop offset="50%" stopColor="#10B981" />
-                      <Stop offset="100%" stopColor="#22C55E" />
-                    </LinearGradient>
-                    <LinearGradient id="carbsGradient" x1="0" y1="0" x2="1" y2="0">
-                      <Stop offset="0%" stopColor="#FECDD3" />
-                      <Stop offset="50%" stopColor="#FB7185" />
-                      <Stop offset="100%" stopColor="#F97373" />
-                    </LinearGradient>
-                    <LinearGradient id="fatGradient" x1="0" y1="0" x2="1" y2="0">
-                      <Stop offset="0%" stopColor="#CBD5F5" />
-                      <Stop offset="50%" stopColor="#64748B" />
-                      <Stop offset="100%" stopColor="#475569" />
-                    </LinearGradient>
-                  </Defs>
-                  {/* Grid lines */}
-                  {[0, 1, 2, 3, 4, 5].map((i) => (
-                    <Line
-                      key={i}
-                      x1={padding}
-                      y1={padding + (i / 5) * innerHeight}
-                      x2={graphWidth - padding}
-                      y2={padding + (i / 5) * innerHeight}
-                      stroke={theme.colors.border}
-                      strokeWidth={0.5}
-                      strokeDasharray="2,2"
-                    />
-                  ))}
-
-                  {/* Target lines */}
-                  {targetProtein !== undefined && (() => {
-                    const targetProteinY = padding + innerHeight - (targetProtein / maxValue) * innerHeight;
-                    return (
-                      <Line
-                        x1={padding}
-                        y1={targetProteinY}
-                        x2={graphWidth - padding}
-                        y2={targetProteinY}
-                        stroke="#10B981"
-                        strokeWidth={1}
-                        strokeDasharray="4,4"
-                        opacity={0.5}
-                      />
-                    );
-                  })()}
-                  {targetCarbs !== undefined && (() => {
-                    const targetCarbsY = padding + innerHeight - (targetCarbs / maxValue) * innerHeight;
-                    return (
-                      <Line
-                        x1={padding}
-                        y1={targetCarbsY}
-                        x2={graphWidth - padding}
-                        y2={targetCarbsY}
-                        stroke="#FF7E67"
-                        strokeWidth={1}
-                        strokeDasharray="4,4"
-                        opacity={0.5}
-                      />
-                    );
-                  })()}
-                  {targetFat !== undefined && (() => {
-                    const targetFatY = padding + innerHeight - (targetFat / maxValue) * innerHeight;
-                    return (
-                      <Line
-                        x1={padding}
-                        y1={targetFatY}
-                        x2={graphWidth - padding}
-                        y2={targetFatY}
-                        stroke="#40514E"
-                        strokeWidth={1}
-                        strokeDasharray="4,4"
-                        opacity={0.5}
-                      />
-                    );
-                  })()}
-
-                  {/* Protein line */}
-                  {proteinPath ? (
-                    <AnimatedPath
-                      d={proteinPath}
-                      fill="none"
-                      stroke="url(#proteinGradient)"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
-                      strokeDashoffset={macrosLineProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [LINE_DRAW_LENGTH, 0],
-                      })}
-                    />
-                  ) : null}
-
-                  {/* Carbs line */}
-                  {carbsPath ? (
-                    <AnimatedPath
-                      d={carbsPath}
-                      fill="none"
-                      stroke="url(#carbsGradient)"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
-                      strokeDashoffset={macrosLineProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [LINE_DRAW_LENGTH, 0],
-                      })}
-                    />
-                  ) : null}
-
-                  {/* Fat line */}
-                  {fatPath ? (
-                    <AnimatedPath
-                      d={fatPath}
-                      fill="none"
-                      stroke="url(#fatGradient)"
-                      strokeWidth={2}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
-                      strokeDashoffset={macrosLineProgress.interpolate({
-                        inputRange: [0, 1],
-                        outputRange: [LINE_DRAW_LENGTH, 0],
-                      })}
-                    />
-                  ) : null}
-
-                  {/* Data points */}
-                  {graphData.map((entry, index) => {
-                    const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
-                    
-                    const proteinY = padding + innerHeight - (entry.protein / maxValue) * innerHeight;
-                    const carbsY = padding + innerHeight - (entry.carbs / maxValue) * innerHeight;
-                    const fatY = padding + innerHeight - (entry.fat / maxValue) * innerHeight;
-
-                    return (
-                      <React.Fragment key={index}>
-                        <Circle cx={x} cy={proteinY} r={4} fill="#10B981" />
-                        <Circle cx={x} cy={carbsY} r={4} fill="#FF7E67" />
-                        <Circle cx={x} cy={fatY} r={4} fill="#40514E" />
-                      </React.Fragment>
-                    );
-                  })}
-                </Svg>
-              </View>
-            </Animated.View>
-
-            {/* Time Range Selector */}
-            <View style={styles.timeRangeContainer}>
-              {timeRanges.map((range) => (
+                </TouchableOpacity>
                 <TouchableOpacity
-                  key={range}
                   style={[
-                    styles.timeRangeButton,
-                    timeRange === range && styles.timeRangeButtonActive,
+                    styles.tab,
+                    activeTab === 'Macros' && { backgroundColor: theme.colors.primary },
                   ]}
-                  onPress={() => handleTimeRangeChange(range)}
+                  onPress={() => setActiveTab('Macros')}
                 >
                   <Text
                     style={[
-                      styles.timeRangeText,
-                      timeRange === range
-                        ? styles.timeRangeTextActive
-                        : { color: theme.colors.textSecondary },
+                      styles.tabText,
+                      {
+                        color: activeTab === 'Macros' ? theme.colors.primaryForeground : theme.colors.textSecondary,
+                      },
                     ]}
                   >
-                    {range}
+                    Macros
                   </Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-
-            {/* Date Range */}
-            <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
-              {getDateRange()}
-            </Text>
-
-            {/* Macros History Table */}
-            {macrosHistory.length > 0 && (
-              <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
-                <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
-                  History
-                </Text>
-                <View style={styles.historyHeaderRow}>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                    Date
-                  </Text>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                    Protein
-                  </Text>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                    Carbs
-                  </Text>
-                  <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
-                    Fat
-                  </Text>
-                  <View style={styles.historyHeaderSpacer} />
-                </View>
-                {macrosHistory.map((entry) => (
-                  <View key={entry.date.toISOString()} style={styles.historyRow}>
-                    <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
-                      {format(entry.date, 'd MMM yyyy')}
-                    </Text>
-                    <Text style={[styles.historyCellText, { color: '#10B981' }]}>
-                      {`${entry.protein.toFixed(0)}g`}
-                    </Text>
-                    <Text style={[styles.historyCellText, { color: '#FF7E67' }]}>
-                      {`${entry.carbs.toFixed(0)}g`}
-                    </Text>
-                    <Text style={[styles.historyCellText, { color: '#40514E' }]}>
-                      {`${entry.fat.toFixed(0)}g`}
-                    </Text>
-                    <View style={styles.historyActions}>
-                      {onRequestLogMealForDate && (
-                        <TouchableOpacity
-                          onPress={() => onRequestLogMealForDate(entry.date)}
-                          style={styles.historyEditButton}
-                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                        >
-                          <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ))}
               </View>
-            )}
-          </View>
-        )}
 
-            {/* Information Box */}
-            <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-              <Feather name="info" size={20} color="#10B981" />
-              <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                Your protein intake is below target. Consider adding more lean protein to your meals.
-              </Text>
-            </View>
-          </>
-        )}
-      </ScrollView>
+              {/* Calories Chart Section */}
+              {activeTab === 'Calories' && (
+                <View style={styles.graphContainer}>
+                  <Animated.View
+                    style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: caloriesChartOpacity }]}
+                    {...graphPanResponder.panHandlers}
+                  >
+                    {/* Tooltip Overlay */}
+                    {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: scrubbingPoints[scrubbingIndex].x - 60,
+                          top: 10,
+                          width: 120,
+                          alignItems: 'center',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <View style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 8,
+                          padding: 8,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 3,
+                          alignItems: 'center'
+                        }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>
+                            {format(scrubbingPoints[scrubbingIndex].data.date, 'MMM d')}
+                          </Text>
+                          <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>
+                            {scrubbingPoints[scrubbingIndex].data.calories.toFixed(0)} Kcal
+                          </Text>
+                        </View>
+                        {/* Triangle */}
+                        <View style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: theme.colors.border, marginTop: -1 }} />
+                        <View style={{ width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: theme.colors.card, marginTop: -7 }} />
+                      </View>
+                    )}
+
+                    {/* Y-axis labels */}
+                    <View style={styles.yAxisContainer}>
+                      {(() => {
+                        const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
+                        const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                        return [0, 1, 2, 3, 4, 5].map((i) => {
+                          const value = maxCal - (i / 5) * (maxCal - minCal);
+                          return (
+                            <Text
+                              key={i}
+                              style={[
+                                styles.yAxisLabel,
+                                {
+                                  color: theme.colors.textTertiary,
+                                  top: padding + (i / 5) * innerHeight - 8,
+                                },
+                              ]}
+                            >
+                              {value.toFixed(0)}
+                            </Text>
+                          );
+                        });
+                      })()}
+                    </View>
+
+                    {/* Graph */}
+                    <View style={styles.graph}>
+                      <Svg width={graphWidth} height={graphHeight}>
+
+                        {/* Grid lines */}
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <Line
+                            key={i}
+                            x1={padding}
+                            y1={padding + (i / 5) * innerHeight}
+                            x2={graphWidth - padding}
+                            y2={padding + (i / 5) * innerHeight}
+                            stroke={theme.colors.border}
+                            strokeWidth={0.5}
+                            strokeDasharray="2,2"
+                          />
+                        ))}
+
+                        {/* Target line */}
+                        {hasTargetCalories && (() => {
+                          const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
+                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const targetY = padding + innerHeight - ((targetCalories! - minCal) / (maxCal - minCal)) * innerHeight;
+                          return (
+                            <Line
+                              x1={padding}
+                              y1={targetY}
+                              x2={graphWidth - padding}
+                              y2={targetY}
+                              stroke="#EF4444"
+                              strokeWidth={1}
+                              strokeDasharray="4,4"
+                              opacity={0.5}
+                            />
+                          );
+                        })()}
+
+                        {/* Calories line path */}
+                        {caloriesPath ? (
+                          <AnimatedPath
+                            d={caloriesPath}
+                            fill="none"
+                            stroke={theme.colors.primary}
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDashoffset={caloriesLineProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [LINE_DRAW_LENGTH, 0],
+                            })}
+                          />
+                        ) : null}
+
+                        {/* Data points (dots) - only show if few points or highlighted */}
+                        {caloriesData.length < 20 && caloriesData.map((entry, index) => {
+                          const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
+                          const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
+                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const normalizedCalories = (entry.calories - minCal) / (maxCal - minCal);
+                          const y = padding + innerHeight - (normalizedCalories * innerHeight);
+                          return (
+                            <Circle
+                              key={index}
+                              cx={x}
+                              cy={y}
+                              r={4}
+                              fill={theme.colors.primary}
+                            />
+                          );
+                        })}
+
+                        {/* Active Scrubber */}
+                        {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
+                          (() => {
+                            const pt = scrubbingPoints[scrubbingIndex];
+                            const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
+                            const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                            const normalizedCalories = (pt.data.calories - minCal) / (maxCal - minCal);
+                            const y = padding + innerHeight - (normalizedCalories * innerHeight);
+
+                            return (
+                              <>
+                                <Line
+                                  x1={pt.x}
+                                  y1={padding}
+                                  x2={pt.x}
+                                  y2={graphHeight - padding}
+                                  stroke={theme.colors.textSecondary}
+                                  strokeWidth={1}
+                                  strokeDasharray="4,4"
+                                />
+                                <Circle
+                                  cx={pt.x}
+                                  cy={y}
+                                  r={6}
+                                  fill={theme.colors.primary}
+                                  stroke={theme.colors.card}
+                                  strokeWidth={3}
+                                />
+                              </>
+                            );
+                          })()
+                        )}
+                      </Svg>
+                    </View>
+                  </Animated.View>
+
+                  {/* Time Range Selector */}
+                  <View style={styles.timeRangeContainer}>
+                    {timeRanges.map((range) => (
+                      <TouchableOpacity
+                        key={range}
+                        style={[
+                          styles.timeRangeButton,
+                          timeRange === range && styles.timeRangeButtonActive,
+                        ]}
+                        onPress={() => handleTimeRangeChange(range)}
+                      >
+                        <Text
+                          style={[
+                            styles.timeRangeText,
+                            timeRange === range
+                              ? styles.timeRangeTextActive
+                              : { color: theme.colors.textSecondary },
+                          ]}
+                        >
+                          {range}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Date Range */}
+                  <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                    {getDateRange()}
+                  </Text>
+
+                  {/* Calories History Table */}
+                  {caloriesHistory.length > 0 && (
+                    <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                        History
+                      </Text>
+                      <View style={styles.historyHeaderSpacer} />
+                      {/* Fixed Spacer issue if needed, but keeping basic structure */}
+                      {caloriesHistory.map((entry) => (
+                        <View key={entry.date.toISOString()} style={styles.historyRow}>
+                          {/* Row content */}
+                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                            {format(entry.date, 'd MMM yyyy')}
+                          </Text>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
+                            {`${entry.calories.toFixed(0)} Kcal`}
+                          </Text>
+                          <View style={styles.historyActions}>
+                            {onRequestLogMealForDate && (
+                              <TouchableOpacity
+                                onPress={() => onRequestLogMealForDate(entry.date)}
+                                style={styles.historyEditButton}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              )}
+
+              {/* Macros Chart Section */}
+
+              {activeTab === 'Macros' && (
+                <View style={styles.graphContainer}>
+                  <Animated.View
+                    style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: macrosChartOpacity }]}
+                    {...graphPanResponder.panHandlers}
+                  >
+                    {/* Tooltip Overlay */}
+                    {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
+                      <View
+                        style={{
+                          position: 'absolute',
+                          left: scrubbingPoints[scrubbingIndex].x - 60,
+                          top: 10,
+                          width: 120,
+                          alignItems: 'center',
+                          zIndex: 10,
+                          pointerEvents: 'none',
+                        }}
+                      >
+                        <View style={{
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 8,
+                          padding: 8,
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                          shadowColor: '#000',
+                          shadowOffset: { width: 0, height: 2 },
+                          shadowOpacity: 0.1,
+                          shadowRadius: 4,
+                          elevation: 3,
+                        }}>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4, textAlign: 'center' }}>
+                            {format(scrubbingPoints[scrubbingIndex].data.date, 'MMM d')}
+                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />
+                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>P: {(scrubbingPoints[scrubbingIndex].data as any).protein.toFixed(0)}g</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EAB308' }} />
+                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>C: {(scrubbingPoints[scrubbingIndex].data as any).carbs.toFixed(0)}g</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>F: {(scrubbingPoints[scrubbingIndex].data as any).fat.toFixed(0)}g</Text>
+                          </View>
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Y-axis labels */}
+                    <View style={styles.yAxisContainer}>
+                      {[0, 1, 2, 3, 4, 5].map((i) => {
+                        const value = maxValue - (i / 5) * maxValue;
+                        return (
+                          <Text
+                            key={i}
+                            style={[
+                              styles.yAxisLabel,
+                              {
+                                color: theme.colors.textTertiary,
+                                top: padding + (i / 5) * innerHeight - 8,
+                              },
+                            ]}
+                          >
+                            {value.toFixed(0)}g
+                          </Text>
+                        );
+                      })}
+                    </View>
+
+                    {/* Graph */}
+                    <View style={styles.graph}>
+                      <Svg width={graphWidth} height={graphHeight}>
+
+                        {/* Grid lines */}
+                        {[0, 1, 2, 3, 4, 5].map((i) => (
+                          <Line
+                            key={i}
+                            x1={padding}
+                            y1={padding + (i / 5) * innerHeight}
+                            x2={graphWidth - padding}
+                            y2={padding + (i / 5) * innerHeight}
+                            stroke={theme.colors.border}
+                            strokeWidth={0.5}
+                            strokeDasharray="2,2"
+                          />
+                        ))}
+
+                        {/* Target lines */}
+                        {targetProtein !== undefined && (() => {
+                          const targetProteinY = padding + innerHeight - (targetProtein / maxValue) * innerHeight;
+                          return (
+                            <Line
+                              x1={padding}
+                              y1={targetProteinY}
+                              x2={graphWidth - padding}
+                              y2={targetProteinY}
+                              stroke="#3B82F6"
+                              strokeWidth={1}
+                              strokeDasharray="4,4"
+                              opacity={0.5}
+                            />
+                          );
+                        })()}
+                        {/* Carbs & Fat targets omitted for brevity in design, or can extend similarly */}
+
+                        {/* Lines */}
+                        {proteinPath ? (
+                          <AnimatedPath
+                            d={proteinPath}
+                            fill="none"
+                            stroke="#3B82F6"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDashoffset={macrosLineProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [LINE_DRAW_LENGTH, 0],
+                            })}
+                          />
+                        ) : null}
+                        {carbsPath ? (
+                          <AnimatedPath
+                            d={carbsPath}
+                            fill="none"
+                            stroke="#EAB308"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDashoffset={macrosLineProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [LINE_DRAW_LENGTH, 0],
+                            })}
+                          />
+                        ) : null}
+                        {fatPath ? (
+                          <AnimatedPath
+                            d={fatPath}
+                            fill="none"
+                            stroke="#EF4444"
+                            strokeWidth={2}
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDashoffset={macrosLineProgress.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [LINE_DRAW_LENGTH, 0],
+                            })}
+                          />
+                        ) : null}
+
+                        {/* Active Scrubber */}
+                        {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
+                          (() => {
+                            const pt = scrubbingPoints[scrubbingIndex];
+                            const proteinY = padding + innerHeight - ((pt.data as any).protein / maxValue) * innerHeight;
+                            const carbsY = padding + innerHeight - ((pt.data as any).carbs / maxValue) * innerHeight;
+                            const fatY = padding + innerHeight - ((pt.data as any).fat / maxValue) * innerHeight;
+
+                            return (
+                              <>
+                                <Line
+                                  x1={pt.x}
+                                  y1={padding}
+                                  x2={pt.x}
+                                  y2={graphHeight - padding}
+                                  stroke={theme.colors.textSecondary}
+                                  strokeWidth={1}
+                                  strokeDasharray="4,4"
+                                />
+                                <Circle cx={pt.x} cy={proteinY} r={5} fill="#3B82F6" stroke={theme.colors.card} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={carbsY} r={5} fill="#EAB308" stroke={theme.colors.card} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={fatY} r={5} fill="#EF4444" stroke={theme.colors.card} strokeWidth={2} />
+                              </>
+                            );
+                          })()
+                        )}
+
+                      </Svg>
+                    </View>
+                  </Animated.View>
+
+
+                  {/* Time Range Selector */}
+                  <View style={styles.timeRangeContainer}>
+                    {timeRanges.map((range) => (
+                      <TouchableOpacity
+                        key={range}
+                        style={[
+                          styles.timeRangeButton,
+                          timeRange === range && styles.timeRangeButtonActive,
+                        ]}
+                        onPress={() => handleTimeRangeChange(range)}
+                      >
+                        <Text
+                          style={[
+                            styles.timeRangeText,
+                            timeRange === range
+                              ? styles.timeRangeTextActive
+                              : { color: theme.colors.textSecondary },
+                          ]}
+                        >
+                          {range}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Date Range */}
+                  <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                    {getDateRange()}
+                  </Text>
+
+                  {/* Macros History Table */}
+                  {macrosHistory.length > 0 && (
+                    <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
+                      <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                        History
+                      </Text>
+                      <View style={styles.historyHeaderRow}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Date
+                        </Text>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Protein
+                        </Text>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Carbs
+                        </Text>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                          Fat
+                        </Text>
+                        <View style={styles.historyHeaderSpacer} />
+                      </View>
+                      {macrosHistory.map((entry) => (
+                        <View key={entry.date.toISOString()} style={styles.historyRow}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                            {format(entry.date, 'd MMM yyyy')}
+                          </Text>
+                          <Text style={[styles.historyCellText, { color: theme.colors.primary }]}>
+                            {`${entry.protein.toFixed(0)}g`}
+                          </Text>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                            {`${entry.carbs.toFixed(0)}g`}
+                          </Text>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textTertiary }]}>
+                            {`${entry.fat.toFixed(0)}g`}
+                          </Text>
+                          <View style={styles.historyActions}>
+                            {onRequestLogMealForDate && (
+                              <TouchableOpacity
+                                onPress={() => onRequestLogMealForDate(entry.date)}
+                                style={styles.historyEditButton}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+
+
+                  {/* Information Box */}
+                  <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+                    <Feather name="info" size={20} color={theme.colors.primary} />
+                    <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                      Your protein intake is below target. Consider adding more lean protein to your meals.
+                    </Text>
+                  </View>
+                </View>
+              )}
+            </React.Fragment>
+          )}
+        </ScrollView>
       </Animated.View>
     </SafeAreaView>
   );
@@ -1036,36 +1215,7 @@ const styles = StyleSheet.create({
   legendText: {
     fontSize: Typography.fontSize.xs,
   },
-  summaryContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingVertical: 24,
-  },
-  summaryItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  summaryValue: {
-    fontSize: Typography.fontSize.xxl,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: 4,
-  },
-  summaryLabel: {
-    fontSize: Typography.fontSize.sm,
-  },
-  setGoalLink: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: '#10B981',
-    marginBottom: 4,
-  },
-  setGoalText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    textAlign: 'center',
-  },
+
   tabContainer: {
     flexDirection: 'row',
     borderRadius: 8,
@@ -1092,32 +1242,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     textAlign: 'center',
   },
-  averagesContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-    marginBottom: 16,
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: 'transparent',
-  },
-  averageItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  averageDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  averageLabel: {
-    fontSize: Typography.fontSize.sm,
-  },
-  averageValue: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
+
   graphCard: {
     borderRadius: 16,
     padding: 18,
@@ -1167,11 +1292,17 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.medium,
   },
   timeRangeButtonActive: {
-    backgroundColor: '#10B981',
-    borderColor: '#10B981',
+    backgroundColor: 'transparent',
+    borderColor: '#000', // Will follow theme in inline styles if dynamic, but here static in stylesheet, best to rely on inline styles for dynamic colors or just fix this to use neutral if possible. Wait, Stylesheet is static.
+    // Actually the dynamic style is applied in render, but let's check.
+    // The render method uses: style={[styles.timeRangeButton, timeRange === range && styles.timeRangeButtonActive]}
+    // So I should remove the color from here or update it later. But wait, I can't access theme here.
+    // I should update the component render to use inline styles for active state or pass theme to styles (not possible easily).
+    // Better to use a standard color here if it matches most themes, or override in render.
+    // Given the previous code, I'll update the render method instead.
   },
   timeRangeTextActive: {
-    color: Colors.white,
+    color: '#000',
   },
   dateRange: {
     textAlign: 'center',
@@ -1268,6 +1399,28 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
   },
+  heroCard: {
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+    flex: 1,
+  },
+  heroLabel: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
+  heroValue: {
+    fontSize: Typography.fontSize.xl,
+    fontWeight: Typography.fontWeight.bold,
+  },
 });
-
-

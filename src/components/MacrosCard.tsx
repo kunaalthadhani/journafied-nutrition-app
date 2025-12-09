@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { PieChart } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -20,14 +20,14 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
 }) => {
   const theme = useTheme();
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       {/* Header with icon and title */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Feather 
-            name="pie-chart" 
-            size={18} 
-            color="#E91E63" 
+          <PieChart
+            size={18}
+            color={theme.colors.textPrimary}
+            strokeWidth={2}
           />
         </View>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Macros</Text>
@@ -36,62 +36,62 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
       {/* Three-column layout */}
       <View style={styles.statsContainer}>
         <View style={styles.statColumn}>
-          <View style={{ flexDirection: 'row' }}>
-            <NumberTicker 
-              value={data.carbs.current} 
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <NumberTicker
+              value={data.carbs.current}
               duration={800}
               decimalPlaces={0}
-              style={[
-                styles.fractionText,
+              style={StyleSheet.flatten([
+                styles.currentText,
                 { color: theme.colors.textPrimary },
-              ]}
+              ])}
             />
-            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
-              /{data.carbs.target}
+            <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
+              /{data.carbs.target}g
             </Text>
           </View>
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Carbs ({data.carbs.unit})
+            Carbs
           </Text>
         </View>
 
-        <View style={[styles.statColumn, styles.middleColumn]}>
-          <View style={{ flexDirection: 'row' }}>
-            <NumberTicker 
-              value={data.protein.current} 
+        <View style={[styles.statColumn, styles.middleColumn, { borderColor: theme.colors.lightBorder }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <NumberTicker
+              value={data.protein.current}
               duration={800}
               decimalPlaces={0}
-              style={[
-                styles.fractionText,
+              style={StyleSheet.flatten([
+                styles.currentText,
                 { color: theme.colors.textPrimary },
-              ]}
+              ])}
             />
-            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
-              /{data.protein.target}
+            <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
+              /{data.protein.target}g
             </Text>
           </View>
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Protein ({data.protein.unit})
+            Protein
           </Text>
         </View>
 
         <View style={styles.statColumn}>
-          <View style={{ flexDirection: 'row' }}>
-            <NumberTicker 
-              value={data.fat.current} 
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end' }}>
+            <NumberTicker
+              value={data.fat.current}
               duration={800}
               decimalPlaces={0}
-              style={[
-                styles.fractionText,
+              style={StyleSheet.flatten([
+                styles.currentText,
                 { color: theme.colors.textPrimary },
-              ]}
+              ])}
             />
-            <Text style={[styles.fractionText, { color: theme.colors.textPrimary }]}>
-              /{data.fat.target}
+            <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
+              /{data.fat.target}g
             </Text>
           </View>
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Fat ({data.fat.unit})
+            Fat
           </Text>
         </View>
       </View>
@@ -117,7 +117,7 @@ const styles = StyleSheet.create({
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: Platform.OS === 'android' ? 8 : 12, // Smaller margin on Android
+    marginBottom: Platform.OS === 'android' ? 8 : 12,
   },
   iconContainer: {
     marginRight: 8,
@@ -125,36 +125,37 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.primaryText,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    minHeight: 50, // Match CaloriesCard exactly
+    minHeight: 50,
   },
   statColumn: {
     alignItems: 'center',
     flex: 1,
-    justifyContent: 'flex-start', // Match CaloriesCard exactly
+    justifyContent: 'flex-start',
   },
   middleColumn: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderLeftColor: Colors.lightBorder,
-    borderRightColor: Colors.lightBorder,
     paddingHorizontal: 8,
   },
-  fractionText: {
+  currentText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.primaryText,
     marginBottom: 6,
+  },
+  targetText: {
+    fontSize: 10,
+    fontWeight: Typography.fontWeight.normal,
+    marginLeft: 2,
+    marginBottom: 8,
   },
   statLabel: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.secondaryText,
     textAlign: 'center',
     lineHeight: Typography.lineHeight.tight * Typography.fontSize.xs,
   },

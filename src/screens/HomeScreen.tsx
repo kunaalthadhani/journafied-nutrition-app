@@ -12,11 +12,12 @@ import {
   Alert,
   KeyboardAvoidingView,
   BackHandler,
+  Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { format } from 'date-fns';
+import { format, isSameDay } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
 import { DateSelector } from '../components/DateSelector';
 import { CalendarModal } from '../components/CalendarModal';
@@ -118,20 +119,20 @@ export const HomeScreen: React.FC = () => {
   });
   const [taskBonusEntries, setTaskBonusEntries] = useState(0);
   const [showFreeEntries, setShowFreeEntries] = useState(false);
-  
+
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
-  
+
   // Get meals for current selected date
   const currentDateKey = getDateKey(selectedDate);
   const currentDayMeals = mealsByDate[currentDateKey] || [];
   const currentDayExercises = exercisesByDate[currentDateKey] || [];
-  
+
   // Calculate all foods from current day's meals for nutrition totals
   const allLoggedFoods = currentDayMeals.flatMap(meal => meal.foods);
   // Calculate current nutrition from current day's foods
   const currentNutrition = calculateTotalNutrition(allLoggedFoods);
-  
+
   // Generate macro data from saved goals with current values (with null safety)
   const macrosData: MacroData = {
     carbs: { current: currentNutrition.totalCarbs, target: savedGoals?.carbsGrams ?? 0, unit: 'g' },
@@ -343,7 +344,7 @@ export const HomeScreen: React.FC = () => {
             ? (data as Record<string, unknown>).broadcastId
             : null;
         if (broadcastId) {
-          notificationService.recordPushClick(broadcastId);
+          notificationService.recordPushClick(broadcastId as string);
         }
       } catch (error) {
         if (__DEV__) console.error('Error handling notification response:', error);
@@ -451,7 +452,7 @@ export const HomeScreen: React.FC = () => {
         if (Object.keys(savedExercises).length > 0) {
           setExercisesByDate(savedExercises);
         }
-        
+
         // Validate entry count matches actual log count (always run)
         let actualLogCount = 0;
         Object.values(savedMeals).forEach(meals => {
@@ -460,9 +461,9 @@ export const HomeScreen: React.FC = () => {
         Object.values(savedExercises).forEach(entries => {
           actualLogCount += entries.length;
         });
-        
+
         const storedCount = await dataStorage.loadEntryCount();
-        
+
         if (actualLogCount !== storedCount) {
           if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
           // Auto-fix by setting entry count to actual meal count
@@ -758,14 +759,14 @@ export const HomeScreen: React.FC = () => {
             Alert.alert(
               '🎉 Referral Reward Earned!',
               referralResult.message ||
-                `You've earned +${referralResult.entriesAwarded} free entries!`,
+              `You've earned +${referralResult.entriesAwarded} free entries!`,
               [{ text: 'Awesome!', style: 'default' }]
             );
 
             // Reload total earned entries from referrals (this affects the limit, not the count)
             const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
             setTotalEarnedEntries(earned);
-            
+
             // Note: We don't reload entryCount here because it was just incremented above
             // The entry count is correct, and the bonus entries increase the limit, not the count
           }
@@ -828,27 +829,27 @@ export const HomeScreen: React.FC = () => {
 
   const handleRemoveFood = (foodId: string) => {
     analyticsService.trackFoodItemRemoval();
-      setMealsByDate(prev => {
-        const currentMeals = prev[currentDateKey] || [];
-        const updatedMeals = currentMeals
-          .map(meal => {
-            if (!meal.foods.some(food => food.id === foodId)) {
-              return meal;
-            }
-            const filteredFoods = meal.foods.filter(food => food.id !== foodId);
-            return {
-              ...meal,
-              foods: filteredFoods,
-              updatedAt: new Date().toISOString(),
-            };
-          })
-          .filter(meal => meal.foods.length > 0); // Remove meals with no foods
-      
-        return {
-          ...prev,
-          [currentDateKey]: updatedMeals
-        };
-      });
+    setMealsByDate(prev => {
+      const currentMeals = prev[currentDateKey] || [];
+      const updatedMeals = currentMeals
+        .map(meal => {
+          if (!meal.foods.some(food => food.id === foodId)) {
+            return meal;
+          }
+          const filteredFoods = meal.foods.filter(food => food.id !== foodId);
+          return {
+            ...meal,
+            foods: filteredFoods,
+            updatedAt: new Date().toISOString(),
+          };
+        })
+        .filter(meal => meal.foods.length > 0); // Remove meals with no foods
+
+      return {
+        ...prev,
+        [currentDateKey]: updatedMeals
+      };
+    });
   };
 
   const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
@@ -1006,7 +1007,7 @@ export const HomeScreen: React.FC = () => {
     await analyticsService.trackSavedPromptAdded();
   };
 
-  const handleSelectSavedPrompt = async (prompt: SavedPrompt) => {
+  const handleSelectSavedPrompt = async (prompt: { text: string }) => {
     setTranscribedText(prompt.text);
     setShouldFocusInput(true);
     setHasUserTyped(true);
@@ -1028,7 +1029,7 @@ export const HomeScreen: React.FC = () => {
       // Stop recording and transcribe
       setIsRecording(false);
       setIsTranscribing(true);
-      
+
       try {
         const transcription = await voiceService.stopRecording();
         if (transcription) {
@@ -1073,7 +1074,7 @@ export const HomeScreen: React.FC = () => {
       if (__DEV__) console.log('Already processing, ignoring duplicate call');
       return;
     }
-    
+
     analyticsService.trackCameraUsage();
     if (__DEV__) console.log('handleTakePhoto called - setting pending action');
     pendingActionRef.current = 'camera';
@@ -1085,7 +1086,7 @@ export const HomeScreen: React.FC = () => {
       if (__DEV__) console.log('Already processing, ignoring duplicate call');
       return;
     }
-    
+
     analyticsService.trackPhotoLibraryUsage();
     if (__DEV__) console.log('handleUploadPhoto called - setting pending action');
     pendingActionRef.current = 'library';
@@ -1110,7 +1111,7 @@ export const HomeScreen: React.FC = () => {
     if (uploadIntervalRef.current) {
       clearInterval(uploadIntervalRef.current);
     }
-    
+
     // Simulate upload progress
     let progress = 0;
     uploadIntervalRef.current = setInterval(() => {
@@ -1126,7 +1127,7 @@ export const HomeScreen: React.FC = () => {
           clearInterval(uploadIntervalRef.current);
           uploadIntervalRef.current = null;
         }
-        
+
         // Wait a moment, then start analyzing
         setTimeout(() => {
           analyzeUploadedImage(imageUri);
@@ -1147,15 +1148,15 @@ export const HomeScreen: React.FC = () => {
     try {
       setIsAnalyzingFood(true);
       if (__DEV__) console.log('Starting image analysis for URI:', uriToAnalyze);
-      
+
       // Add timeout to prevent infinite hanging
       let parsedFoods;
       try {
         const analysisPromise = analyzeFoodFromImage(uriToAnalyze);
-        const timeoutPromise = new Promise<ParsedFood[]>((_, reject) => 
+        const timeoutPromise = new Promise<ParsedFood[]>((_, reject) =>
           setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
         );
-        
+
         // Analyze the image using OpenAI Vision API
         parsedFoods = await Promise.race([analysisPromise, timeoutPromise]);
       } catch (apiError: any) {
@@ -1168,13 +1169,13 @@ export const HomeScreen: React.FC = () => {
         }
         throw apiError; // Re-throw other errors
       }
-      
+
       if (__DEV__) console.log('Analysis complete, parsed foods:', parsedFoods);
-      
+
       if (parsedFoods.length > 0) {
         // Get current date key at the time of analysis
         const dateKey = getDateKey(selectedDate);
-        
+
         // Create a new meal entry with the image and parsed foods
         const createdAt = Date.now();
         const newMeal: Meal = {
@@ -1185,7 +1186,7 @@ export const HomeScreen: React.FC = () => {
           imageUri: uriToAnalyze,
           updatedAt: new Date().toISOString()
         };
-        
+
         // Add meal to the current selected date
         setMealsByDate(prev => ({
           ...prev,
@@ -1241,7 +1242,7 @@ export const HomeScreen: React.FC = () => {
     if (pendingActionRef.current) {
       const action = pendingActionRef.current;
       pendingActionRef.current = null;
-      
+
       // Wait a moment to ensure modal is fully unmounted
       setTimeout(() => {
         if (action === 'camera') {
@@ -1261,7 +1262,7 @@ export const HomeScreen: React.FC = () => {
         if (pendingActionRef.current) {
           const action = pendingActionRef.current;
           pendingActionRef.current = null;
-          
+
           if (__DEV__) console.log('Fallback: Opening after modal close');
           if (action === 'camera') {
             openCameraAfterModalClose();
@@ -1270,7 +1271,7 @@ export const HomeScreen: React.FC = () => {
           }
         }
       }, 800);
-      
+
       return () => clearTimeout(timer);
     }
   }, [photoModalVisible]);
@@ -1278,13 +1279,13 @@ export const HomeScreen: React.FC = () => {
   const openCameraAfterModalClose = async () => {
     if (isOpeningCameraRef.current) return;
     isOpeningCameraRef.current = true;
-    
+
     try {
       if (__DEV__) console.log('Opening camera after modal close...');
       // Check if we already have permissions
       const existingPermission = await ImagePicker.getCameraPermissionsAsync();
       if (__DEV__) console.log('Existing camera permission:', existingPermission);
-      
+
       let permissionResult;
       if (existingPermission.status === 'granted') {
         permissionResult = existingPermission;
@@ -1297,10 +1298,10 @@ export const HomeScreen: React.FC = () => {
         if (__DEV__) console.log('Requesting camera permissions...');
         // Add timeout to prevent hanging
         const permissionPromise = ImagePicker.requestCameraPermissionsAsync();
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Permission request timed out')), 10000)
         );
-        
+
         try {
           permissionResult = await Promise.race([permissionPromise, timeoutPromise]) as typeof existingPermission;
           if (__DEV__) console.log('Permission result:', permissionResult);
@@ -1311,7 +1312,7 @@ export const HomeScreen: React.FC = () => {
           return;
         }
       }
-      
+
       if (permissionResult.status !== 'granted') {
         alert('Sorry, we need camera permissions to take a photo!');
         isOpeningCameraRef.current = false;
@@ -1331,18 +1332,18 @@ export const HomeScreen: React.FC = () => {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileName = asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-        
+
         if (uploadIntervalRef.current) {
           clearInterval(uploadIntervalRef.current);
           uploadIntervalRef.current = null;
         }
-        
+
         setUploadedImage(asset.uri);
         setUploadFileName(fileName);
         setUploadProgress(0);
         setUploadStatus('uploading');
         setUploadStatusVisible(true);
-        
+
         // Pass the URI directly to avoid state timing issues
         simulateUpload(asset.uri);
       } else {
@@ -1360,13 +1361,13 @@ export const HomeScreen: React.FC = () => {
   const openLibraryAfterModalClose = async () => {
     if (isOpeningCameraRef.current) return;
     isOpeningCameraRef.current = true;
-    
+
     try {
       if (__DEV__) console.log('Opening library after modal close...');
       // Check if we already have permissions
       const existingPermission = await ImagePicker.getMediaLibraryPermissionsAsync();
       if (__DEV__) console.log('Existing library permission:', existingPermission);
-      
+
       let permissionResult;
       if (existingPermission.status === 'granted') {
         permissionResult = existingPermission;
@@ -1379,10 +1380,10 @@ export const HomeScreen: React.FC = () => {
         if (__DEV__) console.log('Requesting media library permissions...');
         // Add timeout to prevent hanging
         const permissionPromise = ImagePicker.requestMediaLibraryPermissionsAsync();
-        const timeoutPromise = new Promise((_, reject) => 
+        const timeoutPromise = new Promise((_, reject) =>
           setTimeout(() => reject(new Error('Permission request timed out')), 10000)
         );
-        
+
         try {
           permissionResult = await Promise.race([permissionPromise, timeoutPromise]) as typeof existingPermission;
           if (__DEV__) console.log('Permission result:', permissionResult);
@@ -1393,7 +1394,7 @@ export const HomeScreen: React.FC = () => {
           return;
         }
       }
-      
+
       if (permissionResult.status !== 'granted') {
         alert('Sorry, we need media library permissions to upload a photo!');
         isOpeningCameraRef.current = false;
@@ -1413,18 +1414,18 @@ export const HomeScreen: React.FC = () => {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         const fileName = asset.fileName || asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
-        
+
         if (uploadIntervalRef.current) {
           clearInterval(uploadIntervalRef.current);
           uploadIntervalRef.current = null;
         }
-        
+
         setUploadedImage(asset.uri);
         setUploadFileName(fileName);
         setUploadProgress(0);
         setUploadStatus('uploading');
         setUploadStatusVisible(true);
-        
+
         // Pass the URI directly to avoid state timing issues
         simulateUpload(asset.uri);
       } else {
@@ -1490,7 +1491,7 @@ export const HomeScreen: React.FC = () => {
     },
   ];
 
-  const formattedDate = format(selectedDate, 'MMMM d, yyyy');
+  const formattedDate = format(selectedDate, 'd MMM, yyyy');
 
   if (showAdminPush) {
     return (
@@ -1500,7 +1501,7 @@ export const HomeScreen: React.FC = () => {
 
   if (showSetGoals) {
     return (
-      <SetGoalsScreen 
+      <SetGoalsScreen
         onBack={handleGoalsBack}
         onSave={handleGoalsSave}
         initialGoals={savedGoals}
@@ -1513,32 +1514,7 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-  if (showWeightTracker) {
-    return (
-      <WeightTrackerScreen 
-        onBack={handleWeightTrackerBack}
-        initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
-        targetWeightKg={savedGoals.targetWeightKg ?? undefined}
-        onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
-      />
-    );
-  }
-
-  if (showNutritionAnalysis) {
-    return (
-      <NutritionAnalysisScreen 
-        onBack={handleNutritionAnalysisBack}
-        onRequestLogMeal={handleRequestLogMeal}
-        onRequestLogMealForDate={handleRequestLogMealForDate}
-        onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
-        mealsByDate={mealsByDate}
-        targetCalories={goalsSet ? savedGoals.calories : undefined}
-        targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
-        targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
-        targetFat={goalsSet ? savedGoals.fatGrams : undefined}
-      />
-    );
-  }
+  /* WeightTracker and NutritionAnalysis moved to Modals below to prevent HomeScreen unmount */
 
   if (showSettings) {
     return (
@@ -1601,12 +1577,14 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
           selectedDate={formattedDate}
+          userName={accountInfo?.name || "there"}
           onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
           onWeightTrackerPress={handleWeightTracker}
@@ -1643,34 +1621,34 @@ export const HomeScreen: React.FC = () => {
             keyboardShouldPersistTaps="handled"
           >
             {/* Food Log Section */}
-          <FoodLogSection 
-            meals={currentDayMeals}
-            onRemoveFood={handleRemoveFood}
-            onEditMealPrompt={handleEditMealPrompt}
-            savedPrompts={savedPrompts}
-            onToggleSavePrompt={handleToggleSavePrompt}
-            onDeleteMeal={handleDeleteMeal}
-            onUpdateFood={(mealId, updatedFood) => {
-              setMealsByDate(prev => {
-                const currentMeals = prev[currentDateKey] || [];
-                const updatedMeals = currentMeals.map(meal => {
-                  if (meal.id !== mealId) return meal;
-                  const updatedFoods = meal.foods.map(food =>
-                    food.id === updatedFood.id ? updatedFood : food
-                  );
+            <FoodLogSection
+              meals={currentDayMeals}
+              onRemoveFood={handleRemoveFood}
+              onEditMealPrompt={handleEditMealPrompt}
+              savedPrompts={savedPrompts}
+              onToggleSavePrompt={handleToggleSavePrompt}
+              onDeleteMeal={handleDeleteMeal}
+              onUpdateFood={(mealId, updatedFood) => {
+                setMealsByDate(prev => {
+                  const currentMeals = prev[currentDateKey] || [];
+                  const updatedMeals = currentMeals.map(meal => {
+                    if (meal.id !== mealId) return meal;
+                    const updatedFoods = meal.foods.map(food =>
+                      food.id === updatedFood.id ? updatedFood : food
+                    );
+                    return {
+                      ...meal,
+                      foods: updatedFoods,
+                      updatedAt: new Date().toISOString(),
+                    };
+                  });
                   return {
-                    ...meal,
-                    foods: updatedFoods,
-                    updatedAt: new Date().toISOString(),
+                    ...prev,
+                    [currentDateKey]: updatedMeals,
                   };
                 });
-                return {
-                  ...prev,
-                  [currentDateKey]: updatedMeals,
-                };
-              });
-            }}
-          />
+              }}
+            />
 
             <ExerciseLogSection
               entries={currentDayExercises}
@@ -1680,10 +1658,10 @@ export const HomeScreen: React.FC = () => {
             {/* Motivational Text - only show if no meals logged for current day */}
             {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
               <View style={styles.motivationalTextContainer}>
-                <Text style={styles.motivationalTitle}>
+                <Text style={[styles.motivationalTitle, { color: theme.colors.textPrimary }]}>
                   Ready when you are!
                 </Text>
-                <Text style={styles.motivationalText}>
+                <Text style={[styles.motivationalText, { color: theme.colors.textSecondary }]}>
                   Tell me what you ate or how you moved and I’ll handle the rest
                 </Text>
               </View>
@@ -1712,10 +1690,10 @@ export const HomeScreen: React.FC = () => {
             onQuickPromptPress={handleSelectSavedPrompt}
             onQuickPromptRemove={handleRemoveSavedPrompt}
             placeholder={
-              isAnalyzingFood ? "Analyzing your entry..." : 
-              isRecording ? "Recording..." : 
-              isTranscribing ? "Transcribing..." : 
-              "What did you eat or exercise?"
+              isAnalyzingFood ? "Analyzing your entry..." :
+                isRecording ? "Recording..." :
+                  isTranscribing ? "Transcribing..." :
+                    "What did you eat or exercise?"
             }
           />
         </KeyboardAvoidingView>
@@ -1733,7 +1711,7 @@ export const HomeScreen: React.FC = () => {
           onReferral={handleOpenReferral}
           onFreeEntries={handleOpenFreeEntries}
         />
-        
+
         <PhotoOptionsModal
           visible={photoModalVisible}
           onClose={handleClosePhotoModal}
@@ -1761,15 +1739,59 @@ export const HomeScreen: React.FC = () => {
             style={[styles.analyzingOverlay, { opacity: overlayOpacity }]}
             pointerEvents={isAnalyzingFood ? 'auto' : 'none'}
           >
-            <BlurView intensity={8} tint="light" style={StyleSheet.absoluteFill} />
-            <View style={styles.analyzingInline}>
-              <ActivityIndicator size="small" color="#10B981" />
-              <Text style={[styles.analyzingText, { color: Colors.white }]}>
-                Analyzing your entry...
+            <BlurView intensity={20} tint={theme.mode === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <View style={[
+              styles.analyzingCard,
+              {
+                backgroundColor: theme.colors.card,
+                borderColor: theme.colors.border,
+                shadowColor: theme.colors.shadow,
+              }
+            ]}>
+              <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 16 }} />
+              <Text style={[styles.analyzingTitle, { color: theme.colors.textPrimary }]}>
+                Analyzing
+              </Text>
+              <Text style={[styles.analyzingSubtitle, { color: theme.colors.textSecondary }]}>
+                Identifying food and macros...
               </Text>
             </View>
           </Animated.View>
         )}
+
+        {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
+        <Modal
+          visible={showWeightTracker}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleWeightTrackerBack}
+        >
+          <WeightTrackerScreen
+            onBack={handleWeightTrackerBack}
+            initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
+            targetWeightKg={savedGoals.targetWeightKg ?? undefined}
+            onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
+          />
+        </Modal>
+
+        <Modal
+          visible={showNutritionAnalysis}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleNutritionAnalysisBack}
+        >
+          <NutritionAnalysisScreen
+            onBack={handleNutritionAnalysisBack}
+            onRequestLogMeal={handleRequestLogMeal}
+            onRequestLogMealForDate={handleRequestLogMealForDate}
+            onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
+            mealsByDate={mealsByDate}
+            targetCalories={goalsSet ? savedGoals.calories : undefined}
+            targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
+            targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
+            targetFat={goalsSet ? savedGoals.fatGrams : undefined}
+          />
+        </Modal>
 
         <CalendarModal
           visible={showCalendar}
@@ -1809,7 +1831,7 @@ const styles = StyleSheet.create({
   },
   motivationalTitle: {
     fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.semibold,
+    fontWeight: Typography.fontWeight.semiBold,
     color: Colors.primaryText,
     textAlign: 'center',
     marginBottom: 8,
@@ -1832,20 +1854,26 @@ const styles = StyleSheet.create({
     bottom: 0,
     alignItems: 'center',
     justifyContent: 'center',
+    zIndex: 50,
   },
-  analyzingInline: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
-    paddingHorizontal: 18,
-    paddingVertical: 12,
-    backgroundColor: 'rgba(15, 23, 42, 0.55)',
-    borderRadius: 999,
+  analyzingCard: {
+    padding: 32,
+    borderRadius: 24,
     borderWidth: 1,
-    borderColor: 'rgba(20, 184, 166, 0.2)',
+    alignItems: 'center',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
+    elevation: 8,
+    minWidth: 200,
   },
-  analyzingText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
+  analyzingTitle: {
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: 4,
+  },
+  analyzingSubtitle: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.normal,
   },
 });

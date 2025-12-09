@@ -112,7 +112,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
         {/* Header */}
         <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color="#10B981" />
+            <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Admin Push Console
@@ -125,9 +125,9 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={styles.refreshButton}
           >
             {isLoadingTokens || isLoadingHistory ? (
-              <ActivityIndicator size="small" color="#10B981" />
+              <ActivityIndicator size="small" color={theme.colors.primary} />
             ) : (
-              <Feather name="refresh-cw" size={20} color="#10B981" />
+              <Feather name="refresh-cw" size={20} color={theme.colors.textPrimary} />
             )}
           </TouchableOpacity>
         </View>
@@ -197,15 +197,15 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             <TouchableOpacity
               style={[
                 styles.primaryButton,
-                { backgroundColor: isSending ? '#0F766E' : '#10B981' },
+                { backgroundColor: theme.colors.primary, opacity: isSending ? 0.7 : 1 },
               ]}
               onPress={handleSendPush}
               disabled={isSending}
             >
               {isSending ? (
-                <ActivityIndicator color={Colors.white} />
+                <ActivityIndicator color={theme.colors.primaryForeground} />
               ) : (
-                <Text style={styles.primaryButtonText}>Send Push</Text>
+                <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>Send Push</Text>
               )}
             </TouchableOpacity>
 
@@ -214,7 +214,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
                 <Feather
                   name={broadcastSummary.failureCount > 0 ? 'alert-triangle' : 'check-circle'}
                   size={18}
-                  color={broadcastSummary.failureCount > 0 ? '#F97316' : '#22C55E'}
+                  color={broadcastSummary.failureCount > 0 ? theme.colors.error : theme.colors.success}
                 />
                 <Text style={[styles.summaryText, { color: theme.colors.textSecondary }]}>
                   Targeted {broadcastSummary.targetCount} device(s) · Delivered to{' '}
@@ -227,7 +227,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             )}
 
             {lastError && (
-              <Text style={[styles.errorText, { color: '#F97316' }]}>{lastError}</Text>
+              <Text style={[styles.errorText, { color: theme.colors.error }]}>{lastError}</Text>
             )}
           </View>
 
@@ -244,7 +244,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
               Registered Devices
             </Text>
             {isLoadingTokens ? (
-              <ActivityIndicator style={{ marginTop: 12 }} color="#10B981" />
+              <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary} />
             ) : storedTokens.length === 0 ? (
               <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
                 No tokens saved yet. Launch the app on a physical device and accept push
@@ -274,7 +274,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
               Delivery History
             </Text>
             {isLoadingHistory ? (
-              <ActivityIndicator style={{ marginTop: 12 }} color="#10B981" />
+              <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary} />
             ) : history.length === 0 ? (
               <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
                 No broadcasts sent yet. When you send push notifications, delivery stats will appear
@@ -296,25 +296,25 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
                   </Text>
                   <View style={styles.historyStatsRow}>
                     <View style={styles.historyStat}>
-                      <Feather name="users" size={15} color="#10B981" />
+                      <Feather name="users" size={15} color={theme.colors.textPrimary} />
                       <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
                         Targets {record.targetCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="check-circle" size={15} color="#22C55E" />
+                      <Feather name="check-circle" size={15} color={theme.colors.success} />
                       <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
                         Sent {record.successCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="alert-triangle" size={15} color="#F97316" />
+                      <Feather name="alert-triangle" size={15} color={theme.colors.error} />
                       <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
                         Failed {record.failureCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="mouse-pointer" size={15} color="#6366F1" />
+                      <Feather name="mouse-pointer" size={15} color={theme.colors.info} />
                       <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
                         Clicks {record.clickCount}
                       </Text>
@@ -338,26 +338,26 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
               How to Test
             </Text>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color="#10B981" />
+              <Feather name="check" size={16} color={theme.colors.textPrimary} />
               <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
                 Install the app on a physical device (push notifications do not work on most
                 simulators).
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color="#10B981" />
+              <Feather name="check" size={16} color={theme.colors.textPrimary} />
               <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
                 On first launch, accept the push notification permission prompt.
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color="#10B981" />
+              <Feather name="check" size={16} color={theme.colors.textPrimary} />
               <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
                 Open the sidebar and tap the “Menu” title five times to reveal this console.
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color="#10B981" />
+              <Feather name="check" size={16} color={theme.colors.textPrimary} />
               <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
                 Enter a title/message, press “Send Push”, and observe the delivery log in the device
                 notification center and Metro logs.
@@ -447,7 +447,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   primaryButtonText: {
-    color: Colors.white,
+    color: 'transparent',
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },

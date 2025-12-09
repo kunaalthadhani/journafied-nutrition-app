@@ -16,38 +16,37 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   selectedDate = new Date()
 }) => {
   const theme = useTheme();
-  const [dateList, setDateList] = useState<DayData[]>([]);
-  const scrollRef = useRef<ScrollView | null>(null);
+  const flatListRef = useRef<ScrollView | null>(null);
 
-  useEffect(() => {
-    // Build a continuous list of days ending today, going back N days
+  // Generate the list of dates only once (or if today changes conceptually)
+  const dateList = React.useMemo(() => {
     const today = new Date();
     const rangeDays = 180; // roughly 6 months
-    const dates: DayData[] = [];
+    const dates: Omit<DayData, 'isActive'>[] = [];
     for (let i = rangeDays; i >= 0; i--) {
       const d = subDays(today, i);
       dates.push({
         date: d,
         dayName: format(d, 'EEE'),
         dayNumber: parseInt(format(d, 'd')),
-        isActive: isSameDay(d, selectedDate),
       });
     }
-    setDateList(dates);
-  }, [selectedDate]);
+    return dates;
+  }, []);
 
-  // Scroll to the end (today at rightmost) when list updates
+  // Scroll to end on mount
   useEffect(() => {
+    // Small timeout to ensure layout is measured
     const timer = setTimeout(() => {
-      scrollRef.current?.scrollToEnd({ animated: false });
-    }, 0);
+      flatListRef.current?.scrollToEnd({ animated: false });
+    }, 100);
     return () => clearTimeout(timer);
-  }, [dateList.length]);
+  }, []);
 
   const today = new Date();
-  const handleDatePress = (dateData: DayData) => {
-    if (dateData.date > today) return;
-    if (onDateSelect) onDateSelect(dateData.date);
+  const handleDatePress = (date: Date) => {
+    if (date > today) return;
+    if (onDateSelect) onDateSelect(date);
   };
 
   return (
@@ -57,37 +56,42 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         style={[styles.scrollView]}
-        ref={scrollRef}
+        ref={flatListRef}
         scrollEventThrottle={16}
       >
-        {dateList.map((dateData, index) => (
-          <TouchableOpacity
-            key={`${format(dateData.date, 'yyyy-MM-dd')}-${index}`} // Better key for date changes
-            style={[
-              styles.dayBlock,
-              dateData.isActive && {
-                backgroundColor: theme.colors.accentBg,
-              },
-            ]}
-            onPress={() => handleDatePress(dateData)}
-            activeOpacity={0.7}
-          >
-            <Text style={[
-              styles.dayName,
-              { color: theme.colors.textTertiary },
-              dateData.isActive && { color: theme.colors.accent, fontWeight: Typography.fontWeight.semiBold },
-            ]}>
-              {dateData.dayName}
-            </Text>
-            <Text style={[
-              styles.dayNumber,
-              { color: theme.colors.textTertiary },
-              dateData.isActive && { color: theme.colors.accent, fontSize: Typography.fontSize.xl, fontWeight: Typography.fontWeight.bold },
-            ]}>
-              {dateData.dayNumber}
-            </Text>
-          </TouchableOpacity>
-        ))}
+        {dateList.map((dateData, index) => {
+          const isActive = isSameDay(dateData.date, selectedDate);
+          return (
+            <TouchableOpacity
+              key={`${format(dateData.date, 'yyyy-MM-dd')}-${index}`}
+              style={[
+                styles.dayBlock,
+              ]}
+              onPress={() => handleDatePress(dateData.date)}
+              activeOpacity={0.7}
+            >
+              <Text style={[
+                styles.dayName,
+                { color: theme.colors.textTertiary },
+                isActive && { color: theme.colors.textPrimary, fontWeight: Typography.fontWeight.semiBold },
+              ]}>
+                {dateData.dayName}
+              </Text>
+              <View style={styles.dayNumberContainer}>
+                <Text style={[
+                  styles.dayNumber,
+                  { color: theme.colors.textTertiary },
+                  isActive && { color: theme.colors.textPrimary, fontWeight: Typography.fontWeight.bold },
+                ]}>
+                  {dateData.dayNumber}
+                </Text>
+                {isActive && (
+                  <View style={[styles.activeIndicator, { backgroundColor: theme.colors.primary }]} />
+                )}
+              </View>
+            </TouchableOpacity>
+          )
+        })}
       </Animated.ScrollView>
     </View>
   );
@@ -96,47 +100,43 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: Colors.white,
-    paddingTop: 0, // Remove top padding completely
+    paddingTop: 0,
     paddingBottom: 8,
   },
   scrollView: {
     flexGrow: 0,
   },
   scrollContent: {
-    paddingHorizontal: 8,
+    paddingHorizontal: 12,
   },
   dayBlock: {
-    width: 50,
-    height: 70,
+    width: 48,
+    height: 60,
     alignItems: 'center',
     justifyContent: 'center',
-    marginHorizontal: 4,
-    borderRadius: 12,
-    backgroundColor: 'transparent',
-    marginTop: -2, // Pull the blocks up slightly
-  },
-  activeDayBlock: {
-    backgroundColor: 'transparent', // Remove green background
-    // Remove border completely
+    marginHorizontal: 2,
   },
   dayName: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.medium,
     color: Colors.tertiaryText,
-    marginBottom: 1, // Reduced from 4
+    marginBottom: 4,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
-  activeDayName: {
-    color: Colors.activeGreenBorder,
-    fontWeight: Typography.fontWeight.semiBold,
+  dayNumberContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   dayNumber: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.medium,
     color: Colors.tertiaryText,
   },
-  activeDayNumber: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
-    color: Colors.activeGreenBorder,
+  activeIndicator: {
+    width: 4,
+    height: 4,
+    borderRadius: 2,
+    marginTop: 4,
   },
 });

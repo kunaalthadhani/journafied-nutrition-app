@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { Feather } from '@expo/vector-icons';
+import { Flame } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -20,11 +20,11 @@ export const CaloriesCard: React.FC<CaloriesCardProps> = ({
 }) => {
   const theme = useTheme();
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       {/* Header with icon and title */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Text style={styles.flameIcon}>🔥</Text>
+          <Flame size={18} color={theme.colors.textPrimary} fill={theme.colors.textPrimary} strokeWidth={1} />
         </View>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Calories</Text>
       </View>
@@ -36,7 +36,7 @@ export const CaloriesCard: React.FC<CaloriesCardProps> = ({
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Food</Text>
         </View>
 
-        <View style={[styles.statColumn, styles.middleColumn]}>
+        <View style={[styles.statColumn, styles.middleColumn, { borderColor: theme.colors.lightBorder }]}>
           <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{data.exercise}</Text>
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Exercise</Text>
         </View>
@@ -52,64 +52,45 @@ export const CaloriesCard: React.FC<CaloriesCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.cardBackground,
     borderRadius: 12,
-    padding: 12,
-    marginHorizontal: -16,
-    paddingHorizontal: 28,
+    padding: 16,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 2,
-    elevation: 1,
+    marginBottom: 16,
   },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 12, // Reduced from 16
+    marginBottom: 16,
   },
   iconContainer: {
     marginRight: 8,
   },
-  flameIcon: {
-    fontSize: 20,
-  },
   title: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.primaryText,
   },
   statsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'flex-start',
-    minHeight: 50, // Ensure consistent height
   },
   statColumn: {
     alignItems: 'center',
     flex: 1,
-    justifyContent: 'flex-start', // Ensure top alignment
+    justifyContent: 'flex-start',
   },
   middleColumn: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderLeftColor: Colors.lightBorder,
-    borderRightColor: Colors.lightBorder,
     paddingHorizontal: 8,
   },
   statValue: {
-    fontSize: Typography.fontSize.md, // Changed from lg to match MacrosCard
-    fontWeight: Typography.fontWeight.medium,
-    color: Colors.primaryText,
-    marginBottom: 6, // Changed from 4 to match MacrosCard
+    fontSize: Typography.fontSize.lg,
+    fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: 4,
   },
   statLabel: {
-    fontSize: Typography.fontSize.xs, // Changed from sm to match MacrosCard
-    fontWeight: Typography.fontWeight.normal,
-    color: Colors.secondaryText, // Match MacrosCard
-    textAlign: 'center',
-    lineHeight: Typography.lineHeight.tight * Typography.fontSize.xs, // Add line height to match
+    fontSize: Typography.fontSize.xs,
+    fontWeight: Typography.fontWeight.medium,
   },
 });

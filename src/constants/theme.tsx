@@ -10,6 +10,7 @@ export interface Theme {
 		card: string;
 		input: string;
 		border: string;
+		lightBorder: string;
 		ring: string;
 		textPrimary: string;
 		textSecondary: string;
@@ -22,6 +23,10 @@ export interface Theme {
 		error: string;
 		info: string;
 		overlay: string;
+		primary: string;
+		primaryForeground: string;
+		secondaryBg: string;
+		successBg: string;
 	};
 	radii: {
 		sm: number;
@@ -31,65 +36,75 @@ export interface Theme {
 		pill: number;
 	};
 	elevation: {
-		none: { shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
-		sm: { shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
-		md: { shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
+		none: { shadowColor: string; shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
+		sm: { shadowColor: string; shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
+		md: { shadowColor: string; shadowOffset: { width: number; height: number }; shadowOpacity: number; shadowRadius: number; elevation: number };
 	};
 }
 
 const lightTheme: Theme = {
 	mode: 'light',
 	colors: {
-		background: '#F8FAFC',
+		background: '#FFFFFF', // Clean white
 		card: '#FFFFFF',
-		input: '#F1F5F9',
-		border: '#E5E7EB',
-		ring: '#94A3B8',
-		textPrimary: '#475569',
-		textSecondary: '#475569',
-		textTertiary: '#94A3B8',
-		accentBg: '#ECFDF5',
-		accent: '#10B981',
-		shadow: 'rgba(2, 6, 23, 0.08)',
+		input: '#FFFFFF',      // Inputs often white with border in shadcn
+		border: '#E4E4E7',     // zinc-200
+		lightBorder: '#F4F4F5', // zinc-100
+		ring: '#18181B',       // zinc-900
+		textPrimary: '#09090B', // zinc-950
+		textSecondary: '#71717A', // zinc-500
+		textTertiary: '#A1A1AA', // zinc-400
+		accentBg: '#F4F4F5',   // zinc-100 (hover state/secondary)
+		accent: '#18181B',     // zinc-900 (primary action)
+		shadow: 'rgba(0, 0, 0, 0.04)',
 		success: '#10B981',
 		warning: '#F59E0B',
 		error: '#EF4444',
 		info: '#3B82F6',
-		overlay: 'rgba(0,0,0,0.80)'
+		overlay: 'rgba(0,0,0,0.40)', // lighter overlay for cleaner feel
+		primary: '#18181B',
+		primaryForeground: '#FAFAFA',
+		secondaryBg: '#F4F4F5',
+		successBg: '#ECFDF5',
 	},
-	radii: { sm: 6, md: 12, lg: 16, xl: 20, pill: 9999 },
+	radii: { sm: 4, md: 8, lg: 12, xl: 16, pill: 9999 }, // slightly tighter radii (0.5rem = 8px usually)
 	elevation: {
-		none: { shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-		sm: { shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 2, elevation: 1 },
-		md: { shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2 },
+		none: { shadowColor: 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+		sm: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 },
+		md: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4, elevation: 2 },
 	}
 };
 
 const darkTheme: Theme = {
 	mode: 'dark',
 	colors: {
-		background: '#0B1220', // slate-950-ish
-		card: '#0F172A', // slate-900
-		input: '#111827', // gray-900
-		border: '#1F2937', // gray-800
-		ring: '#64748B', // slate-500
-		textPrimary: '#E5E7EB', // gray-200
-		textSecondary: '#9CA3AF', // gray-400
-		textTertiary: '#6B7280', // gray-500
-		accentBg: '#052e21',
-		accent: '#34D399', // emerald-400 for dark
+		background: '#09090B', // zinc-950
+		card: '#09090B',       // zinc-950 (often same as bg, separated by border)
+		input: '#09090B',
+		border: '#27272A',     // zinc-800
+		lightBorder: '#3F3F46', // zinc-700
+		ring: '#D4D4D8',       // zinc-300
+		textPrimary: '#FAFAFA', // zinc-50
+		textSecondary: '#A1A1AA', // zinc-400
+		textTertiary: '#52525B', // zinc-600
+		accentBg: '#27272A',   // zinc-800
+		accent: '#FAFAFA',     // zinc-50
 		shadow: 'rgba(0,0,0,0.5)',
 		success: '#34D399',
 		warning: '#FBBF24',
 		error: '#F87171',
 		info: '#60A5FA',
-		overlay: 'rgba(0,0,0,0.9)'
+		overlay: 'rgba(0,0,0,0.80)',
+		primary: '#FAFAFA',
+		primaryForeground: '#09090B',
+		secondaryBg: '#27272A',
+		successBg: 'rgba(52, 211, 153, 0.2)',
 	},
-	radii: { sm: 6, md: 12, lg: 16, xl: 20, pill: 9999 },
+	radii: { sm: 4, md: 8, lg: 12, xl: 16, pill: 9999 },
 	elevation: {
-		none: { shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
-		sm: { shadowOffset: { width: 0, height: 1 }, shadowOpacity: 1, shadowRadius: 2, elevation: 1 },
-		md: { shadowOffset: { width: 0, height: 2 }, shadowOpacity: 1, shadowRadius: 4, elevation: 2 },
+		none: { shadowColor: 'transparent', shadowOffset: { width: 0, height: 0 }, shadowOpacity: 0, shadowRadius: 0, elevation: 0 },
+		sm: { shadowColor: "#000", shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.2, shadowRadius: 2, elevation: 1 },
+		md: { shadowColor: "#000", shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.3, shadowRadius: 4, elevation: 2 },
 	}
 };
 
@@ -103,7 +118,7 @@ type ThemeContextValue = {
 	setMode: (mode: ThemeMode) => void;
 };
 
-const ThemeContext = React.createContext<ThemeContextValue>({ theme: lightTheme, currentMode: 'light', setMode: () => {} });
+const ThemeContext = React.createContext<ThemeContextValue>({ theme: lightTheme, currentMode: 'light', setMode: () => { } });
 
 export const ThemeProvider: React.FC<{ children: React.ReactNode; mode?: ThemeMode }> = ({ children, mode }) => {
 	const system = useColorScheme();

@@ -88,7 +88,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
       .then(() => {
         Alert.alert('Copied', 'Referral code copied to clipboard');
       })
-      .catch(() => {});
+      .catch(() => { });
   };
 
   const handleShareWhatsApp = () => {
@@ -107,7 +107,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
     >
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Referral</Text>
         <View style={styles.headerRight} />
@@ -122,11 +122,11 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
             log in to get your code and free entries when friends join
           </Text>
           <TouchableOpacity
-            style={styles.primaryButton}
+            style={[styles.primaryButton, { backgroundColor: theme.colors.primary }]}
             onPress={onLoginPress}
             activeOpacity={0.85}
           >
-            <Text style={styles.primaryButtonText}>Log in</Text>
+            <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>Log in</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -153,18 +153,18 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
             </Text>
             <View style={styles.actionsRow}>
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: '#25D366' }]}
+                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
                 onPress={handleShareWhatsApp}
                 activeOpacity={0.85}
               >
-                <Feather name="message-circle" size={16} color={Colors.white} />
-                <Text style={styles.actionButtonText}>Share on WhatsApp</Text>
+                <Feather name="message-circle" size={16} color={theme.colors.primaryForeground} />
+                <Text style={[styles.actionButtonText, { color: theme.colors.primaryForeground }]}>Share on WhatsApp</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 style={[styles.iconButton, { backgroundColor: theme.colors.input }]}
                 onPress={handleCopyCode}
               >
-                <Feather name="copy" size={16} color="#10B981" />
+                <Feather name="copy" size={16} color={theme.colors.textPrimary} />
               </TouchableOpacity>
             </View>
           </View>
@@ -183,7 +183,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
                 <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
                   From referrals
                 </Text>
-                <Text style={[styles.freeValue, { color: '#10B981' }]}>
+                <Text style={[styles.freeValue, { color: theme.colors.primary }]}>
                   +{totalEarnedEntriesFromReferrals}
                 </Text>
               </View>
@@ -232,7 +232,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
                     <Text style={[styles.tableCellText, { color: theme.colors.textPrimary }]}>
                       {row.friendName}
                     </Text>
-                    <Text style={[styles.tableCellText, { color: '#10B981' }]}>
+                    <Text style={[styles.tableCellText, { color: theme.colors.primary }]}>
                       {row.entries > 0 ? `+${row.entries}` : '+0'}
                     </Text>
                   </View>
@@ -393,7 +393,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   primaryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: 'transparent', // overridden
     borderRadius: 999,
     paddingVertical: 12,
     paddingHorizontal: 24,
@@ -406,6 +406,11 @@ const styles = StyleSheet.create({
 });
 
 export default ReferralScreen;
+
+
+
+
+
 
 
 

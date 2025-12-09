@@ -1,10 +1,11 @@
-import React, { useState } from 'react';
-import { View, StyleSheet, Dimensions, PanResponder } from 'react-native';
+import React, { useState, useRef } from 'react';
+import { View, StyleSheet, Dimensions, PanResponder, Animated, Easing } from 'react-native';
 import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
+import { useTheme } from '../constants/theme';
 
 interface SwipeableCardsProps {
   macrosData?: MacroData;
@@ -14,8 +15,8 @@ interface SwipeableCardsProps {
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SWIPE_THRESHOLD = 30; // Minimum distance to trigger swipe (reduced for more responsiveness)
-const CARD_HEIGHT = 120; // Reduced height for more compact design
+const SWIPE_THRESHOLD = 30; // Minimum distance to trigger swipe
+const CARD_HEIGHT = 120; // Match height
 
 type CardType = 'macros' | 'macros2';
 
@@ -25,7 +26,12 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   dailyCalories,
   onScrollEnable
 }) => {
+  const theme = useTheme();
   const [currentCard, setCurrentCard] = useState<CardType>('macros2');
+
+  // Animation values
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   // Helper functions for two-card navigation
   const getNextCard = (current: CardType): CardType => {
@@ -36,64 +42,93 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
     return current === 'macros2' ? 'macros' : 'macros2';
   };
 
+  const animateSwitch = (direction: 'up' | 'down') => {
+    const nextCard = direction === 'up' ? getNextCard(currentCard) : getPreviousCard(currentCard);
+    const slideOutTo = direction === 'up' ? -50 : 50;
+    const slideInFrom = direction === 'up' ? 50 : -50;
+
+    // Animate OUT
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 150,
+        useNativeDriver: true,
+        easing: Easing.ease,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: slideOutTo,
+        duration: 150,
+        useNativeDriver: true,
+        easing: Easing.ease,
+      }),
+    ]).start(() => {
+      // Switch Content
+      setCurrentCard(nextCard);
+      // Construct IN state
+      slideAnim.setValue(slideInFrom);
+
+      // Animate IN
+      Animated.parallel([
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 200,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+        Animated.timing(slideAnim, {
+          toValue: 0,
+          duration: 200,
+          useNativeDriver: true,
+          easing: Easing.out(Easing.ease),
+        }),
+      ]).start();
+    });
+  };
+
   const panResponder = PanResponder.create({
     onStartShouldSetPanResponder: () => true,
     onMoveShouldSetPanResponder: (_, gestureState) => {
-      // Respond to any vertical movement to capture gestures early
-      return Math.abs(gestureState.dy) > 5;
+      return Math.abs(gestureState.dy) > 10;
     },
-    onPanResponderTerminationRequest: () => false, // Don't allow other components to take over
-    
-    onPanResponderGrant: () => {
-      // Disable parent scroll when starting gesture
-      onScrollEnable?.(false);
-    },
+    onPanResponderTerminationRequest: () => false,
 
-    onPanResponderMove: () => {
-      // No animations during move (simple snap behavior)
+    onPanResponderGrant: () => {
+      onScrollEnable?.(false);
     },
 
     onPanResponderRelease: (_, gestureState) => {
       const { dy } = gestureState;
-      
-      // Two-card infinite loop logic
+
       if (Math.abs(dy) > SWIPE_THRESHOLD) {
         if (dy < 0) {
-          // Swipe up - go to next card (loop through both)
-          setCurrentCard(getNextCard(currentCard));
+          // Swipe up
+          animateSwitch('up');
         } else if (dy > 0) {
-          // Swipe down - go to previous card (loop through both)
-          setCurrentCard(getPreviousCard(currentCard));
+          // Swipe down
+          animateSwitch('down');
         }
       }
 
-      // Re-enable parent scroll when gesture ends
       onScrollEnable?.(true);
     },
   });
 
   return (
-    <View style={styles.container}>
-      {/* Card with indicators on top */}
+    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
       <View style={styles.cardWrapper}>
-        <View style={styles.cardContainer} {...panResponder.panHandlers}>
+        <Animated.View
+          style={[
+            styles.cardContainer,
+            {
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }]
+            }
+          ]}
+          {...panResponder.panHandlers}
+        >
           {currentCard === 'macros' && <MacrosCard data={macrosData} />}
           {currentCard === 'macros2' && <Macros2Card data={macros2Data} dailyCalories={dailyCalories} />}
-        </View>
-
-        {/* Indicators positioned on top of the card */}
-        <View style={styles.indicatorContainer}>
-          <View style={styles.indicatorColumn}>
-            <View style={[
-              styles.indicator,
-              currentCard === 'macros' && styles.activeIndicator
-            ]} />
-            <View style={[
-              styles.indicator,
-              currentCard === 'macros2' && styles.activeIndicator
-            ]} />
-          </View>
-        </View>
+        </Animated.View>
       </View>
     </View>
   );
@@ -101,7 +136,6 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.background,
     marginTop: -8,
     paddingBottom: 0,
   },
@@ -111,28 +145,5 @@ const styles = StyleSheet.create({
   },
   cardContainer: {
     minHeight: CARD_HEIGHT,
-  },
-  indicatorContainer: {
-    position: 'absolute',
-    top: '50%',
-    right: 24,
-    transform: [{ translateY: -10 }], // Center vertically (half of total height)
-    zIndex: 10,
-  },
-  indicatorColumn: {
-    alignItems: 'center',
-  },
-  indicator: {
-    width: 5,
-    height: 5,
-    borderRadius: 2.5,
-    backgroundColor: Colors.tertiaryText, // Grey when not selected
-    marginVertical: 3,
-  },
-  activeIndicator: {
-    backgroundColor: Colors.activeGreenBorder, // Green when selected
-    width: 7,
-    height: 7,
-    borderRadius: 3.5,
   },
 });

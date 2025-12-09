@@ -46,7 +46,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
   const showDateTransition = (date: Date, callback: () => void) => {
     setShowTransition(true);
     setPendingDate(date);
-    
+
     // Fade in the overlay
     Animated.timing(overlayOpacity, {
       toValue: 1,
@@ -55,7 +55,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
     }).start(() => {
       // Execute callback (date change)
       callback();
-      
+
       // Fade out the overlay
       setTimeout(() => {
         Animated.timing(overlayOpacity, {
@@ -94,7 +94,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
       duration: 200,
       useNativeDriver: true,
     }).start();
-    
+
     animateToPosition(0, () => {
       setPendingDate(null);
     }, 200);
@@ -102,30 +102,30 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
 
   const snapToNext = () => {
     const nextDate = addDays(selectedDate, 1);
-    
+
     // Reset content opacity
     contentOpacity.setValue(1);
-    
+
     animateToPosition(SCREEN_WIDTH, () => {
       showDateTransition(nextDate, () => {
         onDateChange(nextDate);
         translateX.setValue(-SCREEN_WIDTH);
-        animateToPosition(0, () => {}, 0);
+        animateToPosition(0, () => { }, 0);
       });
     });
   };
 
   const snapToPrevious = () => {
     const prevDate = subDays(selectedDate, 1);
-    
+
     // Reset content opacity
     contentOpacity.setValue(1);
-    
+
     animateToPosition(-SCREEN_WIDTH, () => {
       showDateTransition(prevDate, () => {
         onDateChange(prevDate);
         translateX.setValue(SCREEN_WIDTH);
-        animateToPosition(0, () => {}, 0);
+        animateToPosition(0, () => { }, 0);
       });
     });
   };
@@ -135,7 +135,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
     onMoveShouldSetPanResponder: (_, gestureState) => {
       return !isAnimating && Math.abs(gestureState.dx) > Math.abs(gestureState.dy * 2);
     },
-    
+
     onPanResponderGrant: () => {
       // Optional: Add haptic feedback here
     },
@@ -144,7 +144,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
       if (!isAnimating) {
         const { dx } = gestureState;
         translateX.setValue(dx);
-        
+
         // Add subtle opacity feedback based on swipe distance
         const progress = Math.min(Math.abs(dx) / SWIPE_THRESHOLD, 1);
         const opacity = 1 - (progress * 0.3); // Reduce opacity by max 30%
@@ -193,7 +193,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
       >
         {children}
       </Animated.View>
-      
+
       {/* Date transition overlay */}
       {showTransition && (
         <Animated.View
@@ -206,20 +206,20 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
           ]}
           pointerEvents="none"
         >
-          <View style={styles.dateTransition}>
-            <Text style={styles.transitionDate}>
+          <View style={[styles.dateTransition, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <Text style={[styles.transitionDate, { color: theme.colors.textPrimary }]}>
               {format(pendingDate || selectedDate, 'MMM d, yyyy')}
             </Text>
-            <Text style={styles.transitionDay}>
+            <Text style={[styles.transitionDay, { color: theme.colors.textSecondary }]}>
               {format(pendingDate || selectedDate, 'EEEE')}
             </Text>
           </View>
         </Animated.View>
       )}
-      
+
       {/* Date indicators */}
       <View style={styles.dateIndicator}>
-        <View style={styles.indicatorDot} />
+        <View style={[styles.indicatorDot, { backgroundColor: theme.colors.textTertiary }]} />
       </View>
     </View>
   );
@@ -245,15 +245,7 @@ const styles = StyleSheet.create({
     width: 5,
     height: 5,
     borderRadius: 2.5,
-    backgroundColor: 'rgba(255, 255, 255, 0.7)',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 2,
-    elevation: 3,
+    opacity: 0.5,
   },
   transitionOverlay: {
     position: 'absolute',
@@ -261,7 +253,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(0, 0, 0, 0.8)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -269,27 +260,26 @@ const styles = StyleSheet.create({
   dateTransition: {
     alignItems: 'center',
     padding: 24,
-    backgroundColor: Colors.cardBackground,
     borderRadius: 16,
+    borderWidth: 1,
+    // Keep subtle shadow for floating element
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
       height: 4,
     },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
+    shadowOpacity: 0.1,
+    shadowRadius: 12,
     elevation: 8,
   },
   transitionDate: {
     fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.primaryText,
     textAlign: 'center',
   },
   transitionDay: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.secondaryText,
     textAlign: 'center',
     marginTop: 4,
   },

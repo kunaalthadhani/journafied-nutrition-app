@@ -56,7 +56,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
     >
       <View style={styles.settingItemLeft}>
         <View style={[styles.iconContainer, { backgroundColor: theme.colors.input }]}>
-          <Feather name={icon as any} size={20} color="#10B981" />
+          <Feather name={icon as any} size={20} color={theme.colors.textPrimary} />
         </View>
         <View style={styles.settingItemText}>
           <Text style={[styles.settingTitle, { color: theme.colors.textPrimary }]}>
@@ -125,7 +125,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const referralBonus = totalEarnedEntries || 0;
   const challengeBonus = taskBonusEntries || 0;
   const totalBonusEntries = referralBonus + challengeBonus;
-  
+
   // Meal reminder settings
   const [breakfastReminder, setBreakfastReminder] = useState<MealReminder>({
     enabled: true,
@@ -306,7 +306,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
           Settings
@@ -314,31 +314,31 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <View style={styles.headerRight} />
       </View>
 
-      <ScrollView 
-        style={styles.content} 
+      <ScrollView
+        style={styles.content}
         contentContainerStyle={{ flexGrow: 1 }}
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
       >
         {/* Subscriptions Section */}
         <SettingSection title="Subscriptions">
-          <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }] }>
+          <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
             <View style={styles.subscriptionHeader}>
               <View style={styles.subscriptionTitleRow}>
-                <Feather name="star" size={18} color="#10B981" />
+                <Feather name="star" size={18} color={theme.colors.textPrimary} />
                 <Text style={[styles.subscriptionTitle, { color: theme.colors.textPrimary }]}>Current Plan</Text>
               </View>
-              <View style={[styles.planBadge, { backgroundColor: plan === 'premium' ? '#10B981' : theme.colors.input, borderColor: theme.colors.border }] }>
+              <View style={[styles.planBadge, { backgroundColor: plan === 'premium' ? theme.colors.primary : theme.colors.input, borderColor: theme.colors.border }]}>
                 <Text style={[styles.planBadgeText, { color: plan === 'premium' ? Colors.white : theme.colors.textSecondary }]}>
                   {plan === 'premium' ? 'Premium' : 'Free'}
                 </Text>
               </View>
             </View>
-            <Text style={[styles.subscriptionSubtitle, { color: theme.colors.textSecondary }] }>
+            <Text style={[styles.subscriptionSubtitle, { color: theme.colors.textSecondary }]}>
               {plan === 'premium' ? 'Enjoy all premium features.' : 'You are on the Free plan. Upgrade to unlock premium features.'}
             </Text>
             <TouchableOpacity
-              style={[styles.upgradeButton, { backgroundColor: '#10B981' }]}
+              style={[styles.upgradeButton, { backgroundColor: theme.colors.primary }]}
               onPress={handleUpgradeToPremium}
               activeOpacity={0.85}
             >
@@ -350,7 +350,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
                 {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining
                 {totalBonusEntries > 0 && (
-                  <Text style={{ color: '#10B981' }}>
+                  <Text style={{ color: theme.colors.primary }}>
                     {' '}(
                     {[
                       referralBonus > 0 ? `+${referralBonus} from referrals` : null,
@@ -376,7 +376,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={notificationsEnabled}
                 onValueChange={setNotificationsEnabled}
-                trackColor={{ false: theme.colors.border, true: '#10B981' }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={Colors.white}
               />
             }
@@ -402,7 +402,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={breakfastReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('breakfast', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#10B981' }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={Colors.white}
               />
             }
@@ -417,7 +417,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={lunchReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('lunch', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#10B981' }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={Colors.white}
               />
             }
@@ -432,7 +432,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Switch
                 value={dinnerReminder.enabled}
                 onValueChange={(enabled) => handleMealReminderToggle('dinner', enabled)}
-                trackColor={{ false: theme.colors.border, true: '#10B981' }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={Colors.white}
               />
             }
@@ -504,7 +504,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.unitOption,
-                  weightUnit === 'kg' && { backgroundColor: '#10B981' },
+                  weightUnit === 'kg' && { backgroundColor: theme.colors.primary },
                   { borderColor: theme.colors.border },
                 ]}
                 onPress={async () => {
@@ -527,7 +527,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <TouchableOpacity
                 style={[
                   styles.unitOption,
-                  weightUnit === 'lbs' && { backgroundColor: '#10B981' },
+                  weightUnit === 'lbs' && { backgroundColor: theme.colors.primary },
                   { borderColor: theme.colors.border },
                 ]}
                 onPress={async () => {
