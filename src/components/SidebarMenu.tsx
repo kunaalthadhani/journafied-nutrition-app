@@ -314,13 +314,9 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
               <MenuItem icon="gift" label="Get Free Entries" onPress={handleFreeEntries} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
-              <MenuItem icon="user" label="Account" onPress={handleLogin} isBottom />
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
-              <MenuItem icon="users" label="Referral" onPress={handleReferral} isBottom />
+              <MenuItem icon="users" label="Refer Friends" onPress={handleReferral} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="settings" label="Settings" onPress={handleSettings} isBottom />
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
-              <MenuItem icon="info" label="About" onPress={handleAbout} isBottom />
             </View>
           </SafeAreaView>
         </Animated.View>

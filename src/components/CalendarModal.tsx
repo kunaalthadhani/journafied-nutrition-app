@@ -10,7 +10,7 @@ import {
   Easing,
   Dimensions, // Added for screen height
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
@@ -38,6 +38,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   dailyCalorieTarget,
 }) => {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   // Animation: Start from -SCREEN_HEIGHT (above screen) to 0
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
   const [currentMonth, setCurrentMonth] = useState(new Date());
@@ -133,7 +134,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
             },
           ]}
         >
-          <SafeAreaView edges={['top']}>
+          <View style={{ paddingTop: Math.max(insets.top, 20) }}>
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerLeft}>
@@ -208,7 +209,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
               <View style={[styles.bottomHandle, { backgroundColor: theme.colors.border }]} />
             </TouchableOpacity>
 
-          </SafeAreaView>
+          </View>
         </Animated.View>
       </View>
     </Modal>

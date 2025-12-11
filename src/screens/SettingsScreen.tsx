@@ -26,6 +26,7 @@ interface SettingsScreenProps {
   freeEntryLimit?: number;
   totalEarnedEntries?: number;
   taskBonusEntries?: number;
+  onLogin?: () => void;
 }
 
 interface SettingItemProps {
@@ -117,6 +118,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   freeEntryLimit = 20,
   totalEarnedEntries,
   taskBonusEntries,
+  onLogin,
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
@@ -320,6 +322,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
       >
+        {/* Account Section */}
+        <SettingSection title="Account">
+          <SettingItem
+            icon="user"
+            title="My Account"
+            subtitle="Manage your profile and login"
+            onPress={onLogin}
+          />
+        </SettingSection>
+
         {/* Subscriptions Section */}
         <SettingSection title="Subscriptions">
           <View style={[styles.subscriptionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -463,6 +475,26 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             title="Contact Us"
             subtitle="Send us feedback"
             onPress={() => Alert.alert('Contact', 'Contact information will be displayed here.')}
+          />
+          <SettingItem
+            icon="info"
+            title="About and Legal"
+            subtitle="Version, Terms, and Privacy"
+            onPress={handleAbout}
+          />
+        </SettingSection>
+
+        {/* Legal Section */}
+        <SettingSection title="Legal">
+          <SettingItem
+            icon="file-text"
+            title="Privacy Policy"
+            onPress={handlePrivacyPolicy}
+          />
+          <SettingItem
+            icon="file-text"
+            title="Terms of Service"
+            onPress={handleTermsOfService}
           />
         </SettingSection>
 

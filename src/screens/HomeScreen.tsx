@@ -1526,6 +1526,7 @@ export const HomeScreen: React.FC = () => {
         freeEntryLimit={FREE_ENTRY_LIMIT}
         totalEarnedEntries={totalEarnedEntries}
         taskBonusEntries={taskBonusEntries}
+        onLogin={handleAccount}
       />
     );
   }
