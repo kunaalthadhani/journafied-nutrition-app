@@ -650,10 +650,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     >
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
-        {...panResponder.panHandlers}
       >
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        {/* Header - Drag to close */}
+        <View
+          style={[styles.header, { borderBottomColor: theme.colors.border }]}
+          {...panResponder.panHandlers}
+        >
           <TouchableOpacity onPress={handleClose} style={styles.backButton}>
             <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>

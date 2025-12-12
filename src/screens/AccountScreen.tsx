@@ -32,135 +32,78 @@ interface AccountScreenProps {
 export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
-  const [name, setName] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
-  const [emailInput, setEmailInput] = useState('');
-  const [pendingOtpCode, setPendingOtpCode] = useState('');
-  const [otpSent, setOtpSent] = useState(false);
+
+  // -- Auth State --
+  const [authSession, setAuthSession] = useState<Session | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
   const [authStatus, setAuthStatus] = useState<'idle' | 'sending' | 'verifying'>('idle');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
+  const [otpSent, setOtpSent] = useState(false);
+
+  // -- Form State --
+  const [name, setName] = useState('');
+  const [emailInput, setEmailInput] = useState('');
+  const [phoneInput, setPhoneInput] = useState('');
+  const [pendingOtpCode, setPendingOtpCode] = useState('');
   const [referralCode, setReferralCode] = useState('');
-  const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
-  const [isValidatingCode, setIsValidatingCode] = useState(false);
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+
+  // -- Validation State --
   const [nameError, setNameError] = useState(false);
   const [emailError, setEmailError] = useState(false);
   const [termsError, setTermsError] = useState(false);
+  const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
+
+  // -- User Data State --
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
   const [entryCount, setEntryCount] = useState(0);
   const [plan, setPlan] = useState<'free' | 'premium'>('free');
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
   const [taskBonusEntries, setTaskBonusEntries] = useState(0);
-  const [referralDetails, setReferralDetails] = useState<{
-    code: string | null;
-    totalReferrals: number;
-    entriesFromReferrals: number;
-  }>({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
   const [goals, setGoals] = useState<ExtendedGoalData | null>(null);
   const [weightSummary, setWeightSummary] = useState<{
     starting: number | null;
     current: number | null;
     goal: number | null;
     change: number | null;
-  }>({
-    starting: null,
-    current: null,
-    goal: null,
-    change: null,
-  });
-  const [isLoading, setIsLoading] = useState(true);
-  const [authSession, setAuthSession] = useState<Session | null>(null);
+  }>({ starting: null, current: null, goal: null, change: null });
+
+  const [referralDetails, setReferralDetails] = useState<{
+    code: string | null;
+    totalReferrals: number;
+    entriesFromReferrals: number;
+  }>({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
 
   const FREE_ENTRY_LIMIT = 20;
 
-  const loadAccountData = React.useCallback(async () => {
-    setIsLoading(true);
-    try {
-      const info = await dataStorage.loadAccountInfo();
-      setAccountInfo(info);
-      if (info?.name) {
-        setName(info.name);
-      }
-      if (info?.email) {
-        setEmailInput(info.email);
-      }
-      if (info?.phoneNumber) {
-        setPhoneInput(info.phoneNumber);
-      }
+  // -- Effects --
 
-      const [count, planValue, goalsData, weightEntries] = await Promise.all([
-        dataStorage.loadEntryCount(),
-        dataStorage.loadUserPlan(),
-        dataStorage.loadGoals(),
-        dataStorage.loadWeightEntries(),
-      ]);
-
-      setEntryCount(count);
-      setPlan(planValue);
-      setGoals(goalsData);
-
-      if (info?.email) {
-        const earnedEntries = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
-        setTotalEarnedEntries(earnedEntries);
-
-        const codeData = await dataStorage.getReferralCode(info.email);
-        setReferralDetails({
-          code: codeData?.code || null,
-          totalReferrals: codeData?.totalReferrals || 0,
-          entriesFromReferrals: codeData?.totalEarnedEntries ?? earnedEntries,
-        });
-      } else {
-        setTotalEarnedEntries(0);
-        setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
-      }
-
-      const sortedEntries = [...weightEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
-
-      const startingWeight = sortedEntries[0]?.weight ?? goalsData?.currentWeightKg ?? null;
-      const currentWeight =
-        sortedEntries[sortedEntries.length - 1]?.weight ?? goalsData?.currentWeightKg ?? null;
-      const goalWeight = goalsData?.targetWeightKg ?? null;
-      const change =
-        startingWeight !== null && currentWeight !== null ? startingWeight - currentWeight : null;
-
-      setWeightSummary({
-        starting: startingWeight,
-        current: currentWeight,
-        goal: goalWeight,
-        change,
-      });
-
-      const tasksStatus = await dataStorage.loadEntryTasks();
-      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
-    } catch (error) {
-      console.error('Error loading account data:', error);
-    } finally {
-      setIsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    loadAccountData();
-  }, [loadAccountData]);
-
+  // 1. Initial Load & Auth Listener
   useEffect(() => {
     let isMounted = true;
 
-    const bootstrap = async () => {
+    const init = async () => {
+      setIsLoading(true);
       try {
+        // Check current session
         const { data } = await authService.getSession();
-        if (!isMounted) return;
-        setAuthSession(data.session ?? null);
-        if (data.session?.user?.email) {
-          setEmailInput(data.session.user.email);
-          await syncAccountInfoFromSession(data.session, true);
+        if (isMounted) {
+          setAuthSession(data.session);
+          if (data.session?.user?.email) {
+            setEmailInput(data.session.user.email);
+          }
         }
-      } catch (error) {
-        console.warn('Auth session bootstrap failed:', error);
+
+        // Load local data regardless of auth state (guest mode support)
+        await loadLocalData();
+      } catch (e) {
+        console.warn('Init failed:', e);
+      } finally {
+        if (isMounted) setIsLoading(false);
       }
     };
 
-    bootstrap();
+    init();
 
     const { data: authListener } = authService.onAuthStateChange(async (_event, session) => {
       if (!isMounted) return;
@@ -168,6 +111,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
       if (session?.user?.email) {
         setEmailInput(session.user.email);
         await syncAccountInfoFromSession(session);
+        await loadLocalData(); // Refresh data on auth change
       }
     });
 
@@ -177,6 +121,60 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     };
   }, []);
 
+  // -- Helpers --
+
+  const loadLocalData = async () => {
+    try {
+      const info = await dataStorage.loadAccountInfo();
+      const [count, planValue, goalsData, weightEntries] = await Promise.all([
+        dataStorage.loadEntryCount(),
+        dataStorage.loadUserPlan(),
+        dataStorage.loadGoals(),
+        dataStorage.loadWeightEntries(),
+      ]);
+
+      setAccountInfo(info);
+      if (info?.name) setName(info.name);
+      if (info?.email) setEmailInput(info.email);
+      if (info?.phoneNumber) setPhoneInput(info.phoneNumber);
+
+      setEntryCount(count);
+      setPlan(planValue);
+      setGoals(goalsData);
+
+      // Weight Summary Logic
+      const sortedEntries = [...weightEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
+      const startingWeight = sortedEntries[0]?.weight ?? goalsData?.currentWeightKg ?? null;
+      const currentWeight = sortedEntries[sortedEntries.length - 1]?.weight ?? goalsData?.currentWeightKg ?? null;
+      const goalWeight = goalsData?.targetWeightKg ?? null;
+      const change = startingWeight !== null && currentWeight !== null ? startingWeight - currentWeight : null;
+
+      setWeightSummary({ starting: startingWeight, current: currentWeight, goal: goalWeight, change });
+
+      // Referral Data
+      if (info?.email) {
+        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
+        setTotalEarnedEntries(earned);
+        const codeData = await dataStorage.getReferralCode(info.email);
+        setReferralDetails({
+          code: codeData?.code || null,
+          totalReferrals: codeData?.totalReferrals || 0,
+          entriesFromReferrals: codeData?.totalEarnedEntries ?? earned,
+        });
+      } else {
+        setTotalEarnedEntries(0);
+        setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
+      }
+
+      // Tasks
+      const tasksStatus = await dataStorage.loadEntryTasks();
+      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
+
+    } catch (error) {
+      console.error('Failed to load local data', error);
+    }
+  };
+
   const syncAccountInfoFromSession = async (session: Session, silent = false) => {
     const email = session.user.email;
     if (!email) return;
@@ -185,182 +183,35 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     const merged: AccountInfo = {
       ...(existing || {}),
       email,
-      name: existing?.name ?? (name.trim().length ? name.trim() : undefined),
-      phoneNumber: phoneInput.trim().length
-        ? phoneInput.trim()
-        : existing?.phoneNumber,
+      name: existing?.name ?? (name.trim() || undefined),
+      phoneNumber: existing?.phoneNumber ?? (phoneInput.trim() || undefined),
       supabaseUserId: session.user.id,
-      hasUsedReferralCode: existing?.hasUsedReferralCode,
     };
 
     await dataStorage.saveAccountInfo(merged);
     setAccountInfo(merged);
-    if (!silent && merged.name) {
-      setName(merged.name);
-    }
-    if (!silent) {
-      setPhoneInput(merged.phoneNumber || '');
-    }
   };
 
-  const formatWeight = (value: number | null) => {
-    if (value === null || value === undefined) {
-      return '--';
-    }
-    return `${convertWeightToDisplay(value).toFixed(1)} ${getWeightUnitLabel()}`;
-  };
-
-  const formatWeightChange = (value: number | null) => {
-    if (value === null || value === undefined) {
-      return '--';
-    }
-    if (value === 0) {
-      return 'No change';
-    }
-    const magnitude = convertWeightToDisplay(Math.abs(value)).toFixed(1);
-    const direction = value > 0 ? 'Lost' : 'Gained';
-    return `${direction} ${magnitude} ${getWeightUnitLabel()}`;
-  };
-
-  const goalLabelMap: Record<string, string> = {
-    lose: 'Lose weight',
-    maintain: 'Maintain weight',
-    gain: 'Gain weight',
-  };
-
-  const remainingEntries =
-    plan === 'premium'
-      ? null
-      : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries - entryCount);
-
-  const handleClearLocalData = () => {
-    Alert.alert(
-      'Clear local data',
-      'This removes every saved entry from this device. Remote backups stay untouched.',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-        {
-          text: 'Clear data',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await authService.signOut().catch(() => { });
-              // Clear all user data from storage
-              await dataStorage.saveAccountInfo({});
-              await dataStorage.saveMeals({});
-              await dataStorage.saveGoals({
-                calories: 1500,
-                proteinPercentage: 30,
-                carbsPercentage: 45,
-                fatPercentage: 25,
-                proteinGrams: 113,
-                carbsGrams: 169,
-                fatGrams: 42,
-                currentWeightKg: null,
-                targetWeightKg: null,
-              });
-              await dataStorage.saveWeightEntries([]);
-              await dataStorage.saveEntryCount(0);
-              await dataStorage.saveUserPlan('free');
-              // Clear entry count from AsyncStorage as well
-              await AsyncStorage.setItem('@trackkal:entryCount', '0');
-
-              // Reset state to show registration form
-              setAccountInfo(null);
-              setEntryCount(0);
-              setPlan('free');
-              setTotalEarnedEntries(0);
-              setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
-              setGoals(null);
-              setWeightSummary({ starting: null, current: null, goal: null, change: null });
-              setAuthSession(null);
-              setEmailInput('');
-              setAuthMessage(null);
-              setOtpSent(false);
-              setPendingOtpCode('');
-            } catch (error) {
-              console.error('Error clearing data:', error);
-              Alert.alert('Error', 'Something went wrong while clearing your data. Please try again.');
-            }
-          },
-        },
-      ]
-    );
-  };
-
-  const handleReferralAfterLogin = async (userEmail: string, userName?: string | null) => {
-    if (!referralCode.trim()) {
-      setReferralCodeError(null);
-      return;
-    }
-    try {
-      setIsValidatingCode(true);
-      const validation = await referralService.validateReferralCodeForRedemption(
-        referralCode.trim(),
-        userEmail
-      );
-
-      if (!validation.valid) {
-        setReferralCodeError(validation.error || 'Invalid referral code');
-        return;
-      }
-
-      await referralService.createReferralRedemption(
-        validation.referralCode!,
-        userEmail,
-        userName && userName.trim().length ? userName : 'TrackKcal user'
-      );
-      setReferralCode('');
-      setReferralCodeError(null);
-    } catch (error) {
-      console.error('Referral redemption failed:', error);
-      setReferralCodeError('Unable to apply referral code right now.');
-    } finally {
-      setIsValidatingCode(false);
-    }
-  };
+  // -- Actions --
 
   const handleSendOtp = async () => {
     const email = emailInput.trim().toLowerCase();
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     let hasError = false;
 
-    if (!name.trim().length) {
-      setNameError(true);
-      hasError = true;
-    } else {
-      setNameError(false);
-    }
+    if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
+    if (!emailRegex.test(email)) { setEmailError(true); hasError = true; } else setEmailError(false);
+    if (!hasAcceptedTerms) { setTermsError(true); hasError = true; } else setTermsError(false);
 
-    if (!emailRegex.test(email)) {
-      setEmailError(true);
-      hasError = true;
-    } else {
-      setEmailError(false);
-    }
-
-    if (!hasAcceptedTerms) {
-      setTermsError(true);
-      hasError = true;
-    } else {
-      setTermsError(false);
-    }
-
-    if (hasError) {
-      return;
-    }
+    if (hasError) return;
 
     try {
       setAuthStatus('sending');
       setAuthMessage(null);
 
-      // Save provisional account info (name, email, phone) before sending OTP
-      const existing = await dataStorage.loadAccountInfo();
+      // Provisionally save info
       const provisional: AccountInfo = {
-        ...(existing || {}),
+        ...(accountInfo || {}),
         name: name.trim(),
         email,
         phoneNumber: phoneInput.trim() || undefined,
@@ -370,533 +221,303 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
 
       await authService.sendOtp(email);
       setOtpSent(true);
-      setAuthMessage('Check your inbox for a verification code.');
+      setAuthMessage('Verification code sent to your email.');
     } catch (error: any) {
-      console.error('OTP send failed:', error);
-      setAuthMessage(error?.message ?? 'Failed to send code. Please try again.');
+      setAuthMessage(error.message || 'Failed to send code.');
     } finally {
       setAuthStatus('idle');
     }
   };
 
   const handleVerifyOtp = async () => {
-    const email = emailInput.trim().toLowerCase();
-    if (!otpSent) {
-      setAuthMessage('Request a code first.');
-      return;
-    }
-    if (pendingOtpCode.trim().length < 6) {
-      setAuthMessage('Enter the verification code from your email.');
+    if (pendingOtpCode.length < 6) {
+      setAuthMessage('Please enter the full 6-digit code.');
       return;
     }
 
     try {
       setAuthStatus('verifying');
       setAuthMessage(null);
-      const { data, error } = await authService.verifyOtp(email, pendingOtpCode.trim());
-      if (error) {
-        throw error;
-      }
-      const session = data.session ?? (await authService.getSession()).data.session;
-      if (!session) {
-        throw new Error('Verification succeeded, but no session was returned.');
-      }
 
-      await syncAccountInfoFromSession(session);
+      const { data, error } = await authService.verifyOtp(emailInput.trim(), pendingOtpCode.trim());
+      if (error) throw error;
+      if (!data.session) throw new Error('No session returned.');
+
+      // Success sequence
+      await syncAccountInfoFromSession(data.session);
       await dataStorage.pushCachedDataToSupabase();
 
-      // Generate or fetch referral code and update UI immediately
-      const referralCodeValue = await referralService.getOrCreateReferralCode(email);
-      setReferralDetails((prev) => ({
-        code: referralCodeValue,
-        totalReferrals: prev?.totalReferrals ?? 0,
-        entriesFromReferrals: prev?.entriesFromReferrals ?? 0,
-      }));
-
-      await handleReferralAfterLogin(email, name.trim() || accountInfo?.name);
-
-      const rewardResult = await dataStorage.completeEntryTask('registration');
-      if (rewardResult.awarded) {
-        setTaskBonusEntries(dataStorage.getEntryTaskBonus(rewardResult.status));
+      // Handle Referrals
+      if (referralCode.trim()) {
+        const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput);
+        if (validation.valid) {
+          await referralService.createReferralRedemption(validation.referralCode!, emailInput, name.trim());
+        }
       }
 
-      setAuthMessage('Success! Your data is now synced to your account.');
-      setOtpSent(false);
+      // Get own referral code
+      const myCode = await referralService.getOrCreateReferralCode(emailInput);
+      setReferralDetails(prev => ({ ...prev, code: myCode }));
+
+      // Registration task bonus
+      const taskResult = await dataStorage.completeEntryTask('registration');
+      if (taskResult.awarded) {
+        Alert.alert('Bonus Unlocked!', 'Account verified. +5 free entries.');
+      }
+
+      await loadLocalData(); // Refresh UI
+      setOtpSent(false); // Reset form state
       setPendingOtpCode('');
-      await loadAccountData();
-    } catch (error: any) {
-      console.error('OTP verification failed:', error);
-      // Always show a clear, user-friendly message when the code is invalid or expired
-      setAuthMessage('The verification code is incorrect or has expired. Please check it and try again.');
+      setReferralCode('');
+
+    } catch (e: any) {
+      setAuthMessage('Invalid code or expired. Please try again.');
     } finally {
       setAuthStatus('idle');
     }
   };
 
   const handleSignOut = async () => {
-    try {
-      await authService.signOut();
-      setAuthSession(null);
-      setOtpSent(false);
-      setPendingOtpCode('');
-      setAuthMessage('Signed out. Continue in guest mode or log in again anytime.');
-      const guestInfo: AccountInfo = {
-        name: name.trim() || undefined,
-        phoneNumber: phoneInput.trim() || accountInfo?.phoneNumber,
-      };
-      await dataStorage.saveAccountInfo(guestInfo);
-      setAccountInfo(guestInfo);
-      await loadAccountData();
-    } catch (error) {
-      console.error('Sign out failed:', error);
-      Alert.alert('Sign out failed', 'Please try again.');
-    }
+    Alert.alert('Sign Out', 'Are you sure?', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Sign Out',
+        style: 'destructive',
+        onPress: async () => {
+          await authService.signOut();
+          setAuthSession(null);
+          // Revert to guest info if needed, or clear PII
+          setAccountInfo(prev => ({ ...prev, email: undefined, supabaseUserId: undefined }));
+          setOtpSent(false);
+          setPendingOtpCode('');
+          setAuthMessage(null);
+        }
+      }
+    ]);
   };
 
-  const renderSummary = () => (
-    <ScrollView
-      style={styles.content}
-      contentContainerStyle={styles.summaryContent}
-      showsVerticalScrollIndicator={false}
-      removeClippedSubviews={false}
-      keyboardShouldPersistTaps="handled"
-    >
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-        ]}
-      >
-        {authSession?.user ? (
-          <TouchableOpacity style={styles.signOutButton} onPress={handleSignOut}>
-            <Feather name="log-out" size={16} color={Colors.white} />
-            <Text style={styles.signOutButtonText}>Sign out</Text>
-          </TouchableOpacity>
-        ) : (
-          <>
-            <Text
-              style={[
-                styles.sectionTitle,
-                { color: theme.colors.textPrimary, marginBottom: 4 },
-              ]}
-            >
-              Sign in or create account
-            </Text>
-            <Text
-              style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 8 }]}
-            >
-              use your name email and phone to log in or set up a new TrackKcal account
-            </Text>
+  const handleClearData = () => {
+    Alert.alert('Clear Everything?', 'This will permanently delete all local data and log you out. This cannot be undone.', [
+      { text: 'Cancel', style: 'cancel' },
+      {
+        text: 'Delete All Data',
+        style: 'destructive',
+        onPress: async () => {
+          await authService.signOut();
+          // Clear data manually since clearAllData doesn't exist
+          await dataStorage.saveAccountInfo({});
+          await dataStorage.saveMeals({});
+          await dataStorage.saveGoals({
+            calories: 1500, proteinPercentage: 30, carbsPercentage: 45, fatPercentage: 25,
+            proteinGrams: 113, carbsGrams: 169, fatGrams: 42,
+            currentWeightKg: null, targetWeightKg: null
+          });
+          await dataStorage.saveWeightEntries([]);
+          await dataStorage.saveEntryCount(0);
+          await dataStorage.saveUserPlan('free');
 
-            <Text style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}>
-              Name
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: theme.colors.textPrimary,
-                  borderColor: nameError ? theme.colors.error : theme.colors.border,
-                  backgroundColor: theme.colors.input,
-                },
-              ]}
-              placeholder="Your name"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={name}
-              onChangeText={(text) => {
-                setName(text);
-                if (nameError && text.trim().length) {
-                  setNameError(false);
-                }
-              }}
-              autoComplete="name"
-              textContentType="name"
-              autoCapitalize="words"
-              autoCorrect={false}
-              editable={authStatus === 'idle'}
-            />
+          await AsyncStorage.clear();
+          // Reset state
+          setAuthSession(null);
+          setAccountInfo(null);
+          setEntryCount(0);
+          setGoals(null);
+          setWeightSummary({ starting: null, current: null, goal: null, change: null });
+          onBack(); // Go back to home to force refresh or mounting triggers
+        }
+      }
+    ]);
+  };
 
-            <Text
-              style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}
-            >
-              Phone number
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.border,
-                  backgroundColor: theme.colors.input,
-                },
-              ]}
-              placeholder="Your phone number"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={phoneInput}
-              onChangeText={setPhoneInput}
-              keyboardType="phone-pad"
-              autoComplete="tel"
-              textContentType="telephoneNumber"
-              autoCapitalize="none"
-              autoCorrect={false}
-              editable={authStatus === 'idle'}
-            />
+  // -- Renderers --
 
-            <Text style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}>
-              Email
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: theme.colors.textPrimary,
-                  borderColor: emailError ? theme.colors.error : theme.colors.border,
-                  backgroundColor: theme.colors.input,
-                },
-              ]}
-              placeholder="you@example.com"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={emailInput}
-              onChangeText={(text) => {
-                setEmailInput(text);
-                if (emailError && text.trim().length) {
-                  setEmailError(false);
-                }
-              }}
-              keyboardType="email-address"
-              autoCapitalize="none"
-              autoComplete="email"
-              autoCorrect={false}
-              textContentType="emailAddress"
-              importantForAutofill="yes"
-              editable={authStatus === 'idle'}
-            />
-            {otpSent && (
-              <>
-                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>
-                  Verification code
-                </Text>
-                <TextInput
-                  style={[
-                    styles.input,
-                    { color: theme.colors.textPrimary, borderColor: theme.colors.border, backgroundColor: theme.colors.input },
-                  ]}
-                  placeholder="Enter verification code"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={pendingOtpCode}
-                  onChangeText={setPendingOtpCode}
-                  keyboardType="number-pad"
-                  maxLength={10}
-                  autoComplete="one-time-code"
-                  textContentType="oneTimeCode"
-                  importantForAutofill="yes"
-                />
-              </>
-            )}
-            <Text
-              style={[styles.label, styles.labelBold, { color: theme.colors.textSecondary }]}
-            >
-              Referral code
-            </Text>
-            <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
-              both you and your friend get extra entries
-            </Text>
-            <TextInput
-              style={[
-                styles.input,
-                {
-                  color: theme.colors.textPrimary,
-                  borderColor: referralCodeError ? theme.colors.error : theme.colors.border,
-                  backgroundColor: theme.colors.input,
-                },
-              ]}
-              placeholder="FRIEND10"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={referralCode}
-              onChangeText={(text) => {
-                setReferralCode(text.trim().toUpperCase());
-                setReferralCodeError(null);
-              }}
-              autoCapitalize="characters"
-              editable={!isValidatingCode && authStatus === 'idle'}
-            />
-            <View style={styles.termsRow}>
-              <TouchableOpacity
-                style={[
-                  styles.checkbox,
-                  { borderColor: termsError ? theme.colors.error : theme.colors.border },
-                ]}
-                onPress={() => {
-                  setHasAcceptedTerms((prev) => {
-                    const next = !prev;
-                    if (next) {
-                      setTermsError(false);
-                    }
-                    return next;
-                  });
-                }}
-                activeOpacity={0.7}
-              >
-                {hasAcceptedTerms && <View style={styles.checkboxInner} />}
-              </TouchableOpacity>
-              <Text
-                style={[styles.helperText, { color: theme.colors.textSecondary, flex: 1 }]}
-              >
-                I accept the{' '}
-                <Text
-                  style={{ color: theme.colors.primary, textDecorationLine: 'underline' }}
-                  onPress={() => {
-                    try {
-                      Linking.openURL('https://www.trackkcal.com/termsandconditions');
-                    } catch (e) {
-                      console.warn('Failed to open terms URL', e);
-                    }
-                  }}
-                >
-                  Terms and Conditions
-                </Text>
-              </Text>
-            </View>
-            {referralCodeError && (
-              <Text style={[styles.errorText, { color: theme.colors.error }]}>{referralCodeError}</Text>
-            )}
-            {authMessage && (
-              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>{authMessage}</Text>
-            )}
-            <TouchableOpacity
-              style={[
-                styles.primaryButton,
-                (authStatus !== 'idle' || isValidatingCode) && styles.primaryButtonDisabled,
-              ]}
-              onPress={otpSent ? handleVerifyOtp : handleSendOtp}
-              disabled={authStatus !== 'idle' || isValidatingCode}
-            >
-              {authStatus !== 'idle' ? (
-                <ActivityIndicator color={Colors.white} />
-              ) : (
-                <Text style={styles.primaryButtonText}>{otpSent ? 'Verify code' : 'Send code'}</Text>
-              )}
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
-
-      {/* Your Referral Code Card - Only show when logged in */}
-      {authSession?.user && referralDetails.code && (
-        <View
-          style={[
-            styles.summaryCard,
-            { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-          ]}
-        >
-          <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-            Your Referral Code
-          </Text>
-          <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 12 }]}>
-            Share your code with friends to earn free entries!
-          </Text>
-          <View style={styles.referralCodeContainer}>
-            <Text style={[styles.referralCodeText, { color: theme.colors.textPrimary }]}>
-              {referralDetails.code}
-            </Text>
-            <TouchableOpacity
-              style={[styles.copyCodeButton, { backgroundColor: theme.colors.input }]}
-              onPress={async () => {
-                try {
-                  await Clipboard.setStringAsync(referralDetails.code!);
-                  Alert.alert('Copied!', 'Referral code copied to clipboard.');
-                } catch (error) {
-                  console.error('Error copying code:', error);
-                  Alert.alert('Error', 'Failed to copy code.');
-                }
-              }}
-            >
-              <Feather name="copy" size={16} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity
-            style={[styles.whatsappButton, { backgroundColor: theme.colors.primary }]}
-            onPress={async () => {
-              try {
-                const message = `Join me on TrackKcal! Use my referral code ${referralDetails.code} to get +10 free entries after logging 5 meals. Download the app and enter the code when you sign up!`;
-                const whatsappUrl = `whatsapp://send?text=${encodeURIComponent(message)}`;
-                const canOpen = await Linking.canOpenURL(whatsappUrl);
-                if (canOpen) {
-                  await Linking.openURL(whatsappUrl);
-                  if (accountInfo?.email) {
-                    await analyticsService.trackReferralCodeShared(accountInfo.email, 'share');
-                  }
-                } else {
-                  Alert.alert('WhatsApp not installed', 'Please install WhatsApp to share your referral code.');
-                }
-              } catch (error) {
-                console.error('Error opening WhatsApp:', error);
-                Alert.alert('Error', 'Could not open WhatsApp. Please try again.');
-              }
-            }}
-          >
-            <Feather name="message-circle" size={18} color={Colors.white} />
-            <Text style={styles.whatsappButtonText}>Share via WhatsApp</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-        ]}
-      >
-        <View style={styles.profileHeader}>
-          <View>
-            <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>
-              {accountInfo?.name || 'TrackKcal user'}
-            </Text>
-            <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>
-              {accountInfo?.email || 'guest mode'}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.planRow}>
-          <Text style={[styles.planLabel, { color: theme.colors.textSecondary }]}>Plan</Text>
-          <View
-            style={[
-              styles.planBadge,
-              { backgroundColor: plan === 'premium' ? theme.colors.primary : theme.colors.input },
-            ]}
-          >
-            <Text
-              style={[
-                styles.planBadgeText,
-                { color: plan === 'premium' ? Colors.white : theme.colors.textSecondary },
-              ]}
-            >
-              {plan === 'premium' ? 'Premium' : 'Free'}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-          Entry usage
+  const renderNotLoggedIn = () => (
+    <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} keyboardShouldPersistTaps="handled">
+      <View style={[styles.formCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Create Account / Sign In</Text>
+        <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
+          Enter your details to sync your progress and get free entry bonuses.
         </Text>
+
+        {/* Name Input */}
+        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
+        <TextInput
+          style={[styles.input, {
+            backgroundColor: theme.colors.input,
+            color: theme.colors.textPrimary,
+            borderColor: nameError ? theme.colors.error : theme.colors.border
+          }]}
+          placeholder="John Doe"
+          placeholderTextColor={theme.colors.textTertiary}
+          value={name}
+          onChangeText={setName}
+          autoCapitalize="words"
+        />
+
+        {/* Email Input */}
+        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+        <TextInput
+          style={[styles.input, {
+            backgroundColor: theme.colors.input,
+            color: theme.colors.textPrimary,
+            borderColor: emailError ? theme.colors.error : theme.colors.border
+          }]}
+          placeholder="john@example.com"
+          placeholderTextColor={theme.colors.textTertiary}
+          value={emailInput}
+          onChangeText={setEmailInput}
+          keyboardType="email-address"
+          autoCapitalize="none"
+        />
+
+        {/* Phone Input */}
+        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Phone (Optional)</Text>
+        <TextInput
+          style={[styles.input, {
+            backgroundColor: theme.colors.input,
+            color: theme.colors.textPrimary,
+            borderColor: theme.colors.border
+          }]}
+          placeholder="+1 234 567 8900"
+          placeholderTextColor={theme.colors.textTertiary}
+          value={phoneInput}
+          onChangeText={setPhoneInput}
+          keyboardType="phone-pad"
+        />
+
+        {/* Referral Code */}
+        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Referral Code (Optional)</Text>
+        <TextInput
+          style={[styles.input, {
+            backgroundColor: theme.colors.input,
+            color: theme.colors.textPrimary,
+            borderColor: referralCodeError ? theme.colors.error : theme.colors.border
+          }]}
+          placeholder="FRIEND123"
+          placeholderTextColor={theme.colors.textTertiary}
+          value={referralCode}
+          onChangeText={setReferralCode}
+          autoCapitalize="characters"
+        />
+        {referralCodeError && <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>{referralCodeError}</Text>}
+
+        {/* OTP Input - Conditionally Rendered */}
+        {otpSent && (
+          <View style={{ marginTop: 16 }}>
+            <Text style={[styles.label, { color: theme.colors.primary, fontWeight: 'bold' }]}>Enter Verification Code</Text>
+            <TextInput
+              style={[styles.input, {
+                backgroundColor: theme.colors.input,
+                color: theme.colors.textPrimary,
+                borderColor: theme.colors.primary,
+                textAlign: 'center',
+                fontSize: 20,
+                letterSpacing: 4
+              }]}
+              placeholder="123456"
+              placeholderTextColor={theme.colors.textTertiary}
+              value={pendingOtpCode}
+              onChangeText={setPendingOtpCode}
+              keyboardType="number-pad"
+              maxLength={6}
+            />
+          </View>
+        )}
+
+        {/* Terms Checkbox */}
+        <TouchableOpacity style={styles.termsRow} onPress={() => setHasAcceptedTerms(!hasAcceptedTerms)}>
+          <View style={[styles.checkbox, { borderColor: termsError ? theme.colors.error : theme.colors.border }]}>
+            {hasAcceptedTerms && <View style={styles.checkboxInner} />}
+          </View>
+          <Text style={[styles.helperText, { flex: 1, color: theme.colors.textSecondary }]}>
+            I agree to the Terms & Conditions
+          </Text>
+        </TouchableOpacity>
+
+        {/* Action Button */}
+        {authMessage && <Text style={{ color: theme.colors.textPrimary, textAlign: 'center', marginVertical: 8 }}>{authMessage}</Text>}
+
+        <TouchableOpacity
+          style={[styles.primaryButton, (!hasAcceptedTerms || authStatus !== 'idle') && styles.primaryButtonDisabled]}
+          disabled={!hasAcceptedTerms || authStatus !== 'idle'}
+          onPress={otpSent ? handleVerifyOtp : handleSendOtp}
+        >
+          {authStatus !== 'idle' ? (
+            <ActivityIndicator color="white" />
+          ) : (
+            <Text style={styles.primaryButtonText}>{otpSent ? 'Verify & Sign In' : 'Send Verification Code'}</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+    </ScrollView>
+  );
+
+  const renderLoggedIn = () => (
+    <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} showsVerticalScrollIndicator={false}>
+      {/* Profile Card */}
+      <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+            <Text style={{ fontSize: 24, color: 'white', fontWeight: 'bold' }}>{accountInfo?.name?.charAt(0).toUpperCase() || 'U'}</Text>
+          </View>
+          <View>
+            <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>{accountInfo?.name || 'User'}</Text>
+            <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>{accountInfo?.email}</Text>
+          </View>
+        </View>
+        <View style={[styles.planBadge, { alignSelf: 'flex-start', marginTop: 12, backgroundColor: plan === 'premium' ? theme.colors.primary : theme.colors.input }]}>
+          <Text style={[styles.planBadgeText, { color: plan === 'premium' ? 'white' : theme.colors.textSecondary }]}>
+            {plan === 'premium' ? 'Premium Plan' : 'Free Plan'}
+          </Text>
+        </View>
+      </View>
+
+      {/* Stats Card */}
+      <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Account Stats</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Logged</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
-              {entryCount}
-            </Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Log Streak</Text>
+            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{entryCount}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Remaining</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
-              {plan === 'premium' ? 'Unlimited' : remainingEntries}
-            </Text>
-            {plan !== 'premium' && (
-              <Text style={[styles.statHelper, { color: theme.colors.textSecondary }]}>
-                out of {FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries}
-              </Text>
-            )}
-          </View>
-          <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-              From referrals
-            </Text>
-            <Text style={[styles.statValue, { color: '#10B981' }]}>
-              +{referralDetails.entriesFromReferrals}
-            </Text>
-            <Text style={[styles.statHelper, { color: theme.colors.textSecondary }]}>
-              {referralDetails.totalReferrals} friends joined
-            </Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Referrals</Text>
+            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{referralDetails.totalReferrals}</Text>
           </View>
         </View>
       </View>
 
-      <View
-        style={[
-          styles.summaryCard,
-          { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
-        ]}
-      >
-        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-          Goals & focus
-        </Text>
-        <View style={styles.goalRow}>
-          <Feather name="target" size={18} color="#10B981" />
-          <Text style={[styles.goalText, { color: theme.colors.textPrimary }]}>
-            {goals?.goal ? goalLabelMap[goals.goal] : 'Goal not set yet'}
-          </Text>
-        </View>
-        <View style={styles.weightGrid}>
-          <View style={styles.weightItem}>
-            <Text style={[styles.weightLabel, { color: theme.colors.textSecondary }]}>
-              Starting weight
-            </Text>
-            <Text style={[styles.weightValue, { color: theme.colors.textPrimary }]}>
-              {formatWeight(weightSummary.starting)}
-            </Text>
-          </View>
-          <View style={styles.weightItem}>
-            <Text style={[styles.weightLabel, { color: theme.colors.textSecondary }]}>
-              Current weight
-            </Text>
-            <Text style={[styles.weightValue, { color: theme.colors.textPrimary }]}>
-              {formatWeight(weightSummary.current)}
-            </Text>
-          </View>
-          <View style={styles.weightItem}>
-            <Text style={[styles.weightLabel, { color: theme.colors.textSecondary }]}>
-              Goal weight
-            </Text>
-            <Text style={[styles.weightValue, { color: theme.colors.textPrimary }]}>
-              {formatWeight(weightSummary.goal)}
-            </Text>
-          </View>
-        </View>
-        <View style={styles.weightChangeRow}>
-          <Feather name="trending-down" size={18} color="#10B981" />
-          <Text style={[styles.weightChangeText, { color: theme.colors.textPrimary }]}>
-            {formatWeightChange(weightSummary.change)}
-          </Text>
-        </View>
-      </View>
-
-      {/* Clear data button */}
-      <TouchableOpacity
-        style={[styles.logoutButton, { borderColor: theme.colors.border }]}
-        onPress={handleClearLocalData}
-      >
+      {/* Actions */}
+      <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>
         <Feather name="log-out" size={18} color={theme.colors.error} />
-        <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>
-          Clear local data
-        </Text>
+        <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>Sign Out</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={{ alignSelf: 'center', padding: 10 }} onPress={handleClearData}>
+        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Danger Zone: Clear All Local Data</Text>
       </TouchableOpacity>
     </ScrollView>
   );
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+      {/* Header */}
       <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color="#10B981" />
+          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Account</Text>
-        <View style={styles.headerRight} />
+        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          {authSession ? 'My Account' : 'Login'}
+        </Text>
+        <View style={{ width: 40 }} />
       </View>
 
       {isLoading ? (
         <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color="#10B981" />
-          <Text style={{ marginTop: 12, color: theme.colors.textSecondary }}>Loading account…</Text>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
-        renderSummary()
+        authSession ? renderLoggedIn() : renderNotLoggedIn()
       )}
     </SafeAreaView>
   );
@@ -953,7 +574,7 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.md,
   },
   primaryButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: '#171717', // Neutral-900 or theme.colors.textPrimary equivalent
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',

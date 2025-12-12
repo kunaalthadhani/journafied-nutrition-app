@@ -247,10 +247,12 @@ export const HomeScreen: React.FC = () => {
   const handleAccount = () => {
     analyticsService.trackAccountScreenOpen();
     setMenuVisible(false);
+    setShowSettings(false);
     setShowAccount(true);
   };
   const handleAccountBack = async () => {
     setShowAccount(false);
+    setShowSettings(true); // Go back to settings
     // Reload account data to sync state after potential logout
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
