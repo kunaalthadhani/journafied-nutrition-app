@@ -40,18 +40,25 @@ interface MenuItemProps {
 const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isBottom }) => {
   const theme = useTheme();
   const scaleAnim = useRef(new Animated.Value(1)).current;
+  const [isPressed, setIsPressed] = useState(false);
 
   const handlePressIn = () => {
+    setIsPressed(true);
     Animated.spring(scaleAnim, {
-      toValue: 0.97,
+      toValue: 0.96,
       useNativeDriver: true,
+      speed: 20,
+      bounciness: 4,
     }).start();
   };
 
   const handlePressOut = () => {
+    setIsPressed(false);
     Animated.spring(scaleAnim, {
       toValue: 1,
       useNativeDriver: true,
+      speed: 20,
+      bounciness: 4,
     }).start();
   };
 
@@ -60,22 +67,24 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
       <TouchableOpacity
         style={[
           styles.menuItem,
-          isActive && { backgroundColor: theme.colors.accentBg },
+          (isActive || isPressed) && { backgroundColor: theme.colors.accentBg },
           isBottom && styles.bottomMenuItem,
         ]}
         onPress={onPress}
         onPressIn={handlePressIn}
         onPressOut={handlePressOut}
-        activeOpacity={0.8}
+        activeOpacity={0.6}
       >
         <Feather
-          color={theme.colors.textPrimary}
+          name={icon as any}
+          size={20}
+          color={isActive || isPressed ? theme.colors.accent : theme.colors.textPrimary}
         />
         <Text
           style={[
             styles.menuText,
             {
-              color: isActive ? theme.colors.accent : theme.colors.textPrimary,
+              color: isActive || isPressed ? theme.colors.accent : theme.colors.textPrimary,
             },
           ]}
         >

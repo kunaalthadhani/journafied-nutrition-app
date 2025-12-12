@@ -28,6 +28,7 @@ interface SettingsScreenProps {
   taskBonusEntries?: number;
   onLogin?: () => void;
   onIntegrations?: () => void;
+  onDowngradeToFree?: () => void;
 }
 
 interface SettingItemProps {
@@ -121,6 +122,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   taskBonusEntries,
   onLogin,
   onIntegrations,
+  onDowngradeToFree,
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
@@ -370,6 +372,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 {plan === 'premium' ? 'Manage Subscription' : 'Upgrade to Premium'}
               </Text>
             </TouchableOpacity>
+
+            {/* Temporary Dev Button to Revert */}
+            {plan === 'premium' && (
+              <TouchableOpacity
+                style={{ marginTop: 12, alignSelf: 'center' }}
+                onPress={onDowngradeToFree}
+              >
+                <Text style={{ color: theme.colors.textTertiary, fontSize: 12, textDecorationLine: 'underline' }}>
+                  (Dev) Downgrade to Free
+                </Text>
+              </TouchableOpacity>
+            )}
+
             {plan === 'free' && (
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
                 {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining

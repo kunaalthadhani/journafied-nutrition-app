@@ -36,16 +36,16 @@ export const Menu: React.FC<MenuProps> = ({
       animationType="fade"
       onRequestClose={onClose}
     >
-      <TouchableOpacity 
-        style={styles.overlay} 
+      <TouchableOpacity
+        style={styles.overlay}
         onPress={onClose}
         activeOpacity={1}
       >
         <View style={[styles.menuContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderWidth: 1 }]}>
-          <TouchableOpacity 
+          <TouchableOpacity
             style={styles.menuItem}
             onPress={handleSetGoals}
-            activeOpacity={0.7}
+            activeOpacity={0.5}
           >
             <Feather name="target" size={20} color="#10B981" />
             <Text style={[styles.menuText, { color: theme.colors.textPrimary }]}>Set Goals</Text>
@@ -53,7 +53,7 @@ export const Menu: React.FC<MenuProps> = ({
           </TouchableOpacity>
 
           {/* Theme selector */}
-          <View style={styles.sectionHeader}> 
+          <View style={styles.sectionHeader}>
             <Text style={[styles.sectionHeaderText, { color: theme.colors.textSecondary }]}>Theme</Text>
           </View>
           <View style={styles.themeRow}>

@@ -27,23 +27,41 @@ import { authService } from '../services/authService';
 
 interface AccountScreenProps {
   onBack: () => void;
+  initialAccountInfo?: AccountInfo | null;
+  initialEntryCount?: number;
+  initialPlan?: 'free' | 'premium';
+  initialGoals?: ExtendedGoalData | null;
+  initialReferralCode?: string | null;
+  initialTotalEarnedEntries?: number;
+  initialTaskBonusEntries?: number;
 }
 
-export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
+export const AccountScreen: React.FC<AccountScreenProps> = ({
+  onBack,
+  initialAccountInfo,
+  initialEntryCount,
+  initialPlan,
+  initialGoals,
+  initialReferralCode,
+  initialTotalEarnedEntries,
+  initialTaskBonusEntries,
+}) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
 
   // -- Auth State --
   const [authSession, setAuthSession] = useState<Session | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  // Only show loading if we don't have basic account info AND we suspect we might need to load it
+  // If we have accountInfo (logged in) or if we explicitly have null (guest), we can skip full blocker
+  const [isLoading, setIsLoading] = useState(!initialAccountInfo && initialAccountInfo !== null);
   const [authStatus, setAuthStatus] = useState<'idle' | 'sending' | 'verifying'>('idle');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
   const [otpSent, setOtpSent] = useState(false);
 
   // -- Form State --
-  const [name, setName] = useState('');
-  const [emailInput, setEmailInput] = useState('');
-  const [phoneInput, setPhoneInput] = useState('');
+  const [name, setName] = useState(initialAccountInfo?.name || '');
+  const [emailInput, setEmailInput] = useState(initialAccountInfo?.email || '');
+  const [phoneInput, setPhoneInput] = useState(initialAccountInfo?.phoneNumber || '');
   const [pendingOtpCode, setPendingOtpCode] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
@@ -55,12 +73,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
 
   // -- User Data State --
-  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
-  const [entryCount, setEntryCount] = useState(0);
-  const [plan, setPlan] = useState<'free' | 'premium'>('free');
-  const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
-  const [taskBonusEntries, setTaskBonusEntries] = useState(0);
-  const [goals, setGoals] = useState<ExtendedGoalData | null>(null);
+  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(initialAccountInfo || null);
+  const [entryCount, setEntryCount] = useState(initialEntryCount || 0);
+  const [plan, setPlan] = useState<'free' | 'premium'>(initialPlan || 'free');
+  const [totalEarnedEntries, setTotalEarnedEntries] = useState(initialTotalEarnedEntries || 0);
+  const [taskBonusEntries, setTaskBonusEntries] = useState(initialTaskBonusEntries || 0);
+  const [goals, setGoals] = useState<ExtendedGoalData | null>(initialGoals || null);
   const [weightSummary, setWeightSummary] = useState<{
     starting: number | null;
     current: number | null;
@@ -72,7 +90,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     code: string | null;
     totalReferrals: number;
     entriesFromReferrals: number;
-  }>({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
+  }>({
+    code: initialReferralCode || null,
+    totalReferrals: 0,
+    entriesFromReferrals: initialTotalEarnedEntries || 0
+  });
 
   const FREE_ENTRY_LIMIT = 20;
 
@@ -83,7 +105,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
     let isMounted = true;
 
     const init = async () => {
-      setIsLoading(true);
+      if (!initialAccountInfo && initialAccountInfo !== null) {
+        setIsLoading(true);
+      }
       try {
         // Check current session
         const { data } = await authService.getSession();
@@ -517,7 +541,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({ onBack }) => {
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
-        authSession ? renderLoggedIn() : renderNotLoggedIn()
+        (authSession || accountInfo?.email) ? renderLoggedIn() : renderNotLoggedIn()
       )}
     </SafeAreaView>
   );

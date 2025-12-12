@@ -255,6 +255,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettings = async () => {
+    setShowSettings(true);
     analyticsService.trackSettingsOpen();
     // Reload referral data to ensure it's up to date
     try {
@@ -269,7 +270,6 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       if (__DEV__) console.error('Error reloading referral data in settings:', error);
     }
-    setShowSettings(true);
   };
 
   const handleSettingsBack = () => {
@@ -1571,6 +1571,12 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+  const handleDowngradeToFree = async () => {
+    setUserPlan('free');
+    await dataStorage.saveUserPlan('free');
+    Alert.alert('Plan Reset', 'You are now on the Free plan.');
+  };
+
   /* WeightTracker and NutritionAnalysis moved to Modals below to prevent HomeScreen unmount */
 
   if (showSettings) {
@@ -1589,6 +1595,7 @@ export const HomeScreen: React.FC = () => {
           // Small timeout to allow transition
           setTimeout(() => setShowIntegrations(true), 100);
         }}
+        onDowngradeToFree={handleDowngradeToFree}
       />
     );
   }
@@ -1607,7 +1614,16 @@ export const HomeScreen: React.FC = () => {
 
   if (showAccount) {
     return (
-      <AccountScreen onBack={handleAccountBack} />
+      <AccountScreen
+        onBack={handleAccountBack}
+        initialAccountInfo={accountInfo}
+        initialEntryCount={entryCount}
+        initialPlan={userPlan}
+        initialGoals={savedGoals}
+        initialReferralCode={referralCode}
+        initialTotalEarnedEntries={totalEarnedEntries}
+        initialTaskBonusEntries={taskBonusEntries}
+      />
     );
   }
 
@@ -1658,7 +1674,6 @@ export const HomeScreen: React.FC = () => {
           onCalendarPress={handleCalendarPress}
           onWeightTrackerPress={handleWeightTracker}
           onNutritionAnalysisPress={handleNutritionAnalysis}
-          userName={accountInfo?.name || "there"}
           streak={currentStreak}
         />
 
