@@ -27,6 +27,7 @@ interface SettingsScreenProps {
   totalEarnedEntries?: number;
   taskBonusEntries?: number;
   onLogin?: () => void;
+  onIntegrations?: () => void;
 }
 
 interface SettingItemProps {
@@ -119,6 +120,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   totalEarnedEntries,
   taskBonusEntries,
   onLogin,
+  onIntegrations,
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
@@ -322,6 +324,16 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
       >
+        {/* Integrations Section */}
+        <SettingSection title="Connections">
+          <SettingItem
+            icon="activity"
+            title="Integrations"
+            subtitle="Apple Health, Google Fit, etc."
+            onPress={onIntegrations}
+          />
+        </SettingSection>
+
         {/* Account Section */}
         <SettingSection title="Account">
           <SettingItem
@@ -395,7 +407,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             showChevron={false}
           />
           <SettingItem
-            icon="ruler"
+            icon="sliders"
             title="Weight Unit"
             subtitle={weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lbs)'}
             onPress={() => setShowUnitSelector(true)}

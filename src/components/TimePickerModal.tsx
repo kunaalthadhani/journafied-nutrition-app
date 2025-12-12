@@ -95,7 +95,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                       style={[
                         styles.pickerItem,
                         selectedHour === hour && {
-                          backgroundColor: '#10B981',
+                          backgroundColor: theme.colors.primary,
                         },
                       ]}
                       onPress={() => setSelectedHour(hour)}
@@ -106,7 +106,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                           {
                             color:
                               selectedHour === hour
-                                ? Colors.white
+                                ? theme.colors.primaryForeground
                                 : theme.colors.textPrimary,
                             fontWeight:
                               selectedHour === hour
@@ -139,7 +139,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                       style={[
                         styles.pickerItem,
                         selectedMinute === minute && {
-                          backgroundColor: '#10B981',
+                          backgroundColor: theme.colors.primary,
                         },
                       ]}
                       onPress={() => setSelectedMinute(minute)}
@@ -150,7 +150,7 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                           {
                             color:
                               selectedMinute === minute
-                                ? Colors.white
+                                ? theme.colors.primaryForeground
                                 : theme.colors.textPrimary,
                             fontWeight:
                               selectedMinute === minute
@@ -178,10 +178,10 @@ export const TimePickerModal: React.FC<TimePickerModalProps> = ({
                 </Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={styles.confirmButton}
+                style={[styles.confirmButton, { backgroundColor: theme.colors.primary }]}
                 onPress={handleConfirm}
               >
-                <Text style={styles.confirmButtonText}>Confirm</Text>
+                <Text style={[styles.confirmButtonText, { color: theme.colors.primaryForeground }]}>Confirm</Text>
               </TouchableOpacity>
             </View>
           </SafeAreaView>
@@ -279,13 +279,17 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     borderRadius: 8,
-    backgroundColor: '#10B981',
+    backgroundColor: '#18181B', // Fallback if styles can't access theme dynamically, but better to use style prop injection or context if possible.
+    // Wait, styles are static factory. I need to pass the theme color via style prop in render.
+    // The previous code had style={styles.confirmButton}. I need to change how color is applied.
     alignItems: 'center',
   },
   confirmButtonText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.white,
+    color: '#FAFAFA', // Fallback, but ideally should be overrideable or use theme.colors.primaryForeground in render if possible. 
+    // Since styles are static, we'll stick to a safe light color if primary is usually dark. 
+    // But for full correctness, I should inline this style too.
   },
 });
 

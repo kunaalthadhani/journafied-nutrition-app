@@ -34,6 +34,7 @@ import { AboutScreen } from './AboutScreen';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
 import { FreeEntriesScreen } from './FreeEntriesScreen';
+import { IntegrationsScreen } from './IntegrationsScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -57,6 +58,7 @@ import * as Device from 'expo-device';
 import Constants from 'expo-constants';
 import { Platform, AppState } from 'react-native';
 import { generateId } from '../utils/uuid';
+import { calculateStreak } from '../utils/streakUtils';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -67,6 +69,7 @@ export const HomeScreen: React.FC = () => {
   const [showWeightTracker, setShowWeightTracker] = useState(false);
   const [showNutritionAnalysis, setShowNutritionAnalysis] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
+  const [showIntegrations, setShowIntegrations] = useState(false);
   const [showSubscription, setShowSubscription] = useState(false);
   const [userPlan, setUserPlan] = useState<'free' | 'premium'>('free');
   const [entryCount, setEntryCount] = useState<number>(0);
@@ -139,6 +142,54 @@ export const HomeScreen: React.FC = () => {
     protein: { current: currentNutrition.totalProtein, target: savedGoals?.proteinGrams ?? 0, unit: 'g' },
     fat: { current: currentNutrition.totalFat, target: savedGoals?.fatGrams ?? 0, unit: 'g' }
   };
+
+  // Calculate current streak
+  const currentStreak = calculateStreak(mealsByDate);
+
+  // Manage Streak Reminder Notification
+  useEffect(() => {
+    const manageStreakNotification = async () => {
+      const today = format(new Date(), 'yyyy-MM-dd');
+      const reminderId = `streak-reminder-${today}`;
+      const hasLoggedToday = mealsByDate[today] && mealsByDate[today].length > 0;
+
+      // If we have logged today, cancel any pending reminder for today
+      if (hasLoggedToday) {
+        await Notifications.cancelScheduledNotificationAsync(reminderId);
+        return;
+      }
+
+      // If we haven't logged today, check if we have a streak to protect (i.e., we logged yesterday)
+      // calculateStreak includes today if logged, or yesterday.
+      // If we haven't logged today, calculateStreak returns the streak ending yesterday (if any).
+      // If result > 0, we are at risk.
+      if (currentStreak > 0) {
+        // Schedule for 10 PM (22:00) today
+        const triggerDate = new Date();
+        triggerDate.setHours(22, 0, 0, 0);
+
+        // We will only schedule if now < 22:00.
+        if (new Date() < triggerDate) {
+          // Attempt to cancel first to avoid duplicates (though identifier should handle update if identifier supported)
+          // Expo notification identifier support might vary so explicit cancel is safer.
+          await Notifications.cancelScheduledNotificationAsync(reminderId);
+
+          await Notifications.scheduleNotificationAsync({
+            identifier: reminderId,
+            content: {
+              title: "🔥 Don't lose your streak!",
+              body: `You're on a ${currentStreak} day streak. Log a meal by midnight to keep it going!`,
+              sound: true,
+            },
+            trigger: triggerDate,
+          });
+        }
+      }
+    };
+
+    manageStreakNotification();
+  }, [mealsByDate, currentStreak]);
+
   // Calories card data (Food, Exercise, Remaining)
   const effectiveDailyCalories = dailyCalories && dailyCalories > 0 ? dailyCalories : 1500;
   const totalExerciseCalories = currentDayExercises.reduce(
@@ -565,6 +616,10 @@ export const HomeScreen: React.FC = () => {
       }
       if (showSettings) {
         setShowSettings(false);
+        return true;
+      }
+      if (showIntegrations) {
+        setShowIntegrations(false);
         return true;
       }
       if (showWeightTracker) {
@@ -1529,7 +1584,18 @@ export const HomeScreen: React.FC = () => {
         totalEarnedEntries={totalEarnedEntries}
         taskBonusEntries={taskBonusEntries}
         onLogin={handleAccount}
+        onIntegrations={() => {
+          setShowSettings(false);
+          // Small timeout to allow transition
+          setTimeout(() => setShowIntegrations(true), 100);
+        }}
       />
+    );
+  }
+
+  if (showIntegrations) {
+    return (
+      <IntegrationsScreen onBack={() => setShowIntegrations(false)} />
     );
   }
 
@@ -1592,6 +1658,8 @@ export const HomeScreen: React.FC = () => {
           onCalendarPress={handleCalendarPress}
           onWeightTrackerPress={handleWeightTracker}
           onNutritionAnalysisPress={handleNutritionAnalysis}
+          userName={accountInfo?.name || "there"}
+          streak={currentStreak}
         />
 
         {/* Date Selector (horizontal scroll/pan within the bar only) */}

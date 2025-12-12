@@ -15,7 +15,7 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import { analyticsService } from '../services/analyticsService';
 
@@ -641,8 +641,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               {/* Calories Chart Section */}
               {activeTab === 'Calories' && (
                 <View style={styles.graphContainer}>
-                  <Animated.View
-                    style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: caloriesChartOpacity }]}
+                  <View
+                    style={[
+                      styles.graphCard,
+                      {
+                        backgroundColor: theme.colors.card,
+                        shadowColor: theme.colors.shadow,
+                      },
+                    ]}
                     {...graphPanResponder.panHandlers}
                   >
                     {/* Tooltip Overlay */}
@@ -651,7 +657,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         style={{
                           position: 'absolute',
                           left: scrubbingPoints[scrubbingIndex].x - 60,
-                          top: 10,
+                          top: scrubbingPoints[scrubbingIndex].y - 70, // Matched offset
                           width: 120,
                           alignItems: 'center',
                           zIndex: 10,
@@ -684,48 +690,44 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </View>
                     )}
 
-                    {/* Y-axis labels */}
-                    <View style={styles.yAxisContainer}>
-                      {(() => {
-                        const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                        const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
-                        return [0, 1, 2, 3, 4, 5].map((i) => {
-                          const value = maxCal - (i / 5) * (maxCal - minCal);
-                          return (
-                            <Text
-                              key={i}
-                              style={[
-                                styles.yAxisLabel,
-                                {
-                                  color: theme.colors.textTertiary,
-                                  top: padding + (i / 5) * innerHeight - 8,
-                                },
-                              ]}
-                            >
-                              {value.toFixed(0)}
-                            </Text>
-                          );
-                        });
-                      })()}
-                    </View>
-
                     {/* Graph */}
-                    <View style={styles.graph}>
+                    <Animated.View style={[styles.graph, { opacity: caloriesChartOpacity }]}>
                       <Svg width={graphWidth} height={graphHeight}>
+                        {/* Grid lines & Labels */}
+                        {(() => {
+                          const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
+                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const range = maxCal - minCal || 1;
 
-                        {/* Grid lines */}
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <Line
-                            key={i}
-                            x1={padding}
-                            y1={padding + (i / 5) * innerHeight}
-                            x2={graphWidth - padding}
-                            y2={padding + (i / 5) * innerHeight}
-                            stroke={theme.colors.border}
-                            strokeWidth={0.5}
-                            strokeDasharray="2,2"
-                          />
-                        ))}
+                          return [0, 1, 2, 3, 4, 5].map((i) => {
+                            const ratio = i / 5;
+                            const value = maxCal - ratio * range;
+                            const y = padding + i * (innerHeight / 5); // Simple linear distribution
+
+                            return (
+                              <React.Fragment key={i}>
+                                <Line
+                                  x1={padding}
+                                  y1={y}
+                                  x2={graphWidth - padding}
+                                  y2={y}
+                                  stroke={theme.colors.border}
+                                  strokeWidth={0.5}
+                                  strokeDasharray="2,2"
+                                />
+                                <SvgText
+                                  x={padding - 6}
+                                  y={y + 3}
+                                  fontSize={10}
+                                  fill={theme.colors.textTertiary}
+                                  textAnchor="end"
+                                >
+                                  {value.toFixed(0)}
+                                </SvgText>
+                              </React.Fragment>
+                            );
+                          });
+                        })()}
 
                         {/* Target line */}
                         {hasTargetCalories && (() => {
@@ -752,7 +754,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             d={caloriesPath}
                             fill="none"
                             stroke={theme.colors.primary}
-                            strokeWidth={2}
+                            strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
@@ -763,7 +765,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           />
                         ) : null}
 
-                        {/* Data points (dots) - only show if few points or highlighted */}
+                        {/* Data points (dots) - hollow style */}
                         {caloriesData.length < 20 && caloriesData.map((entry, index) => {
                           const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
                           const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
@@ -776,7 +778,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               cx={x}
                               cy={y}
                               r={4}
-                              fill={theme.colors.primary}
+                              fill={theme.colors.card}
+                              stroke={theme.colors.primary}
+                              strokeWidth={2}
                             />
                           );
                         })}
@@ -814,8 +818,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           })()
                         )}
                       </Svg>
-                    </View>
-                  </Animated.View>
+                    </Animated.View>
+                  </View>
 
                   {/* Time Range Selector */}
                   <View style={styles.timeRangeContainer}>
@@ -934,44 +938,36 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </View>
                     )}
 
-                    {/* Y-axis labels */}
-                    <View style={styles.yAxisContainer}>
-                      {[0, 1, 2, 3, 4, 5].map((i) => {
-                        const value = maxValue - (i / 5) * maxValue;
-                        return (
-                          <Text
-                            key={i}
-                            style={[
-                              styles.yAxisLabel,
-                              {
-                                color: theme.colors.textTertiary,
-                                top: padding + (i / 5) * innerHeight - 8,
-                              },
-                            ]}
-                          >
-                            {value.toFixed(0)}g
-                          </Text>
-                        );
-                      })}
-                    </View>
-
                     {/* Graph */}
                     <View style={styles.graph}>
                       <Svg width={graphWidth} height={graphHeight}>
-
-                        {/* Grid lines */}
-                        {[0, 1, 2, 3, 4, 5].map((i) => (
-                          <Line
-                            key={i}
-                            x1={padding}
-                            y1={padding + (i / 5) * innerHeight}
-                            x2={graphWidth - padding}
-                            y2={padding + (i / 5) * innerHeight}
-                            stroke={theme.colors.border}
-                            strokeWidth={0.5}
-                            strokeDasharray="2,2"
-                          />
-                        ))}
+                        {/* Grid lines & Y-axis labels */}
+                        {[0, 1, 2, 3, 4, 5].map((i) => {
+                          const value = maxValue - (i / 5) * maxValue;
+                          const y = padding + i * (innerHeight / 5);
+                          return (
+                            <React.Fragment key={i}>
+                              <Line
+                                x1={padding}
+                                y1={y}
+                                x2={graphWidth - padding}
+                                y2={y}
+                                stroke={theme.colors.border}
+                                strokeWidth={0.5}
+                                strokeDasharray="2,2"
+                              />
+                              <SvgText
+                                x={padding - 6}
+                                y={y + 3}
+                                fontSize={10}
+                                fill={theme.colors.textTertiary}
+                                textAnchor="end"
+                              >
+                                {value.toFixed(0)}
+                              </SvgText>
+                            </React.Fragment>
+                          );
+                        })}
 
                         {/* Target lines */}
                         {targetProtein !== undefined && (() => {
@@ -997,7 +993,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             d={proteinPath}
                             fill="none"
                             stroke="#3B82F6"
-                            strokeWidth={2}
+                            strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
@@ -1012,7 +1008,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             d={carbsPath}
                             fill="none"
                             stroke="#EAB308"
-                            strokeWidth={2}
+                            strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
@@ -1027,7 +1023,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             d={fatPath}
                             fill="none"
                             stroke="#EF4444"
-                            strokeWidth={2}
+                            strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
                             strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
@@ -1254,20 +1250,9 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
     elevation: 8,
   },
-  yAxisContainer: {
-    position: 'absolute',
-    left: 0,
-    top: 0,
-    width: 40,
-    height: '100%',
-  },
-  yAxisLabel: {
-    fontSize: Typography.fontSize.xs,
-    position: 'absolute',
-    right: 8,
-  },
   graph: {
-    marginLeft: 40,
+    marginLeft: 0, // Removed specialized margin for inline axes
+    marginRight: 0,
     alignItems: 'center',
     justifyContent: 'center',
   },

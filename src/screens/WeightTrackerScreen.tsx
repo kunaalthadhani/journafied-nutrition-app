@@ -986,7 +986,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       {historyEntries.map((entry, index) => {
                         const isEditing = editingEntryIndex === index;
                         return (
-                          <View key={entry.date.toISOString()} style={styles.historyRow}>
+                          <View key={entry.id || index} style={styles.historyRow}>
                             <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
                               {format(entry.date, 'd MMM yyyy')}
                             </Text>

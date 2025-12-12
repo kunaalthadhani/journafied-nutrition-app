@@ -16,6 +16,7 @@ interface TopNavigationBarProps {
   // selectedDate is no longer needed for display in header, but kept in props if needed elsewhere or legacy, 
   // though we will remove it from display logic.
   selectedDate?: string;
+  streak?: number;
 }
 
 export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
@@ -23,7 +24,8 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onCalendarPress,
   onWeightTrackerPress,
   onNutritionAnalysisPress,
-  userName = "Guest"
+  userName = "Guest",
+  streak = 0
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -41,9 +43,16 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             <Menu color={theme.colors.textPrimary} size={20} strokeWidth={2} />
           </TouchableOpacity>
 
-          <Text style={[styles.greetingText, { color: theme.colors.textPrimary }]}>
-            Hi {userName},
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            <Text style={[styles.greetingText, { color: theme.colors.textPrimary }]}>
+              Hi {userName},
+            </Text>
+            {streak > 0 && (
+              <View style={styles.streakContainer}>
+                <Text style={styles.streakText}>🔥 x{streak}</Text>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Right: Icons */}
@@ -111,5 +120,19 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
     // No extra margin needed if we want it tight next to the icon container space
     marginLeft: 0,
+  },
+  streakContainer: {
+    marginLeft: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.1)', // Subtle red tint
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 12,
+  },
+  streakText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
+    color: '#EF4444', // Red color for fire/streak
   },
 });

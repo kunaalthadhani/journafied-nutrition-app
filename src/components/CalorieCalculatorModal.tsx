@@ -11,6 +11,7 @@ import {
   KeyboardAvoidingView,
   Platform,
   Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -45,13 +46,76 @@ type Gender = 'male' | 'female' | 'prefer_not_to_say';
 type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
 
+const PROMO_FACTS = [
+  "Studies show that keeping a food diary doubles a person's weight loss compared to those who don't.",
+  "Most of us underestimate what we eat by ~30%. Tracking builds the awareness needed for change.",
+  "Consistency beats intensity. Hitting your calorie target 80% of the time is better than giving up after one bad day."
+];
+
+interface StepItem {
+  type: 'question' | 'facts_list' | 'final_fact';
+  questionId?: number;
+}
+
+const LoadingSpinner = ({ color }: { color: string }) => {
+  const spinValue = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.loop(
+      Animated.timing(spinValue, {
+        toValue: 1,
+        duration: 2000,
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    ).start();
+  }, []);
+
+  const spin = spinValue.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  return (
+    <Animated.View style={{ transform: [{ rotate: spin }], marginBottom: 24 }}>
+      <Feather name="loader" size={48} color={color} />
+    </Animated.View>
+  );
+};
+
 export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
   onBack,
   onCalculated
 }) => {
   const theme = useTheme();
   const { weightUnit: preferredWeightUnit } = usePreferences();
-  const [currentStep, setCurrentStep] = useState(1);
+
+  // Sequence Management
+  const [stepSequence, setStepSequence] = useState<StepItem[]>([]);
+  const [currentStepIndex, setCurrentStepIndex] = useState(0);
+
+  useEffect(() => {
+    // Fixed Sequence: Questions 1-9 -> Facts List -> Question 10 (Activity) -> Result (handled implicitly)
+    const newSequence: StepItem[] = [];
+
+    // Add Questions 1-9
+    for (let i = 1; i <= 9; i++) {
+      newSequence.push({ type: 'question', questionId: i });
+    }
+
+    // Add Facts List Step (inserted after Pace/Rate which is Q9)
+    newSequence.push({ type: 'facts_list' });
+
+    // Add Question 10 (Activity Level)
+    newSequence.push({ type: 'question', questionId: 10 });
+
+    // Add Final Fact Step
+    newSequence.push({ type: 'final_fact' });
+
+    setStepSequence(newSequence);
+  }, []);
+
+
 
   // Name question state
   const [name, setName] = useState('');
@@ -97,11 +161,23 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // Calculated calories state
   const [calculatedCalories, setCalculatedCalories] = useState<number | null>(null);
 
+  // Loading state
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [loadingMessage, setLoadingMessage] = useState('Analyzing your entry...');
+
   // Screen animation
   const screenOpacity = useRef(new Animated.Value(0)).current;
 
-  const totalSteps = 10;
-  const progress = (currentStep / totalSteps) * 100;
+  const currentStepItem = stepSequence[currentStepIndex];
+  // If index is out of bounds, we are at the Result screen (equivalent to step 11 in original logic)
+  const isResultScreen = currentStepIndex >= stepSequence.length;
+  // Map to original step IDs for compatibility with switch/case rendering
+  const currentStep = currentStepItem ? (currentStepItem.questionId || 0) : 11;
+
+  const totalSteps = stepSequence.length || 10;
+  const progress = Math.min(100, ((currentStepIndex + 1) / totalSteps) * 100);
+
+
 
   // Animate screen fade in on mount
   useEffect(() => {
@@ -222,9 +298,10 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   const handleNameNext = () => {
-    if (name.trim() !== '' && currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+    if (name.trim() !== '' && currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
     }
+
   };
 
   const handleTrackingGoalSelect = (selectedGoal: string) => {
@@ -246,27 +323,30 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     const isValid = heightUnit === 'cm'
       ? heightCm.trim() !== ''
       : (heightFeetInput.trim() !== '' && heightInchesInput.trim() !== '');
-    if (isValid && currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+    if (isValid && currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
     }
+
   };
 
   const handleWeightNext = () => {
-    if (weight.trim() !== '' && currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+    if (weight.trim() !== '' && currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
     }
+
   };
 
   const handleAgeNext = () => {
-    if (age.trim() !== '' && currentStep < totalSteps) {
-      setCurrentStep(currentStep + 1);
+    if (age.trim() !== '' && currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
     }
+
   };
 
   const handleTargetWeightNext = () => {
     // Target weight is optional, check only if entered
     // if (targetWeight.trim() !== '' && currentStep < totalSteps) {
-    setCurrentStep(currentStep + 1);
+    setCurrentStepIndex(currentStepIndex + 1);
     // }
   };
 
@@ -280,7 +360,9 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       const dailyCalories = calculateDailyCalories();
       setCalculatedCalories(dailyCalories);
       // Move to completion screen
-      setCurrentStep(currentStep + 1);
+      setCalculatedCalories(dailyCalories);
+      // Move to completion screen
+      setCurrentStepIndex(currentStepIndex + 1);
     }
   };
 
@@ -333,13 +415,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   const handlePrevious = () => {
-    if (currentStep > 1) {
-      setCurrentStep(currentStep - 1);
+    if (currentStepIndex > 0) {
+      setCurrentStepIndex(currentStepIndex - 1);
     }
   };
 
   const handleClose = () => {
-    setCurrentStep(1);
+    setCurrentStepIndex(0);
     setName('');
     setTrackingGoal(null);
     setTrackingGoalOther('');
@@ -360,7 +442,135 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     onBack();
   };
 
+  const handleFactsNext = () => {
+    if (currentStepIndex < totalSteps - 1) {
+      setCurrentStepIndex(currentStepIndex + 1);
+    }
+  };
+
+  const handleCreatePlan = async () => {
+    setIsAnalyzing(true);
+
+    const messages = [
+      "Analyzing your entry...",
+      "Calculating your macros...",
+      "Understanding your lifestyle...",
+      "Personalizing your plan...",
+      "Finalizing details..."
+    ];
+
+    // Helper for random delay between min and max ms
+    const delay = (min: number, max: number) =>
+      new Promise(resolve => setTimeout(resolve, Math.floor(Math.random() * (max - min + 1) + min)));
+
+    for (const msg of messages) {
+      setLoadingMessage(msg);
+      // Random delay between 1.5s (1500ms) and 2.5s (2500ms) for each step
+      // Total time for 5 messages will be approx 7.5s - 12.5s (Avg ~10s)
+      await delay(1500, 2500);
+    }
+
+    setIsAnalyzing(false);
+    handleCompleteCalculation();
+  };
+
+
+
+  const renderFactsList = () => {
+    return (
+      <View style={styles.questionContainer}>
+        <View style={{
+          width: 80,
+          height: 80,
+          borderRadius: 40,
+          backgroundColor: theme.colors.secondaryBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 24
+        }}>
+          <Feather name="zap" size={40} color={theme.colors.primary} />
+        </View>
+
+        <Text style={[styles.questionText, { color: theme.colors.textPrimary, marginBottom: 8 }]}>
+          Did You Know?
+        </Text>
+        <Text style={[styles.subText, { color: theme.colors.textSecondary, marginBottom: 32 }]}>
+          Here are some scientific facts to get you started.
+        </Text>
+
+        <View style={styles.factsContainer}>
+          {PROMO_FACTS.map((fact, index) => (
+            <View key={index} style={[styles.factCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+              <View style={[styles.factNumberConfig, { backgroundColor: theme.colors.primary + '20' }]}>
+                <Text style={[styles.factNumberText, { color: theme.colors.primary }]}>{index + 1}</Text>
+              </View>
+              <Text style={[styles.factContentText, { color: theme.colors.textPrimary }]}>
+                {fact}
+              </Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+
+
+  const renderFinalFact = () => {
+    return (
+      <View style={[styles.questionContainer, { justifyContent: 'center', alignItems: 'center' }]}>
+        <View style={{
+          width: 80,
+          height: 80,
+          borderRadius: 40,
+          backgroundColor: theme.colors.secondaryBg,
+          alignItems: 'center',
+          justifyContent: 'center',
+          marginBottom: 24
+        }}>
+          <Feather name="trending-up" size={40} color={theme.colors.primary} />
+        </View>
+        <Text style={[styles.questionText, { color: theme.colors.textPrimary, textAlign: 'center' }]}>
+          One last thing...
+        </Text>
+        <Text style={[styles.subText, {
+          color: theme.colors.textSecondary,
+          textAlign: 'center',
+          fontSize: Typography.fontSize.lg,
+          marginTop: 16,
+          lineHeight: 30,
+          fontWeight: '500'
+        }]}>
+          Studies show that being aware of what you're eating helps reduce your weight by <Text style={{ color: theme.colors.primary, fontWeight: 'bold' }}>20%</Text>.
+        </Text>
+      </View>
+    );
+  };
+
+  const renderLoadingScreen = () => {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 20 }}>
+        <LoadingSpinner color={theme.colors.primary} />
+        <Text style={[styles.questionText, { color: theme.colors.textPrimary, textAlign: 'center', fontSize: Typography.fontSize.lg }]}>
+          {loadingMessage}
+        </Text>
+      </View>
+    );
+  };
+
   const renderQuestion = () => {
+    if (isAnalyzing) {
+      return renderLoadingScreen();
+    }
+
+    if (currentStepItem?.type === 'facts_list') {
+      return renderFactsList();
+    }
+
+    if (currentStepItem?.type === 'final_fact') {
+      return renderFinalFact();
+    }
+
     switch (currentStep) {
       case 1:
         return (
@@ -879,58 +1089,71 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     let handleNext = () => { };
     let label = 'Next';
 
-    switch (currentStep) {
-      case 1:
-        isDisabled = name.trim() === '';
-        handleNext = handleNameNext;
-        break;
-      case 2:
-        isDisabled = trackingGoal === null || (trackingGoal === 'other' && trackingGoalOther.trim() === '');
-        handleNext = () => !isDisabled && setCurrentStep(currentStep + 1);
-        break;
-      case 3:
-        isDisabled = !gender;
-        handleNext = () => gender && setCurrentStep(currentStep + 1);
-        break;
-      case 4:
-        isDisabled = age.trim() === '';
-        handleNext = handleAgeNext;
-        break;
-      case 5:
-        isDisabled = !goal;
-        handleNext = () => goal && setCurrentStep(currentStep + 1);
-        break;
-      case 6:
-        const isHeightValid = heightUnit === 'cm'
-          ? heightCm.trim() !== ''
-          : (heightFeetInput.trim() !== '' && heightInchesInput.trim() !== '');
-        isDisabled = !isHeightValid;
-        handleNext = handleHeightNext;
-        break;
-      case 7:
-        isDisabled = weight.trim() === '';
-        handleNext = handleWeightNext;
-        break;
-      case 8:
-        isDisabled = false; // Optional
-        handleNext = handleTargetWeightNext;
-        if (targetWeight.trim() === '') label = 'Skip';
-        break;
-      case 9:
-        isDisabled = selectedRate === null;
-        handleNext = () => selectedRate !== null && setCurrentStep(currentStep + 1);
-        break;
-      case 10:
-        isDisabled = activityLevel === null;
-        handleNext = handleCompleteCalculation;
-        label = 'Calculate';
-        break;
-      default:
-        // Completion screen doesn't use this nav
-        return null;
+
+
+    // Check for Facts List step type
+    if (currentStepItem?.type === 'facts_list') {
+      isDisabled = false;
+      handleNext = handleFactsNext;
+    } else if (currentStepItem?.type === 'final_fact') {
+      isDisabled = false;
+      label = 'Create Plan';
+      handleNext = handleCreatePlan;
+    } else if (isResultScreen) {
+      return null;
+    } else {
+      // Standard Question Steps Switch
+      switch (currentStep) {
+        case 1:
+          isDisabled = name.trim() === '';
+          handleNext = handleNameNext;
+          break;
+        case 2:
+          isDisabled = trackingGoal === null || (trackingGoal === 'other' && trackingGoalOther.trim() === '');
+          handleNext = () => !isDisabled && setCurrentStepIndex(currentStepIndex + 1);
+          break;
+        case 3:
+          isDisabled = !gender;
+          handleNext = () => gender && setCurrentStepIndex(currentStepIndex + 1);
+          break;
+        case 4:
+          isDisabled = age.trim() === '';
+          handleNext = handleAgeNext;
+          break;
+        case 5:
+          isDisabled = !goal;
+          handleNext = () => goal && setCurrentStepIndex(currentStepIndex + 1);
+          break;
+        case 6:
+          const isHeightValid = heightUnit === 'cm'
+            ? heightCm.trim() !== ''
+            : (heightFeetInput.trim() !== '' && heightInchesInput.trim() !== '');
+          isDisabled = !isHeightValid;
+          handleNext = handleHeightNext;
+          break;
+        case 7:
+          isDisabled = weight.trim() === '';
+          handleNext = handleWeightNext;
+          break;
+        case 8:
+          isDisabled = false; // Optional
+          handleNext = handleTargetWeightNext;
+          if (targetWeight.trim() === '') label = 'Skip';
+          break;
+        case 9:
+          isDisabled = selectedRate === null;
+          handleNext = () => selectedRate !== null && setCurrentStepIndex(currentStepIndex + 1);
+          break;
+        case 10:
+          isDisabled = activityLevel === null;
+          handleNext = () => activityLevel && setCurrentStepIndex(currentStepIndex + 1);
+          break;
+        default:
+          return null;
+      }
     }
 
-    if (currentStep > totalSteps) return null; // Completion screen
+    if (isAnalyzing) return null; // Hide buttons during loading
 
     return (
       <View style={[
@@ -940,7 +1163,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           borderTopColor: theme.colors.border,
         }
       ]}>
-        {currentStep > 1 && (
+        {currentStepIndex > 0 && (
           <TouchableOpacity
             style={[styles.navButton, styles.prevButton, { borderColor: theme.colors.border }]}
             onPress={handlePrevious}
@@ -1249,5 +1472,34 @@ const styles = StyleSheet.create({
   primaryButtonText: {
     fontSize: Typography.fontSize.md,
     fontWeight: '600',
+  },
+  factsContainer: {
+    width: '100%',
+    gap: 16,
+  },
+  factCard: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    padding: 16,
+    borderRadius: 16,
+    borderWidth: 1,
+    gap: 16,
+  },
+  factNumberConfig: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 2,
+  },
+  factNumberText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: 'bold',
+  },
+  factContentText: {
+    flex: 1,
+    fontSize: Typography.fontSize.md,
+    lineHeight: 22,
   },
 });
