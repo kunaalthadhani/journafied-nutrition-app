@@ -17,6 +17,7 @@ interface TopNavigationBarProps {
   // though we will remove it from display logic.
   selectedDate?: string;
   streak?: number;
+  frozen?: boolean;
 }
 
 export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
@@ -25,7 +26,8 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onWeightTrackerPress,
   onNutritionAnalysisPress,
   userName = "Guest",
-  streak = 0
+  streak = 0,
+  frozen = false,
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -48,8 +50,10 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
               Hi {userName},
             </Text>
             {streak > 0 && (
-              <View style={styles.streakContainer}>
-                <Text style={styles.streakText}>🔥 x{streak}</Text>
+              <View style={[styles.streakContainer, frozen && { backgroundColor: 'rgba(56, 189, 248, 0.15)' }]}>
+                <Text style={[styles.streakText, frozen && { color: '#0EA5E9' }]}>
+                  {frozen ? '❄️' : '🔥'} x{streak}
+                </Text>
               </View>
             )}
           </View>

@@ -7,44 +7,47 @@ import { Meal } from '../components/FoodLogSection';
  * @param mealsByDate - Record of meals indexed by date key 'YYYY-MM-DD'
  * @returns number - The current streak count
  */
-export const calculateStreak = (mealsByDate: Record<string, Meal[]>): number => {
+export const calculateStreak = (
+    mealsByDate: Record<string, Meal[]>,
+    frozenDates: string[] = [] // New param: dates where freeze was applied
+): number => {
     const datesWithMeals = Object.entries(mealsByDate)
         .filter(([_, meals]) => meals.length > 0)
-        .map(([dateKey]) => dateKey)
-        .sort((a, b) => b.localeCompare(a)); // Descending order (newest first)
+        .map(([dateKey]) => dateKey);
 
-    if (datesWithMeals.length === 0) return 0;
+    // Combine real logs and frozen dates
+    const activeDates = new Set([...datesWithMeals, ...frozenDates]);
+
+    if (activeDates.size === 0) return 0;
 
     const today = format(new Date(), 'yyyy-MM-dd');
     const yesterday = format(subDays(new Date(), 1), 'yyyy-MM-dd');
 
+    // Check if the streak is active (logged or frozen today or yesterday)
+    // We walk backwards from today.
     let streak = 0;
-    let currentDate = today;
+    let checkDate = today;
 
-    // Check if the streak is active (logged today or yesterday)
-    // If the latest log is older than yesterday, the streak is broken (0).
-    const lastLogDate = datesWithMeals[0];
-    if (lastLogDate !== today && lastLogDate !== yesterday) {
+    // Special logic: If today is NOT logged/frozen, but yesterday IS, 
+    // the streak is still "active" (valued at X), but strictly speaking
+    // you haven't incremented it for today yet.
+    // Standard streak logic: 
+    // If today is present -> streak includes today.
+    // If today is missing but yesterday is present -> streak includes yesterday (and is 1+).
+    // If neither -> streak broken (0).
+
+    if (!activeDates.has(today) && !activeDates.has(yesterday)) {
         return 0;
     }
 
-    // If we haven't logged today yet, we start counting from yesterday to see the "active" streak carried over
-    // BUT, usually UI shows "current streak". 
-    // - If I logged yesterday (streak 1) and not today: Streak is 1 X (pending today).
-    // - If I logged today: Streak is 2.
-    // The sorting ensures we just walk back.
+    // Start counting
+    // If today is missing, start checking from yesterday
+    if (!activeDates.has(today)) {
+        checkDate = yesterday;
+    }
 
-    // Implementation: We verify continuity from "today" backwards.
-    // If "today" is missing, we temporarily pretend it's there to check continuity from yesterday? 
-    // No, simpler: Find the anchor. 
-
-    let checkDate = datesWithMeals.includes(today) ? today : yesterday;
-
-    // If even yesterday is not in the list (handled by the lastLogDate check above), we wouldn't be here.
-
-    // Now iterate backwards
     while (true) {
-        if (datesWithMeals.includes(checkDate)) {
+        if (activeDates.has(checkDate)) {
             streak++;
             checkDate = format(subDays(parseISO(checkDate), 1), 'yyyy-MM-dd');
         } else {

@@ -14,10 +14,11 @@ import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { format, subDays, subMonths, subYears, parseISO } from 'date-fns';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText } from 'react-native-svg';
+import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import { analyticsService } from '../services/analyticsService';
+import { generateWeeklyInsights } from '../services/openaiService';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
@@ -29,10 +30,11 @@ interface NutritionAnalysisScreenProps {
   targetProtein?: number;
   targetCarbs?: number;
   targetFat?: number;
+  isPremium?: boolean;
 }
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
-type TabType = 'Calories' | 'Macros';
+type TabType = 'Calories' | 'Macros' | 'Insights';
 
 interface DailyNutrition {
   date: Date;
@@ -52,6 +54,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   targetProtein: targetProteinProp,
   targetCarbs: targetCarbsProp,
   targetFat: targetFatProp,
+  isPremium = false,
 }) => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
@@ -482,14 +485,136 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     ]).start();
   }, [JSON.stringify(graphData), maxValue]);
 
+  // Insights State
+  const [insightText, setInsightText] = useState<string | null>(null);
+  const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+
+  useEffect(() => {
+    if (activeTab === 'Insights' && isPremium && !insightText && graphData.length > 0) {
+      setIsGeneratingInsight(true);
+      // Prepare summary for AI
+      const weeklySummary = {
+        averageCalories,
+        averageProtein,
+        averageCarbs,
+        averageFat,
+        totalDaysLogged: graphData.length,
+        calorieTrend: graphData.map(d => d.calories).slice(-7), // Last 7 entries
+      };
+
+      generateWeeklyInsights(weeklySummary)
+        .then(text => {
+          setInsightText(text);
+        })
+        .catch(err => console.error(err))
+        .finally(() => setIsGeneratingInsight(false));
+    }
+  }, [activeTab, isPremium, graphData]); // Removed insightText dependency to avoid loops, though strict mode might differ.
+
+  // Radar Chart Data Calculation
+  const radarData = useMemo(() => {
+    if (!averageProtein || !averageCarbs || !averageFat || !targetProtein || !targetCarbs || !targetFat) return [];
+
+    // Normalize to 0-1 range (capped at 1.2 for over-performance visualization)
+    const pScore = Math.min(1.2, averageProtein / targetProtein);
+    const cScore = Math.min(1.2, averageCarbs / targetCarbs);
+    const fScore = Math.min(1.2, averageFat / targetFat);
+
+    // Check consistency (simple variance proxy)
+    // Lower variance = higher consistency score
+    const calorieVariance = graphData.reduce((acc, curr) => acc + Math.pow(curr.calories - (averageCalories || 0), 2), 0) / graphData.length;
+    const calorieStdDev = Math.sqrt(calorieVariance);
+    // arbitrary scaling: if stdDev is 0, score is 1. If stdDev is 500, score is ~0.
+    const consistScore = Math.max(0.2, 1 - (calorieStdDev / 1000));
+
+    return [
+      { label: 'Protein', value: pScore },
+      { label: 'Carbs', value: cScore },
+      { label: 'Fat', value: fScore },
+      { label: 'Consistency', value: consistScore },
+    ];
+  }, [averageProtein, averageCarbs, averageFat, targetProtein, targetCarbs, targetFat, graphData]);
+
+  const renderRadarChart = () => {
+    const size = 200;
+    const center = size / 2;
+    const radius = (size - 40) / 2; // leave padding for labels
+
+    if (radarData.length === 0) return null;
+
+    const angleStep = (Math.PI * 2) / radarData.length;
+
+    const points = radarData.map((d, i) => {
+      const angle = i * angleStep - Math.PI / 2; // Start at top
+      // value is 0-1+
+      const r = Math.min(d.value, 1.1) * radius;
+      const x = center + r * Math.cos(angle);
+      const y = center + r * Math.sin(angle);
+      return `${x},${y}`;
+    }).join(' ');
+
+    // Background webs
+    const webs = [0.25, 0.5, 0.75, 1].map(scale => {
+      return radarData.map((_, i) => {
+        const angle = i * angleStep - Math.PI / 2;
+        const r = scale * radius;
+        const x = center + r * Math.cos(angle);
+        const y = center + r * Math.sin(angle);
+        return `${x},${y}`;
+      }).join(' ');
+    });
+
+    return (
+      <View style={{ alignItems: 'center', justifyContent: 'center', height: 240 }}>
+        <Svg height={size} width={size}>
+          {/* Webs */}
+          {webs.map((pointsStr, i) => (
+            <Polygon key={i} points={pointsStr} stroke={theme.colors.border} strokeWidth="1" fill="none" opacity={0.5} />
+          ))}
+          {/* Axis Lines */}
+          {radarData.map((_, i) => {
+            const angle = i * angleStep - Math.PI / 2;
+            const x = center + radius * Math.cos(angle);
+            const y = center + radius * Math.sin(angle);
+            return <Line key={i} x1={center} y1={center} x2={x} y2={y} stroke={theme.colors.border} strokeWidth="1" opacity={0.5} />;
+          })}
+          {/* Data Shape */}
+          <Polygon points={points} fill="rgba(59, 130, 246, 0.2)" stroke={theme.colors.primary} strokeWidth="2" />
+          {/* Labels */}
+          {radarData.map((d, i) => {
+            const angle = i * angleStep - Math.PI / 2;
+            const labelRadius = radius + 15;
+            const x = center + labelRadius * Math.cos(angle);
+            const y = center + labelRadius * Math.sin(angle);
+            return (
+              <SvgText
+                key={i}
+                x={x}
+                y={y + 4}
+                fill={theme.colors.textSecondary}
+                fontSize="10"
+                fontWeight="bold"
+                textAnchor="middle"
+              >
+                {d.label}
+              </SvgText>
+            );
+          })}
+        </Svg>
+      </View>
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
-        {...panResponder.panHandlers}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View
+          style={[styles.header, { borderBottomColor: theme.colors.border }]}
+          {...panResponder.panHandlers}
+        >
           <TouchableOpacity onPress={handleClose} style={styles.backButton}>
             <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
           </TouchableOpacity>
@@ -634,6 +759,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     ]}
                   >
                     Macros
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[
+                    styles.tab,
+                    activeTab === 'Insights' && { backgroundColor: theme.colors.primary },
+                  ]}
+                  onPress={() => setActiveTab('Insights')}
+                >
+                  <Text
+                    style={[
+                      styles.tabText,
+                      {
+                        color: activeTab === 'Insights' ? theme.colors.primaryForeground : theme.colors.textSecondary,
+                      },
+                    ]}
+                  >
+                    {isPremium ? '✨ Insights' : '🔒 Insights'}
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -1155,6 +1298,75 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       Your protein intake is below target. Consider adding more lean protein to your meals.
                     </Text>
                   </View>
+                </View>
+              )}
+
+              {/* Insights Tab */}
+              {activeTab === 'Insights' && (
+                <View style={styles.graphContainer}>
+                  {!isPremium ? (
+                    <View style={{ alignItems: 'center', padding: 40, opacity: 0.6 }}>
+                      <Feather name="lock" size={48} color={theme.colors.textSecondary} style={{ marginBottom: 16 }} />
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
+                        Premium Feature
+                      </Text>
+                      <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>
+                        Unlock advanced analytics, AI-powered insights, and weekly trend reports.
+                      </Text>
+                    </View>
+                  ) : (
+                    <View>
+                      {/* Radar Chart Card */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
+                        <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, fontSize: 16, marginBottom: 4 }]}>
+                          Nutrition Balance
+                        </Text>
+                        <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, fontSize: 12, marginBottom: 20 }}>
+                          Goal Adherence (Target vs Actual)
+                        </Text>
+                        {renderRadarChart()}
+                      </View>
+
+                      {/* AI Insight Card */}
+                      <View style={{
+                        backgroundColor: 'rgba(139, 92, 246, 0.1)', // Violet tint
+                        borderRadius: 16,
+                        padding: 20,
+                        borderWidth: 1,
+                        borderColor: 'rgba(139, 92, 246, 0.2)',
+                        marginBottom: 16
+                      }}>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                          <Text style={{ fontSize: 20 }}>✨</Text>
+                          <Text style={{ color: '#8B5CF6', fontWeight: 'bold', fontSize: 16 }}>Smart Insights</Text>
+                        </View>
+
+                        {isGeneratingInsight ? (
+                          <Text style={{ color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your weekly trends...</Text>
+                        ) : (
+                          <Text style={{ color: theme.colors.textPrimary, lineHeight: 22, fontSize: 15 }}>
+                            {insightText || "Keep logging consistently to unlock personalized AI insights about your nutrition patterns."}
+                          </Text>
+                        )}
+                      </View>
+
+                      {/* Weekly Consistency */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 24 }]}>
+                        <View>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>Consistency Score</Text>
+                          <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold', fontSize: 24, marginTop: 4 }}>
+                            {(radarData.find(d => d.label === 'Consistency')?.value || 0) * 100 > 80 ? 'Excellent' : 'Good'}
+                          </Text>
+                        </View>
+                        <View style={{ alignItems: 'flex-end' }}>
+                          <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.colors.primary }}>
+                            {Math.round((radarData.find(d => d.label === 'Consistency')?.value || 0) * 100)}%
+                          </Text>
+                        </View>
+                      </View>
+
+                    </View>
+                  )}
                 </View>
               )}
             </React.Fragment>

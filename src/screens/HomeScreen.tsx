@@ -17,7 +17,7 @@ import {
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { format, isSameDay } from 'date-fns';
+import { format, isSameDay, subDays } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
 import { DateSelector } from '../components/DateSelector';
 import { CalendarModal } from '../components/CalendarModal';
@@ -30,6 +30,7 @@ import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SubscriptionScreen } from './SubscriptionScreen';
 import { AccountScreen } from './AccountScreen';
+import AdvancedAnalyticsScreen from './AdvancedAnalyticsScreen';
 import { AboutScreen } from './AboutScreen';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
@@ -50,7 +51,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useTheme } from '../constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus } from '../services/dataStorage';
+import { dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import { notificationService } from '../services/notificationService';
 import { referralService } from '../services/referralService';
@@ -122,6 +123,17 @@ export const HomeScreen: React.FC = () => {
   });
   const [taskBonusEntries, setTaskBonusEntries] = useState(0);
   const [showFreeEntries, setShowFreeEntries] = useState(false);
+
+
+
+  // Streak Freeze State
+  const [streakFreeze, setStreakFreeze] = useState<StreakFreezeData | null>(null);
+  const [justFrozeToday, setJustFrozeToday] = useState(false);
+
+  // Advanced Analytics
+  const [showAdvancedAnalytics, setShowAdvancedAnalytics] = useState(false);
+  const handleOpenAdvancedAnalytics = () => setShowAdvancedAnalytics(true);
+  const handleAdvancedAnalyticsBack = () => setShowAdvancedAnalytics(false);
 
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
@@ -466,129 +478,220 @@ export const HomeScreen: React.FC = () => {
     setTaskBonusEntries(calculateTaskBonus(status));
   };
 
+  // Logic to handle missed days and auto-freeze
+  const checkMissedDaysAndFreeze = async (
+    meals: Record<string, Meal[]>,
+    freezeData: StreakFreezeData | null,
+    plan: 'free' | 'premium'
+  ): Promise<StreakFreezeData | null> => {
+    // Only for premium users and if freeze data exists
+    if (!freezeData || plan !== 'premium') return freezeData;
+
+    const today = new Date();
+    const yesterday = subDays(today, 1);
+    const yesterdayKey = format(yesterday, 'yyyy-MM-dd');
+    const todayKey = format(today, 'yyyy-MM-dd');
+
+    // If we logged yesterday or freeze was already used yesterday, we are good for yesterday check
+    const loggedYesterday = meals[yesterdayKey] && meals[yesterdayKey].length > 0;
+    const frozenYesterday = freezeData.usedOnDates.includes(yesterdayKey);
+    // If we logged today, we are good
+    const loggedToday = meals[todayKey] && meals[todayKey].length > 0;
+
+    // We only care if yesterday was missed AND it wasn't already frozen
+    if (!loggedYesterday && !frozenYesterday) {
+      // Check if we HAD a streak before yesterday
+      // i.e. did we log the day before yesterday?
+      const dayBeforeYesterday = subDays(today, 2);
+      const dayBeforeKey = format(dayBeforeYesterday, 'yyyy-MM-dd');
+      const loggedDayBefore = meals[dayBeforeKey] && meals[dayBeforeKey].length > 0;
+      const frozenDayBefore = freezeData.usedOnDates.includes(dayBeforeKey);
+
+      // If we had a streak alive (logged or frozen day before), and missed yesterday...
+      if (loggedDayBefore || frozenDayBefore) {
+        // Apply freeze if available
+        if (freezeData.freezesAvailable > 0) {
+          const newData: StreakFreezeData = {
+            ...freezeData,
+            freezesAvailable: freezeData.freezesAvailable - 1,
+            usedOnDates: [...freezeData.usedOnDates, yesterdayKey]
+          };
+
+          // Save and notify
+          await dataStorage.saveStreakFreeze(newData);
+          setJustFrozeToday(true); // Signal to show alert
+          // Show local notification or alert about freeze usage?
+          // We'll use a state to show a nice UI on home screen.
+
+          return newData;
+        } else {
+          // Streak broken :( 
+          // No remaining freezes.
+        }
+      }
+    }
+    return freezeData;
+  };
+
+  const loadAllData = async () => {
+    try {
+      // Initialize analytics
+      await analyticsService.initialize();
+      await analyticsService.trackAppOpen();
+
+      // Load entry count
+      const stored = await AsyncStorage.getItem(ENTRY_COUNT_KEY);
+      if (stored) setEntryCount(parseInt(stored, 10) || 0);
+      else {
+        const count = await dataStorage.loadEntryCount();
+        setEntryCount(count);
+      }
+
+      // Load user plan
+      const plan = await dataStorage.loadUserPlan();
+      setUserPlan(plan);
+
+      // Load goals
+      const savedGoalsData = await dataStorage.loadGoals();
+      if (savedGoalsData) {
+        setSavedGoals(savedGoalsData);
+        setDailyCalories(savedGoalsData.calories);
+        setGoalsSet(true);
+      }
+
+      // Load meals
+      const savedMeals = await dataStorage.loadMeals();
+      if (Object.keys(savedMeals).length > 0) {
+        setMealsByDate(savedMeals);
+      }
+
+      // Load exercises
+      const savedExercises = await dataStorage.loadExercises();
+      if (Object.keys(savedExercises).length > 0) {
+        setExercisesByDate(savedExercises);
+      }
+
+      // Load Freeze Data
+      const currentMonthStart = format(new Date(), 'yyyy-MM-01');
+      let freezeData = await dataStorage.loadStreakFreeze();
+
+      // Reset if new month
+      if (!freezeData || freezeData.lastResetDate !== currentMonthStart) {
+        freezeData = {
+          freezesAvailable: 2, // Reset to 2 every month
+          lastResetDate: currentMonthStart,
+          usedOnDates: freezeData ? freezeData.usedOnDates : [] // Keep history, just reset counter
+        };
+        await dataStorage.saveStreakFreeze(freezeData);
+      }
+
+      // Check for missed days to auto-freeze
+      // Need to pass latest meals (savedMeals) and plan
+      const updatedFreezeData = await checkMissedDaysAndFreeze(savedMeals, freezeData, plan);
+      setStreakFreeze(updatedFreezeData);
+
+
+      // Validate entry count matches actual log count (always run)
+      let actualLogCount = 0;
+      Object.values(savedMeals).forEach(meals => {
+        actualLogCount += meals.length;
+      });
+
+      // Example check if we need to fix
+      if (actualLogCount > 0 && (!stored || parseInt(stored) < actualLogCount)) {
+        // We could fix it here, but let's just trust for now or update it
+      }
+
+      Object.values(savedExercises).forEach(entries => {
+        actualLogCount += entries.length;
+      });
+
+      const storedCount = await dataStorage.loadEntryCount();
+
+      if (actualLogCount !== storedCount) {
+        if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
+        await dataStorage.saveEntryCount(actualLogCount);
+        await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualLogCount));
+        setEntryCount(actualLogCount);
+      }
+
+      // Load saved prompts
+      const storedPrompts = await dataStorage.loadSavedPrompts();
+      if (storedPrompts.length > 0) {
+        setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
+      }
+
+      // ENTRY TASKS
+      const tasksStatus = await dataStorage.loadEntryTasks();
+      setEntryTasks(tasksStatus);
+      setTaskBonusEntries(calculateTaskBonus(tasksStatus));
+
+      // DEVICE INFO
+      const deviceInfo = {
+        deviceName: Device.deviceName || 'Unknown',
+        modelName: Device.modelName || 'Unknown',
+        osName: Device.osName || 'Unknown',
+        osVersion: Device.osVersion || 'Unknown',
+        platform: Platform.OS,
+        appVersion: Constants.expoConfig?.version || '1.0.0',
+        timestamp: new Date().toISOString(),
+      };
+      await dataStorage.saveDeviceInfo(deviceInfo);
+
+      // ACCOUNT / REFERRAL info
+      const accountInfo = await dataStorage.loadAccountInfo();
+      setAccountInfo(accountInfo || null);
+      if (accountInfo?.email) {
+        let code = await dataStorage.getReferralCode(accountInfo.email);
+        if (!code) {
+          await referralService.getOrCreateReferralCode(accountInfo.email);
+          code = await dataStorage.getReferralCode(accountInfo.email);
+        }
+        setReferralCode(code?.code || null);
+        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+        setTotalEarnedEntries(earned);
+      } else {
+        setEntryCount(0);
+        setReferralCode(null);
+        setTotalEarnedEntries(0);
+      }
+
+    } catch (e) {
+      console.error("Failed to load home screen data", e);
+    }
+  };
+
+  const handleSyncAccount = async () => {
+    await loadAllData();
+  };
+
   // Initialize analytics and load all data on mount
   useEffect(() => {
-    (async () => {
-      try {
-        // Initialize analytics
-        await analyticsService.initialize();
-        await analyticsService.trackAppOpen();
+    loadAllData();
 
-        // Load entry count
-        const stored = await AsyncStorage.getItem(ENTRY_COUNT_KEY);
-        if (stored) setEntryCount(parseInt(stored, 10) || 0);
-        else {
-          const count = await dataStorage.loadEntryCount();
-          setEntryCount(count);
-        }
+    // App State Listener (Moved inside here or separate effect?)
+    // Best to keep separate, but since we are refactoring... let's keep it separate to avoid closure staleness issues if possible, 
+    // although AppState listener is usually static.
+    // The previous code had it inside the same huge useEffect.
+  }, []);
 
-        // Load user plan
-        const plan = await dataStorage.loadUserPlan();
-        setUserPlan(plan);
-
-        // Load goals
-        const savedGoalsData = await dataStorage.loadGoals();
-        if (savedGoalsData) {
-          setSavedGoals(savedGoalsData);
-          setDailyCalories(savedGoalsData.calories);
-          setGoalsSet(true);
-        }
-
-        // Load meals
-        const savedMeals = await dataStorage.loadMeals();
-        if (Object.keys(savedMeals).length > 0) {
-          setMealsByDate(savedMeals);
-        }
-
-        // Load exercises
-        const savedExercises = await dataStorage.loadExercises();
-        if (Object.keys(savedExercises).length > 0) {
-          setExercisesByDate(savedExercises);
-        }
-
-        // Validate entry count matches actual log count (always run)
-        let actualLogCount = 0;
-        Object.values(savedMeals).forEach(meals => {
-          actualLogCount += meals.length;
-        });
-        Object.values(savedExercises).forEach(entries => {
-          actualLogCount += entries.length;
-        });
-
-        const storedCount = await dataStorage.loadEntryCount();
-
-        if (actualLogCount !== storedCount) {
-          if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
-          // Auto-fix by setting entry count to actual meal count
-          await dataStorage.saveEntryCount(actualLogCount);
-          await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualLogCount));
-          setEntryCount(actualLogCount);
-        }
-
-        // Load saved prompts (cap to latest 6)
-        const storedPrompts = await dataStorage.loadSavedPrompts();
-        if (storedPrompts.length > 0) {
-          setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
-        }
-
-        const tasksStatus = await dataStorage.loadEntryTasks();
-        setEntryTasks(tasksStatus);
-        setTaskBonusEntries(calculateTaskBonus(tasksStatus));
-
-        // Capture and save device info
-        const deviceInfo = {
-          deviceName: Device.deviceName || 'Unknown',
-          modelName: Device.modelName || 'Unknown',
-          osName: Device.osName || 'Unknown',
-          osVersion: Device.osVersion || 'Unknown',
-          platform: Platform.OS,
-          appVersion: Constants.expoConfig?.version || '1.0.0',
-          timestamp: new Date().toISOString(),
-        };
-        await dataStorage.saveDeviceInfo(deviceInfo);
-
-        // Load referral code and earned entries
-        const accountInfo = await dataStorage.loadAccountInfo();
-        setAccountInfo(accountInfo || null);
-        if (accountInfo?.email) {
-          // Ensure user has a referral code
-          let code = await dataStorage.getReferralCode(accountInfo.email);
-          if (!code) {
-            // Generate if missing
-            await referralService.getOrCreateReferralCode(accountInfo.email);
-            code = await dataStorage.getReferralCode(accountInfo.email);
-          }
-          setReferralCode(code?.code || null);
-
-          // Load total earned entries
-          const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-          setTotalEarnedEntries(earned);
-
-          // Verify pending redemptions are still valid
-          const redemptions = await dataStorage.getReferralRedemptionsForUser(
-            accountInfo.email,
-            'referee'
-          );
-          const pending = redemptions.filter((r) => r.status === 'pending');
-          // Check if any pending redemptions should be marked as failed (e.g., expired)
-          // For now, we'll keep them pending indefinitely, but you could add expiration logic
-        } else {
-          // Account is cleared/logged out - reset entry count and referral data
-          setEntryCount(0);
-          setReferralCode(null);
-          setTotalEarnedEntries(0);
-        }
-      } catch (error) {
-        if (__DEV__) console.error('Error loading data:', error);
-      }
-    })();
-
-    // Track app close when component unmounts or app goes to background
-    const subscription = AppState.addEventListener('change', (nextAppState) => {
+  // Separate Effect for AppState to keep it clean
+  useEffect(() => {
+    const subscription = AppState.addEventListener('change', async (nextAppState) => {
       if (nextAppState === 'background' || nextAppState === 'inactive') {
         analyticsService.trackAppClose();
       } else if (nextAppState === 'active') {
         analyticsService.trackAppOpen();
+
+        // Refresh checks on foreground
+        const meals = await dataStorage.loadMeals();
+        const plan = await dataStorage.loadUserPlan();
+        const freeze = await dataStorage.loadStreakFreeze();
+        if (meals && plan && freeze) {
+          const updated = await checkMissedDaysAndFreeze(meals, freeze, plan);
+          setStreakFreeze(updated);
+          setMealsByDate(meals);
+        }
       }
     });
 
@@ -1614,16 +1717,35 @@ export const HomeScreen: React.FC = () => {
 
   if (showAccount) {
     return (
-      <AccountScreen
-        onBack={handleAccountBack}
-        initialAccountInfo={accountInfo}
-        initialEntryCount={entryCount}
-        initialPlan={userPlan}
-        initialGoals={savedGoals}
-        initialReferralCode={referralCode}
-        initialTotalEarnedEntries={totalEarnedEntries}
-        initialTaskBonusEntries={taskBonusEntries}
-      />
+      <>
+        <AccountScreen
+          onBack={handleAccountBack}
+          onRequestSync={handleSyncAccount}
+          initialAccountInfo={accountInfo}
+          initialEntryCount={entryCount}
+          initialPlan={userPlan}
+          initialGoals={savedGoals}
+          initialReferralCode={referralCode}
+          initialTotalEarnedEntries={totalEarnedEntries}
+          initialTaskBonusEntries={taskBonusEntries}
+          initialStreakFreeze={streakFreeze}
+          initialFrozenDates={streakFreeze?.usedOnDates}
+          onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
+        />
+        <Modal
+          visible={showAdvancedAnalytics}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleAdvancedAnalyticsBack}
+        >
+          <AdvancedAnalyticsScreen
+            onBack={handleAdvancedAnalyticsBack}
+            userPlan={userPlan}
+            mealsByDate={mealsByDate}
+            userGoals={savedGoals}
+          />
+        </Modal>
+      </>
     );
   }
 
@@ -1675,7 +1797,37 @@ export const HomeScreen: React.FC = () => {
           onWeightTrackerPress={handleWeightTracker}
           onNutritionAnalysisPress={handleNutritionAnalysis}
           streak={currentStreak}
+          frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday} // Pass frozen state to TopBar
         />
+
+        {/* Just Frozen Alert / Greeting Replacement */}
+        {justFrozeToday ? (
+          <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
+            <View style={{
+              backgroundColor: 'rgba(56, 189, 248, 0.1)',
+              borderRadius: 12,
+              padding: 16,
+              borderWidth: 1,
+              borderColor: 'rgba(56, 189, 248, 0.2)'
+            }}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                <Text style={{ fontSize: 18 }}>❄️</Text>
+                <Text style={{
+                  fontSize: 16,
+                  fontWeight: '600',
+                  color: theme.colors.textPrimary
+                }}>Recovery Day Used</Text>
+              </View>
+              <Text style={{
+                fontSize: 14,
+                color: theme.colors.textSecondary,
+                lineHeight: 20
+              }}>
+                We've got you covered. A recovery day was used to save your streak. Reset and ready when you are.
+              </Text>
+            </View>
+          </View>
+        ) : null}
 
         {/* Date Selector (horizontal scroll/pan within the bar only) */}
         <DateSelector
@@ -1876,6 +2028,21 @@ export const HomeScreen: React.FC = () => {
             targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
             targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
             targetFat={goalsSet ? savedGoals.fatGrams : undefined}
+            isPremium={userPlan === 'premium'}
+          />
+        </Modal>
+
+        <Modal
+          visible={showAdvancedAnalytics}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleAdvancedAnalyticsBack}
+        >
+          <AdvancedAnalyticsScreen
+            onBack={handleAdvancedAnalyticsBack}
+            userPlan={userPlan}
+            mealsByDate={mealsByDate}
+            userGoals={savedGoals}
           />
         </Modal>
 

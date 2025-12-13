@@ -19,7 +19,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
-import { dataStorage, AccountInfo, ExtendedGoalData } from '../services/dataStorage';
+import { dataStorage, AccountInfo, ExtendedGoalData, StreakFreezeData } from '../services/dataStorage';
 import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -34,6 +34,10 @@ interface AccountScreenProps {
   initialReferralCode?: string | null;
   initialTotalEarnedEntries?: number;
   initialTaskBonusEntries?: number;
+  onRequestSync: () => Promise<void>;
+  initialStreakFreeze?: StreakFreezeData | null;
+  initialFrozenDates?: string[];
+  onOpenAdvancedAnalytics?: () => void;
 }
 
 export const AccountScreen: React.FC<AccountScreenProps> = ({
@@ -45,6 +49,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   initialReferralCode,
   initialTotalEarnedEntries,
   initialTaskBonusEntries,
+  onRequestSync,
+  initialStreakFreeze,
+  initialFrozenDates,
+  onOpenAdvancedAnalytics,
 }) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
@@ -78,6 +86,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [plan, setPlan] = useState<'free' | 'premium'>(initialPlan || 'free');
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(initialTotalEarnedEntries || 0);
   const [taskBonusEntries, setTaskBonusEntries] = useState(initialTaskBonusEntries || 0);
+  const [streakFreeze, setStreakFreeze] = useState<StreakFreezeData | null>(initialStreakFreeze || null);
   const [goals, setGoals] = useState<ExtendedGoalData | null>(initialGoals || null);
   const [weightSummary, setWeightSummary] = useState<{
     starting: number | null;
@@ -150,11 +159,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const loadLocalData = async () => {
     try {
       const info = await dataStorage.loadAccountInfo();
-      const [count, planValue, goalsData, weightEntries] = await Promise.all([
+      const [count, planValue, goalsData, weightEntries, streakData] = await Promise.all([
         dataStorage.loadEntryCount(),
         dataStorage.loadUserPlan(),
         dataStorage.loadGoals(),
         dataStorage.loadWeightEntries(),
+        dataStorage.loadStreakFreeze(),
       ]);
 
       setAccountInfo(info);
@@ -165,6 +175,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       setEntryCount(count);
       setPlan(planValue);
       setGoals(goalsData);
+      setStreakFreeze(streakData);
 
       // Weight Summary Logic
       const sortedEntries = [...weightEntries].sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -509,7 +520,50 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{referralDetails.totalReferrals}</Text>
           </View>
         </View>
+
+        {/* Premium: Streak Freeze Status */}
+        {plan === 'premium' && streakFreeze && (
+          <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Recovery Days</Text>
+              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>Automatic protection for missed days.</Text>
+            </View>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {[1, 2].map((i) => (
+                <Text key={i} style={{ fontSize: 18, opacity: i <= streakFreeze.freezesAvailable ? 1 : 0.3 }}>
+                  ❄️
+                </Text>
+              ))}
+            </View>
+          </View>
+        )}
       </View>
+
+      {/* Advanced Analytics Menu Item */}
+      {onOpenAdvancedAnalytics && (
+        <TouchableOpacity
+          style={[styles.summaryCard, {
+            backgroundColor: 'rgba(139, 92, 246, 0.05)',
+            borderColor: 'rgba(139, 92, 246, 0.3)',
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            marginTop: 16
+          }]}
+          onPress={onOpenAdvancedAnalytics}
+        >
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: 8, borderRadius: 8 }}>
+              <Feather name="bar-chart-2" size={24} color="#8B5CF6" />
+            </View>
+            <View>
+              <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>Advanced Analytics</Text>
+              <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>View trends, heatmaps & insights</Text>
+            </View>
+          </View>
+          <Feather name="chevron-right" size={20} color={theme.colors.textTertiary} />
+        </TouchableOpacity>
+      )}
 
       {/* Actions */}
       <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>

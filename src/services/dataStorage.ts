@@ -23,6 +23,7 @@ const STORAGE_KEYS = {
   SAVED_PROMPTS: '@trackkal:savedPrompts',
   ENTRY_TASKS: '@trackkal:entryTasks',
   SYNC_QUEUE: '@trackkal:syncQueue',
+  STREAK_FREEZE: '@trackkal:streakFreeze',
 };
 
 export interface ExtendedGoalData {
@@ -126,6 +127,11 @@ export type EntryTaskType = 'customPlan' | 'registration';
 export interface EntryTasksStatus {
   customPlanCompleted: boolean;
   registrationCompleted: boolean;
+}
+export interface StreakFreezeData {
+  freezesAvailable: number; // 0-2
+  lastResetDate: string; // ISO date string of start of current month
+  usedOnDates: string[]; // List of YYYY-MM-DD dates where freeze preserved a streak
 }
 
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
@@ -476,7 +482,7 @@ export const dataStorage = {
   async saveGoals(goals: ExtendedGoalData): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -612,7 +618,7 @@ export const dataStorage = {
   async saveExercises(exercisesByDate: Record<string, ExerciseEntry[]>): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesByDate));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -755,7 +761,7 @@ export const dataStorage = {
   async saveEntryCount(count: number): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_COUNT, String(count));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -802,11 +808,52 @@ export const dataStorage = {
     }
   },
 
+  // Save streak freeze data
+  async saveStreakFreeze(data: StreakFreezeData): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.STREAK_FREEZE, JSON.stringify(data));
+      // TODO: Consider syncing this to backend later if needed
+    } catch (error) {
+      console.error('Error saving streak freeze data:', error);
+    }
+  },
+
+  // Load streak freeze data
+  async loadStreakFreeze(): Promise<StreakFreezeData | null> {
+    try {
+      const jsonValue = await AsyncStorage.getItem(STORAGE_KEYS.STREAK_FREEZE);
+      return jsonValue != null ? JSON.parse(jsonValue) : null;
+    } catch (e) {
+      console.error('Failed to load streak freeze data', e);
+      return null;
+    }
+  },
+
+  async saveAnalyticsFeedback(feedback: AnalyticsFeedback): Promise<void> {
+    try {
+      const existing = await this.getAnalyticsFeedback();
+      const newFeedback = [...existing, feedback];
+      await AsyncStorage.setItem(STORAGE_KEYS.ANALYTICS_FEEDBACK, JSON.stringify(newFeedback));
+    } catch (e) {
+      console.error('Failed to save analytics feedback', e);
+    }
+  },
+
+  async getAnalyticsFeedback(): Promise<AnalyticsFeedback[]> {
+    try {
+      const jsonValue = await AsyncStorage.getItem(STORAGE_KEYS.ANALYTICS_FEEDBACK);
+      return jsonValue != null ? JSON.parse(jsonValue) : [];
+    } catch (e) {
+      console.error('Failed to load analytics feedback', e);
+      return [];
+    }
+  },
+
   // Save user plan
   async saveUserPlan(plan: 'free' | 'premium'): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, plan);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -857,7 +904,7 @@ export const dataStorage = {
   async saveDeviceInfo(info: any): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.DEVICE_INFO, JSON.stringify(info));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -958,7 +1005,7 @@ export const dataStorage = {
   async savePreferences(prefs: Preferences): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(prefs));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1039,7 +1086,7 @@ export const dataStorage = {
   async savePushTokens(tokens: string[]): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.PUSH_TOKENS, JSON.stringify(tokens));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1075,7 +1122,7 @@ export const dataStorage = {
       if (!existing.includes(token)) {
         const updated = [...existing, token];
         await this.savePushTokens(updated);
-        
+
         // Also sync individual token
         const accountInfo = await getCachedAccountInfo();
         if (accountInfo?.supabaseUserId) {
@@ -1099,7 +1146,7 @@ export const dataStorage = {
       const existing = await this.loadPushTokens();
       const updated = existing.filter(t => t !== token);
       await this.savePushTokens(updated);
-      
+
       // Revoke token in Supabase
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1168,7 +1215,7 @@ export const dataStorage = {
       const existing = await this.loadPushHistory();
       const updated = [record, ...existing];
       await this.savePushHistory(updated);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1195,7 +1242,7 @@ export const dataStorage = {
           : record
       );
       await this.savePushHistory(updated);
-      
+
       // Sync click update to Supabase
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1220,10 +1267,10 @@ export const dataStorage = {
       const localData = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
       const localPrompts: SavedPrompt[] = localData
         ? (Array.isArray(JSON.parse(localData))
-            ? JSON.parse(localData).filter(
-                (item: SavedPrompt) => typeof item?.id === 'string' && typeof item?.text === 'string'
-              )
-            : [])
+          ? JSON.parse(localData).filter(
+            (item: SavedPrompt) => typeof item?.id === 'string' && typeof item?.text === 'string'
+          )
+          : [])
         : [];
 
       // If user is logged in, fetch from Supabase
@@ -1268,7 +1315,7 @@ export const dataStorage = {
       const existing = await this.loadSavedPrompts();
       const updated = [prompt, ...existing];
       await this.saveSavedPrompts(updated);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1291,7 +1338,7 @@ export const dataStorage = {
       const existing = await this.loadSavedPrompts();
       const updated = existing.filter(prompt => prompt.id !== id);
       await this.saveSavedPrompts(updated);
-      
+
       // Delete from Supabase
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1343,7 +1390,7 @@ export const dataStorage = {
   async saveEntryTasks(status: EntryTasksStatus): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(status));
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1424,7 +1471,7 @@ export const dataStorage = {
           console.error('Error fetching referral code from Supabase:', error);
         }
       }
-      
+
       // Fallback to local
       const codes = await this.loadReferralCodes();
       return codes.find(c => c.userId === userId) || null;
@@ -1445,7 +1492,7 @@ export const dataStorage = {
           console.error('Error fetching referral code by code from Supabase:', error);
         }
       }
-      
+
       // Fallback to local
       const codes = await this.loadReferralCodes();
       return codes.find(c => c.code === code.toUpperCase()) || null;
@@ -1465,7 +1512,7 @@ export const dataStorage = {
         codes.push(referralCode);
       }
       await this.saveReferralCodes(codes);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1526,7 +1573,7 @@ export const dataStorage = {
       const redemptions = await this.loadReferralRedemptions();
       redemptions.push(redemption);
       await this.saveReferralRedemptions(redemptions);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1563,7 +1610,7 @@ export const dataStorage = {
           console.error('Error fetching referral redemptions from Supabase:', error);
         }
       }
-      
+
       // Fallback to local
       const redemptions = await this.loadReferralRedemptions();
       if (type === 'referrer') {
@@ -1620,7 +1667,7 @@ export const dataStorage = {
       const rewards = await this.loadReferralRewards();
       rewards.push(reward);
       await this.saveReferralRewards(rewards);
-      
+
       // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
@@ -1657,7 +1704,7 @@ export const dataStorage = {
           console.error('Error fetching referral rewards from Supabase:', error);
         }
       }
-      
+
       // Fallback to local
       const rewards = await this.loadReferralRewards();
       return rewards.filter(r => r.userId.toLowerCase() === userId.toLowerCase());

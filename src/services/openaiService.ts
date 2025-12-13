@@ -151,7 +151,7 @@ If you cannot identify any food items, return an empty array: []
         max_tokens: config.OPENAI_CONFIG.max_tokens,
       }),
     });
-    
+
     if (__DEV__) console.log('OpenAI API response status:', response.status);
 
     if (!response.ok) {
@@ -167,7 +167,7 @@ If you cannot identify any food items, return an empty array: []
 
     // Parse the JSON response
     const parsedFoods = JSON.parse(content);
-    
+
     // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
     const foodsWithIds = parsedFoods.map((food: any) => ({
       ...food,
@@ -178,7 +178,7 @@ If you cannot identify any food items, return an empty array: []
 
   } catch (error) {
     if (__DEV__) console.error('Error analyzing food with ChatGPT:', error);
-    
+
     // Fallback to local parsing if ChatGPT fails
     if (__DEV__) console.log('Falling back to local food parsing...');
     const { parseFoodInput } = require('../utils/foodNutrition');
@@ -231,10 +231,10 @@ export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise
         duration_minutes: Math.round(
           Number(
             exercise.duration_minutes ??
-              exercise.duration ??
-              exercise.minutes ??
-              exercise.time ??
-              0
+            exercise.duration ??
+            exercise.minutes ??
+            exercise.time ??
+            0
           ) || 0
         ),
         intensity: exercise.intensity || 'moderate',
@@ -252,11 +252,59 @@ export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise
   }
 }
 
+// ... (existing code)
+
+export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
+  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
+    // Return a default canned insight if no API key
+    return "Great job tracking this week! Your protein intake is steady. Try boosting fiber next week for even better energy.";
+  }
+
+  try {
+    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: config.OPENAI_CONFIG.model,
+        messages: [
+          {
+            role: 'system',
+            content: `You are a friendly, encouraging nutrition coach. 
+            Analyze the provided weekly nutrition summary. 
+            Give ONE brilliant, specific, and positive insight about their eating patterns. 
+            Keep it under 30 words. 
+            Focus on trends like "You tend to eat more protein on weekends" or "Your calorie stability is impressive". 
+            Avoid negative or judgmental language. Use emojis sparingly.`
+          },
+          {
+            role: 'user',
+            content: JSON.stringify(weeklyData)
+          }
+        ],
+        temperature: 0.7,
+        max_tokens: 60,
+      }),
+    });
+
+    if (!response.ok) return "You're doing great! Consistent tracking is the key to success. Keep it up!";
+
+    const data: OpenAIResponse = await response.json();
+    return data.choices[0]?.message?.content || "Keep up the good work! Your consistency allows us to spot helpful trends.";
+  } catch (error) {
+    if (__DEV__) console.error('Error generating insights:', error);
+    return "Your weekly pattern shows solid consistency. Keep logging to unlock more detailed trends!";
+  }
+}
+
 // Validation function to ensure the response format is correct
 function validateFoodResponse(foods: any[]): boolean {
+  // ...
   if (!Array.isArray(foods)) return false;
-  
-    return foods.every(food => 
+
+  return foods.every(food =>
     typeof food.name === 'string' &&
     typeof food.quantity === 'number' &&
     typeof food.unit === 'string' &&
@@ -291,7 +339,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood
 
     // Use vision-capable model (gpt-4o or gpt-4-vision-preview)
     const visionModel = 'gpt-4o'; // or 'gpt-4-vision-preview'
-    
+
     if (__DEV__) console.log('Sending request to OpenAI Vision API...');
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
@@ -344,7 +392,7 @@ If you cannot identify any food items, return an empty array: []
     });
 
     if (__DEV__) console.log('OpenAI response status:', response.status);
-    
+
     if (!response.ok) {
       const errorText = await response.text();
       if (__DEV__) console.error('OpenAI API error response:', errorText);
@@ -353,7 +401,7 @@ If you cannot identify any food items, return an empty array: []
 
     const data: OpenAIResponse = await response.json();
     if (__DEV__) console.log('OpenAI response received');
-    
+
     const content = data.choices[0]?.message?.content;
     if (__DEV__) console.log('Response content length:', content?.length || 0);
 
@@ -371,7 +419,7 @@ If you cannot identify any food items, return an empty array: []
       if (__DEV__) console.error('Content:', content);
       throw new Error('Failed to parse OpenAI response as JSON');
     }
-    
+
     // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
     const foodsWithIds = parsedFoods.map((food: any) => ({
       ...food,
