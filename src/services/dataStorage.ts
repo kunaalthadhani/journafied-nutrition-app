@@ -4,6 +4,7 @@ import { supabaseDataService } from './supabaseDataService';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
+import { calculateStreak } from '../utils/streakUtils';
 
 export interface MealEntry {
   id: string;
@@ -597,7 +598,7 @@ export const dataStorage = {
       await processSyncQueue(accountInfo);
       if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
 
-      const { upserts, deletions } = diffMeals(previousMeals as unknown as Record<string, MealEntry[]>, nextMeals as unknown as Record<string, MealEntry[]>);
+      const { upserts, deletions } = diffMeals(previousMeals, nextMeals);
 
       if (upserts.length > 0) {
         try {
@@ -2237,7 +2238,15 @@ export const dataStorage = {
   },
 
   getStreak: async (): Promise<number> => {
-    return 0; // Placeholder until refactor
+    try {
+      const meals = await dataStorage.loadMeals();
+      const freezeData = await dataStorage.loadStreakFreeze();
+      // Pass frozen dates to calculator if needed, or update calculateStreak to handle them
+      return calculateStreak(meals, freezeData?.usedOnDates || []);
+    } catch (e) {
+      console.error('Error calculating streak:', e);
+      return 0;
+    }
   },
 
   saveMeal: async (date: string, meal: MealEntry): Promise<void> => {
