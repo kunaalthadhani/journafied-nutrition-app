@@ -7,16 +7,15 @@ import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { ParsedFood } from '../utils/foodNutrition';
 import { useTheme } from '../constants/theme';
+import { MealEntry } from '../services/dataStorage';
 import { SavedPrompt } from '../services/dataStorage';
 
-export interface Meal {
-  id: string;
-  prompt: string;
-  foods: ParsedFood[];
-  timestamp: number;
-  imageUri?: string;
-  updatedAt?: string;
-}
+export interface Meal extends MealEntry { } // Backwards compatibility if needed, or replace usages.
+
+// Actually, let's just use MealEntry to be clean, merging with local interface if it had extra props?
+// Local Meal has: id, prompt, foods, timestamp, imageUri?, updatedAt?
+// dataStorage MealEntry has: id, prompt, foods, timestamp, imageUri?, updatedAt?, userId?, date?
+// They are compatible. Let's alias it for now to avoid refactoring entire file.
 
 interface FoodLogSectionProps {
   meals: Meal[];

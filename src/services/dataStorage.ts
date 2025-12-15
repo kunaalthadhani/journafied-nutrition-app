@@ -1,9 +1,20 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { Meal } from '../components/FoodLogSection';
 import { ExerciseEntry } from '../components/ExerciseLogSection';
 import { supabaseDataService } from './supabaseDataService';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { generateId, ensureUUID } from '../utils/uuid';
+import { ParsedFood } from '../utils/foodNutrition';
+
+export interface MealEntry {
+  id: string;
+  prompt: string;
+  foods: ParsedFood[];
+  timestamp: number;
+  imageUri?: string;
+  updatedAt?: string;
+  date?: string; // Optional if we store it by date key
+  userId?: string;
+}
 
 const STORAGE_KEYS = {
   GOALS: '@trackkal:goals',
@@ -24,6 +35,8 @@ const STORAGE_KEYS = {
   ENTRY_TASKS: '@trackkal:entryTasks',
   SYNC_QUEUE: '@trackkal:syncQueue',
   STREAK_FREEZE: '@trackkal:streakFreeze',
+  ADJUSTMENT_HISTORY: '@trackkal:adjustmentHistory',
+  ANALYTICS_FEEDBACK: '@trackkal:analyticsFeedback',
 };
 
 export interface ExtendedGoalData {
@@ -71,6 +84,30 @@ export interface Preferences {
     breakfast: { enabled: boolean; hour: number; minute: number };
     lunch: { enabled: boolean; hour: number; minute: number };
     dinner: { enabled: boolean; hour: number; minute: number };
+  };
+  dynamicAdjustmentEnabled: boolean; // Smart Dynamic Adjustments feature
+  dynamicAdjustmentThreshold: number; // 3, 4, or 5 (percentage)
+  lastAdjustmentWeight?: number; // Weight at last adjustment (baseline)
+}
+
+export interface AdjustmentRecord {
+  id: string;
+  date: string; // YYYY-MM-DD
+  previousCalories: number;
+  newCalories: number;
+  previousWeight: number; // Baseline weight
+  currentWeight: number; // Trigger weight
+  threshold: number; // The % threshold used
+  status: 'applied' | 'dismissed' | 'pending';
+  previousMacros?: {
+    protein: number;
+    carbs: number;
+    fats: number;
+  };
+  macros?: {
+    protein: number;
+    carbs: number;
+    fats: number;
   };
 }
 
@@ -145,7 +182,7 @@ const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
 };
 
 export type MealSyncPayload = {
-  meal: Meal;
+  meal: MealEntry;
   dateKey: string;
 };
 
@@ -309,7 +346,7 @@ const processSyncQueue = async (accountInfo: AccountInfo | null): Promise<void> 
   await writeSyncQueue(remaining);
 };
 
-const ensureMealMetadata = (mealsByDate: Record<string, Meal[]>) => {
+const ensureMealMetadata = (mealsByDate: Record<string, MealEntry[]>) => {
   const now = new Date().toISOString();
   Object.keys(mealsByDate).forEach((dateKey) => {
     mealsByDate[dateKey] = mealsByDate[dateKey].map((meal) => ({
@@ -320,8 +357,8 @@ const ensureMealMetadata = (mealsByDate: Record<string, Meal[]>) => {
   });
 };
 
-const flattenMeals = (mealsByDate: Record<string, Meal[]>) => {
-  const map = new Map<string, { meal: Meal; dateKey: string }>();
+const flattenMeals = (mealsByDate: Record<string, MealEntry[]>) => {
+  const map = new Map<string, { meal: MealEntry; dateKey: string }>();
   Object.entries(mealsByDate).forEach(([dateKey, meals]) => {
     meals.forEach((meal) => {
       map.set(meal.id, { meal, dateKey });
@@ -331,8 +368,8 @@ const flattenMeals = (mealsByDate: Record<string, Meal[]>) => {
 };
 
 const diffMeals = (
-  previous: Record<string, Meal[]>,
-  next: Record<string, Meal[]>
+  previous: Record<string, MealEntry[]>,
+  next: Record<string, MealEntry[]>
 ): { upserts: MealSyncPayload[]; deletions: string[] } => {
   const prevMap = flattenMeals(previous);
   const nextMap = flattenMeals(next);
@@ -366,12 +403,12 @@ const diffMeals = (
 };
 
 const mergeMealsCache = (
-  remote: Record<string, Meal[]>,
-  local: Record<string, Meal[]>
-): Record<string, Meal[]> => {
+  remote: Record<string, MealEntry[]>,
+  local: Record<string, MealEntry[]>
+): Record<string, MealEntry[]> => {
   ensureMealMetadata(remote);
   ensureMealMetadata(local);
-  const merged: Record<string, Meal[]> = JSON.parse(JSON.stringify(local));
+  const merged: Record<string, MealEntry[]> = JSON.parse(JSON.stringify(local));
   const mergedFlat = flattenMeals(merged);
   const remoteFlat = flattenMeals(remote);
 
@@ -546,11 +583,11 @@ export const dataStorage = {
   },
 
   // Save all meals by date
-  async saveMeals(mealsByDate: Record<string, Meal[]>): Promise<void> {
+  async saveMeals(mealsByDate: Record<string, MealEntry[]>): Promise<void> {
     try {
       const prevSerialized = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      const previousMeals: Record<string, Meal[]> = prevSerialized ? JSON.parse(prevSerialized) : {};
-      const nextMeals: Record<string, Meal[]> = JSON.parse(JSON.stringify(mealsByDate));
+      const previousMeals: Record<string, MealEntry[]> = prevSerialized ? JSON.parse(prevSerialized) : {};
+      const nextMeals: Record<string, MealEntry[]> = JSON.parse(JSON.stringify(mealsByDate));
 
       ensureMealMetadata(previousMeals);
       ensureMealMetadata(nextMeals);
@@ -560,7 +597,7 @@ export const dataStorage = {
       await processSyncQueue(accountInfo);
       if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
 
-      const { upserts, deletions } = diffMeals(previousMeals, nextMeals);
+      const { upserts, deletions } = diffMeals(previousMeals as unknown as Record<string, MealEntry[]>, nextMeals as unknown as Record<string, MealEntry[]>);
 
       if (upserts.length > 0) {
         try {
@@ -589,10 +626,10 @@ export const dataStorage = {
   },
 
   // Load meals
-  async loadMeals(): Promise<Record<string, Meal[]>> {
+  async loadMeals(): Promise<Record<string, MealEntry[]>> {
     try {
       const localData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      const localMeals: Record<string, Meal[]> = localData ? JSON.parse(localData) : {};
+      const localMeals: Record<string, MealEntry[]> = localData ? JSON.parse(localData) : {};
 
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
@@ -709,6 +746,14 @@ export const dataStorage = {
               enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } })
             )
           );
+        }
+      }
+      if (normalized.length <= 1) {
+        // User presumably reset their data. Reset smart adjustment baseline.
+        const prefs = await this.loadPreferences();
+        if (prefs && prefs.lastAdjustmentWeight) {
+          await this.savePreferences({ ...prefs, lastAdjustmentWeight: undefined });
+          console.log('Reset smart adjustment baseline due to weight history clear.');
         }
       }
     } catch (error) {
@@ -1045,7 +1090,19 @@ export const dataStorage = {
         }
       }
 
-      return localPrefs;
+      const defaults: Preferences = {
+        weightUnit: 'kg',
+        notificationsEnabled: true,
+        mealReminders: {
+          breakfast: { enabled: false, hour: 8, minute: 0 },
+          lunch: { enabled: false, hour: 13, minute: 0 },
+          dinner: { enabled: false, hour: 19, minute: 0 },
+        },
+        dynamicAdjustmentEnabled: true, // Enable by default for visibility
+        dynamicAdjustmentThreshold: 2, // Lower threshold to 2% for easier testing
+      };
+
+      return localPrefs ? { ...defaults, ...localPrefs } : defaults;
     } catch (error) {
       console.error('Error loading preferences:', error);
       return null;
@@ -1975,7 +2032,220 @@ export const dataStorage = {
       console.error('Error pushing cached data to Supabase:', error);
     }
   },
-};
 
+  saveStreakFreeze: async (data: StreakFreezeData): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.STREAK_FREEZE, JSON.stringify(data));
+    } catch (e) {
+      console.error('Failed to save streak freeze', e);
+    }
+  },
+
+  loadStreakFreeze: async (): Promise<StreakFreezeData | null> => {
+    try {
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.STREAK_FREEZE);
+      if (json) return JSON.parse(json);
+    } catch (e) {
+      console.error('Failed to load streak freeze', e);
+    }
+    return null;
+  },
+
+  saveAdjustmentHistory: async (history: AdjustmentRecord[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.ADJUSTMENT_HISTORY, JSON.stringify(history));
+    } catch (e) {
+      console.error('Failed to save adjustment history', e);
+    }
+  },
+
+  loadAdjustmentHistory: async (): Promise<AdjustmentRecord[]> => {
+    try {
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.ADJUSTMENT_HISTORY);
+      if (json) {
+        return JSON.parse(json);
+      }
+    } catch (e) {
+      console.error('Failed to load adjustment history', e);
+    }
+    return [];
+  },
+
+  checkAndGenerateAdjustment: async (): Promise<AdjustmentRecord | null> => {
+    try {
+      const prefs = await dataStorage.loadPreferences();
+      if (!prefs || !prefs.dynamicAdjustmentEnabled) return null;
+
+      const goals = await dataStorage.loadGoals();
+      if (!goals) return null;
+
+      const weightEntries = await dataStorage.loadWeightEntries();
+      if (!weightEntries || weightEntries.length === 0) return null;
+
+      // Sort by date desc
+      // Sort by date desc - ensure reliable parsing
+      const sortedWeights = [...weightEntries].sort((a, b) => {
+        const dateA = a.date instanceof Date ? a.date.getTime() : new Date(a.date).getTime();
+        const dateB = b.date instanceof Date ? b.date.getTime() : new Date(b.date).getTime();
+        return dateB - dateA;
+      });
+
+      const currentEntry = sortedWeights[0];
+      const currentWeight = currentEntry.weight;
+
+      // Determine baseline
+      let baselineWeight = prefs.lastAdjustmentWeight;
+
+      // If we don't have a baseline, we need at least 2 entries to compare start vs current
+      if (!baselineWeight) {
+        if (sortedWeights.length < 2) return null;
+        // Use the OLDEST weight as baseline
+        const oldestEntry = sortedWeights[sortedWeights.length - 1];
+        baselineWeight = oldestEntry.weight;
+      }
+
+      // Small sanity check: if current IS the baseline (e.g. only 1 entry and it was set as baseline), skip
+      if (baselineWeight === currentWeight) return null;
+
+      console.log('Checking smart adjustment... Enabled:', prefs.dynamicAdjustmentEnabled, 'Baseline:', baselineWeight, 'Current:', currentWeight);
+
+      // Calculate change
+      const percentChange = (currentWeight - baselineWeight) / baselineWeight;
+      const thresholdDecimal = prefs.dynamicAdjustmentThreshold / 100;
+
+      console.log('Change %:', percentChange, 'Threshold:', thresholdDecimal);
+
+      if (Math.abs(percentChange) >= thresholdDecimal) {
+        // Prevent duplicate pending for same day/weight?
+        // For now, let it generate.
+
+        // Logic change: Adjust based on user's selected pace
+        // Mild (0.25) -> 100 kcal
+        // Normal (0.5) -> 200 kcal
+        // Fast (1.0) -> 300 kcal
+        // Default to Normal (200) if unknown
+
+        let adjustmentAmount = 200;
+        if (goals.activityRate) {
+          if (goals.activityRate <= 0.25) adjustmentAmount = 100;
+          else if (goals.activityRate <= 0.5) adjustmentAmount = 200;
+          else adjustmentAmount = 300;
+        }
+
+        let newCalories = goals.calories;
+        if (goals.goal === 'gain') {
+          newCalories += adjustmentAmount;
+        } else {
+          // Lose or Maintain (usually lose)
+          newCalories -= adjustmentAmount;
+        }
+
+        if (newCalories < 1200) newCalories = 1200; // Safety floor
+
+        // Helper for macros
+        const pRate = goals.proteinPercentage / 100;
+        const cRate = goals.carbsPercentage / 100;
+        const fRate = goals.fatPercentage / 100;
+
+        return {
+          id: generateId(),
+          date: new Date().toISOString().split('T')[0],
+          previousCalories: goals.calories,
+          newCalories,
+          previousWeight: baselineWeight,
+          currentWeight,
+          threshold: prefs.dynamicAdjustmentThreshold,
+          status: 'pending',
+          previousMacros: {
+            protein: goals.proteinGrams,
+            carbs: goals.carbsGrams,
+            fats: goals.fatGrams,
+          },
+          macros: {
+            protein: Math.round((newCalories * pRate) / 4),
+            carbs: Math.round((newCalories * cRate) / 4),
+            fats: Math.round((newCalories * fRate) / 9),
+          }
+        };
+      }
+    } catch (e) {
+      console.error('Error generating adjustment', e);
+    }
+    return null;
+  },
+
+  applyAdjustment: async (record: AdjustmentRecord): Promise<void> => {
+    try {
+      const goals = await dataStorage.loadGoals();
+      if (!goals) return;
+
+      // 1. Update Goals
+      const newGoals: ExtendedGoalData = {
+        ...goals,
+        calories: record.newCalories,
+        proteinGrams: record.macros?.protein || goals.proteinGrams,
+        carbsGrams: record.macros?.carbs || goals.carbsGrams,
+        fatGrams: record.macros?.fats || goals.fatGrams,
+      };
+      await dataStorage.saveGoals(newGoals);
+
+      // 2. Update Preferences (baseline)
+      const prefs = await dataStorage.loadPreferences();
+      if (prefs) {
+        await dataStorage.savePreferences({
+          ...prefs,
+          lastAdjustmentWeight: record.currentWeight
+        });
+      }
+
+      // 3. Save to History
+      const history = await dataStorage.loadAdjustmentHistory();
+      const newHistory = [
+        { ...record, status: 'applied' as const },
+        ...history
+      ];
+      await dataStorage.saveAdjustmentHistory(newHistory);
+
+    } catch (e) {
+      console.error('Failed to apply adjustment', e);
+    }
+  },
+
+  dismissAdjustment: async (record: AdjustmentRecord): Promise<void> => {
+    try {
+      const history = await dataStorage.loadAdjustmentHistory();
+      const newHistory = [
+        { ...record, status: 'dismissed' as const },
+        ...history
+      ];
+      await dataStorage.saveAdjustmentHistory(newHistory);
+      // Update baseline to prevent immediate re-prompt
+      const prefs = await dataStorage.loadPreferences();
+      if (prefs) {
+        await dataStorage.savePreferences({
+          ...prefs,
+          lastAdjustmentWeight: record.currentWeight
+        });
+      }
+    } catch (e) {
+      console.error('Failed to dismiss adjustment', e);
+    }
+  },
+  getAccountInfo: async (): Promise<AccountInfo | null> => {
+    const json = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
+    return json ? JSON.parse(json) : null;
+  },
+
+  getStreak: async (): Promise<number> => {
+    return 0; // Placeholder until refactor
+  },
+
+  saveMeal: async (date: string, meal: MealEntry): Promise<void> => {
+    const meals = await dataStorage.loadMeals();
+    const dayMeals = meals[date] || [];
+    meals[date] = [...dayMeals, meal];
+    await dataStorage.saveMeals(meals);
+  },
+};
 
 

@@ -39,6 +39,7 @@ export interface CalorieCalculationResult {
 interface CalorieCalculatorScreenProps {
   onBack: () => void;
   onCalculated: (result: CalorieCalculationResult) => void;
+  initialData?: CalorieCalculationResult | any; // Accept initial data for recalculations
 }
 
 type Goal = 'lose' | 'maintain' | 'gain';
@@ -85,7 +86,8 @@ const LoadingSpinner = ({ color }: { color: string }) => {
 
 export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
   onBack,
-  onCalculated
+  onCalculated,
+  initialData
 }) => {
   const theme = useTheme();
   const { weightUnit: preferredWeightUnit } = usePreferences();
@@ -98,8 +100,18 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     // Fixed Sequence: Questions 1-9 -> Facts List -> Question 10 (Activity) -> Result (handled implicitly)
     const newSequence: StepItem[] = [];
 
-    // Add Questions 1-9
+    // If initialData is present (recalculate), we might skip steps 1 (Name) and 2 (Tracking Goal)
+    // But we need to check if we can skip them. 
+    // User requested flow: Age, Height, Weight, Target Weight, Rate, Activity.
+    // This matches steps 4, 6, 7, 8, 9, 10.
+    // Step 3 (Sex) is needed for BMR. Step 5 (Goal) is needed for Rate logic.
+    // So if recalculating, let's start at Step 3 (Sex)? 
+    // And pre-fill everything.
+
+    // Always build full sequence, but jump index?
     for (let i = 1; i <= 9; i++) {
+      // If recalculating, strictly skip 1 and 2?
+      if (initialData && (i === 1 || i === 2)) continue;
       newSequence.push({ type: 'question', questionId: i });
     }
 
@@ -113,38 +125,42 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     newSequence.push({ type: 'final_fact' });
 
     setStepSequence(newSequence);
-  }, []);
-
-
+    setCurrentStepIndex(0); // Start at beginning of NEW sequence (which starts at Q3 if skipped)
+  }, [initialData]);
 
   // Name question state
-  const [name, setName] = useState('');
+  const [name, setName] = useState(initialData?.name || '');
 
   // Tracking goal question state
-  const [trackingGoal, setTrackingGoal] = useState<string | null>(null);
+  const [trackingGoal, setTrackingGoal] = useState<string | null>(initialData?.trackingGoal || null);
   const [trackingGoalOther, setTrackingGoalOther] = useState('');
 
-  const [goal, setGoal] = useState<Goal | null>(null);
+  const [goal, setGoal] = useState<Goal | null>(initialData?.goal || null);
 
   // Gender question state
-  const [gender, setGender] = useState<Gender | null>(null);
+  const [gender, setGender] = useState<Gender | null>(initialData?.gender || null);
 
   // Height question state
   const [heightUnit, setHeightUnit] = useState<HeightUnit>('cm');
-  const [heightCm, setHeightCm] = useState('');
-  const [heightFeetInput, setHeightFeetInput] = useState('');
-  const [heightInchesInput, setHeightInchesInput] = useState('');
+  const [heightCm, setHeightCm] = useState(initialData?.heightCm ? String(initialData.heightCm) : '');
+  const [heightFeetInput, setHeightFeetInput] = useState(initialData?.heightFeet ? String(initialData.heightFeet) : '');
+  const [heightInchesInput, setHeightInchesInput] = useState(initialData?.heightInches ? String(initialData.heightInches) : '');
+
+  useEffect(() => {
+    // If we have feet/inches but no cm, or vice versa, logic handles it in calculation, but setup UI state:
+    if (initialData?.heightFeet) setHeightUnit('ft');
+  }, [initialData]);
 
   // Weight question state - use preference as default
   const [weightUnit, setWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
-  const [weight, setWeight] = useState('');
+  const [weight, setWeight] = useState(initialData?.currentWeightKg ? String(initialData.currentWeightKg) : '');
 
   // Age question state
-  const [age, setAge] = useState('');
+  const [age, setAge] = useState(initialData?.age ? String(initialData.age) : '');
 
-  // Target weight question state - use preference as default
+  // Target weight question state
   const [targetWeightUnit, setTargetWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
-  const [targetWeight, setTargetWeight] = useState('');
+  const [targetWeight, setTargetWeight] = useState(initialData?.targetWeightKg ? String(initialData.targetWeightKg) : '');
 
   // Update weight units when preference changes
   useEffect(() => {

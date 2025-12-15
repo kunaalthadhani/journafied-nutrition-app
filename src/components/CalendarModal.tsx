@@ -17,6 +17,7 @@ import { Typography } from '../constants/typography';
 import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth } from 'date-fns';
 import { Meal } from './FoodLogSection';
 import { calculateTotalNutrition } from '../utils/foodNutrition';
+import { AdjustmentRecord } from '../services/dataStorage';
 
 interface CalendarModalProps {
   visible: boolean;
@@ -25,6 +26,7 @@ interface CalendarModalProps {
   onDateSelect: (date: Date) => void;
   mealsByDate: Record<string, Meal[]>;
   dailyCalorieTarget: number;
+  adjustments?: AdjustmentRecord[];
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -36,6 +38,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   onDateSelect,
   mealsByDate,
   dailyCalorieTarget,
+  adjustments,
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -199,6 +202,13 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                     </Text>
                     {/* Minimal Bar Indicator */}
                     <View style={[styles.barIndicator, { backgroundColor: indicatorColor }]} />
+
+                    {/* Adjustment Indicator */}
+                    {adjustments?.some(a => a.status === 'applied' && isSameDay(new Date(a.date), dayData.date)) && (
+                      <View style={{ position: 'absolute', top: 2, right: 2 }}>
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary }} />
+                      </View>
+                    )}
                   </TouchableOpacity>
                 );
               })}

@@ -103,7 +103,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     (async () => {
       const savedEntries = await dataStorage.loadWeightEntries();
       if (savedEntries.length > 0) {
-        setWeightEntries(savedEntries);
+        // Ensure sorted ASC (oldest first)
+        const sorted = [...savedEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        setWeightEntries(sorted);
       } else if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
         setWeightEntries([{ date: new Date(), weight: initialCurrentWeightKg }]);
       }
@@ -131,37 +133,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     })();
   }, []);
 
-  useEffect(() => {
-    if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
-      setWeightEntries((prevEntries) => {
-        if (prevEntries.length === 0) {
-          return [{
-            id: generateId(),
-            date: new Date(),
-            weight: initialCurrentWeightKg,
-            updatedAt: new Date().toISOString(),
-          }];
-        }
-
-        const alreadyHasInitial = prevEntries.some(entry =>
-          Math.abs(entry.weight - initialCurrentWeightKg) < 0.01
-        );
-        if (alreadyHasInitial) {
-          return prevEntries;
-        }
-
-        return [
-          ...prevEntries,
-          {
-            id: generateId(),
-            date: new Date(),
-            weight: initialCurrentWeightKg,
-            updatedAt: new Date().toISOString(),
-          },
-        ];
-      });
-    }
-  }, [initialCurrentWeightKg]);
+  // Removed automatic initial weight entry duplication logic
+  // to prevent ghost entries on re-open.
 
   // Persist weight entries whenever they change
   useEffect(() => {
@@ -229,7 +202,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   // Screen-level slide-up for smooth navigation
   const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
-  const handleClose = () => {
+  const handleClose = async () => {
+    // Explicitly save before closing to ensure HomeScreen sees latest data
+    await dataStorage.saveWeightEntries(weightEntries);
+
     Animated.timing(slideAnim, {
       toValue: Dimensions.get('window').height,
       duration: 300,
@@ -469,6 +445,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     setLogDate(new Date());
     setShowLogModal(false);
   };
+
+  useEffect(() => {
+    if (showLogModal) {
+      setLogDate(new Date());
+    }
+  }, [showLogModal]);
 
   const handleStartEditEntry = (index: number) => {
     const entry = historyEntries[index];

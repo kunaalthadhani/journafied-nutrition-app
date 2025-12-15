@@ -1,9 +1,9 @@
 import { supabase, isSupabaseConfigured } from './supabaseClient';
-import type { 
-  AccountInfo, 
-  MealSyncPayload, 
-  WeightEntry, 
-  WeightSyncPayload, 
+import type {
+  AccountInfo,
+  MealSyncPayload,
+  WeightEntry,
+  WeightSyncPayload,
   ExtendedGoalData,
   Preferences,
   PushBroadcastRecord,
@@ -11,9 +11,10 @@ import type {
   EntryTasksStatus,
   ReferralCode,
   ReferralRedemption,
-  ReferralReward
+  ReferralReward,
+  MealEntry
 } from './dataStorage';
-import { Meal } from '../components/FoodLogSection';
+
 import { ExerciseEntry } from '../components/ExerciseLogSection';
 import { AppUser, SupabaseFoodLog, SupabaseWeightEntry } from '../types';
 
@@ -27,7 +28,7 @@ const mapAppUser = (record: any): AppUser => ({
   updatedAt: record.updated_at,
 });
 
-const sumNutrient = (foods: Meal['foods'], key: 'calories' | 'protein' | 'carbs' | 'fat') =>
+const sumNutrient = (foods: MealEntry['foods'], key: 'calories' | 'protein' | 'carbs' | 'fat') =>
   foods.reduce((total, food) => total + (food[key] || 0), 0);
 
 const formatDate = (timestamp: number) => {
@@ -159,26 +160,26 @@ async function getUserByEmail(email: string): Promise<AppUser | null> {
   return data ? mapAppUser(data) : null;
 }
 
-function mapFoodLogRowToMeals(records: SupabaseFoodLog[]): Record<string, Meal[]> {
-  const grouped: Record<string, Meal[]> = {};
+function mapFoodLogRowToMeals(records: SupabaseFoodLog[]): Record<string, MealEntry[]> {
+  const grouped: Record<string, MealEntry[]> = {};
 
   records.forEach((record) => {
-    const payload = (record.parsed_payload as Meal | null) ?? null;
-    const meal: Meal = payload
+    const payload = (record.parsed_payload as MealEntry | null) ?? null;
+    const meal: MealEntry = payload
       ? {
-          ...payload,
-          foods: Array.isArray(payload.foods) ? payload.foods : [],
-          timestamp:
-            typeof payload.timestamp === 'number'
-              ? payload.timestamp
-              : new Date(record.logged_date).getTime(),
-        }
+        ...payload,
+        foods: Array.isArray(payload.foods) ? payload.foods : [],
+        timestamp:
+          typeof payload.timestamp === 'number'
+            ? payload.timestamp
+            : new Date(record.logged_date).getTime(),
+      }
       : {
-          id: record.id || `meal-${record.logged_date}`,
-          prompt: record.prompt,
-          foods: [],
-          timestamp: new Date(record.logged_date).getTime(),
-        };
+        id: record.id || `meal-${record.logged_date}`,
+        prompt: record.prompt,
+        foods: [],
+        timestamp: new Date(record.logged_date).getTime(),
+      };
     meal.id = meal.id || record.id || `meal-${record.logged_date}`;
     meal.updatedAt = payload?.updatedAt || record.updated_at || new Date().toISOString();
 
@@ -192,7 +193,7 @@ function mapFoodLogRowToMeals(records: SupabaseFoodLog[]): Record<string, Meal[]
   return grouped;
 }
 
-function mealPayloadToRow(userId: string, payload: { meal: Meal; dateKey: string }): SupabaseFoodLog {
+function mealPayloadToRow(userId: string, payload: { meal: MealEntry; dateKey: string }): SupabaseFoodLog {
   return {
     id: payload.meal.id,
     user_id: userId,
@@ -271,7 +272,7 @@ export const supabaseDataService = {
     }
   },
 
-  async fetchMeals(accountInfo: AccountInfo | null): Promise<Record<string, Meal[]>> {
+  async fetchMeals(accountInfo: AccountInfo | null): Promise<Record<string, MealEntry[]>> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return {};
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};

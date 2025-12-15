@@ -39,7 +39,8 @@ import { IntegrationsScreen } from './IntegrationsScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
-import { FoodLogSection, Meal } from '../components/FoodLogSection';
+import { FoodLogSection } from '../components/FoodLogSection';
+import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData, AdjustmentRecord } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
@@ -51,7 +52,7 @@ import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
 import { useTheme } from '../constants/theme';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData } from '../services/dataStorage';
+
 import { analyticsService } from '../services/analyticsService';
 import { notificationService } from '../services/notificationService';
 import { referralService } from '../services/referralService';
@@ -60,6 +61,8 @@ import Constants from 'expo-constants';
 import { Platform, AppState } from 'react-native';
 import { generateId } from '../utils/uuid';
 import { calculateStreak } from '../utils/streakUtils';
+import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
+import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -135,6 +138,11 @@ export const HomeScreen: React.FC = () => {
   const handleOpenAdvancedAnalytics = () => setShowAdvancedAnalytics(true);
   const handleAdvancedAnalyticsBack = () => setShowAdvancedAnalytics(false);
 
+  // Smart Adjustment
+  const [adjustmentAvailable, setAdjustmentAvailable] = useState<AdjustmentRecord | null>(null);
+  const [showSmartAdjustmentModal, setShowSmartAdjustmentModal] = useState(false);
+  const [adjustmentHistory, setAdjustmentHistory] = useState<AdjustmentRecord[]>([]);
+
   // Helper to get date key
   const getDateKey = (date: Date) => format(date, 'yyyy-MM-dd');
 
@@ -201,6 +209,20 @@ export const HomeScreen: React.FC = () => {
 
     manageStreakNotification();
   }, [mealsByDate, currentStreak]);
+
+  // Check for Smart Adjustments when Weight Tracker closes
+  useEffect(() => {
+    if (!showWeightTracker) {
+      const checkAdjustments = async () => {
+        const available = await dataStorage.checkAndGenerateAdjustment();
+        if (available && available.status === 'pending') {
+          setAdjustmentAvailable(available);
+          // Also refresh history to update baseline if needed? No, baseline changes on Apply/Dismiss.
+        }
+      };
+      checkAdjustments();
+    }
+  }, [showWeightTracker]);
 
   // Calories card data (Food, Exercise, Remaining)
   const effectiveDailyCalories = dailyCalories && dailyCalories > 0 ? dailyCalories : 1500;
@@ -589,6 +611,16 @@ export const HomeScreen: React.FC = () => {
       // Need to pass latest meals (savedMeals) and plan
       const updatedFreezeData = await checkMissedDaysAndFreeze(savedMeals, freezeData, plan);
       setStreakFreeze(updatedFreezeData);
+
+      // Check for Smart Adjustments
+      const history = await dataStorage.loadAdjustmentHistory();
+      setAdjustmentHistory(history);
+
+      const availableAdjustment = await dataStorage.checkAndGenerateAdjustment();
+
+      if (availableAdjustment && availableAdjustment.status === 'pending') {
+        setAdjustmentAvailable(availableAdjustment);
+      }
 
 
       // Validate entry count matches actual log count (always run)
@@ -1785,6 +1817,27 @@ export const HomeScreen: React.FC = () => {
   }
 
 
+  // Smart Adjustment Handlers
+  // Smart Adjustment Handlers
+  const handleApplyAdjustment = async (modifiedRecord?: any) => {
+    const recordToApply = modifiedRecord || adjustmentAvailable;
+    if (!recordToApply) return;
+
+    await dataStorage.applyAdjustment(recordToApply);
+
+    setAdjustmentAvailable(null);
+    setShowSmartAdjustmentModal(false);
+    await loadAllData(); // Refresh goals and history
+    Alert.alert('Success', 'Your plan has been updated! 🚀');
+  };
+
+  const handleDismissAdjustment = async () => {
+    if (!adjustmentAvailable) return;
+    await dataStorage.dismissAdjustment(adjustmentAvailable);
+    setAdjustmentAvailable(null);
+    setShowSmartAdjustmentModal(false);
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
       <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
@@ -1798,6 +1851,12 @@ export const HomeScreen: React.FC = () => {
           onNutritionAnalysisPress={handleNutritionAnalysis}
           streak={currentStreak}
           frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday} // Pass frozen state to TopBar
+        />
+
+        <SmartAdjustmentBanner
+          visible={!!adjustmentAvailable}
+          onPress={() => setShowSmartAdjustmentModal(true)}
+          onClose={handleDismissAdjustment}
         />
 
         {/* Just Frozen Alert / Greeting Replacement */}
@@ -2053,6 +2112,14 @@ export const HomeScreen: React.FC = () => {
           onDateSelect={handleDateSelect}
           mealsByDate={mealsByDate}
           dailyCalorieTarget={dailyCalories}
+          adjustments={adjustmentHistory}
+        />
+
+        <SmartAdjustmentModal
+          visible={showSmartAdjustmentModal}
+          onClose={() => setShowSmartAdjustmentModal(false)}
+          onApply={handleApplyAdjustment}
+          adjustment={adjustmentAvailable}
         />
       </View>
     </SafeAreaView>

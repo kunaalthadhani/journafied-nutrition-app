@@ -10,6 +10,8 @@ import {
   ActivityIndicator,
   Linking,
   Platform,
+  Switch,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -109,31 +111,26 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   // -- Effects --
 
-  // 1. Initial Load & Auth Listener
+
+
+  // -- Dynamic Adjustments State --
+  const [dynamicEnabled, setDynamicEnabled] = useState(false);
+  const [dynamicThreshold, setDynamicThreshold] = useState<number>(5);
+  const [showDynamicHelp, setShowDynamicHelp] = useState(false);
+
   useEffect(() => {
     let isMounted = true;
 
     const init = async () => {
-      if (!initialAccountInfo && initialAccountInfo !== null) {
-        setIsLoading(true);
-      }
-      try {
-        // Check current session
-        const { data } = await authService.getSession();
-        if (isMounted) {
-          setAuthSession(data.session);
-          if (data.session?.user?.email) {
-            setEmailInput(data.session.user.email);
-          }
+      await loadLocalData();
+      const { data } = await authService.getSession();
+      if (isMounted && data.session) {
+        setAuthSession(data.session);
+        if (data.session.user?.email) {
+          setEmailInput(data.session.user.email);
         }
-
-        // Load local data regardless of auth state (guest mode support)
-        await loadLocalData();
-      } catch (e) {
-        console.warn('Init failed:', e);
-      } finally {
-        if (isMounted) setIsLoading(false);
       }
+      setIsLoading(false);
     };
 
     init();
@@ -144,7 +141,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       if (session?.user?.email) {
         setEmailInput(session.user.email);
         await syncAccountInfoFromSession(session);
-        await loadLocalData(); // Refresh data on auth change
+        await loadLocalData();
       }
     });
 
@@ -159,13 +156,19 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const loadLocalData = async () => {
     try {
       const info = await dataStorage.loadAccountInfo();
-      const [count, planValue, goalsData, weightEntries, streakData] = await Promise.all([
+      const [count, planValue, goalsData, weightEntries, streakData, prefs] = await Promise.all([
         dataStorage.loadEntryCount(),
         dataStorage.loadUserPlan(),
         dataStorage.loadGoals(),
         dataStorage.loadWeightEntries(),
         dataStorage.loadStreakFreeze(),
+        dataStorage.loadPreferences(),
       ]);
+
+      if (prefs) {
+        setDynamicEnabled(!!prefs.dynamicAdjustmentEnabled);
+        setDynamicThreshold(prefs.dynamicAdjustmentThreshold || 5);
+      }
 
       setAccountInfo(info);
       if (info?.name) setName(info.name);
@@ -226,6 +229,50 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     await dataStorage.saveAccountInfo(merged);
     setAccountInfo(merged);
   };
+
+  const toggleDynamicAdjustment = async (newValue: boolean) => {
+    if (plan !== 'premium') return;
+    setDynamicEnabled(newValue);
+
+    const currentPrefs = await dataStorage.loadPreferences();
+    const updatedPrefs = {
+      ...(currentPrefs || {
+        weightUnit: 'kg',
+        notificationsEnabled: true,
+        mealReminders: {
+          breakfast: { enabled: false, hour: 8, minute: 0 },
+          lunch: { enabled: false, hour: 13, minute: 0 },
+          dinner: { enabled: false, hour: 19, minute: 0 }
+        }
+      }),
+      dynamicAdjustmentEnabled: newValue,
+      dynamicAdjustmentThreshold: dynamicThreshold,
+    };
+    // @ts-ignore
+    await dataStorage.savePreferences(updatedPrefs);
+  };
+
+  const updateDynamicThreshold = async (val: number) => {
+    if (plan !== 'premium') return;
+    setDynamicThreshold(val);
+    const currentPrefs = await dataStorage.loadPreferences();
+    const updatedPrefs = {
+      ...(currentPrefs || {
+        weightUnit: 'kg',
+        notificationsEnabled: true,
+        mealReminders: {
+          breakfast: { enabled: false, hour: 8, minute: 0 },
+          lunch: { enabled: false, hour: 13, minute: 0 },
+          dinner: { enabled: false, hour: 19, minute: 0 }
+        }
+      }),
+      dynamicAdjustmentEnabled: dynamicEnabled,
+      dynamicAdjustmentThreshold: val,
+    };
+    // @ts-ignore
+    await dataStorage.savePreferences(updatedPrefs);
+  };
+
 
   // -- Actions --
 
@@ -508,7 +555,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       </View>
 
       {/* Stats Card */}
+
+      {/* Account Stats */}
       <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+
         <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Account Stats</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
@@ -565,6 +615,70 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         </TouchableOpacity>
       )}
 
+      {/* Smart Dynamic Adjustments (Placement: After Advanced Analytics) */}
+      <View style={[styles.summaryCard, { marginTop: 16 }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={[styles.cardTitle, { color: theme.colors.textPrimary, marginBottom: 0 }]}>Smart Dynamic Adjustments</Text>
+            {plan === 'premium' ? (
+              <View style={{ backgroundColor: theme.colors.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
+                <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>PRO</Text>
+              </View>
+            ) : (
+              <Feather name="lock" size={14} color={theme.colors.textTertiary} />
+            )}
+          </View>
+          <Switch
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={'white'}
+            ios_backgroundColor={theme.colors.border}
+            onValueChange={toggleDynamicAdjustment}
+            value={dynamicEnabled}
+            disabled={plan !== 'premium'}
+          />
+        </View>
+
+        <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 12 }}>
+          Automatically adapts your nutrition plan as your body changes to prevent plateaus.
+        </Text>
+
+        {dynamicEnabled && (
+          <View style={{ marginBottom: 12 }}>
+            <Text style={{ color: theme.colors.textPrimary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Adjustment Threshold:</Text>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {[3, 4, 5].map((val) => (
+                <TouchableOpacity
+                  key={val}
+                  onPress={() => updateDynamicThreshold(val)}
+                  style={{
+                    flex: 1,
+                    paddingVertical: 6,
+                    alignItems: 'center',
+                    borderRadius: 6,
+                    backgroundColor: dynamicThreshold === val ? 'rgba(59, 130, 246, 0.1)' : theme.colors.background,
+                    borderWidth: 1,
+                    borderColor: dynamicThreshold === val ? theme.colors.primary : theme.colors.border,
+                  }}
+                >
+                  <Text style={{
+                    fontSize: 12,
+                    fontWeight: '600',
+                    color: dynamicThreshold === val ? theme.colors.primary : theme.colors.textSecondary
+                  }}>{val}%</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: 11, marginTop: 4 }}>
+              We'll suggest a Plan Update when your weight changes by {dynamicThreshold}%.
+            </Text>
+          </View>
+        )}
+
+        <TouchableOpacity onPress={() => setShowDynamicHelp(true)} style={{ alignSelf: 'flex-start' }}>
+          <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '500' }}>How it works</Text>
+        </TouchableOpacity>
+      </View>
+
       {/* Actions */}
       <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>
         <Feather name="log-out" size={18} color={theme.colors.error} />
@@ -597,10 +711,49 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       ) : (
         (authSession || accountInfo?.email) ? renderLoggedIn() : renderNotLoggedIn()
       )}
+      <Modal
+        visible={showDynamicHelp}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDynamicHelp(false)}
+      >
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+          <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 400 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+              <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.colors.textPrimary }}>Why Dynamic Adjustments?</Text>
+              <TouchableOpacity onPress={() => setShowDynamicHelp(false)}>
+                <Feather name="x" size={24} color={theme.colors.textTertiary} />
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: 16, borderRadius: 12, marginBottom: 16 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.primary, textAlign: 'center' }}>
+                📉 Smaller Body = Lower Energy Needs
+              </Text>
+            </View>
+
+            <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+              When you lose weight, your body requires fewer calories to maintain itself.
+            </Text>
+            <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 20 }}>
+              If you keep eating the same amount, your weight loss will eventually stop (a "plateau"). To prevent this, we automatically suggest small updates to your plan when you make significant progress.
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => setShowDynamicHelp(false)}
+              style={{ backgroundColor: theme.colors.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
+            >
+              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
+// End of AccountScreen
 
+// -- Styles --
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
@@ -642,6 +795,10 @@ const styles = StyleSheet.create({
     marginBottom: 6,
   },
   labelBold: {
+    fontWeight: Typography.fontWeight.semiBold,
+  },
+  cardTitle: {
+    fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
   input: {

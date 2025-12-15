@@ -180,6 +180,20 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       <CalorieCalculatorScreen
         onBack={handleCalculatorBack}
         onCalculated={handleCalculatedCalories}
+        initialData={{
+          name,
+          trackingGoal,
+          currentWeightKg,
+          targetWeightKg,
+          age,
+          gender,
+          heightCm,
+          heightFeet,
+          heightInches,
+          goal,
+          activityRate,
+          activityLevel
+        }}
       />
     );
   }
