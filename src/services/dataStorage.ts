@@ -38,7 +38,16 @@ const STORAGE_KEYS = {
   STREAK_FREEZE: '@trackkal:streakFreeze',
   ADJUSTMENT_HISTORY: '@trackkal:adjustmentHistory',
   ANALYTICS_FEEDBACK: '@trackkal:analyticsFeedback',
+  SUMMARIES: '@trackkal:summaries',
+  // Helper to generate daily keys
+  dailyLog: (date: string) => `@trackkal:log:${date}`,
+  USER_METRICS_SNAPSHOT: '@trackkal:userMetricsSnapshot',
+  INSIGHTS: '@trackkal:insights',
+  COACH_DISMISS_DATE: '@trackkal:coachDismissDate',
 };
+
+// ... (rest of file)
+
 
 export interface ExtendedGoalData {
   calories: number;
@@ -170,6 +179,66 @@ export interface StreakFreezeData {
   freezesAvailable: number; // 0-2
   lastResetDate: string; // ISO date string of start of current month
   usedOnDates: string[]; // List of YYYY-MM-DD dates where freeze preserved a streak
+}
+
+export interface DailySummary {
+  date: string; // YYYY-MM-DD
+  totalCalories: number;
+  totalProtein: number;
+  totalCarbs: number;
+  totalFat: number;
+  entryCount: number;
+  updatedAt: string;
+}
+
+export interface UserMetricsSnapshot {
+  generatedAt: string;
+  userGoals: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+    goalType: string;
+  };
+  averages7Day: {
+    calories: number;
+    protein: number;
+    carbs: number;
+    fat: number;
+  };
+  weightTrend: {
+    current: number | null;
+    startOfPeriod: number | null; // 7-14 days ago
+    change: number | null;
+    periodDays: number;
+  };
+  consistencyScore: number; // 0-100 based on adherence
+  currentStreak: number;
+  weakNutrients: string[]; // e.g. ['protein', 'fiber']
+  commonFoods: { name: string; frequency: number }[]; // top 5 recent
+  recentDailySummaries: DailySummary[]; // last 7 days of summaries for granular rules
+}
+
+export interface Insight {
+  id: string; // unique
+  date: string; // YYYY-MM-DD generated
+  type: 'pattern' | 'warning' | 'achievement' | 'suggestion';
+  title: string;
+  description: string; // Internal description, not AI text yet
+  confidence: number; // 0-1
+  relatedMetric?: string; // e.g. 'protein', 'calories'
+  isDismissed?: boolean;
+}
+
+export interface NutritionLibraryItem {
+  id?: string;
+  name: string;
+  calories_per_100g: number;
+  protein_per_100g: number;
+  carbs_per_100g: number;
+  fat_per_100g: number;
+  standard_serving_weight_g: number;
+  standard_unit: string;
 }
 
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
@@ -583,73 +652,113 @@ export const dataStorage = {
     }
   },
 
-  // Save all meals by date
-  async saveMeals(mealsByDate: Record<string, MealEntry[]>): Promise<void> {
+  // --- DAILY LOG SHARDING HELPERS ---
+
+  async getDailyLog(date: string): Promise<MealEntry[]> {
     try {
-      const prevSerialized = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      const previousMeals: Record<string, MealEntry[]> = prevSerialized ? JSON.parse(prevSerialized) : {};
-      const nextMeals: Record<string, MealEntry[]> = JSON.parse(JSON.stringify(mealsByDate));
-
-      ensureMealMetadata(previousMeals);
-      ensureMealMetadata(nextMeals);
-
-      await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(nextMeals));
-      const accountInfo = await getCachedAccountInfo();
-      await processSyncQueue(accountInfo);
-      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
-
-      const { upserts, deletions } = diffMeals(previousMeals, nextMeals);
-
-      if (upserts.length > 0) {
-        try {
-          await supabaseDataService.upsertMeals(accountInfo, upserts);
-        } catch (error) {
-          console.error('Error syncing meals to Supabase:', error);
-          await Promise.all(upserts.map((payload) =>
-            enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload })
-          ));
-        }
-      }
-
-      if (deletions.length > 0) {
-        try {
-          await supabaseDataService.deleteMeals(accountInfo, deletions);
-        } catch (error) {
-          console.error('Error deleting meals from Supabase:', error);
-          await Promise.all(deletions.map((id) =>
-            enqueueSyncOperation({ entity: 'meal', action: 'delete', payload: { id } })
-          ));
-        }
-      }
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.dailyLog(date));
+      return json ? JSON.parse(json) : [];
     } catch (error) {
-      console.error('Error saving meals:', error);
+      console.error(`Error loading daily log for ${date}:`, error);
+      return [];
     }
   },
 
-  // Load meals
-  async loadMeals(): Promise<Record<string, MealEntry[]>> {
+  async saveDailyLog(date: string, meals: MealEntry[]): Promise<void> {
     try {
-      const localData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      const localMeals: Record<string, MealEntry[]> = localData ? JSON.parse(localData) : {};
+      await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(meals));
 
-      const accountInfo = await getCachedAccountInfo();
-      await processSyncQueue(accountInfo);
-      if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
-        return localMeals;
-      }
+      // Update summary automatically
+      await this.updateSummaryForDate(date, meals);
 
-      const remoteMeals = await supabaseDataService.fetchMeals(accountInfo);
-      if (remoteMeals && Object.keys(remoteMeals).length > 0) {
-        const merged = mergeMealsCache(remoteMeals, localMeals);
-        await AsyncStorage.setItem(STORAGE_KEYS.MEALS, JSON.stringify(merged));
-        return merged;
-      }
-
-      return localMeals;
+      // Sync to Supabase logic will be handled by caller or queue for now to keep this atomic
+      // But typically we should sync here.
     } catch (error) {
-      console.error('Error loading meals:', error);
-      return {};
+      console.error(`Error saving daily log for ${date}:`, error);
     }
+  },
+
+  async deleteDailyLog(date: string): Promise<void> {
+    try {
+      await AsyncStorage.removeItem(STORAGE_KEYS.dailyLog(date));
+      await this.updateSummaryForDate(date, []);
+    } catch (error) {
+      console.error(`Error deleting daily log for ${date}:`, error);
+    }
+  },
+
+  async migrateLegacyMealsToShards(): Promise<void> {
+    try {
+      const legacyJson = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
+      if (!legacyJson) return; // Already migrated or empty
+
+      console.log('Migrating legacy meals to shards...');
+      const legacyMeals: Record<string, MealEntry[]> = JSON.parse(legacyJson);
+
+      const keys = Object.keys(legacyMeals);
+      const pairs: [string, string][] = keys.map(date => [
+        STORAGE_KEYS.dailyLog(date),
+        JSON.stringify(legacyMeals[date])
+      ]);
+
+      if (pairs.length > 0) {
+        try {
+          await AsyncStorage.multiSet(pairs);
+        } catch (e) {
+          for (const [k, v] of pairs) {
+            await AsyncStorage.setItem(k, v);
+          }
+        }
+      }
+
+      await AsyncStorage.removeItem(STORAGE_KEYS.MEALS);
+      console.log('Migration to shards complete.');
+
+      // Also ensure summaries exist
+      await this.migrateMealsToSummaries();
+
+    } catch (error) {
+      console.error('Error migrating to shards:', error);
+    }
+  },
+
+  // Save all meals (Legacy wrapper/Batched)
+  // Maintains interface compatibility but uses shards internally
+  async saveMeals(mealsByDate: Record<string, MealEntry[]>): Promise<void> {
+    try {
+      for (const [date, meals] of Object.entries(mealsByDate)) {
+        await this.saveDailyLog(date, meals);
+      }
+    } catch (error) {
+      console.error('Error saving meals (sharded):', error);
+    }
+  },
+
+  // Load ALL meals (Expensive - avoids returning partial data if usage expects all)
+  // WARNING: This reconstructs the full blob. Use getDailyLog whenever possible.
+  async loadMeals(): Promise<Record<string, MealEntry[]>> {
+    // First check if we need to migrate
+    const legacy = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
+    if (legacy) {
+      await this.migrateLegacyMealsToShards();
+    }
+
+    // Load all keys matching pattern
+    const allKeys = await AsyncStorage.getAllKeys();
+    const shardKeys = allKeys.filter(k => k.startsWith('@trackkal:log:'));
+
+    if (shardKeys.length === 0) return {};
+
+    const pairs = await AsyncStorage.multiGet(shardKeys);
+    const constructed: Record<string, MealEntry[]> = {};
+
+    pairs.forEach(([key, value]) => {
+      if (value) {
+        const date = key.replace('@trackkal:log:', '');
+        constructed[date] = JSON.parse(value);
+      }
+    });
+    return constructed;
   },
 
   // Save exercises by date
@@ -1793,6 +1902,89 @@ export const dataStorage = {
     }
   },
 
+  // Daily Summary (Lightweight) Methods
+  async loadDailySummaries(): Promise<Record<string, DailySummary>> {
+    try {
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.SUMMARIES);
+      return json ? JSON.parse(json) : {};
+    } catch (error) {
+      console.error('Error loading summaries:', error);
+      return {};
+    }
+  },
+
+  async saveDailySummaries(summaries: Record<string, DailySummary>): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries));
+    } catch (error) {
+      console.error('Error saving summaries:', error);
+    }
+  },
+
+  recalculateDailySummary(date: string, mealsOrFoods: MealEntry[] | any[]): DailySummary {
+    // This helper can take full daily meals and produce the summary
+    // Needs to handle both MealEntry (which has ParsedFood[]) 
+    // or flat ParsedFood list if we change structure later.
+
+    // Flatten to just foods
+    const foods = (mealsOrFoods as MealEntry[]).flatMap(m => m.foods);
+
+    const totals = foods.reduce((acc, food) => {
+      return {
+        calories: acc.calories + (food.calories || 0),
+        protein: acc.protein + (food.protein || 0),
+        carbs: acc.carbs + (food.carbs || 0),
+        fat: acc.fat + (food.fat || 0),
+      };
+    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+
+    return {
+      date,
+      totalCalories: totals.calories,
+      totalProtein: Number(totals.protein.toFixed(1)),
+      totalCarbs: Number(totals.carbs.toFixed(1)),
+      totalFat: Number(totals.fat.toFixed(1)),
+      entryCount: mealsOrFoods.length,
+      updatedAt: new Date().toISOString()
+    };
+  },
+
+  async updateSummaryForDate(dateKey: string, mealsForDay: MealEntry[]): Promise<void> {
+    try {
+      const summaries = await this.loadDailySummaries();
+      const newSummary = this.recalculateDailySummary(dateKey, mealsForDay);
+      summaries[dateKey] = newSummary;
+      await this.saveDailySummaries(summaries);
+
+      // Sync summary to Supabase (Step 2 - Todo)
+      // await supabaseDataService.upsertDailySummary(...)
+    } catch (e) {
+      console.error("Error updating summary for date", e);
+    }
+  },
+
+  async migrateMealsToSummaries(): Promise<void> {
+    try {
+      const existingSummaries = await this.loadDailySummaries();
+      if (Object.keys(existingSummaries).length > 0) return;
+
+      console.log('No daily summaries found, performing initial migration...');
+      const allMeals = await this.loadMeals();
+      const newSummaries: Record<string, DailySummary> = {};
+
+      Object.keys(allMeals).forEach(dateKey => {
+        newSummaries[dateKey] = this.recalculateDailySummary(dateKey, allMeals[dateKey]);
+      });
+
+      if (Object.keys(newSummaries).length > 0) {
+        await this.saveDailySummaries(newSummaries);
+        console.log('Initial daily summaries migration complete.');
+      }
+    } catch (error) {
+      console.error('Migration failed', error);
+    }
+  },
+
   async pushCachedDataToSupabase(): Promise<void> {
     try {
       const accountInfo = await getCachedAccountInfo();
@@ -2239,10 +2431,9 @@ export const dataStorage = {
 
   getStreak: async (): Promise<number> => {
     try {
-      const meals = await dataStorage.loadMeals();
+      const summaries = await dataStorage.loadDailySummaries();
       const freezeData = await dataStorage.loadStreakFreeze();
-      // Pass frozen dates to calculator if needed, or update calculateStreak to handle them
-      return calculateStreak(meals, freezeData?.usedOnDates || []);
+      return calculateStreak(summaries, freezeData?.usedOnDates || []);
     } catch (e) {
       console.error('Error calculating streak:', e);
       return 0;
@@ -2255,6 +2446,211 @@ export const dataStorage = {
     meals[date] = [...dayMeals, meal];
     await dataStorage.saveMeals(meals);
   },
+
+  // --- USER METRICS SNAPSHOT ---
+
+  async getUserMetricsSnapshot(): Promise<UserMetricsSnapshot | null> {
+    try {
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.USER_METRICS_SNAPSHOT);
+      return json ? JSON.parse(json) : null;
+    } catch (e) {
+      console.error('Error loading snapshot', e);
+      return null;
+    }
+  },
+
+  async saveUserMetricsSnapshot(snapshot: UserMetricsSnapshot): Promise<void> {
+    try {
+      await AsyncStorage.setItem(STORAGE_KEYS.USER_METRICS_SNAPSHOT, JSON.stringify(snapshot));
+      // Optional: Sync to Supabase here or in background
+    } catch (e) {
+      console.error('Error saving snapshot', e);
+    }
+  },
+
+  async generateUserMetricsSnapshot(): Promise<UserMetricsSnapshot | null> {
+    try {
+      // 1. Load data
+      const goals = await this.loadGoals();
+      if (!goals) return null; // Can't generate without goals
+
+      const summaries = await this.loadDailySummaries();
+
+      // Load raw entries directly
+      const weightJson = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
+      const weightEntries: WeightEntry[] = weightJson ? JSON.parse(weightJson) : [];
+
+      const today = new Date();
+
+      // 2. Averages (Last 7 days)
+      let totalCals = 0, totalP = 0, totalC = 0, totalF = 0;
+      let dayCount = 0;
+      const verifiedKeys: string[] = []; // for common foods scan
+
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        const k = d.toISOString().split('T')[0];
+        const s = summaries[k];
+        if (s && s.entryCount > 0) {
+          totalCals += s.totalCalories;
+          totalP += s.totalProtein;
+          totalC += s.totalCarbs;
+          totalF += s.totalFat;
+          dayCount++;
+          verifiedKeys.push(k);
+        }
+      }
+
+      const avgs = {
+        calories: dayCount ? Math.round(totalCals / dayCount) : 0,
+        protein: dayCount ? Math.round(totalP / dayCount) : 0,
+        carbs: dayCount ? Math.round(totalC / dayCount) : 0,
+        fat: dayCount ? Math.round(totalF / dayCount) : 0,
+      };
+
+      // 3. Weight Trend (last 14 days)
+      // Sort desc
+      const sortedWeights = [...weightEntries].sort((a, b) => b.date.localeCompare(a.date));
+      const currentW = sortedWeights.length > 0 ? sortedWeights[0].weight : null;
+      // Find weight ~14 days ago
+      const twoWeeksAgo = new Date();
+      twoWeeksAgo.setDate(today.getDate() - 14);
+      const pastWEntry = sortedWeights.find(w => w.date <= twoWeeksAgo.toISOString().split('T')[0]);
+      // If no entry 14 days ago exactly, just take the oldest within that window or just oldest if window small
+      // Let's grab oldest in the last 14-30 day window for trend
+      const startW = pastWEntry ? pastWEntry.weight : (sortedWeights.length > 0 ? sortedWeights[sortedWeights.length - 1].weight : null);
+
+      // 4. Consistency Score
+      // Simple metric: % of days in last 7 days where cals were within +/- 15% of goal
+      let consistentDays = 0;
+      for (let i = 0; i < 7; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        const k = d.toISOString().split('T')[0];
+        const s = summaries[k];
+        if (s && s.entryCount > 0) {
+          const diff = Math.abs(s.totalCalories - goals.calories);
+          if (diff / goals.calories <= 0.15) consistentDays++;
+        }
+      }
+      const consistencyScore = Math.round((consistentDays / 7) * 100);
+
+      // 5. Weak Nutrients
+      const weak: string[] = [];
+      if (avgs.protein < goals.proteinGrams * 0.8) weak.push('protein');
+      if (avgs.calories > goals.calories * 1.2) weak.push('calories_high');
+      if (avgs.calories < goals.calories * 0.8) weak.push('calories_low');
+
+      // 6. Common Foods (Scan verified keys only = sharded read)
+      const foodCounts: Record<string, number> = {};
+      for (const k of verifiedKeys) {
+        try {
+          const dailyMeals = await this.getDailyLog(k);
+          dailyMeals.forEach(m => {
+            m.foods.forEach(f => {
+              // Safe property access
+              const name = ((f as any).food_name || (f as any).foodName || (f as any).name || '').toLowerCase().trim();
+              if (name) foodCounts[name] = (foodCounts[name] || 0) + 1;
+            });
+          });
+        } catch (e) { /* ignore read error */ }
+      }
+      const commonFoods = Object.entries(foodCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([name, frequency]) => ({ name, frequency }));
+
+      const streak = await this.getStreak();
+
+      const snapshot: UserMetricsSnapshot = {
+        generatedAt: new Date().toISOString(),
+        userGoals: {
+          calories: goals.calories,
+          protein: goals.proteinGrams,
+          carbs: goals.carbsGrams,
+          fat: goals.fatGrams,
+          goalType: goals.goal || 'maintain',
+        },
+        averages7Day: avgs,
+        weightTrend: {
+          current: currentW,
+          startOfPeriod: startW,
+          change: (currentW && startW) ? Number((currentW - startW).toFixed(2)) : null,
+          periodDays: 14 // approx
+        },
+        consistencyScore,
+        currentStreak: streak,
+        weakNutrients: weak,
+        commonFoods,
+        recentDailySummaries: Object.values(summaries).filter(s => verifiedKeys.includes(s.date))
+      };
+
+      await this.saveUserMetricsSnapshot(snapshot);
+      return snapshot;
+
+    } catch (error) {
+      console.error('Error generating metrics snapshot:', error);
+      return null;
+    }
+  }
+
+  ,
+
+
+  // --- INSIGHT ENGINE STORAGE ---
+
+  async saveInsights(insights: Insight[]): Promise<void> {
+    try {
+      const currentFn = await this.loadInsights();
+      const current = currentFn || [];
+      const newMap = new Map();
+      current.forEach(i => newMap.set(i.id, i));
+      insights.forEach(i => newMap.set(i.id, i));
+
+      const combined = Array.from(newMap.values()).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50);
+      await AsyncStorage.setItem(STORAGE_KEYS.INSIGHTS, JSON.stringify(combined));
+    } catch (e) {
+      console.error('Error saving insights', e);
+    }
+  },
+
+  async loadInsights(): Promise<Insight[]> {
+    try {
+      const json = await AsyncStorage.getItem(STORAGE_KEYS.INSIGHTS);
+      return json ? JSON.parse(json) : [];
+    } catch (e) {
+      console.error('Error loading insights', e);
+      return [];
+    }
+  },
+
+  async dismissInsight(id: string): Promise<void> {
+    try {
+      const insights = await this.loadInsights();
+      const updated = insights.map(i =>
+        i.id === id ? { ...i, isDismissed: true } : i
+      );
+      await AsyncStorage.setItem(STORAGE_KEYS.INSIGHTS, JSON.stringify(updated));
+    } catch (e) {
+      console.error('Error dismissing insight', e);
+    }
+  },
+
+  async setCoachDismissedToday(): Promise<void> {
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      await AsyncStorage.setItem(STORAGE_KEYS.COACH_DISMISS_DATE, today);
+    } catch (e) { console.error(e); }
+  },
+
+  async isCoachDismissedToday(): Promise<boolean> {
+    try {
+      const stored = await AsyncStorage.getItem(STORAGE_KEYS.COACH_DISMISS_DATE);
+      const today = new Date().toISOString().split('T')[0];
+      return stored === today;
+    } catch (e) { return false; }
+  }
 };
 
 

@@ -479,6 +479,41 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
         </SettingSection>
 
+        {/* Debug Section (Only visible in Development) */}
+        {__DEV__ && (
+          <SettingSection title="Developer Tools">
+            <SettingItem
+              icon="tool"
+              title="Test AI Coach"
+              subtitle="Reset & Inject Test Insight"
+              onPress={async () => {
+                try {
+                  // 1. Clear Dismissal
+                  await AsyncStorage.removeItem('@trackkal:coachDismissDate');
+
+                  // 2. Clear Old Insights
+                  await AsyncStorage.setItem('@trackkal:insights', '[]');
+
+                  // 3. Inject Test Insight
+                  const testInsight = {
+                    id: 'test-' + Date.now(),
+                    type: 'warning',
+                    title: 'Protein Intake Low',
+                    description: 'You are significantly under your protein goal.',
+                    date: new Date().toISOString().split('T')[0],
+                    referenceData: { metric: 'protein', value: 20, target: 150 }
+                  };
+                  await AsyncStorage.setItem('@trackkal:insights', JSON.stringify([testInsight]));
+
+                  Alert.alert('Test Ready', 'Go to Home Screen to see the "Protein Intake Low" card.');
+                } catch (e) {
+                  Alert.alert('Error', 'Failed to set up test state');
+                }
+              }}
+            />
+          </SettingSection>
+        )}
+
         {/* Data Section */}
         <SettingSection title="Data">
           <SettingItem

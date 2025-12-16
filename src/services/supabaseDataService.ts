@@ -9,10 +9,10 @@ import type {
   PushBroadcastRecord,
   SavedPrompt,
   EntryTasksStatus,
-  ReferralCode,
   ReferralRedemption,
   ReferralReward,
-  MealEntry
+  MealEntry,
+  NutritionLibraryItem
 } from './dataStorage';
 
 import { ExerciseEntry } from '../components/ExerciseLogSection';
@@ -1067,6 +1067,62 @@ export const supabaseDataService = {
         relatedRedemptionId: row.related_redemption_id || '',
       })) || []
     );
+  },
+
+  // Nutrition Library (Deterministic Engine)
+  async fetchNutritionFromLibrary(foodName: string): Promise<NutritionLibraryItem | null> {
+    if (!isSupabaseConfigured() || !supabase) return null;
+
+    // Normalize name for lookup (lowercase, trimmed)
+    const normalizedName = foodName.toLowerCase().trim();
+
+    const { data, error } = await supabase
+      .from('nutrition_library')
+      .select('*')
+      .eq('name', normalizedName)
+      .maybeSingle();
+
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error fetching from nutrition_library:', error);
+      return null;
+    }
+
+    if (!data) return null;
+
+    return {
+      id: data.id,
+      name: data.name,
+      calories_per_100g: data.calories_per_100g,
+      protein_per_100g: data.protein_per_100g,
+      carbs_per_100g: data.carbs_per_100g,
+      fat_per_100g: data.fat_per_100g,
+      standard_serving_weight_g: data.standard_serving_weight_g,
+      standard_unit: data.standard_unit,
+    };
+  },
+
+  async saveNutritionToLibrary(item: NutritionLibraryItem): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase) return;
+
+    // Normalize name
+    const normalizedName = item.name.toLowerCase().trim();
+
+    const { error } = await supabase.from('nutrition_library').upsert(
+      {
+        name: normalizedName,
+        calories_per_100g: item.calories_per_100g,
+        protein_per_100g: item.protein_per_100g,
+        carbs_per_100g: item.carbs_per_100g,
+        fat_per_100g: item.fat_per_100g,
+        standard_serving_weight_g: item.standard_serving_weight_g,
+        standard_unit: item.standard_unit,
+      },
+      { onConflict: 'name' }
+    );
+
+    if (error) {
+      console.error('Error saving to nutrition_library:', error);
+    }
   },
 };
 

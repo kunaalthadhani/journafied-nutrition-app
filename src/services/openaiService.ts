@@ -105,6 +105,54 @@ Return ONLY a JSON array in the following shape:
 If you cannot identify any exercises, return an empty array [].
 `;
 
+// New Types for Step 1 Parsing
+interface ParsedStructure {
+  name: string;
+  quantity: number;
+  unit: string;
+  preparation?: string;
+  estimated_weight_g: number; // We still ask AI for this to handle unit conversion for now
+}
+
+const FOOD_STRUCTURE_PROMPT = `
+You are an expert food analyst. Analyze the input to identify food items, portion sizes, and estimated weights.
+
+Return ONLY a valid JSON array of objects with this structure:
+[
+  {
+    "name": "General food name (e.g., 'Banana', 'Fried Egg')",
+    "quantity": number,
+    "unit": "unit description (e.g., 'medium', 'cup')",
+    "preparation": "cooking method if specified",
+    "estimated_weight_g": number (estimated weight in grams for this portion)
+  }
+]
+
+Do not calculate calories or macros. Focus only on identifying the food and portion.
+If you cannot identify any food, return [].
+`;
+
+const NUTRITION_ESTIMATION_PROMPT = `
+You are a USDA nutrition database assistant.
+Provide standard nutritional values per 100g for the specified food item.
+
+Input: [Food Name]
+
+Return ONLY a valid JSON object:
+{
+  "name": "Normalized canonical name",
+  "calories_per_100g": number,
+  "protein_per_100g": number,
+  "carbs_per_100g": number,
+  "fat_per_100g": number,
+  "standard_unit": "standard serving unit (e.g., 'medium', 'cup', 'slice')",
+  "standard_serving_weight_g": number (weight of that standard unit)
+}
+`;
+
+import { supabaseDataService } from './supabaseDataService';
+import { NutritionLibraryItem } from './dataStorage';
+
 export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedFood[]> {
   // Validate API key before making request
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
@@ -112,7 +160,101 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedF
   }
 
   try {
-    if (__DEV__) console.log('Calling OpenAI API for food analysis:', foodInput);
+    if (__DEV__) console.log('Step 1: Parsing food structure for:', foodInput);
+
+    // 1. Structure Parsing (No Macros)
+    const structureResponse = await fetch(config.API_ENDPOINTS.OPENAI, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: config.OPENAI_CONFIG.model,
+        messages: [
+          { role: 'system', content: FOOD_STRUCTURE_PROMPT },
+          { role: 'user', content: foodInput }
+        ],
+        temperature: 0.3, // Lower temperature for more deterministic structure
+        max_tokens: config.OPENAI_CONFIG.max_tokens,
+      }),
+    });
+
+    if (!structureResponse.ok) throw new Error(`OpenAI API error: ${structureResponse.status}`);
+    const structureData: OpenAIResponse = await structureResponse.json();
+    const structureContent = structureData.choices[0]?.message?.content;
+    if (!structureContent) throw new Error('No response from OpenAI');
+
+    const parsedItems: ParsedStructure[] = JSON.parse(structureContent);
+    const finalFoods: ParsedFood[] = [];
+
+    // 2. Nutrition Lookup & Calculation
+    for (const item of parsedItems) {
+      if (__DEV__) console.log(`Processing item: ${item.name}`);
+
+      // Try reading from Library
+      let libraryItem = await supabaseDataService.fetchNutritionFromLibrary(item.name);
+
+      if (!libraryItem) {
+        if (__DEV__) console.log(`Cache miss for ${item.name}. Fetching nutrition factors...`);
+
+        // Fallback: Ask AI for factors (The "One-Time Hallucination")
+        libraryItem = await fetchNutritionFactors(item.name);
+
+        // Save to Library for future deterministic use
+        if (libraryItem) {
+          await supabaseDataService.saveNutritionToLibrary(libraryItem);
+        }
+      }
+
+      if (libraryItem) {
+        // Calculate based on 100g factors
+        // Formula: (grams / 100) * factor
+        const weight = item.estimated_weight_g || libraryItem.standard_serving_weight_g;
+        const ratio = weight / 100;
+
+        finalFoods.push({
+          id: generateId(),
+          name: libraryItem.name, // Use canonical name
+          quantity: item.quantity,
+          unit: item.unit,
+          weight_g: weight,
+          calories: Math.round(libraryItem.calories_per_100g * ratio),
+          protein: Number((libraryItem.protein_per_100g * ratio).toFixed(1)),
+          carbs: Number((libraryItem.carbs_per_100g * ratio).toFixed(1)),
+          fat: Number((libraryItem.fat_per_100g * ratio).toFixed(1)),
+        });
+      } else {
+        // Safe fallback if even the factor fetch fails (should rarely happen)
+        // just pass through what we have with 0s or try legacy parse?
+        // For now, let's just push a placeholder to avoid breaking the app
+        finalFoods.push({
+          id: generateId(),
+          name: item.name,
+          quantity: item.quantity,
+          unit: item.unit,
+          weight_g: item.estimated_weight_g || 100,
+          calories: 0,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+        });
+      }
+    }
+
+    return finalFoods;
+
+  } catch (error) {
+    if (__DEV__) console.error('Error in deterministic food analysis:', error);
+    // Fallback to local parsing if everything fails
+    const { parseFoodInput } = require('../utils/foodNutrition');
+    return parseFoodInput(foodInput);
+  }
+}
+
+// Helper to fetch deterministic factors for the library
+async function fetchNutritionFactors(foodName: string): Promise<NutritionLibraryItem | null> {
+  try {
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -122,67 +264,31 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedF
       body: JSON.stringify({
         model: config.OPENAI_CONFIG.model,
         messages: [
-          {
-            role: 'system',
-            content: FOOD_ANALYSIS_PROMPT + `
-Return format (JSON array only, no other text):
-[
-  {
-    "name": "Food name",
-    "quantity": number,
-    "unit": "description of quantity (e.g., 'medium banana', 'cup of rice')",
-    "weight_g": estimated_weight_in_grams,
-    "calories": total_calories_for_this_quantity,
-    "protein": total_protein_in_grams,
-    "carbs": total_carbs_in_grams,
-    "fat": total_fat_in_grams
-  }
-]
-
-If you cannot identify any food items, return an empty array: []
-`
-          },
-          {
-            role: 'user',
-            content: foodInput
-          }
+          { role: 'system', content: NUTRITION_ESTIMATION_PROMPT },
+          { role: 'user', content: foodName }
         ],
-        temperature: config.OPENAI_CONFIG.temperature,
-        max_tokens: config.OPENAI_CONFIG.max_tokens,
+        temperature: 0.2,
       }),
     });
 
-    if (__DEV__) console.log('OpenAI API response status:', response.status);
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
+    if (!response.ok) return null;
     const data: OpenAIResponse = await response.json();
     const content = data.choices[0]?.message?.content;
+    if (!content) return null;
 
-    if (!content) {
-      throw new Error('No response from OpenAI');
-    }
-
-    // Parse the JSON response
-    const parsedFoods = JSON.parse(content);
-
-    // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
-    const foodsWithIds = parsedFoods.map((food: any) => ({
-      ...food,
-      id: food.id || generateId(),
-    }));
-
-    return foodsWithIds;
-
-  } catch (error) {
-    if (__DEV__) console.error('Error analyzing food with ChatGPT:', error);
-
-    // Fallback to local parsing if ChatGPT fails
-    if (__DEV__) console.log('Falling back to local food parsing...');
-    const { parseFoodInput } = require('../utils/foodNutrition');
-    return parseFoodInput(foodInput);
+    const result = JSON.parse(content);
+    return {
+      name: result.name || foodName,
+      calories_per_100g: result.calories_per_100g || 0,
+      protein_per_100g: result.protein_per_100g || 0,
+      carbs_per_100g: result.carbs_per_100g || 0,
+      fat_per_100g: result.fat_per_100g || 0,
+      standard_unit: result.standard_unit || 'serving',
+      standard_serving_weight_g: result.standard_serving_weight_g || 100,
+    };
+  } catch (e) {
+    console.error('Failed to fetch nutrition factors', e);
+    return null;
   }
 }
 

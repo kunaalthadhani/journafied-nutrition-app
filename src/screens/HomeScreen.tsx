@@ -40,7 +40,7 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
 import { FoodLogSection } from '../components/FoodLogSection';
-import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData, AdjustmentRecord } from '../services/dataStorage';
+import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData, AdjustmentRecord, DailySummary } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
@@ -63,6 +63,7 @@ import { generateId } from '../utils/uuid';
 import { calculateStreak } from '../utils/streakUtils';
 import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
+import { CoachCard } from '../components/CoachCard';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -97,7 +98,9 @@ export const HomeScreen: React.FC = () => {
     targetWeightKg: null,
   });
   // Store meals & exercises by date (YYYY-MM-DD format)
+  // Store meals & exercises by date (YYYY-MM-DD format)
   const [mealsByDate, setMealsByDate] = useState<Record<string, Meal[]>>({});
+  const [summariesByDate, setSummariesByDate] = useState<Record<string, DailySummary>>({});
   const [exercisesByDate, setExercisesByDate] = useState<Record<string, ExerciseEntry[]>>({});
   const [isAnalyzingFood, setIsAnalyzingFood] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
@@ -163,15 +166,32 @@ export const HomeScreen: React.FC = () => {
     fat: { current: currentNutrition.totalFat, target: savedGoals?.fatGrams ?? 0, unit: 'g' }
   };
 
-  // Calculate current streak
-  const currentStreak = calculateStreak(mealsByDate);
+  // Load meals for selected date (Pagination/Sharding)
+  React.useEffect(() => {
+    let active = true;
+    const loadDay = async () => {
+      const key = getDateKey(selectedDate);
+      const dailyMeals = await dataStorage.getDailyLog(key);
+      if (active) {
+        setMealsByDate({ [key]: dailyMeals });
+      }
+    };
+    loadDay();
+    return () => { active = false; };
+  }, [selectedDate]);
+
+
+
+  // Calculate current streak using SUMMARIES (efficient)
+  const currentStreak = calculateStreak(summariesByDate, streakFreeze?.usedOnDates || []);
 
   // Manage Streak Reminder Notification
   useEffect(() => {
     const manageStreakNotification = async () => {
       const today = format(new Date(), 'yyyy-MM-dd');
       const reminderId = `streak-reminder-${today}`;
-      const hasLoggedToday = mealsByDate[today] && mealsByDate[today].length > 0;
+      // Use summary for check if logged
+      const hasLoggedToday = summariesByDate[today] && summariesByDate[today].entryCount > 0;
 
       // If we have logged today, cancel any pending reminder for today
       if (hasLoggedToday) {
@@ -208,7 +228,7 @@ export const HomeScreen: React.FC = () => {
     };
 
     manageStreakNotification();
-  }, [mealsByDate, currentStreak]);
+  }, [summariesByDate, currentStreak]);
 
   // Check for Smart Adjustments when Weight Tracker closes
   useEffect(() => {
@@ -458,9 +478,18 @@ export const HomeScreen: React.FC = () => {
     if (__DEV__) console.log('Date selected:', format(date, 'yyyy-MM-dd'));
   };
 
-  // Persist meals whenever mealsByDate changes
+  // Persist meals whenever mealsByDate changes, AND update local summary state
   useEffect(() => {
-    dataStorage.saveMeals(mealsByDate);
+    const persistAndSync = async () => {
+      await dataStorage.saveMeals(mealsByDate);
+      // Refresh summaries from storage to catch updates made by dataStorage.saveMeals
+      // This is a bit inefficient (re-reading), but cleanest for now.
+      // Alternatively we could just locally update summariesByDate here, 
+      // but let's trust the storage layer
+      const freshSummaries = await dataStorage.loadDailySummaries();
+      setSummariesByDate(freshSummaries);
+    };
+    persistAndSync();
   }, [mealsByDate]);
 
   useEffect(() => {
@@ -502,7 +531,7 @@ export const HomeScreen: React.FC = () => {
 
   // Logic to handle missed days and auto-freeze
   const checkMissedDaysAndFreeze = async (
-    meals: Record<string, Meal[]>,
+    summaries: Record<string, DailySummary>,
     freezeData: StreakFreezeData | null,
     plan: 'free' | 'premium'
   ): Promise<StreakFreezeData | null> => {
@@ -515,10 +544,10 @@ export const HomeScreen: React.FC = () => {
     const todayKey = format(today, 'yyyy-MM-dd');
 
     // If we logged yesterday or freeze was already used yesterday, we are good for yesterday check
-    const loggedYesterday = meals[yesterdayKey] && meals[yesterdayKey].length > 0;
+    const loggedYesterday = summaries[yesterdayKey] && summaries[yesterdayKey].entryCount > 0;
     const frozenYesterday = freezeData.usedOnDates.includes(yesterdayKey);
     // If we logged today, we are good
-    const loggedToday = meals[todayKey] && meals[todayKey].length > 0;
+    const loggedToday = summaries[todayKey] && summaries[todayKey].entryCount > 0;
 
     // We only care if yesterday was missed AND it wasn't already frozen
     if (!loggedYesterday && !frozenYesterday) {
@@ -526,7 +555,7 @@ export const HomeScreen: React.FC = () => {
       // i.e. did we log the day before yesterday?
       const dayBeforeYesterday = subDays(today, 2);
       const dayBeforeKey = format(dayBeforeYesterday, 'yyyy-MM-dd');
-      const loggedDayBefore = meals[dayBeforeKey] && meals[dayBeforeKey].length > 0;
+      const loggedDayBefore = summaries[dayBeforeKey] && summaries[dayBeforeKey].entryCount > 0;
       const frozenDayBefore = freezeData.usedOnDates.includes(dayBeforeKey);
 
       // If we had a streak alive (logged or frozen day before), and missed yesterday...
@@ -542,13 +571,9 @@ export const HomeScreen: React.FC = () => {
           // Save and notify
           await dataStorage.saveStreakFreeze(newData);
           setJustFrozeToday(true); // Signal to show alert
-          // Show local notification or alert about freeze usage?
-          // We'll use a state to show a nice UI on home screen.
-
           return newData;
         } else {
           // Streak broken :( 
-          // No remaining freezes.
         }
       }
     }
@@ -581,11 +606,17 @@ export const HomeScreen: React.FC = () => {
         setGoalsSet(true);
       }
 
-      // Load meals
-      const savedMeals = await dataStorage.loadMeals();
-      if (Object.keys(savedMeals).length > 0) {
-        setMealsByDate(savedMeals);
-      }
+      // Load Summaries (New) & Migrate if needed
+      await dataStorage.migrateLegacyMealsToShards(); // Ensure legacy turned to shards
+      await dataStorage.migrateMealsToSummaries(); // Ensure summaries exist
+
+      const savedSummaries = await dataStorage.loadDailySummaries();
+      setSummariesByDate(savedSummaries);
+
+      // Load today's meals initially
+      const startKey = getDateKey(selectedDate);
+      const todaysMeals = await dataStorage.getDailyLog(startKey);
+      setMealsByDate({ [startKey]: todaysMeals });
 
       // Load exercises
       const savedExercises = await dataStorage.loadExercises();
@@ -608,8 +639,8 @@ export const HomeScreen: React.FC = () => {
       }
 
       // Check for missed days to auto-freeze
-      // Need to pass latest meals (savedMeals) and plan
-      const updatedFreezeData = await checkMissedDaysAndFreeze(savedMeals, freezeData, plan);
+      // Use summaries
+      const updatedFreezeData = await checkMissedDaysAndFreeze(savedSummaries, freezeData, plan);
       setStreakFreeze(updatedFreezeData);
 
       // Check for Smart Adjustments
@@ -623,10 +654,10 @@ export const HomeScreen: React.FC = () => {
       }
 
 
-      // Validate entry count matches actual log count (always run)
+      // Validate entry count matches actual log count (via summaries)
       let actualLogCount = 0;
-      Object.values(savedMeals).forEach(meals => {
-        actualLogCount += meals.length;
+      Object.values(savedSummaries).forEach(s => {
+        actualLogCount += s.entryCount;
       });
 
       // Example check if we need to fix
@@ -1773,7 +1804,7 @@ export const HomeScreen: React.FC = () => {
           <AdvancedAnalyticsScreen
             onBack={handleAdvancedAnalyticsBack}
             userPlan={userPlan}
-            mealsByDate={mealsByDate}
+            summariesByDate={summariesByDate}
             userGoals={savedGoals}
           />
         </Modal>
@@ -1917,6 +1948,11 @@ export const HomeScreen: React.FC = () => {
             scrollEnabled={scrollEnabled}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Daily AI Coach Card */}
+            {isSameDay(selectedDate, new Date()) && (
+              <CoachCard />
+            )}
+
             {/* Food Log Section */}
             <FoodLogSection
               meals={currentDayMeals}
@@ -2100,7 +2136,7 @@ export const HomeScreen: React.FC = () => {
           <AdvancedAnalyticsScreen
             onBack={handleAdvancedAnalyticsBack}
             userPlan={userPlan}
-            mealsByDate={mealsByDate}
+            summariesByDate={summariesByDate}
             userGoals={savedGoals}
           />
         </Modal>
