@@ -117,7 +117,7 @@ export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights
     // --- PRIORITIZATION ---
     // Warning > Pattern > Suggestion > Achievement
     const priorityMap: Record<string, number> = {
-        'warning': 4,
+        'warning': 5,
         'pattern': 3,
         'suggestion': 2,
         'achievement': 1

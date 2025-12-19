@@ -21,6 +21,37 @@ export interface ParsedFood {
   protein: number;
   carbs: number;
   fat: number;
+
+  // Detailed Macros & Micros
+  // Carbs Logic
+  dietary_fiber?: number;
+  sugar?: number;
+  added_sugars?: number;
+  sugar_alcohols?: number;
+  net_carbs?: number;
+
+  // Fat Breakdown
+  saturated_fat?: number;
+  trans_fat?: number;
+  polyunsaturated_fat?: number;
+  monounsaturated_fat?: number;
+
+  // Others
+  cholesterol_mg?: number;
+  sodium_mg?: number;
+  calcium_mg?: number;
+  iron_mg?: number;
+  potassium_mg?: number;
+
+  // Vitamins
+  vitamin_a_mcg?: number; // micro-grams (RAE)
+  vitamin_c_mg?: number;
+  vitamin_d_mcg?: number; // micro-grams
+  vitamin_e_mg?: number;
+  vitamin_k_mcg?: number;
+  vitamin_b12_mcg?: number;
+  // Legacy backups for compatibility if needed (mapped to new fields ideally)
+  flavor?: string; // Optional flavor text
 }
 
 // Basic food database (you can expand this significantly)
@@ -92,9 +123,9 @@ const QUANTITY_PATTERNS = [
 
 export function findFoodInDatabase(foodName: string): FoodItem | null {
   const normalizedName = foodName.toLowerCase().trim();
-  
-  return FOOD_DATABASE.find(food => 
-    food.aliases.some(alias => 
+
+  return FOOD_DATABASE.find(food =>
+    food.aliases.some(alias =>
       normalizedName.includes(alias.toLowerCase()) ||
       alias.toLowerCase().includes(normalizedName)
     )
@@ -104,7 +135,7 @@ export function findFoodInDatabase(foodName: string): FoodItem | null {
 export function parseQuantityAndSize(input: string): { quantity: number; sizeMultiplier: number } {
   let quantity = 1;
   let sizeMultiplier = 1;
-  
+
   // Check for size modifiers (large, small, medium)
   for (const pattern of QUANTITY_PATTERNS) {
     const match = input.match(pattern.pattern);
@@ -122,35 +153,35 @@ export function parseQuantityAndSize(input: string): { quantity: number; sizeMul
       }
     }
   }
-  
+
   return { quantity, sizeMultiplier };
 }
 
 export function parseFoodInput(input: string): ParsedFood[] {
   const parsedFoods: ParsedFood[] = [];
-  
+
   // Split by common delimiters (and, comma, etc.)
   const foodItems = input.split(/,|\sand\s|\n/i).map(item => item.trim());
-  
+
   for (const item of foodItems) {
     if (!item) continue;
-    
+
     // Extract quantity and size information
     const { quantity, sizeMultiplier } = parseQuantityAndSize(item);
-    
+
     // Try to identify the food
     const food = findFoodInDatabase(item);
-    
+
     if (food) {
       // Calculate actual weight based on serving size, quantity, and size modifier
       const weight_g = food.serving_size_g * quantity * sizeMultiplier;
-      
+
       // Calculate nutrition values based on actual weight
       const calories = Math.round((food.calories / 100) * weight_g);
       const protein = Math.round(((food.protein / 100) * weight_g) * 10) / 10;
       const carbs = Math.round(((food.carbs / 100) * weight_g) * 10) / 10;
       const fat = Math.round(((food.fat / 100) * weight_g) * 10) / 10;
-      
+
       parsedFoods.push({
         id: `${food.id}_${Date.now()}_${Math.random()}`,
         name: food.name,
@@ -164,7 +195,7 @@ export function parseFoodInput(input: string): ParsedFood[] {
       });
     }
   }
-  
+
   return parsedFoods;
 }
 

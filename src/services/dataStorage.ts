@@ -98,6 +98,7 @@ export interface Preferences {
   dynamicAdjustmentEnabled: boolean; // Smart Dynamic Adjustments feature
   dynamicAdjustmentThreshold: number; // 3, 4, or 5 (percentage)
   lastAdjustmentWeight?: number; // Weight at last adjustment (baseline)
+  smartSuggestEnabled?: boolean; // New feature toggle
 }
 
 export interface AdjustmentRecord {
@@ -191,6 +192,14 @@ export interface DailySummary {
   updatedAt: string;
 }
 
+export interface AnalyticsFeedback {
+  id: string;
+  timestamp: string;
+  type: 'accuracy' | 'feature_request' | 'general';
+  message?: string;
+  rating?: number;
+}
+
 export interface UserMetricsSnapshot {
   generatedAt: string;
   userGoals: {
@@ -205,6 +214,27 @@ export interface UserMetricsSnapshot {
     protein: number;
     carbs: number;
     fat: number;
+    // Expanded Micros
+    dietary_fiber: number;
+    sugar: number;
+    added_sugars: number;
+    sugar_alcohols: number;
+    net_carbs: number;
+    saturated_fat: number;
+    trans_fat: number;
+    polyunsaturated_fat: number;
+    monounsaturated_fat: number;
+    sodium: number;
+    potassium: number;
+    cholesterol: number;
+    calcium: number;
+    iron: number;
+    vitamin_a: number;
+    vitamin_c: number;
+    vitamin_d: number;
+    vitamin_e: number;
+    vitamin_k: number;
+    vitamin_b12: number;
   };
   weightTrend: {
     current: number | null;
@@ -215,7 +245,14 @@ export interface UserMetricsSnapshot {
   consistencyScore: number; // 0-100 based on adherence
   currentStreak: number;
   weakNutrients: string[]; // e.g. ['protein', 'fiber']
-  commonFoods: { name: string; frequency: number }[]; // top 5 recent
+  commonFoods: {
+    name: string;
+    frequency: number;
+    avgP: number;
+    avgC: number;
+    avgF: number;
+    avgKcal: number;
+  }[]; // top 10 recent
   recentDailySummaries: DailySummary[]; // last 7 days of summaries for granular rules
 }
 
@@ -231,14 +268,41 @@ export interface Insight {
 }
 
 export interface NutritionLibraryItem {
-  id?: string;
   name: string;
   calories_per_100g: number;
   protein_per_100g: number;
   carbs_per_100g: number;
   fat_per_100g: number;
-  standard_serving_weight_g: number;
+
+  dietary_fiber_per_100g?: number;
+  sugar_per_100g?: number;
+  added_sugars_per_100g?: number;
+  sugar_alcohols_per_100g?: number;
+  net_carbs_per_100g?: number;
+
+  saturated_fat_per_100g?: number;
+  trans_fat_per_100g?: number;
+  polyunsaturated_fat_per_100g?: number;
+  monounsaturated_fat_per_100g?: number;
+
+  cholesterol_mg_per_100g?: number;
+  sodium_mg_per_100g?: number;
+  potassium_mg_per_100g?: number;
+  calcium_mg_per_100g?: number;
+  iron_mg_per_100g?: number;
+
+  vitamin_a_mcg_per_100g?: number;
+  vitamin_c_mg_per_100g?: number;
+  vitamin_d_mcg_per_100g?: number;
+  vitamin_e_mg_per_100g?: number;
+  vitamin_k_mcg_per_100g?: number;
+  vitamin_b12_mcg_per_100g?: number;
+
   standard_unit: string;
+  standard_serving_weight_g: number;
+  id?: string;
+  // Previously used fields for backward compatibility mapping if needed (optional)
+  fiber_per_100g?: number;
 }
 
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
@@ -2482,8 +2546,19 @@ export const dataStorage = {
 
       const today = new Date();
 
+
+
       // 2. Averages (Last 7 days)
       let totalCals = 0, totalP = 0, totalC = 0, totalF = 0;
+
+      // Track micros separately
+      const microSums = {
+        dietary_fiber: 0, sugar: 0, added_sugars: 0, sugar_alcohols: 0, net_carbs: 0,
+        saturated_fat: 0, trans_fat: 0, polyunsaturated_fat: 0, monounsaturated_fat: 0,
+        sodium: 0, potassium: 0, cholesterol: 0, calcium: 0, iron: 0,
+        vitamin_a: 0, vitamin_c: 0, vitamin_d: 0, vitamin_e: 0, vitamin_k: 0, vitamin_b12: 0
+      };
+
       let dayCount = 0;
       const verifiedKeys: string[] = []; // for common foods scan
 
@@ -2502,27 +2577,18 @@ export const dataStorage = {
         }
       }
 
-      const avgs = {
-        calories: dayCount ? Math.round(totalCals / dayCount) : 0,
-        protein: dayCount ? Math.round(totalP / dayCount) : 0,
-        carbs: dayCount ? Math.round(totalC / dayCount) : 0,
-        fat: dayCount ? Math.round(totalF / dayCount) : 0,
-      };
-
       // 3. Weight Trend (last 14 days)
       // Sort desc
       const sortedWeights = [...weightEntries].sort((a, b) => b.date.localeCompare(a.date));
+      // ... (Keeping this part identical relies on me copying it perfectly or using a smaller chunk)
+      // I'll copy the logic I saw in previous `view_file`.
       const currentW = sortedWeights.length > 0 ? sortedWeights[0].weight : null;
-      // Find weight ~14 days ago
       const twoWeeksAgo = new Date();
       twoWeeksAgo.setDate(today.getDate() - 14);
       const pastWEntry = sortedWeights.find(w => w.date <= twoWeeksAgo.toISOString().split('T')[0]);
-      // If no entry 14 days ago exactly, just take the oldest within that window or just oldest if window small
-      // Let's grab oldest in the last 14-30 day window for trend
       const startW = pastWEntry ? pastWEntry.weight : (sortedWeights.length > 0 ? sortedWeights[sortedWeights.length - 1].weight : null);
 
       // 4. Consistency Score
-      // Simple metric: % of days in last 7 days where cals were within +/- 15% of goal
       let consistentDays = 0;
       for (let i = 0; i < 7; i++) {
         const d = new Date();
@@ -2536,30 +2602,118 @@ export const dataStorage = {
       }
       const consistencyScore = Math.round((consistentDays / 7) * 100);
 
-      // 5. Weak Nutrients
-      const weak: string[] = [];
-      if (avgs.protein < goals.proteinGrams * 0.8) weak.push('protein');
-      if (avgs.calories > goals.calories * 1.2) weak.push('calories_high');
-      if (avgs.calories < goals.calories * 0.8) weak.push('calories_low');
+      // 6. Common Foods & Micro Accumulation
+      const foodStats: Record<string, { count: number, p: number, c: number, f: number, kcal: number, weight: number }> = {};
 
-      // 6. Common Foods (Scan verified keys only = sharded read)
-      const foodCounts: Record<string, number> = {};
       for (const k of verifiedKeys) {
         try {
           const dailyMeals = await this.getDailyLog(k);
           dailyMeals.forEach(m => {
             m.foods.forEach(f => {
-              // Safe property access
+              // Stats for Common Foods
               const name = ((f as any).food_name || (f as any).foodName || (f as any).name || '').toLowerCase().trim();
-              if (name) foodCounts[name] = (foodCounts[name] || 0) + 1;
+              if (name) {
+                if (!foodStats[name]) {
+                  foodStats[name] = { count: 0, p: 0, c: 0, f: 0, kcal: 0, weight: 0 };
+                }
+                const s = foodStats[name];
+                s.count++;
+                s.p += (f.protein || 0);
+                s.c += (f.carbs || 0);
+                s.f += (f.fat || 0);
+                s.kcal += (f.calories || 0);
+                s.weight += (f.weight_g || 100);
+              }
+
+              // Accumulate Daily Micros
+              // Safe access with fallback 0
+              if (f.dietary_fiber) microSums.dietary_fiber += f.dietary_fiber;
+              else if ((f as any).fiber) microSums.dietary_fiber += (f as any).fiber; // legacy fallback
+
+              if (f.sugar) microSums.sugar += f.sugar;
+              if (f.added_sugars) microSums.added_sugars += f.added_sugars;
+              if (f.sugar_alcohols) microSums.sugar_alcohols += f.sugar_alcohols;
+              if (f.net_carbs) microSums.net_carbs += f.net_carbs;
+
+              if (f.saturated_fat) microSums.saturated_fat += f.saturated_fat;
+              if (f.trans_fat) microSums.trans_fat += f.trans_fat;
+              if (f.polyunsaturated_fat) microSums.polyunsaturated_fat += f.polyunsaturated_fat;
+              if (f.monounsaturated_fat) microSums.monounsaturated_fat += f.monounsaturated_fat;
+
+              if (f.sodium_mg) microSums.sodium += f.sodium_mg;
+              if (f.potassium_mg) microSums.potassium += f.potassium_mg;
+              if (f.cholesterol_mg) microSums.cholesterol += f.cholesterol_mg;
+              if (f.calcium_mg) microSums.calcium += f.calcium_mg;
+              if (f.iron_mg) microSums.iron += f.iron_mg;
+
+              if (f.vitamin_a_mcg) microSums.vitamin_a += f.vitamin_a_mcg;
+              if (f.vitamin_c_mg) microSums.vitamin_c += f.vitamin_c_mg;
+              if (f.vitamin_d_mcg) microSums.vitamin_d += f.vitamin_d_mcg;
+              if (f.vitamin_e_mg) microSums.vitamin_e += f.vitamin_e_mg;
+              if (f.vitamin_k_mcg) microSums.vitamin_k += f.vitamin_k_mcg;
+              if (f.vitamin_b12_mcg) microSums.vitamin_b12 += f.vitamin_b12_mcg;
             });
           });
         } catch (e) { /* ignore read error */ }
       }
-      const commonFoods = Object.entries(foodCounts)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 5)
-        .map(([name, frequency]) => ({ name, frequency }));
+
+      const avgs = {
+        calories: dayCount ? Math.round(totalCals / dayCount) : 0,
+        protein: dayCount ? Math.round(totalP / dayCount) : 0,
+        carbs: dayCount ? Math.round(totalC / dayCount) : 0,
+        fat: dayCount ? Math.round(totalF / dayCount) : 0,
+
+        dietary_fiber: dayCount ? Math.round(microSums.dietary_fiber / dayCount) : 0,
+        sugar: dayCount ? Math.round(microSums.sugar / dayCount) : 0,
+        added_sugars: dayCount ? Math.round(microSums.added_sugars / dayCount) : 0,
+        sugar_alcohols: dayCount ? Math.round(microSums.sugar_alcohols / dayCount) : 0,
+        net_carbs: dayCount ? Math.round(microSums.net_carbs / dayCount) : 0,
+
+        saturated_fat: dayCount ? Math.round(microSums.saturated_fat / dayCount) : 0,
+        trans_fat: dayCount ? Math.round(microSums.trans_fat / dayCount) : 0,
+        polyunsaturated_fat: dayCount ? Math.round(microSums.polyunsaturated_fat / dayCount) : 0,
+        monounsaturated_fat: dayCount ? Math.round(microSums.monounsaturated_fat / dayCount) : 0,
+
+        sodium: dayCount ? Math.round(microSums.sodium / dayCount) : 0,
+        potassium: dayCount ? Math.round(microSums.potassium / dayCount) : 0,
+        cholesterol: dayCount ? Math.round(microSums.cholesterol / dayCount) : 0,
+        calcium: dayCount ? Math.round(microSums.calcium / dayCount) : 0,
+        iron: dayCount ? Math.round(microSums.iron / dayCount) : 0,
+
+        vitamin_a: dayCount ? Math.round(microSums.vitamin_a / dayCount) : 0,
+        vitamin_c: dayCount ? Math.round(microSums.vitamin_c / dayCount) : 0,
+        vitamin_d: dayCount ? Math.round(microSums.vitamin_d / dayCount) : 0,
+        vitamin_e: dayCount ? Math.round(microSums.vitamin_e / dayCount) : 0,
+        vitamin_k: dayCount ? Math.round(microSums.vitamin_k / dayCount) : 0,
+        vitamin_b12: dayCount ? Math.round(microSums.vitamin_b12 / dayCount) : 0,
+      };
+
+      // 5. Weak Nutrients (Calculated after avgs)
+      const weak: string[] = [];
+      if (avgs.protein < goals.proteinGrams * 0.8) weak.push('protein');
+      if (avgs.calories > goals.calories * 1.2) weak.push('calories_high');
+      if (avgs.calories < goals.calories * 0.8) weak.push('calories_low');
+      // Add micronutrient checks if we want? (optional, but good for coach)
+      if (avgs.dietary_fiber < 25) weak.push('fiber'); // General guideline
+      if (avgs.sugar > 50) weak.push('sugar_high');
+
+      const commonFoods = Object.entries(foodStats)
+        .sort((a, b) => b[1].count - a[1].count)
+        .slice(0, 10)
+        .map(([name, stats]) => {
+          // Normalize to per 100g
+          const totalW = stats.weight || (stats.count * 100);
+          const factor = 100 / totalW;
+
+          return {
+            name,
+            frequency: stats.count,
+            avgP: Math.round((stats.p * factor) * 10) / 10,
+            avgC: Math.round((stats.c * factor) * 10) / 10,
+            avgF: Math.round((stats.f * factor) * 10) / 10,
+            avgKcal: Math.round((stats.kcal * factor) * 10) / 10
+          };
+        });
 
       const streak = await this.getStreak();
 
@@ -2593,9 +2747,7 @@ export const dataStorage = {
       console.error('Error generating metrics snapshot:', error);
       return null;
     }
-  }
-
-  ,
+  },
 
 
   // --- INSIGHT ENGINE STORAGE ---
@@ -2650,7 +2802,90 @@ export const dataStorage = {
       const today = new Date().toISOString().split('T')[0];
       return stored === today;
     } catch (e) { return false; }
-  }
+  },
+
+  async debug_injectPlateauData(): Promise<void> {
+    console.log('Injecting debug plateau data...');
+    const today = new Date();
+
+    // 1. Set Goal (Deficit but eating maintenance)
+    // Let's say Maintenance is 2500, Target is 2000.
+    const goals: ExtendedGoalData = {
+      calories: 2000,
+      proteinPercentage: 30,
+      carbsPercentage: 40,
+      fatPercentage: 30,
+      proteinGrams: 150,
+      carbsGrams: 200,
+      fatGrams: 67,
+      currentWeightKg: 80,
+      targetWeightKg: 75,
+      goal: 'lose',
+      gender: 'male'
+    };
+    await this.saveGoals(goals);
+
+    // 3. Generate 14 Days of Data
+    const weightEntries: WeightEntry[] = [];
+
+    for (let i = 0; i < 14; i++) {
+      const d = new Date();
+      d.setDate(today.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+
+      // WEIGHT: Stable (Plateau)
+      // 80.0 -> 80.1 variance
+      weightEntries.push({
+        id: generateId(),
+        date: dateStr,
+        weight: 80 + (i % 2 === 0 ? 0 : 0.1), // 80.0, 80.1, 80.0...
+        updatedAt: new Date().toISOString()
+      });
+
+      // MEALS: Consistent, "Healthy" Staples
+      // ~2000 kcal (Hitting the target perfectly)
+      const meals: MealEntry[] = [
+        {
+          id: generateId(),
+          prompt: "Breakfast",
+          timestamp: d.setHours(8, 0, 0, 0),
+          foods: [
+            { id: generateId(), quantity: 3, unit: 'whole', name: "Scrambled Eggs (3 eggs)", calories: 240, protein: 18, carbs: 2, fat: 15, weight_g: 150 },
+            { id: generateId(), quantity: 2, unit: 'slice', name: "Whole Wheat Toast", calories: 100, protein: 4, carbs: 15, fat: 2, weight_g: 40 }
+          ]
+        },
+        {
+          id: generateId(),
+          prompt: "Lunch",
+          timestamp: d.setHours(13, 0, 0, 0),
+          foods: [
+            { id: generateId(), quantity: 200, unit: 'g', name: "Grilled Chicken Breast", calories: 300, protein: 60, carbs: 0, fat: 6, weight_g: 200 },
+            { id: generateId(), quantity: 200, unit: 'g', name: "Brown Rice", calories: 250, protein: 5, carbs: 50, fat: 2, weight_g: 200 },
+            { id: generateId(), quantity: 150, unit: 'g', name: "Broccoli", calories: 50, protein: 4, carbs: 10, fat: 0, weight_g: 150 }
+          ]
+        },
+        {
+          id: generateId(),
+          prompt: "Dinner",
+          timestamp: d.setHours(19, 0, 0, 0),
+          foods: [
+            { id: generateId(), quantity: 200, unit: 'g', name: "Grilled Salmon", calories: 400, protein: 40, carbs: 0, fat: 20, weight_g: 200 },
+            { id: generateId(), quantity: 200, unit: 'g', name: "Quinoa Salad", calories: 300, protein: 10, carbs: 40, fat: 10, weight_g: 200 }
+          ]
+        }
+      ];
+
+      // Save Daily Log
+      await this.saveDailyLog(dateStr, meals);
+    }
+
+    // Save Weights
+    await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(weightEntries));
+
+    // 4. Force Snapshot Update
+    await this.generateUserMetricsSnapshot();
+    console.log('Debug data injected.');
+  },
 };
 
 

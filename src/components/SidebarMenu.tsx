@@ -9,7 +9,7 @@ import {
   Dimensions,
   useWindowDimensions,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
@@ -27,6 +27,7 @@ interface SidebarMenuProps {
   onAdminPush?: () => void;
   onReferral?: () => void;
   onFreeEntries?: () => void;
+  onHowItWorks?: () => void;
 }
 
 interface MenuItemProps {
@@ -107,9 +108,11 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onAdminPush,
   onReferral,
   onFreeEntries,
+  onHowItWorks,
 }) => {
   const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
   const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
   const [secretTapCount, setSecretTapCount] = useState(0);
   const secretTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -274,7 +277,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             },
           ]}
         >
-          <SafeAreaView style={styles.safeArea} edges={['top', 'bottom']}>
+          <View style={[styles.safeArea, { paddingTop: insets.top, paddingBottom: insets.bottom }]}>
             <View style={styles.content}>
               {/* Header */}
               <View style={styles.header}>
@@ -321,13 +324,14 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
+              <MenuItem icon="book-open" label="How it Works" onPress={() => { onHowItWorks?.(); onClose(); }} isBottom />
               <MenuItem icon="gift" label="Get Free Entries" onPress={handleFreeEntries} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="users" label="Refer Friends" onPress={handleReferral} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="settings" label="Settings" onPress={handleSettings} isBottom />
             </View>
-          </SafeAreaView>
+          </View>
         </Animated.View>
       </View>
     </Modal>

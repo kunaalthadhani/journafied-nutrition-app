@@ -12,7 +12,8 @@ import type {
   ReferralRedemption,
   ReferralReward,
   MealEntry,
-  NutritionLibraryItem
+  NutritionLibraryItem,
+  ReferralCode
 } from './dataStorage';
 
 import { ExerciseEntry } from '../components/ExerciseLogSection';
@@ -775,6 +776,8 @@ export const supabaseDataService = {
         lunch: { enabled: false, hour: 12, minute: 0 },
         dinner: { enabled: false, hour: 18, minute: 0 },
       },
+      dynamicAdjustmentEnabled: data.dynamic_adjustment_enabled ?? false,
+      dynamicAdjustmentThreshold: data.dynamic_adjustment_threshold ?? 3,
     };
   },
 
@@ -1096,6 +1099,32 @@ export const supabaseDataService = {
       protein_per_100g: data.protein_per_100g,
       carbs_per_100g: data.carbs_per_100g,
       fat_per_100g: data.fat_per_100g,
+
+      // Extended
+      dietary_fiber_per_100g: data.dietary_fiber_per_100g ?? data.fiber_per_100g,
+      sugar_per_100g: data.sugar_per_100g,
+      added_sugars_per_100g: data.added_sugars_per_100g,
+      sugar_alcohols_per_100g: data.sugar_alcohols_per_100g,
+      net_carbs_per_100g: data.net_carbs_per_100g,
+
+      saturated_fat_per_100g: data.saturated_fat_per_100g,
+      trans_fat_per_100g: data.trans_fat_per_100g,
+      polyunsaturated_fat_per_100g: data.polyunsaturated_fat_per_100g,
+      monounsaturated_fat_per_100g: data.monounsaturated_fat_per_100g,
+
+      sodium_mg_per_100g: data.sodium_mg_per_100g,
+      potassium_mg_per_100g: data.potassium_mg_per_100g,
+      cholesterol_mg_per_100g: data.cholesterol_mg_per_100g,
+      calcium_mg_per_100g: data.calcium_mg_per_100g,
+      iron_mg_per_100g: data.iron_mg_per_100g,
+
+      vitamin_a_mcg_per_100g: data.vitamin_a_mcg_per_100g,
+      vitamin_c_mg_per_100g: data.vitamin_c_mg_per_100g,
+      vitamin_d_mcg_per_100g: data.vitamin_d_mcg_per_100g,
+      vitamin_e_mg_per_100g: data.vitamin_e_mg_per_100g,
+      vitamin_k_mcg_per_100g: data.vitamin_k_mcg_per_100g,
+      vitamin_b12_mcg_per_100g: data.vitamin_b12_mcg_per_100g,
+
       standard_serving_weight_g: data.standard_serving_weight_g,
       standard_unit: data.standard_unit,
     };
@@ -1107,21 +1136,56 @@ export const supabaseDataService = {
     // Normalize name
     const normalizedName = item.name.toLowerCase().trim();
 
-    const { error } = await supabase.from('nutrition_library').upsert(
-      {
-        name: normalizedName,
-        calories_per_100g: item.calories_per_100g,
-        protein_per_100g: item.protein_per_100g,
-        carbs_per_100g: item.carbs_per_100g,
-        fat_per_100g: item.fat_per_100g,
-        standard_serving_weight_g: item.standard_serving_weight_g,
-        standard_unit: item.standard_unit,
-      },
-      { onConflict: 'name' }
-    );
+    try {
+      const { error } = await supabase.from('nutrition_library').upsert(
+        {
+          name: normalizedName,
+          calories_per_100g: item.calories_per_100g,
+          protein_per_100g: item.protein_per_100g,
+          carbs_per_100g: item.carbs_per_100g,
+          fat_per_100g: item.fat_per_100g,
 
-    if (error) {
-      console.error('Error saving to nutrition_library:', error);
+          // Micros
+          dietary_fiber_per_100g: item.dietary_fiber_per_100g,
+          sugar_per_100g: item.sugar_per_100g,
+          added_sugars_per_100g: item.added_sugars_per_100g,
+          sugar_alcohols_per_100g: item.sugar_alcohols_per_100g,
+          net_carbs_per_100g: item.net_carbs_per_100g,
+
+          saturated_fat_per_100g: item.saturated_fat_per_100g,
+          trans_fat_per_100g: item.trans_fat_per_100g,
+          polyunsaturated_fat_per_100g: item.polyunsaturated_fat_per_100g,
+          monounsaturated_fat_per_100g: item.monounsaturated_fat_per_100g,
+
+          sodium_mg_per_100g: item.sodium_mg_per_100g,
+          potassium_mg_per_100g: item.potassium_mg_per_100g,
+          cholesterol_mg_per_100g: item.cholesterol_mg_per_100g,
+          calcium_mg_per_100g: item.calcium_mg_per_100g,
+          iron_mg_per_100g: item.iron_mg_per_100g,
+
+          vitamin_a_mcg_per_100g: item.vitamin_a_mcg_per_100g,
+          vitamin_c_mg_per_100g: item.vitamin_c_mg_per_100g,
+          vitamin_d_mcg_per_100g: item.vitamin_d_mcg_per_100g,
+          vitamin_e_mg_per_100g: item.vitamin_e_mg_per_100g,
+          vitamin_k_mcg_per_100g: item.vitamin_k_mcg_per_100g,
+          vitamin_b12_mcg_per_100g: item.vitamin_b12_mcg_per_100g,
+
+          standard_serving_weight_g: item.standard_serving_weight_g,
+          standard_unit: item.standard_unit,
+        },
+        { onConflict: 'name' }
+      );
+
+      if (error) {
+        // Ignore "relation not found" error to prevent crash if table missing
+        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
+          console.warn('Supabase table "nutrition_library" missing. Auto-save skipped.');
+          return;
+        }
+        console.error('Error saving to nutrition_library:', error);
+      }
+    } catch (e) {
+      console.error('Exception saving to nutrition_library:', e);
     }
   },
 };

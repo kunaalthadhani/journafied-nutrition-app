@@ -63,6 +63,29 @@ export const authService = {
     return supabase!.auth.onAuthStateChange(callback);
   },
 
+  async resetPasswordForEmail(email: string) {
+    ensureClient();
+    return supabase!.auth.resetPasswordForEmail(email, {
+      redirectTo: 'io.supabase.trackkcal://reset-callback/', // deep link if needed
+    });
+  },
+
+  async signUp(email: string, password: string) {
+    ensureClient();
+    return supabase!.auth.signUp({
+      email,
+      password,
+    });
+  },
+
+  async signIn(email: string, password: string) {
+    ensureClient();
+    return supabase!.auth.signInWithPassword({
+      email,
+      password,
+    });
+  },
+
   async signOut() {
     ensureClient();
     return supabase!.auth.signOut();

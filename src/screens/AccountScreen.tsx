@@ -11,7 +11,9 @@ import {
   Linking,
   Platform,
   Switch,
+
   Modal,
+  KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -26,6 +28,8 @@ import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { authService } from '../services/authService';
+import { COUNTRIES, Country } from '../constants/countries';
+import { FlatList } from 'react-native';
 
 interface AccountScreenProps {
   onBack: () => void;
@@ -71,14 +75,33 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   // -- Form State --
   const [name, setName] = useState(initialAccountInfo?.name || '');
   const [emailInput, setEmailInput] = useState(initialAccountInfo?.email || '');
-  const [phoneInput, setPhoneInput] = useState(initialAccountInfo?.phoneNumber || '');
-  const [pendingOtpCode, setPendingOtpCode] = useState('');
+  const [phoneInput, setPhoneInput] = useState(() => {
+    // If we have an initial phone, we might need to parse it? 
+    // For now, simpler to start empty or just raw. 
+    // If initialAccountInfo.phoneNumber exists, it's likely full string "+97150..."
+    // We should parse it ideally, but for now let's just leave it blank or raw
+    // and let user fix it if they edit.
+    // simpler:
+    return '';
+  });
+  const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+
+  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Default UAE
+  const [showCountryPicker, setShowCountryPicker] = useState(false);
+  const [countrySearchQuery, setCountrySearchQuery] = useState('');
+
+  // -- Forgot Password State --
+  const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
+  const [forgotPasswordMode, setForgotPasswordMode] = useState<'email' | 'phone'>('email');
+  const [resetInput, setResetInput] = useState('');
 
   // -- Validation State --
   const [nameError, setNameError] = useState(false);
   const [emailError, setEmailError] = useState(false);
+  const [phoneError, setPhoneError] = useState(false);
   const [termsError, setTermsError] = useState(false);
   const [referralCodeError, setReferralCodeError] = useState<string | null>(null);
 
@@ -274,15 +297,83 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   };
 
 
+  // -- Computed --
+  const filteredCountries = COUNTRIES.filter(c =>
+    c.name.toLowerCase().includes(countrySearchQuery.toLowerCase()) ||
+    c.dial_code.includes(countrySearchQuery) ||
+    c.code.toLowerCase().includes(countrySearchQuery.toLowerCase())
+  );
+
   // -- Actions --
 
-  const handleSendOtp = async () => {
-    const email = emailInput.trim().toLowerCase();
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  // -- Actions --
+
+  const handleSignIn = async () => {
+    if (!emailInput.trim() || !password.trim()) {
+      setAuthMessage('Please enter email and password.');
+      return;
+    }
+    try {
+      setAuthStatus('verifying');
+      setAuthMessage(null);
+      const { data, error } = await authService.signIn(emailInput.trim(), password);
+      if (error) throw error;
+      if (data.session) {
+        await syncAccountInfoFromSession(data.session);
+        await loadLocalData(); // Refresh UI
+      }
+    } catch (e: any) {
+      setAuthMessage(e.message || 'Login failed.');
+      // If login fails, suggest reset?
+    } finally {
+      setAuthStatus('idle');
+    }
+  };
+
+  const handleForgotPassword = async () => {
+    if (!resetInput.trim()) {
+      Alert.alert("Missing Info", `Please enter your ${forgotPasswordMode}.`);
+      return;
+    }
+
+    try {
+      setAuthMessage(null); // Clear previous
+      setForgotPasswordVisible(false); // Close modal
+
+      if (forgotPasswordMode === 'email') {
+        await authService.resetPasswordForEmail(resetInput.trim());
+        Alert.alert("Reset Link Sent", "Check your email for password reset instructions.");
+      } else {
+        // Phone flow (simulated as we might not have SMS set up, or standard OTP login)
+        // Using signInWithOTP for phone is the standard way to 'verify' ownership then they can change password?
+        // Or actually just 'Login with OTP'.
+        Alert.alert("Coming Soon", "SMS reset is currently being configured. Please use Email reset for now.");
+      }
+    } catch (e: any) {
+      Alert.alert("Error", e.message || "Failed to send reset link.");
+    }
+  };
+
+  const handleSignUp = async () => {
     let hasError = false;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
     if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
-    if (!emailRegex.test(email)) { setEmailError(true); hasError = true; } else setEmailError(false);
+    if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
+    if (!password.trim() || password.length < 6) { setAuthMessage('Password must be at least 6 chars.'); hasError = true; }
+
+    // Phone Validation
+    const cleanPhone = phoneInput.replace(/\D/g, ''); // Remove non-digits
+    // Strip leading zero if present (User might type 050...)
+    const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
+
+    if (!finalPhoneBody || finalPhoneBody.length < 5) { // Basic check
+      setPhoneError(true);
+      hasError = true;
+    } else {
+      setPhoneError(false);
+    }
+
     if (!hasAcceptedTerms) { setTermsError(true); hasError = true; } else setTermsError(false);
 
     if (hasError) return;
@@ -291,69 +382,45 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       setAuthStatus('sending');
       setAuthMessage(null);
 
-      // Provisionally save info
-      const provisional: AccountInfo = {
-        ...(accountInfo || {}),
-        name: name.trim(),
-        email,
-        phoneNumber: phoneInput.trim() || undefined,
-      };
-      await dataStorage.saveAccountInfo(provisional);
-      setAccountInfo(provisional);
+      const fullPhoneNumber = `${selectedCountry.dial_code}${finalPhoneBody}`;
 
-      await authService.sendOtp(email);
-      setOtpSent(true);
-      setAuthMessage('Verification code sent to your email.');
-    } catch (error: any) {
-      setAuthMessage(error.message || 'Failed to send code.');
-    } finally {
-      setAuthStatus('idle');
-    }
-  };
-
-  const handleVerifyOtp = async () => {
-    if (pendingOtpCode.length < 6) {
-      setAuthMessage('Please enter the full 6-digit code.');
-      return;
-    }
-
-    try {
-      setAuthStatus('verifying');
-      setAuthMessage(null);
-
-      const { data, error } = await authService.verifyOtp(emailInput.trim(), pendingOtpCode.trim());
+      // 1. Sign Up
+      const { data, error } = await authService.signUp(emailInput.trim(), password);
       if (error) throw error;
-      if (!data.session) throw new Error('No session returned.');
 
-      // Success sequence
-      await syncAccountInfoFromSession(data.session);
-      await dataStorage.pushCachedDataToSupabase();
+      if (data.session) {
+        // Immediate login success (if confirm email off)
+        // Save Name/Phone logic
+        const provisional: AccountInfo = {
+          ...(accountInfo || {}),
+          name: name.trim(),
+          email: emailInput.trim(),
+          phoneNumber: fullPhoneNumber,
+          supabaseUserId: data.session.user.id,
+        };
+        await dataStorage.saveAccountInfo(provisional); // Save mostly for name
+        await syncAccountInfoFromSession(data.session);
 
-      // Handle Referrals
-      if (referralCode.trim()) {
-        const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput);
-        if (validation.valid) {
-          await referralService.createReferralRedemption(validation.referralCode!, emailInput, name.trim());
+        // Referrals
+        if (referralCode.trim()) {
+          const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput.trim());
+          if (validation.valid) {
+            await referralService.createReferralRedemption(validation.referralCode!, emailInput.trim(), name.trim());
+          }
         }
+
+        // Bonus
+        const taskResult = await dataStorage.completeEntryTask('registration');
+        if (taskResult.awarded) Alert.alert('Welcome!', 'Account created. +5 free entries.');
+
+        await loadLocalData();
+      } else {
+        // Email confirmation required
+        Alert.alert('Verify Email', 'Please check your email to confirm your account.');
+        setAuthMode('signin'); // Switch to login
       }
-
-      // Get own referral code
-      const myCode = await referralService.getOrCreateReferralCode(emailInput);
-      setReferralDetails(prev => ({ ...prev, code: myCode }));
-
-      // Registration task bonus
-      const taskResult = await dataStorage.completeEntryTask('registration');
-      if (taskResult.awarded) {
-        Alert.alert('Bonus Unlocked!', 'Account verified. +5 free entries.');
-      }
-
-      await loadLocalData(); // Refresh UI
-      setOtpSent(false); // Reset form state
-      setPendingOtpCode('');
-      setReferralCode('');
-
     } catch (e: any) {
-      setAuthMessage('Invalid code or expired. Please try again.');
+      setAuthMessage(e.message || 'Sign up failed.');
     } finally {
       setAuthStatus('idle');
     }
@@ -370,8 +437,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           setAuthSession(null);
           // Revert to guest info if needed, or clear PII
           setAccountInfo(prev => ({ ...prev, email: undefined, supabaseUserId: undefined }));
-          setOtpSent(false);
-          setPendingOtpCode('');
           setAuthMessage(null);
         }
       }
@@ -413,125 +478,185 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   // -- Renderers --
 
+  // -- Renderers --
+
   const renderNotLoggedIn = () => (
-    <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} keyboardShouldPersistTaps="handled">
-      <View style={[styles.formCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
-        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Create Account / Sign In</Text>
-        <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
-          Enter your details to sync your progress and get free entry bonuses.
-        </Text>
+    <KeyboardAvoidingView
+      style={{ flex: 1 }}
+      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
+    >
+      <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} keyboardShouldPersistTaps="handled">
+        <View style={[styles.formCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
 
-        {/* Name Input */}
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
-        <TextInput
-          style={[styles.input, {
-            backgroundColor: theme.colors.input,
-            color: theme.colors.textPrimary,
-            borderColor: nameError ? theme.colors.error : theme.colors.border
-          }]}
-          placeholder="John Doe"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={name}
-          onChangeText={setName}
-          autoCapitalize="words"
-        />
-
-        {/* Email Input */}
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
-        <TextInput
-          style={[styles.input, {
-            backgroundColor: theme.colors.input,
-            color: theme.colors.textPrimary,
-            borderColor: emailError ? theme.colors.error : theme.colors.border
-          }]}
-          placeholder="john@example.com"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={emailInput}
-          onChangeText={setEmailInput}
-          keyboardType="email-address"
-          autoCapitalize="none"
-        />
-
-        {/* Phone Input */}
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Phone (Optional)</Text>
-        <TextInput
-          style={[styles.input, {
-            backgroundColor: theme.colors.input,
-            color: theme.colors.textPrimary,
-            borderColor: theme.colors.border
-          }]}
-          placeholder="+1 234 567 8900"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={phoneInput}
-          onChangeText={setPhoneInput}
-          keyboardType="phone-pad"
-        />
-
-        {/* Referral Code */}
-        <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Referral Code (Optional)</Text>
-        <TextInput
-          style={[styles.input, {
-            backgroundColor: theme.colors.input,
-            color: theme.colors.textPrimary,
-            borderColor: referralCodeError ? theme.colors.error : theme.colors.border
-          }]}
-          placeholder="FRIEND123"
-          placeholderTextColor={theme.colors.textTertiary}
-          value={referralCode}
-          onChangeText={setReferralCode}
-          autoCapitalize="characters"
-        />
-        {referralCodeError && <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>{referralCodeError}</Text>}
-
-        {/* OTP Input - Conditionally Rendered */}
-        {otpSent && (
-          <View style={{ marginTop: 16 }}>
-            <Text style={[styles.label, { color: theme.colors.primary, fontWeight: 'bold' }]}>Enter Verification Code</Text>
-            <TextInput
-              style={[styles.input, {
-                backgroundColor: theme.colors.input,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.primary,
-                textAlign: 'center',
-                fontSize: 20,
-                letterSpacing: 4
-              }]}
-              placeholder="123456"
-              placeholderTextColor={theme.colors.textTertiary}
-              value={pendingOtpCode}
-              onChangeText={setPendingOtpCode}
-              keyboardType="number-pad"
-              maxLength={6}
-            />
+          {/* Toggle Tabs */}
+          <View style={{ flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signin' ? 2 : 0, borderBottomColor: theme.colors.primary }}
+              onPress={() => setAuthMode('signin')}
+            >
+              <Text style={{ fontWeight: 'bold', color: authMode === 'signin' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Sign In</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signup' ? 2 : 0, borderBottomColor: theme.colors.primary }}
+              onPress={() => setAuthMode('signup')}
+            >
+              <Text style={{ fontWeight: 'bold', color: authMode === 'signup' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Create Account</Text>
+            </TouchableOpacity>
           </View>
-        )}
 
-        {/* Terms Checkbox */}
-        <TouchableOpacity style={styles.termsRow} onPress={() => setHasAcceptedTerms(!hasAcceptedTerms)}>
-          <View style={[styles.checkbox, { borderColor: termsError ? theme.colors.error : theme.colors.border }]}>
-            {hasAcceptedTerms && <View style={styles.checkboxInner} />}
-          </View>
-          <Text style={[styles.helperText, { flex: 1, color: theme.colors.textSecondary }]}>
-            I agree to the Terms & Conditions
+          <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
+            {authMode === 'signup'
+              ? "Enter your details to sync your progress and get free entry bonuses."
+              : "Welcome back! Sign in to access your data."}
           </Text>
-        </TouchableOpacity>
 
-        {/* Action Button */}
-        {authMessage && <Text style={{ color: theme.colors.textPrimary, textAlign: 'center', marginVertical: 8 }}>{authMessage}</Text>}
-
-        <TouchableOpacity
-          style={[styles.primaryButton, (!hasAcceptedTerms || authStatus !== 'idle') && styles.primaryButtonDisabled]}
-          disabled={!hasAcceptedTerms || authStatus !== 'idle'}
-          onPress={otpSent ? handleVerifyOtp : handleSendOtp}
-        >
-          {authStatus !== 'idle' ? (
-            <ActivityIndicator color="white" />
-          ) : (
-            <Text style={styles.primaryButtonText}>{otpSent ? 'Verify & Sign In' : 'Send Verification Code'}</Text>
+          {/* Name Input (SignUp Only) */}
+          {authMode === 'signup' && (
+            <>
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: nameError ? theme.colors.error : theme.colors.border
+                }]}
+                placeholder="John Doe"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={name}
+                onChangeText={setName}
+                autoCapitalize="words"
+              />
+            </>
           )}
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+
+          {/* Email Input */}
+          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+          <TextInput
+            style={[styles.input, {
+              backgroundColor: theme.colors.input,
+              color: theme.colors.textPrimary,
+              borderColor: emailError ? theme.colors.error : theme.colors.border
+            }]}
+            placeholder="john@example.com"
+            placeholderTextColor={theme.colors.textTertiary}
+            value={emailInput}
+            onChangeText={setEmailInput}
+            keyboardType="email-address"
+            autoCapitalize="none"
+          />
+
+          {/* Password Input */}
+          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
+          <TextInput
+            style={[styles.input, {
+              backgroundColor: theme.colors.input,
+              color: theme.colors.textPrimary,
+              borderColor: theme.colors.border
+            }]}
+            placeholder="••••••"
+            placeholderTextColor={theme.colors.textTertiary}
+            value={password}
+            onChangeText={setPassword}
+            secureTextEntry
+          />
+
+          {authMode === 'signin' && (
+            <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
+              <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '500' }}>Forgot password?</Text>
+            </TouchableOpacity>
+          )}
+
+          {/* Additional SignUp Fields */}
+          {authMode === 'signup' && (
+            <>
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Phone Number</Text>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* Country Picker Trigger */}
+                <TouchableOpacity
+                  style={{
+                    height: 50,
+                    backgroundColor: theme.colors.input,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                    borderRadius: 8,
+                    paddingHorizontal: 12,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                    minWidth: 80
+                  }}
+                  onPress={() => setShowCountryPicker(true)}
+                >
+                  <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold' }}>{selectedCountry.dial_code}</Text>
+                  <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>{selectedCountry.code}</Text>
+                </TouchableOpacity>
+
+                {/* Phone Input */}
+                <TextInput
+                  style={[styles.input, {
+                    flex: 1,
+                    backgroundColor: theme.colors.input,
+                    color: theme.colors.textPrimary,
+                    borderColor: phoneError ? theme.colors.error : theme.colors.border
+                  }]}
+                  placeholder={selectedCountry.placeholder}
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={phoneInput}
+                  onChangeText={(text) => {
+                    // Start stripping lead 0 immediately for UX? 
+                    // Or just let them type and strip validly. 
+                    // User said "50... not 050". If they type 0, we can ignore it?
+                    if (text.length === 1 && text === '0') return; // Prevent leading 0 if starting
+                    setPhoneInput(text);
+                  }}
+                  keyboardType="phone-pad"
+                />
+              </View>
+
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Referral Code (Optional)</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: referralCodeError ? theme.colors.error : theme.colors.border
+                }]}
+                placeholder="FRIEND123"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={referralCode}
+                onChangeText={setReferralCode}
+                autoCapitalize="characters"
+              />
+              {referralCodeError && <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>{referralCodeError}</Text>}
+
+              {/* Terms Checkbox */}
+              <TouchableOpacity style={styles.termsRow} onPress={() => setHasAcceptedTerms(!hasAcceptedTerms)}>
+                <View style={[styles.checkbox, { borderColor: termsError ? theme.colors.error : theme.colors.border }]}>
+                  {hasAcceptedTerms && <View style={styles.checkboxInner} />}
+                </View>
+                <Text style={[styles.helperText, { flex: 1, color: theme.colors.textSecondary }]}>
+                  I agree to the Terms & Conditions
+                </Text>
+              </TouchableOpacity>
+            </>
+          )}
+
+          {/* Action Button */}
+          {authMessage && <Text style={{ color: theme.colors.textPrimary, textAlign: 'center', marginVertical: 8 }}>{authMessage}</Text>}
+
+          <TouchableOpacity
+            style={[styles.primaryButton, (authMode === 'signup' && !hasAcceptedTerms) && styles.primaryButtonDisabled]}
+            disabled={(authMode === 'signup' && !hasAcceptedTerms) || authStatus !== 'idle'}
+            onPress={authMode === 'signup' ? handleSignUp : handleSignIn}
+          >
+            {authStatus !== 'idle' ? (
+              <ActivityIndicator color="white" />
+            ) : (
+              <Text style={styles.primaryButtonText}>{authMode === 'signup' ? 'Create Account' : 'Sign In'}</Text>
+            )}
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 
   const renderLoggedIn = () => (
@@ -709,8 +834,170 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : (
-        (authSession || accountInfo?.email) ? renderLoggedIn() : renderNotLoggedIn()
+        authSession ? renderLoggedIn() : renderNotLoggedIn()
       )}
+
+      {/* Country Picker Modal */}
+      <Modal
+        visible={showCountryPicker}
+        animationType="slide"
+        transparent={true}
+        onRequestClose={() => setShowCountryPicker(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+            <View style={{ backgroundColor: theme.colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '70%', padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.colors.textPrimary }}>Select Country</Text>
+                <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
+                  <Feather name="x" size={24} color={theme.colors.textPrimary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Search Bar */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.input, borderRadius: 8, paddingHorizontal: 12, marginBottom: 16, height: 40, borderWidth: 1, borderColor: theme.colors.border }}>
+                <Feather name="search" size={16} color={theme.colors.textTertiary} style={{ marginRight: 8 }} />
+                <TextInput
+                  style={{ flex: 1, color: theme.colors.textPrimary, height: '100%' }}
+                  placeholder="Search country..."
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={countrySearchQuery}
+                  onChangeText={setCountrySearchQuery}
+                  autoCorrect={false}
+                />
+                {countrySearchQuery.length > 0 && (
+                  <TouchableOpacity onPress={() => setCountrySearchQuery('')}>
+                    <Feather name="x-circle" size={16} color={theme.colors.textTertiary} />
+                  </TouchableOpacity>
+                )}
+              </View>
+
+              <FlatList
+                data={filteredCountries}
+                keyExtractor={(item) => item.code}
+                keyboardShouldPersistTaps="handled"
+                renderItem={({ item }) => (
+                  <TouchableOpacity
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}
+                    onPress={() => {
+                      setSelectedCountry(item);
+                      setShowCountryPicker(false);
+                      setCountrySearchQuery(''); // Reset search
+                    }}
+                  >
+                    <Text style={{ fontSize: 24, marginRight: 12 }}>{item.code === 'AE' ? '🇦🇪' : item.code === 'US' ? '🇺🇸' : item.code === 'GB' ? '🇬🇧' : '🏳️'}</Text>
+                    <Text style={{ fontSize: 16, color: theme.colors.textPrimary, flex: 1 }}>{item.name}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textSecondary }}>{item.dial_code}</Text>
+                  </TouchableOpacity>
+                )}
+              />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
+
+      {/* Forgot Password Modal */}
+      <Modal
+        visible={forgotPasswordVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setForgotPasswordVisible(false)}
+      >
+        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
+          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
+            <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.colors.textPrimary }}>Reset Password</Text>
+                <TouchableOpacity onPress={() => setForgotPasswordVisible(false)}>
+                  <Feather name="x" size={24} color={theme.colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+
+              {/* Type Selection */}
+              <View style={{ flexDirection: 'row', marginBottom: 16, borderRadius: 8, backgroundColor: theme.colors.secondaryBg, padding: 4 }}>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6, backgroundColor: forgotPasswordMode === 'email' ? theme.colors.card : 'transparent', shadowOpacity: forgotPasswordMode === 'email' ? 0.1 : 0 }}
+                  onPress={() => setForgotPasswordMode('email')}
+                >
+                  <Text style={{ fontWeight: '600', color: forgotPasswordMode === 'email' ? theme.colors.textPrimary : theme.colors.textSecondary }}>Email</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={{ flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6, backgroundColor: forgotPasswordMode === 'phone' ? theme.colors.card : 'transparent', shadowOpacity: forgotPasswordMode === 'phone' ? 0.1 : 0 }}
+                  onPress={() => setForgotPasswordMode('phone')}
+                >
+                  <Text style={{ fontWeight: '600', color: forgotPasswordMode === 'phone' ? theme.colors.textPrimary : theme.colors.textSecondary }}>SMS</Text>
+                </TouchableOpacity>
+              </View>
+
+              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 8 }}>
+                Enter your {forgotPasswordMode} to receive a reset code.
+              </Text>
+
+              {forgotPasswordMode === 'email' ? (
+                <TextInput
+                  style={[styles.input, {
+                    backgroundColor: theme.colors.input,
+                    color: theme.colors.textPrimary,
+                    borderColor: theme.colors.border
+                  }]}
+                  placeholder="john@example.com"
+                  placeholderTextColor={theme.colors.textTertiary}
+                  value={resetInput}
+                  onChangeText={setResetInput}
+                  keyboardType="email-address"
+                  autoCapitalize="none"
+                />
+              ) : (
+                <View style={{ flexDirection: 'row', gap: 10 }}>
+                  <TouchableOpacity
+                    style={{
+                      height: 50,
+                      backgroundColor: theme.colors.input,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 12,
+                      justifyContent: 'center',
+                      alignItems: 'center',
+                      minWidth: 80
+                    }}
+                    onPress={() => setShowCountryPicker(true)}
+                  >
+                    <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold' }}>{selectedCountry.dial_code}</Text>
+                    <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>{selectedCountry.code}</Text>
+                  </TouchableOpacity>
+
+                  <TextInput
+                    style={[styles.input, {
+                      flex: 1,
+                      backgroundColor: theme.colors.input,
+                      color: theme.colors.textPrimary,
+                      borderColor: theme.colors.border
+                    }]}
+                    placeholder={selectedCountry.placeholder}
+                    placeholderTextColor={theme.colors.textTertiary}
+                    value={resetInput}
+                    onChangeText={(text) => {
+                      if (text.length === 1 && text === '0') return;
+                      setResetInput(text);
+                    }}
+                    keyboardType="phone-pad"
+                  />
+                </View>
+              )}
+
+              <TouchableOpacity
+                style={[styles.primaryButton, { marginTop: 16 }]}
+                onPress={handleForgotPassword}
+              >
+                <Text style={styles.primaryButtonText}>Send Reset Code</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
+
       <Modal
         visible={showDynamicHelp}
         transparent={true}
@@ -748,7 +1035,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 };
 // End of AccountScreen

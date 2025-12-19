@@ -419,7 +419,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       // Mark graph animation as complete so we can start the typewriter insight
       setGraphAnimationDone(true);
     });
-  }, [JSON.stringify(graphData)]);
+  }, [graphData]);
 
   const handleLogWeight = () => {
     const weight = parseFloat(logWeight);
@@ -495,6 +495,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const entry = historyEntries[index];
     if (!entry) return;
 
+    // Simplified deletion using object reference
     Alert.alert(
       'Delete Entry',
       `Delete weight entry for ${format(entry.date, 'd MMM yyyy')}?`,
@@ -504,12 +505,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           text: 'Delete',
           style: 'destructive',
           onPress: () => {
-            setWeightEntries(prev => {
-              const sorted = [...prev].sort((a, b) => b.date.getTime() - a.date.getTime());
-              if (!sorted[index]) return prev;
-              sorted.splice(index, 1);
-              return sorted.sort((a, b) => a.date.getTime() - b.date.getTime());
-            });
+            setWeightEntries(prev => prev.filter(e => e !== entry));
             if (editingEntryIndex === index) {
               handleCancelEditEntry();
             }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { GrocerySuggestionsScreen } from './GrocerySuggestionsScreen';
 import {
   View,
   Text,
@@ -63,7 +64,10 @@ import { generateId } from '../utils/uuid';
 import { calculateStreak } from '../utils/streakUtils';
 import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
-import { CoachCard } from '../components/CoachCard';
+import { SmartSuggestBanner } from '../components/CoachCard';
+import { ChatCoachScreen } from './ChatCoachScreen';
+import { chatCoachService } from '../services/chatCoachService';
+import { WalkthroughModal } from '../components/WalkthroughModal';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -129,6 +133,9 @@ export const HomeScreen: React.FC = () => {
   });
   const [taskBonusEntries, setTaskBonusEntries] = useState(0);
   const [showFreeEntries, setShowFreeEntries] = useState(false);
+  const [showGrocerySuggestions, setShowGrocerySuggestions] = useState(false);
+  const [showChatCoach, setShowChatCoach] = useState(false);
+  const [showWalkthrough, setShowWalkthrough] = useState(false);
 
 
 
@@ -423,6 +430,16 @@ export const HomeScreen: React.FC = () => {
     setShowFreeEntries(false);
   };
 
+  const handleGrocerySuggestions = () => {
+    setShowSettings(false);
+    setShowGrocerySuggestions(true);
+  };
+
+  const handleGrocerySuggestionsBack = () => {
+    setShowGrocerySuggestions(false);
+    setShowSettings(true);
+  };
+
   const handleCustomPlanTaskNavigate = () => {
     setShowFreeEntries(false);
     handleSetGoals();
@@ -594,6 +611,9 @@ export const HomeScreen: React.FC = () => {
         setEntryCount(count);
       }
 
+      // Check if user unlocked AI Coach
+      await chatCoachService.checkUnlockStatus();
+
       // Load user plan
       const plan = await dataStorage.loadUserPlan();
       setUserPlan(plan);
@@ -724,6 +744,28 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
+  useEffect(() => {
+    const checkWalkthrough = async () => {
+      try {
+        const hasSeen = await AsyncStorage.getItem('@trackkal:hasSeenWalkthrough');
+        if (hasSeen !== 'true') {
+          // Delay slightly to let app load
+          setTimeout(() => setShowWalkthrough(true), 1000);
+        }
+      } catch (e) {
+        console.error('Error checking walkthrough prop', e);
+      }
+    };
+    checkWalkthrough();
+  }, []);
+
+  const handleWalkthroughClose = async (dontShowAgain: boolean) => {
+    setShowWalkthrough(false);
+    if (dontShowAgain) {
+      await AsyncStorage.setItem('@trackkal:hasSeenWalkthrough', 'true');
+    }
+  };
+
   const handleSyncAccount = async () => {
     await loadAllData();
   };
@@ -747,13 +789,22 @@ export const HomeScreen: React.FC = () => {
         analyticsService.trackAppOpen();
 
         // Refresh checks on foreground
+        // Refresh checks on foreground
+        const summaries = await dataStorage.loadDailySummaries();
         const meals = await dataStorage.loadMeals();
         const plan = await dataStorage.loadUserPlan();
         const freeze = await dataStorage.loadStreakFreeze();
-        if (meals && plan && freeze) {
-          const updated = await checkMissedDaysAndFreeze(meals, freeze, plan);
+
+        if (summaries && plan && freeze) {
+          const updated = await checkMissedDaysAndFreeze(summaries, freeze, plan);
           setStreakFreeze(updated);
+        }
+
+        if (meals) {
           setMealsByDate(meals);
+        }
+        if (summaries) {
+          setSummariesByDate(summaries);
         }
       }
     });
@@ -800,6 +851,10 @@ export const HomeScreen: React.FC = () => {
         setShowSetGoals(false);
         return true;
       }
+      if (showGrocerySuggestions) {
+        setShowGrocerySuggestions(false);
+        return true;
+      }
       if (showAccount) {
         setShowAccount(false);
         return true;
@@ -842,6 +897,7 @@ export const HomeScreen: React.FC = () => {
     showAbout,
     showReferral,
     showFreeEntries,
+    showGrocerySuggestions,
     showCalendar,
     menuVisible,
   ]);
@@ -1762,6 +1818,23 @@ export const HomeScreen: React.FC = () => {
           setTimeout(() => setShowIntegrations(true), 100);
         }}
         onDowngradeToFree={handleDowngradeToFree}
+        onGrocerySuggestions={handleGrocerySuggestions}
+      />
+    );
+  }
+
+  if (showGrocerySuggestions) {
+    return (
+      <GrocerySuggestionsScreen
+        onBack={handleGrocerySuggestionsBack}
+        userMetrics={{
+          goal: savedGoals.goal,
+          targetCalories: savedGoals.calories || 2000,
+          proteinRatio: savedGoals.proteinPercentage || 30,
+          carbsRatio: savedGoals.carbsPercentage || 40,
+          fatRatio: savedGoals.fatPercentage || 30,
+          recentMeals: Object.values(mealsByDate).flat(),
+        }}
       />
     );
   }
@@ -1950,7 +2023,7 @@ export const HomeScreen: React.FC = () => {
           >
             {/* Daily AI Coach Card */}
             {isSameDay(selectedDate, new Date()) && (
-              <CoachCard />
+              <SmartSuggestBanner />
             )}
 
             {/* Food Log Section */}
@@ -1961,25 +2034,26 @@ export const HomeScreen: React.FC = () => {
               savedPrompts={savedPrompts}
               onToggleSavePrompt={handleToggleSavePrompt}
               onDeleteMeal={handleDeleteMeal}
-              onUpdateFood={(mealId, updatedFood) => {
-                setMealsByDate(prev => {
-                  const currentMeals = prev[currentDateKey] || [];
-                  const updatedMeals = currentMeals.map(meal => {
-                    if (meal.id !== mealId) return meal;
-                    const updatedFoods = meal.foods.map(food =>
-                      food.id === updatedFood.id ? updatedFood : food
-                    );
-                    return {
-                      ...meal,
-                      foods: updatedFoods,
-                      updatedAt: new Date().toISOString(),
-                    };
-                  });
+              onUpdateFood={async (mealId, updatedFood) => {
+                const currentMeals = mealsByDate[currentDateKey] || [];
+                const updatedMeals = currentMeals.map(meal => {
+                  if (meal.id !== mealId) return meal;
+                  const updatedFoods = meal.foods.map(food =>
+                    food.id === updatedFood.id ? updatedFood : food
+                  );
                   return {
-                    ...prev,
-                    [currentDateKey]: updatedMeals,
+                    ...meal,
+                    foods: updatedFoods,
+                    updatedAt: new Date().toISOString(),
                   };
                 });
+
+                setMealsByDate(prev => ({
+                  ...prev,
+                  [currentDateKey]: updatedMeals,
+                }));
+
+                await dataStorage.saveDailyLog(currentDateKey, updatedMeals);
               }}
             />
 
@@ -2003,6 +2077,32 @@ export const HomeScreen: React.FC = () => {
             {/* Bottom spacing to account for input bar height */}
             <View style={styles.bottomSpacer} />
           </ScrollView>
+
+          {/* Floating AI Coach Button */}
+          {!isAnalyzingFood && !isRecording && (
+            <TouchableOpacity
+              onPress={() => setShowChatCoach(true)}
+              style={{
+                position: 'absolute',
+                right: 16,
+                bottom: 90, // Above bottom bar
+                width: 50,
+                height: 50,
+                borderRadius: 25,
+                backgroundColor: theme.colors.primary,
+                alignItems: 'center',
+                justifyContent: 'center',
+                shadowColor: "#000",
+                shadowOffset: { width: 0, height: 2 },
+                shadowOpacity: 0.25,
+                shadowRadius: 3.84,
+                elevation: 5,
+                zIndex: 100
+              }}
+            >
+              <Feather name="message-square" size={24} color={theme.colors.primaryForeground} />
+            </TouchableOpacity>
+          )}
 
           {/* Bottom Input Bar */}
           <BottomInputBar
@@ -2043,6 +2143,10 @@ export const HomeScreen: React.FC = () => {
           onAdminPush={handleAdminPush}
           onReferral={handleOpenReferral}
           onFreeEntries={handleOpenFreeEntries}
+          onHowItWorks={() => {
+            setMenuVisible(false);
+            setShowWalkthrough(true);
+          }}
         />
 
         <PhotoOptionsModal
@@ -2141,6 +2245,15 @@ export const HomeScreen: React.FC = () => {
           />
         </Modal>
 
+        <Modal
+          visible={showChatCoach}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowChatCoach(false)}
+        >
+          <ChatCoachScreen onClose={() => setShowChatCoach(false)} />
+        </Modal>
+
         <CalendarModal
           visible={showCalendar}
           onClose={() => setShowCalendar(false)}
@@ -2156,6 +2269,11 @@ export const HomeScreen: React.FC = () => {
           onClose={() => setShowSmartAdjustmentModal(false)}
           onApply={handleApplyAdjustment}
           adjustment={adjustmentAvailable}
+        />
+
+        <WalkthroughModal
+          visible={showWalkthrough}
+          onClose={handleWalkthroughClose}
         />
       </View>
     </SafeAreaView>

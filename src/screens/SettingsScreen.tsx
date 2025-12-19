@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -17,6 +17,8 @@ import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { TimePickerModal } from '../components/TimePickerModal';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { featureFlags } from '../config/featureFlags';
+import { dataStorage, AccountInfo } from '../services/dataStorage';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -29,6 +31,8 @@ interface SettingsScreenProps {
   onLogin?: () => void;
   onIntegrations?: () => void;
   onDowngradeToFree?: () => void;
+  onGrocerySuggestions?: () => void;
+  onHowItWorks?: () => void;
 }
 
 interface SettingItemProps {
@@ -38,6 +42,7 @@ interface SettingItemProps {
   onPress?: () => void;
   rightElement?: React.ReactNode;
   showChevron?: boolean;
+  disabled?: boolean;
 }
 
 const SettingItem: React.FC<SettingItemProps> = ({
@@ -47,15 +52,16 @@ const SettingItem: React.FC<SettingItemProps> = ({
   onPress,
   rightElement,
   showChevron = true,
+  disabled = false,
 }) => {
   const theme = useTheme();
 
   return (
     <TouchableOpacity
-      style={[styles.settingItem, { borderBottomColor: theme.colors.border }]}
-      onPress={onPress}
+      style={[styles.settingItem, { borderBottomColor: theme.colors.border }, disabled && { opacity: 0.5 }]}
+      onPress={disabled ? undefined : onPress}
       activeOpacity={0.7}
-      disabled={!onPress}
+      disabled={disabled || !onPress}
     >
       <View style={styles.settingItemLeft}>
         <View style={[styles.iconContainer, { backgroundColor: theme.colors.input }]}>
@@ -74,7 +80,7 @@ const SettingItem: React.FC<SettingItemProps> = ({
       </View>
       <View style={styles.settingItemRight}>
         {rightElement}
-        {showChevron && onPress && (
+        {showChevron && onPress && !disabled && (
           <Feather name="chevron-right" size={20} color={theme.colors.textTertiary} />
         )}
       </View>
@@ -112,6 +118,9 @@ interface MealReminder {
   minute: number;
 }
 
+// Module-level variable to persist unlock across re-renders
+let isGroceryUnlocked = false;
+
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onBack,
   plan = 'free',
@@ -123,6 +132,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onLogin,
   onIntegrations,
   onDowngradeToFree,
+  onGrocerySuggestions,
+  onHowItWorks,
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
@@ -149,8 +160,53 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     minute: 0,
   });
 
+  // Feature Flags & Easter Egg
+  const [grocerySuggestionsEnabled, setGrocerySuggestionsEnabled] = useState(false);
+  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
+  const secretTaps = useRef(0);
+
   const [timePickerVisible, setTimePickerVisible] = useState(false);
   const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
+
+  useEffect(() => {
+    checkFeatureFlags();
+  }, []);
+
+  const checkFeatureFlags = async () => {
+    try {
+      const accountInfo = await dataStorage.loadAccountInfo();
+      // Enable if admin OR if unlocked via easter egg
+      const enabled = featureFlags.grocerySuggestions.isEnabled(accountInfo) || isGroceryUnlocked;
+      setGrocerySuggestionsEnabled(enabled);
+
+      const prefs = await dataStorage.loadPreferences();
+      setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+    } catch (e) {
+      console.error("Error checking feature flags", e);
+    }
+  };
+
+  const handleGroceryTap = () => {
+    if (grocerySuggestionsEnabled) {
+      onGrocerySuggestions?.();
+    } else {
+      secretTaps.current += 1;
+      console.log('Secret taps:', secretTaps.current);
+
+      if (secretTaps.current >= 5) {
+        isGroceryUnlocked = true;
+        setGrocerySuggestionsEnabled(true);
+        Alert.alert("🥕 Beta Feature Unlocked", "You've enabled Grocery Suggestions for this session!");
+
+        // Slight delay to ensure state update processes before nav
+        setTimeout(() => {
+          onGrocerySuggestions?.();
+        }, 500);
+
+        secretTaps.current = 0;
+      }
+    }
+  };
 
   const handleExportData = () => {
     Alert.alert(
@@ -336,6 +392,39 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           />
         </SettingSection>
 
+        {/* Smart Features */}
+        <SettingSection title="Smart Features">
+          <SettingItem
+            icon="zap"
+            title="Smart Suggest"
+            subtitle="Show next meal suggestions on Home"
+            rightElement={
+              <Switch
+                value={smartSuggestEnabled}
+                onValueChange={async (val) => {
+                  setSmartSuggestEnabled(val);
+                  // Persist
+                  const prefs = await dataStorage.loadPreferences();
+                  if (prefs) {
+                    prefs.smartSuggestEnabled = val;
+                    await dataStorage.savePreferences(prefs);
+                  }
+                }}
+                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                thumbColor={Colors.white}
+              />
+            }
+            showChevron={false}
+          />
+          <SettingItem
+            icon="shopping-cart"
+            title="Grocery Suggestions"
+            subtitle={grocerySuggestionsEnabled ? "AI-Powered Lists" : "Coming soon"}
+            onPress={handleGroceryTap}
+            disabled={false}
+          />
+        </SettingSection>
+
         {/* Account Section */}
         <SettingSection title="Account">
           <SettingItem
@@ -389,19 +478,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
                 {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining
                 {totalBonusEntries > 0 && (
-                  <Text style={{ color: theme.colors.primary }}>
-                    {' '}(
-                    {[
-                      referralBonus > 0 ? `+${referralBonus} from referrals` : null,
-                      challengeBonus > 0 ? `+${challengeBonus} from challenges` : null,
-                    ]
-                      .filter(Boolean)
-                      .join(' & ')}
-                    )
-                  </Text>
+                  <Text style={{ color: theme.colors.primary }}> (+{totalBonusEntries} bonus)</Text>
                 )}
               </Text>
             )}
+
+            <TouchableOpacity
+              style={{ marginTop: 24, alignSelf: 'center' }}
+              onPress={() => {
+                dataStorage.debug_injectPlateauData();
+                Alert.alert('Done', 'Plateau data injected. Check Grocery list.');
+              }}
+            >
+              <Text style={{ color: theme.colors.error, fontSize: 12, textDecorationLine: 'underline' }}>
+                (Dev) Inject Plateau Data
+              </Text>
+            </TouchableOpacity>
           </View>
         </SettingSection>
 
@@ -533,6 +625,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             onPress={() => Alert.alert('Help', 'Help content will be displayed here.')}
           />
           <SettingItem
+            icon="book-open"
+            title="How it Works"
+            subtitle="View the app walkthrough"
+            onPress={onHowItWorks}
+          />
+          <SettingItem
             icon="mail"
             title="Contact Us"
             subtitle="Send us feedback"
@@ -645,7 +743,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
         </View>
       </Modal>
-    </SafeAreaView>
+    </SafeAreaView >
   );
 };
 
@@ -798,34 +896,28 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.sm,
     marginBottom: 12,
   },
+  upgradeButton: {
+    paddingVertical: 10,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  upgradeButtonText: {
+    color: Colors.white,
+    fontWeight: Typography.fontWeight.bold,
+  },
+  remainingText: {
+    fontSize: Typography.fontSize.xs,
+    marginTop: 8,
+    textAlign: 'center',
+  },
   planBadge: {
+    paddingHorizontal: 8,
     paddingVertical: 4,
-    paddingHorizontal: 10,
-    borderRadius: 999,
+    borderRadius: 4,
     borderWidth: 1,
   },
   planBadgeText: {
     fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.semiBold,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  upgradeButton: {
-    alignSelf: 'flex-start',
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    borderRadius: 10,
-    marginTop: 4,
-  },
-  upgradeButtonText: {
-    color: Colors.white,
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  remainingText: {
-    marginTop: 8,
-    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.bold,
   },
 });
-
-
