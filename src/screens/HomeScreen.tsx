@@ -67,7 +67,7 @@ import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 import { SmartSuggestBanner } from '../components/CoachCard';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
-import { WalkthroughModal } from '../components/WalkthroughModal';
+import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -136,7 +136,8 @@ export const HomeScreen: React.FC = () => {
   const [showGrocerySuggestions, setShowGrocerySuggestions] = useState(false);
   const [showChatCoach, setShowChatCoach] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
-
+  const [walkthroughHideOffer, setWalkthroughHideOffer] = useState(false);
+  const [accountInitialMode, setAccountInitialMode] = useState<'signin' | 'signup'>('signin');
 
 
   // Streak Freeze State
@@ -761,6 +762,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleWalkthroughClose = async (dontShowAgain: boolean) => {
     setShowWalkthrough(false);
+    setWalkthroughHideOffer(false); // Reset this
     if (dontShowAgain) {
       await AsyncStorage.setItem('@trackkal:hasSeenWalkthrough', 'true');
     }
@@ -1819,6 +1821,22 @@ export const HomeScreen: React.FC = () => {
         }}
         onDowngradeToFree={handleDowngradeToFree}
         onGrocerySuggestions={handleGrocerySuggestions}
+        onHowItWorks={() => {
+          // We might want to close settings? Or keep it open?
+          // If we close settings, we lose context.
+          // But Walkthrough is a modal.
+          // SettingsScreen is also a full screen return.
+          // If we set showWalkthrough(true), it will render WalkthroughModal over Settings IF Walkthrough is in a Portal or valid location.
+          // But HomeScreen structure is `if (showSettings) return <SettingsScreen ... />`.
+          // So if we set `showWalkthrough(true)`, `HomeScreen` will still return `SettingsScreen`.
+          // `AppWalkthroughModal` is rendered in the MAIN return of `HomeScreen` (at the bottom).
+          // So if `showSettings` is true, we don't see `AppWalkthroughModal`.
+
+          // We need to close Settings to show Walkthrough?
+          setShowSettings(false);
+          setWalkthroughHideOffer(true);
+          setShowWalkthrough(true);
+        }}
       />
     );
   }
@@ -1867,6 +1885,7 @@ export const HomeScreen: React.FC = () => {
           initialStreakFreeze={streakFreeze}
           initialFrozenDates={streakFreeze?.usedOnDates}
           onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
+          initialMode={accountInitialMode}
         />
         <Modal
           visible={showAdvancedAnalytics}
@@ -2145,6 +2164,7 @@ export const HomeScreen: React.FC = () => {
           onFreeEntries={handleOpenFreeEntries}
           onHowItWorks={() => {
             setMenuVisible(false);
+            setWalkthroughHideOffer(true);
             setShowWalkthrough(true);
           }}
         />
@@ -2271,9 +2291,11 @@ export const HomeScreen: React.FC = () => {
           adjustment={adjustmentAvailable}
         />
 
-        <WalkthroughModal
+        <AppWalkthroughModal
           visible={showWalkthrough}
           onClose={handleWalkthroughClose}
+          onSignUp={() => handleAccount('signup')}
+          hideOffer={walkthroughHideOffer}
         />
       </View>
     </SafeAreaView>

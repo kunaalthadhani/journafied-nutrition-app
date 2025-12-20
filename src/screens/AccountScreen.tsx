@@ -44,6 +44,7 @@ interface AccountScreenProps {
   initialStreakFreeze?: StreakFreezeData | null;
   initialFrozenDates?: string[];
   onOpenAdvancedAnalytics?: () => void;
+  initialMode?: 'signin' | 'signup';
 }
 
 export const AccountScreen: React.FC<AccountScreenProps> = ({
@@ -59,6 +60,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   initialStreakFreeze,
   initialFrozenDates,
   onOpenAdvancedAnalytics,
+  initialMode = 'signin',
 }) => {
   const theme = useTheme();
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
@@ -87,7 +89,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
-  const [authMode, setAuthMode] = useState<'signin' | 'signup'>('signin');
+  const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
 
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Default UAE
   const [showCountryPicker, setShowCountryPicker] = useState(false);
