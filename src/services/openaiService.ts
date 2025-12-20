@@ -454,78 +454,37 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood
     const base64Image = await FileSystem.readAsStringAsync(imageUri, {
       encoding: FileSystem.EncodingType.Base64,
     });
-    if (__DEV__) console.log('Image read, length:', base64Image.length);
 
     // Determine image format from URI
     const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
     const imageDataUrl = `data:image/${imageFormat};base64,${base64Image}`;
 
-    // Use vision-capable model (gpt-4o or gpt-4-vision-preview)
-    const visionModel = 'gpt-4o'; // or 'gpt-4-vision-preview'
+    if (__DEV__) console.log('Sending request to OpenAI Vision API (Describer Mode)...');
 
-    if (__DEV__) console.log('Sending request to OpenAI Vision API...');
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
+    // Step 1: Vision AI describes the food
+    const visionResponse = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: visionModel,
+        model: 'gpt-4o',
         messages: [
           {
             role: 'system',
-            content: IMAGE_ANALYSIS_PROMPT + `
-Return format (JSON array only, no other text):
-[
-  {
-    "name": "Food name",
-    "quantity": number,
-    "unit": "description of quantity (e.g., 'medium banana', 'cup of rice')",
-    "weight_g": estimated_weight_in_grams,
-    "calories": total_calories_for_this_quantity,
-    "protein": total_protein_in_grams,
-    "carbs": total_carbs_in_grams,
-    "fat": total_fat_in_grams,
-    
-    // Detailed Macros
-    "dietary_fiber": total_dietary_fiber_g,
-    "sugar": total_sugar_g,
-    "added_sugars": total_added_sugars_g,
-    "sugar_alcohols": total_sugar_alcohols_g,
-    "net_carbs": total_net_carbs_g,
-    
-    "saturated_fat": total_saturated_fat_g,
-    "trans_fat": total_trans_fat_g,
-    "polyunsaturated_fat": total_poly_fat_g,
-    "monounsaturated_fat": total_mono_fat_g,
-    "cholesterol_mg": total_cholesterol_mg,
-
-    // Minerals
-    "sodium_mg": total_sodium_mg,
-    "potassium_mg": total_potassium_mg,
-    "calcium_mg": total_calcium_mg,
-    "iron_mg": total_iron_mg,
-    
-    // Vitamins
-    "vitamin_a_mcg": total_vit_a_mcg,
-    "vitamin_c_mg": total_vit_c_mg,
-    "vitamin_d_mcg": total_vit_d_mcg,
-    "vitamin_e_mg": total_vit_e_mg,
-    "vitamin_k_mcg": total_vit_k_mcg,
-    "vitamin_b12_mcg": total_vit_b12_mcg
-  }
-]
-
-If you cannot identify any food items, return an empty array: []
-`
+            content: `You are a specialized Food Analyst. 
+            Describe the food in this image in extreme detail. 
+            Identify every visible ingredient, sauce (e.g. "Creamy Alfredo", "Tomato Basil"), and estimate precise portion sizes (e.g. "Approx 200g", "1 Large Bowl").
+            If you see oil or butter sheen, mention it.
+            Return ONLY the description text.`
           },
           {
             role: 'user',
             content: [
               {
                 type: 'text',
-                text: 'Analyze this food image and provide nutritional information for all visible food items. Estimate portion sizes based on what you see in the image.'
+                text: 'Describe this dish for caloric analysis.'
               },
               {
                 type: 'image_url',
@@ -536,51 +495,35 @@ If you cannot identify any food items, return an empty array: []
             ]
           }
         ],
-        temperature: config.OPENAI_CONFIG.temperature,
-        max_tokens: config.OPENAI_CONFIG.max_tokens,
+        max_tokens: 300,
       }),
     });
 
-    if (__DEV__) console.log('OpenAI response status:', response.status);
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      if (__DEV__) console.error('OpenAI API error response:', errorText);
-      throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+    if (!visionResponse.ok) {
+      const errorText = await visionResponse.text();
+      if (__DEV__) console.error('Vision API error response:', errorText);
+      throw new Error(`Vision API error: ${visionResponse.status} - ${errorText}`);
     }
 
-    const data: OpenAIResponse = await response.json();
-    if (__DEV__) console.log('OpenAI response received');
+    const visionData = await visionResponse.json();
+    const description = visionData.choices[0]?.message?.content;
 
-    const content = data.choices[0]?.message?.content;
-    if (__DEV__) console.log('Response content length:', content?.length || 0);
+    if (!description) throw new Error('No description from Vision AI');
 
-    if (!content) {
-      throw new Error('No response from OpenAI');
-    }
+    if (__DEV__) console.log('Vision Description:', description);
 
-    // Parse the JSON response
-    let parsedFoods;
-    try {
-      parsedFoods = JSON.parse(content);
-      if (__DEV__) console.log('Parsed foods count:', parsedFoods.length);
-    } catch (parseError) {
-      if (__DEV__) console.error('JSON parse error:', parseError);
-      if (__DEV__) console.error('Content:', content);
-      throw new Error('Failed to parse OpenAI response as JSON');
-    }
+    // Step 2: Text Agent analyzes the description
+    // using the centralized logic (Gatekeeper -> Chef -> Physicist)
+    const result = await analyzeFoodWithChatGPT(description);
 
-    // Add unique IDs to each food item (food items don't need UUIDs, they're stored in JSONB)
-    const foodsWithIds = parsedFoods.map((food: any) => ({
-      ...food,
-      id: food.id || generateId(),
-    }));
-
-    if (__DEV__) console.log('Returning parsed foods:', foodsWithIds.length);
-    return foodsWithIds;
+    // If clarification is needed, we (unfortunately) can't ask the user in this flow yet without refactoring HomeScreen.
+    // For now, we assume the Vision description was good enough. 
+    // If it *still* asks for clarification, it returns empty foods.
+    // To handle this better, we could recursively call with "Ignore ambiguity" flag, but let's trust gpt-4o vision + text.
+    return result.foods;
 
   } catch (error) {
-    if (__DEV__) console.error('Error analyzing food from image:', error);
+    if (__DEV__) console.error('Error in image analysis:', error);
     throw error;
   }
 }
