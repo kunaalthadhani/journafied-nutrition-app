@@ -121,195 +121,125 @@ interface ParsedStructure {
   estimated_weight_g: number; // We still ask AI for this to handle unit conversion for now
 }
 
-const FOOD_STRUCTURE_PROMPT = `
-You are an expert food analyst. Analyze the input to identify food items, portion sizes, and estimated weights.
+const AGENTIC_ANALYSIS_PROMPT = `
+You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutritionist. Your goal is to provide the most accurate nutritional tracking possible by "thinking" through the dish composition.
 
-Return ONLY a valid JSON array of objects with this structure:
-[
-  {
-    "name": "General food name (e.g., 'Banana', 'Fried Egg')",
-    "quantity": number,
-    "unit": "unit description (e.g., 'medium', 'cup')",
-    "preparation": "cooking method if specified",
-    "estimated_weight_g": number (estimated weight in grams for this portion)
-  }
-]
+### THE 3-STAGE PROCESS (Perform this internally):
+1. **The Gatekeeper (Check & Clarify):**
+   - Check if the user input is ambiguous (e.g., "Chicken Pasta").
+   - **ONE-SHOT CLARIFICATION POLICY:**
+     - Ask **one** comprehensive question covering ALL missing variables (Sauce, Portion, etc.).
+     - If the user has already provided details (even if slight ambiguity remains), **DO NOT ASK AGAIN**. Assume reasonable defaults.
+     - Return a "clarification_question" ONLY if totally critical info is missing.
 
-Do not calculate calories or macros. Focus only on identifying the food and portion.
-If you cannot identify any food, return [].
-`;
+2. **The Deconstructor (The Chef):**
+   - If the input is clear enough, break down complex dishes into atomic ingredients.
+   - Example: "Pasta" (if context allows assumption) -> Cooked Pasta + Olive Oil/Butter + Sauce + Cheese + Protein.
+   - **Crucial:** Always account for "hidden calories".
 
-const NUTRITION_ESTIMATION_PROMPT = `
-You are a USDA nutrition database assistant.
-Provide standard nutritional values per 100g for the specified food item.
+3. **The Quantifier (The Physicist):**
+   - Convert vague units ("a bowl") into accurate gram weights.
+   - Sum up the macros.
 
-Input: [Food Name]
-
-Return ONLY a valid JSON object:
+### OUTPUT INSTRUCTIONS:
+Return a JSON Object.
+EITHER:
+A) If you need clarification:
 {
-  "name": "Normalized canonical name",
-  "calories_per_100g": number,
-  "protein_per_100g": number,
-  "carbs_per_100g": number,
-  "fat_per_100g": number,
-  
-  // Detailed Macros
-  "dietary_fiber_per_100g": number (optional),
-  "sugar_per_100g": number (optional),
-  "added_sugars_per_100g": number (optional),
-  "sugar_alcohols_per_100g": number (optional),
-  "net_carbs_per_100g": number (optional),
-  
-  "saturated_fat_per_100g": number (optional),
-  "trans_fat_per_100g": number (optional),
-  "polyunsaturated_fat_per_100g": number (optional),
-  "monounsaturated_fat_per_100g": number (optional),
-  "cholesterol_mg_per_100g": number (optional),
-
-  // Minerals
-  "sodium_mg_per_100g": number (optional),
-  "potassium_mg_per_100g": number (optional),
-  "calcium_mg_per_100g": number (optional),
-  "iron_mg_per_100g": number (optional),
-  
-  // Vitamins
-  "vitamin_a_mcg_per_100g": number (optional),
-  "vitamin_c_mg_per_100g": number (optional),
-  "vitamin_d_mcg_per_100g": number (optional),
-  "vitamin_e_mg_per_100g": number (optional),
-  "vitamin_k_mcg_per_100g": number (optional),
-  "vitamin_b12_mcg_per_100g": number (optional),
-
-  "standard_unit": "standard serving unit (e.g., 'medium', 'cup', 'slice')",
-  "standard_serving_weight_g": number (weight of that standard unit)
+  "clarification_question": "String (E.g., 'Was that a cream-based or tomato-based sauce? And roughly how big was the bowl?')"
 }
+
+OR
+
+B) If you have enough info (or are making safe assumptions):
+{
+  "items": [
+    {
+      "log_name": "String",
+      "reasoning": "String",
+      "quantity": Number,
+      "unit": "String",
+      "total_weight_g": Number,
+      "nutrition": {
+        "calories": Number,
+        "protein": Number,
+        "carbs": Number,
+        "fat": Number
+      }
+    }
+  ]
+}
+
+- Return ONLY valid JSON.
 `;
 
-import { supabaseDataService } from './supabaseDataService';
-import { NutritionLibraryItem } from './dataStorage';
-
-export async function analyzeFoodWithChatGPT(foodInput: string): Promise<ParsedFood[]> {
-  // Validate API key before making request
+export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods: ParsedFood[], clarificationQuestion?: string }> {
+  // Validate API key
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
     throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
   }
 
   try {
-    if (__DEV__) console.log('Step 1: Parsing food structure for:', foodInput);
+    if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
 
-    // 1. Structure Parsing (No Macros)
-    const structureResponse = await fetch(config.API_ENDPOINTS.OPENAI, {
+    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: config.OPENAI_CONFIG.model,
+        model: 'gpt-4o', // Strongly recommended for this logic depth
         messages: [
-          { role: 'system', content: FOOD_STRUCTURE_PROMPT },
+          { role: 'system', content: AGENTIC_ANALYSIS_PROMPT },
           { role: 'user', content: foodInput }
         ],
-        temperature: 0.3, // Lower temperature for more deterministic structure
-        max_tokens: config.OPENAI_CONFIG.max_tokens,
+        temperature: 0.3,
+        response_format: { type: "json_object" }
       }),
     });
 
-    if (!structureResponse.ok) throw new Error(`OpenAI API error: ${structureResponse.status}`);
-    const structureData: OpenAIResponse = await structureResponse.json();
-    const structureContent = structureData.choices[0]?.message?.content;
-    if (!structureContent) throw new Error('No response from OpenAI');
+    if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
+    const data: OpenAIResponse = await response.json();
+    const content = data.choices[0]?.message?.content;
+    if (!content) throw new Error('No response from OpenAI');
 
-    const parsedItems: ParsedStructure[] = JSON.parse(structureContent);
-    const finalFoods: ParsedFood[] = [];
+    const result = JSON.parse(content);
 
-    // 2. Nutrition Lookup & Calculation
-    for (const item of parsedItems) {
-      if (__DEV__) console.log(`Processing item: ${item.name}`);
-
-      // Try reading from Library
-      let libraryItem = await supabaseDataService.fetchNutritionFromLibrary(item.name);
-
-      if (!libraryItem) {
-        if (__DEV__) console.log(`Cache miss for ${item.name}. Fetching nutrition factors...`);
-
-        // Fallback: Ask AI for factors (The "One-Time Hallucination")
-        libraryItem = await fetchNutritionFactors(item.name);
-
-        // Save to Library for future deterministic use
-        if (libraryItem) {
-          await supabaseDataService.saveNutritionToLibrary(libraryItem);
-        }
-      }
-
-      if (libraryItem) {
-        // Calculate based on 100g factors
-        // Formula: (grams / 100) * factor
-        const weight = item.estimated_weight_g || libraryItem.standard_serving_weight_g;
-        const ratio = weight / 100;
-
-        finalFoods.push({
-          id: generateId(),
-          name: libraryItem.name, // Use canonical name
-          quantity: item.quantity,
-          unit: item.unit,
-          weight_g: weight,
-          calories: Math.round(libraryItem.calories_per_100g * ratio),
-          protein: Number((libraryItem.protein_per_100g * ratio).toFixed(1)),
-          carbs: Number((libraryItem.carbs_per_100g * ratio).toFixed(1)),
-          fat: Number((libraryItem.fat_per_100g * ratio).toFixed(1)),
-
-          // Detailed Macros
-          dietary_fiber: libraryItem.dietary_fiber_per_100g ? Number((libraryItem.dietary_fiber_per_100g * ratio).toFixed(1)) : undefined,
-          sugar: libraryItem.sugar_per_100g ? Number((libraryItem.sugar_per_100g * ratio).toFixed(1)) : undefined,
-          added_sugars: libraryItem.added_sugars_per_100g ? Number((libraryItem.added_sugars_per_100g * ratio).toFixed(1)) : undefined,
-          sugar_alcohols: libraryItem.sugar_alcohols_per_100g ? Number((libraryItem.sugar_alcohols_per_100g * ratio).toFixed(1)) : undefined,
-          net_carbs: libraryItem.net_carbs_per_100g ? Number((libraryItem.net_carbs_per_100g * ratio).toFixed(1)) : undefined,
-
-          // Fat Breakdown
-          saturated_fat: libraryItem.saturated_fat_per_100g ? Number((libraryItem.saturated_fat_per_100g * ratio).toFixed(1)) : undefined,
-          trans_fat: libraryItem.trans_fat_per_100g ? Number((libraryItem.trans_fat_per_100g * ratio).toFixed(1)) : undefined,
-          polyunsaturated_fat: libraryItem.polyunsaturated_fat_per_100g ? Number((libraryItem.polyunsaturated_fat_per_100g * ratio).toFixed(1)) : undefined,
-          monounsaturated_fat: libraryItem.monounsaturated_fat_per_100g ? Number((libraryItem.monounsaturated_fat_per_100g * ratio).toFixed(1)) : undefined,
-          cholesterol_mg: libraryItem.cholesterol_mg_per_100g ? Math.round(libraryItem.cholesterol_mg_per_100g * ratio) : undefined,
-
-          // Minerals
-          sodium_mg: libraryItem.sodium_mg_per_100g ? Math.round(libraryItem.sodium_mg_per_100g * ratio) : undefined,
-          potassium_mg: libraryItem.potassium_mg_per_100g ? Math.round(libraryItem.potassium_mg_per_100g * ratio) : undefined,
-          calcium_mg: libraryItem.calcium_mg_per_100g ? Math.round(libraryItem.calcium_mg_per_100g * ratio) : undefined,
-          iron_mg: libraryItem.iron_mg_per_100g ? Number((libraryItem.iron_mg_per_100g * ratio).toFixed(1)) : undefined,
-
-          // Vitamins
-          vitamin_a_mcg: libraryItem.vitamin_a_mcg_per_100g ? Math.round(libraryItem.vitamin_a_mcg_per_100g * ratio) : undefined,
-          vitamin_c_mg: libraryItem.vitamin_c_mg_per_100g ? Number((libraryItem.vitamin_c_mg_per_100g * ratio).toFixed(1)) : undefined,
-          vitamin_d_mcg: libraryItem.vitamin_d_mcg_per_100g ? Number((libraryItem.vitamin_d_mcg_per_100g * ratio).toFixed(1)) : undefined,
-          vitamin_e_mg: libraryItem.vitamin_e_mg_per_100g ? Number((libraryItem.vitamin_e_mg_per_100g * ratio).toFixed(1)) : undefined,
-          vitamin_k_mcg: libraryItem.vitamin_k_mcg_per_100g ? Math.round(libraryItem.vitamin_k_mcg_per_100g * ratio) : undefined,
-          vitamin_b12_mcg: libraryItem.vitamin_b12_mcg_per_100g ? Number((libraryItem.vitamin_b12_mcg_per_100g * ratio).toFixed(2)) : undefined,
-        });
-      } else {
-        // Safe fallback
-        finalFoods.push({
-          id: generateId(),
-          name: item.name,
-          quantity: item.quantity,
-          unit: item.unit,
-          weight_g: item.estimated_weight_g || 100,
-          calories: 0,
-          protein: 0,
-          carbs: 0,
-          fat: 0,
-        });
-      }
+    if (result.clarification_question) {
+      return { foods: [], clarificationQuestion: result.clarification_question };
     }
 
-    return finalFoods;
+    const items = result.items || [];
+    const finalFoods: ParsedFood[] = [];
+
+    for (const item of items) {
+      // We skip the sequential DB lookup for the *macros* because the Agent has done a better job 
+      // of calculating the composite macros (Chicken + Sauce + Pasta) than our generic DB would (just "Pasta").
+      // However, we still format it as ParsedFood.
+
+      finalFoods.push({
+        id: generateId(),
+        name: item.log_name,
+        quantity: item.quantity,
+        unit: item.unit,
+        weight_g: item.total_weight_g,
+        calories: item.nutrition.calories,
+        protein: item.nutrition.protein,
+        carbs: item.nutrition.carbs,
+        fat: item.nutrition.fat,
+        // We can put the reasoning in a hidden field if we ever want to show "Why this calorie count?"
+        // For now, we trust the agent.
+      });
+    }
+
+    return { foods: finalFoods };
 
   } catch (error) {
-    if (__DEV__) console.error('Error in deterministic food analysis:', error);
-    // Fallback to local parsing if everything fails
+    if (__DEV__) console.error('Error in agentic food analysis:', error);
+    // Fallback to local parsing
     const { parseFoodInput } = require('../utils/foodNutrition');
-    return parseFoodInput(foodInput);
+    return { foods: parseFoodInput(foodInput) };
   }
 }
 
@@ -712,21 +642,49 @@ You will receive:
 - If it's morning (before 11am) and they listed 0 meals, suggest a high-protein breakfast.
 - If they have many calories left but low protein, suggest a lean protein source.
 - If they have few calories left, suggest a high-volume, low-cal snack.
-- Be specific. Don't just say "eat protein". Say "How about a Grilled Chicken Salad with light dressing? It fits your 400kcal remaining perfectly."
+- **ALWAYS include specific quantities and weights** (e.g., "150g Grilled Chicken", "200g Greek Yogurt").
 
 ### Output Format
 - Return a **single plain text recommendation**.
 - Be concise (max 2 sentences).
-- No markdown headers.
-- Start directly with the suggestion (e.g., "Since you're low on protein...")
+- Start directly with the suggestion (e.g., "Try a 200g Chicken Salad...").
 `;
 
-export async function generateSmartSuggestion(context: any): Promise<string> {
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+const SMART_SUGGEST_LIMIT_KEY = 'smart_suggest_limit_v1';
+const DAILY_LIMIT = 2;
+
+export async function generateSmartSuggestion(context: any, forceNew: boolean = false): Promise<string> {
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
     return "Upgrade to Premium to unlock Smart Suggestions based on your unique metabolism!";
   }
 
   try {
+    // 1. Check Daily Limit and Cache
+    const now = new Date();
+    const todayKey = now.toISOString().split('T')[0]; // "2023-10-27"
+
+    const storedData = await AsyncStorage.getItem(SMART_SUGGEST_LIMIT_KEY);
+    let usage = { date: todayKey, count: 0, suggestion: '' };
+
+    if (storedData) {
+      const parsed = JSON.parse(storedData);
+      if (parsed.date === todayKey) {
+        usage = parsed;
+      }
+    }
+
+    // Return cached suggestion if available and not forcing new
+    if (!forceNew && usage.suggestion) {
+      return usage.suggestion;
+    }
+
+    if (usage.count >= DAILY_LIMIT) {
+      return "You've reached your daily Smart Suggest limit. Check back tomorrow!";
+    }
+
+    // 2. call API with Cheaper Model
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -734,7 +692,7 @@ export async function generateSmartSuggestion(context: any): Promise<string> {
         'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o',
+        model: 'gpt-4o-mini', // Cost optimized
         messages: [
           { role: 'system', content: SMART_SUGGEST_PROMPT },
           { role: 'user', content: JSON.stringify(context) }
@@ -747,7 +705,14 @@ export async function generateSmartSuggestion(context: any): Promise<string> {
     if (!response.ok) return "Unable to generate smart suggestion right now.";
 
     const data: OpenAIResponse = await response.json();
-    return data.choices[0]?.message?.content || "Keep hitting those macros!";
+    const suggestion = data.choices[0]?.message?.content || "Keep hitting those macros!";
+
+    // 3. Increment Limit and Save Cache
+    usage.count += 1;
+    usage.suggestion = suggestion; // Cache the new suggestion
+    await AsyncStorage.setItem(SMART_SUGGEST_LIMIT_KEY, JSON.stringify(usage));
+
+    return suggestion;
 
   } catch (error) {
     console.error('Error generating smart suggestion:', error);

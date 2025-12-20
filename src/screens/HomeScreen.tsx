@@ -995,7 +995,20 @@ export const HomeScreen: React.FC = () => {
       // Use ChatGPT for real-time food analysis
       let parsedFoods: ParsedFood[] = [];
       try {
-        parsedFoods = await analyzeFoodWithChatGPT(trimmed);
+        const analysisResult = await analyzeFoodWithChatGPT(trimmed);
+        if (analysisResult.clarificationQuestion) {
+          setIsAnalyzingFood(false);
+          // Put text back and ask for clarification
+          setTranscribedText(trimmed);
+          setShouldFocusInput(true);
+          Alert.alert(
+            'Clarification Needed',
+            analysisResult.clarificationQuestion,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        parsedFoods = analysisResult.foods;
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           Alert.alert(
@@ -1150,7 +1163,19 @@ export const HomeScreen: React.FC = () => {
       setIsAnalyzingFood(true);
       let parsedFoods;
       try {
-        parsedFoods = await analyzeFoodWithChatGPT(newPrompt);
+        const analysisResult = await analyzeFoodWithChatGPT(newPrompt);
+        if (analysisResult.clarificationQuestion) {
+          setIsAnalyzingFood(false);
+          // Ask usage to clarify
+          // Since we are in an edit flow, we just tell them what's missing so they can edit again.
+          Alert.alert(
+            'Clarification Needed',
+            analysisResult.clarificationQuestion,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        parsedFoods = analysisResult.foods;
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           Alert.alert(
@@ -2042,7 +2067,12 @@ export const HomeScreen: React.FC = () => {
           >
             {/* Daily AI Coach Card */}
             {isSameDay(selectedDate, new Date()) && (
-              <SmartSuggestBanner />
+              <SmartSuggestBanner
+                onLogSuggestion={(text) => {
+                  setTranscribedText(text);
+                  setShouldFocusInput(true);
+                }}
+              />
             )}
 
             {/* Food Log Section */}

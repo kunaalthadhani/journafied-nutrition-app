@@ -11,18 +11,20 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
     UIManager.setLayoutAnimationEnabledExperimental(true);
 }
 
-export const SmartSuggestBanner = () => {
+export interface SmartSuggestBannerProps {
+    onLogSuggestion?: (suggestion: string) => void;
+}
+
+export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSuggestion }) => {
     const theme = useTheme();
-    const [visible, setVisible] = useState(false); // Controlled by preference
+    const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
     const [suggestion, setSuggestion] = useState<string | null>(null);
 
     useEffect(() => {
         const checkPref = async () => {
-            const prefs = await dataStorage.loadPreferences(); // Need to fetch local/merged prefs
-            // If smartSuggestEnabled is undefined, default to true or false? User said "toggle ... to turn on". Maybe default on?
-            // Let's assume default ON for visibility unless explicitly false.
+            const prefs = await dataStorage.loadPreferences();
             if (prefs && prefs.smartSuggestEnabled !== false) {
                 setVisible(true);
             } else {
@@ -32,48 +34,21 @@ export const SmartSuggestBanner = () => {
         checkPref();
     }, []);
 
-    const handlePress = async () => {
-        if (expanded) {
-            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-            setExpanded(false);
-            return;
-        }
-
-        // Mock Premium Check (Replace with real check later)
-        const isPremium = false; // User said "this should only be a premium feature".
-        // But for testing, let's allow it but label it? Or block it?
-        // User request: "only be a premium feature ... if they click it, it will generate that".
-        // If I block it, they can't see the feature.
-        // Let's implement the generation but show a "Premium Usage" alert if not premium?
-        // Or better: Let it work for now to demonstrate, but add a visual tag "PREMIUM".
-
-        // Actually, let's gating logic:
-        // if (!isPremium) { Alert.alert("Premium Feature", "Upgrade to get AI meal suggestions."); return; }
-        // I will allow it for now as I am the dev.
-
+    const fetchSuggestion = async (forceNew: boolean) => {
         setLoading(true);
         try {
-            // Build context
             const ctx = await chatCoachService.buildContext();
 
-            // Check Data Sufficiency (7 Day Requirement)
             if (ctx.dataQuality === 'insufficient') {
-                Alert.alert(
-                    "Calibrating...",
-                    "Smart Suggest needs 7 days of food logs to learn your metabolism. Keep logging!"
-                );
+                Alert.alert("Calibrating...", "Need 7 days of logs first!");
                 setLoading(false);
                 return;
             }
 
-            // Get suggestion based on remaining calories/macros? 
-            // We need 'remaining' data which isn't fully in ctx (ctx has averages).
-            // Let's fetch today's summary specifically.
             const today = new Date().toISOString().split('T')[0];
             const logs = await dataStorage.getDailyLog(today);
-            const goals = ctx.userProfile; // It has goals.
+            const goals = ctx.userProfile;
 
-            // Quick calc for remaining
             let eatenCals = 0;
             let eatenProt = 0;
             logs.forEach(m => m.foods.forEach(f => {
@@ -81,7 +56,6 @@ export const SmartSuggestBanner = () => {
                 eatenProt += f.protein;
             }));
 
-            // Goal check
             const targetCals = ctx.recentPerformance.calorieGoal || 2000;
             const targetProt = ctx.recentPerformance.proteinGoal || 150;
 
@@ -93,7 +67,7 @@ export const SmartSuggestBanner = () => {
                 goal: goals.goalType
             };
 
-            const text = await generateSmartSuggestion(promptContext);
+            const text = await generateSmartSuggestion(promptContext, forceNew);
             setSuggestion(text);
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setExpanded(true);
@@ -104,6 +78,25 @@ export const SmartSuggestBanner = () => {
         }
     };
 
+    const handlePress = () => {
+        if (expanded) {
+            // If already expanded, maybe just do nothing or toggle?
+            // User said "option to close".
+            // We'll let the close button handle closing.
+            return;
+        }
+        fetchSuggestion(false);
+    };
+
+    const handleRefresh = () => {
+        fetchSuggestion(true);
+    };
+
+    const handleClose = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setExpanded(false);
+    };
+
     if (!visible) return null;
 
     return (
@@ -112,6 +105,7 @@ export const SmartSuggestBanner = () => {
                 activeOpacity={0.7}
                 onPress={handlePress}
                 style={styles.header}
+                disabled={expanded}
             >
                 <View style={styles.leftRow}>
                     <View style={[styles.iconBox, { backgroundColor: theme.colors.primary }]}>
@@ -124,9 +118,11 @@ export const SmartSuggestBanner = () => {
                         </Text>
                     </View>
                 </View>
-                <View style={[styles.badge, { borderColor: theme.colors.primary }]}>
-                    <Text style={[styles.badgeText, { color: theme.colors.primary }]}>PREMIUM</Text>
-                </View>
+                {!expanded && (
+                    <View style={[styles.badge, { borderColor: theme.colors.primary }]}>
+                        <Text style={[styles.badgeText, { color: theme.colors.primary }]}>PREMIUM</Text>
+                    </View>
+                )}
             </TouchableOpacity>
 
             {loading && (
@@ -142,6 +138,28 @@ export const SmartSuggestBanner = () => {
                         <Text style={[styles.suggestionText, { color: theme.colors.textPrimary }]}>
                             {suggestion}
                         </Text>
+                    </View>
+
+                    <View style={styles.actions}>
+                        <TouchableOpacity
+                            style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
+                            onPress={() => onLogSuggestion?.(suggestion)}
+                        >
+                            <Feather name="plus-circle" size={16} color="white" />
+                            <Text style={styles.logButtonText}>Log This Meal</Text>
+                        </TouchableOpacity>
+
+                        <View style={styles.miniActions}>
+                            <TouchableOpacity onPress={handleRefresh} style={styles.miniButton}>
+                                <Feather name="refresh-cw" size={14} color={theme.colors.textSecondary} />
+                                <Text style={[styles.miniButtonText, { color: theme.colors.textSecondary }]}>New</Text>
+                            </TouchableOpacity>
+
+                            <TouchableOpacity onPress={handleClose} style={styles.miniButton}>
+                                <Feather name="x" size={14} color={theme.colors.textSecondary} />
+                                <Text style={[styles.miniButtonText, { color: theme.colors.textSecondary }]}>Close</Text>
+                            </TouchableOpacity>
+                        </View>
                     </View>
                 </View>
             )}
@@ -212,10 +230,44 @@ const styles = StyleSheet.create({
     suggestionBox: {
         padding: 12,
         borderRadius: 12,
+        marginBottom: 12,
     },
     suggestionText: {
         fontFamily: Typography.fontFamily.medium,
         fontSize: 14,
         lineHeight: 20,
     },
+    actions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    logButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 6,
+        paddingHorizontal: 12,
+        paddingVertical: 8,
+        borderRadius: 8,
+    },
+    logButtonText: {
+        color: 'white',
+        fontFamily: Typography.fontFamily.semiBold,
+        fontSize: 13,
+    },
+    miniActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    miniButton: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4,
+        padding: 4,
+    },
+    miniButtonText: {
+        fontFamily: Typography.fontFamily.medium,
+        fontSize: 12,
+    }
 });
