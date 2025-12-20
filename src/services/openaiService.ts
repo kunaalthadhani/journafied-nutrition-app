@@ -133,13 +133,17 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
      - Return a "clarification_question" ONLY if totally critical info is missing.
 
 2. **The Deconstructor (The Chef):**
-   - If the input is clear enough, break down complex dishes into atomic ingredients.
-   - Example: "Pasta" (if context allows assumption) -> Cooked Pasta + Olive Oil/Butter + Sauce + Cheese + Protein.
-   - **Crucial:** Always account for "hidden calories".
+   - **ALWAYS** break down composite items (Burgers, Sandwiches, Salads, Pizza, Tacos) into their core atomic ingredients.
+   - **DO NOT** log generic entries like "Cheeseburger" or "Pizza Slice" unless impossible to decompose.
+   - Log the Bread/Base, Proteins, Fats/Cheeses, Sauces, and Veggies as SEPARATE items.
+   - Example: "Cheeseburger" -> Output 5 items: "Hamburger Bun", "Beef Patty", "Cheddar Cheese", "Ketchup", "Pickles".
+   - Example: "Caesar Salad" -> Output 4 items: "Romaine Lettuce", "Croutons", "Caesar Dressing", "Parmesan Cheese".
+   - **Crucial:** Always account for "hidden calories" (cooking oil, butter).
 
 3. **The Quantifier (The Physicist):**
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
+   - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, and key Vitamins (A, C, D, B12), Calcium, and Iron. Use standard nutritional data.
 
 ### OUTPUT INSTRUCTIONS:
 Return a JSON Object.
@@ -164,7 +168,19 @@ B) If you have enough info (or are making safe assumptions):
         "calories": Number,
         "protein": Number,
         "carbs": Number,
-        "fat": Number
+        "fat": Number,
+        "dietary_fiber": Number,
+        "sugar": Number,
+        "saturated_fat": Number,
+        "sodium_mg": Number,
+        "potassium_mg": Number,
+        "cholesterol_mg": Number,
+        "calcium_mg": Number,
+        "iron_mg": Number,
+        "vitamin_a_mcg": Number,
+        "vitamin_c_mg": Number,
+        "vitamin_d_mcg": Number,
+        "vitamin_b12_mcg": Number
       }
     }
   ]
@@ -228,8 +244,18 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods
         protein: item.nutrition.protein,
         carbs: item.nutrition.carbs,
         fat: item.nutrition.fat,
-        // We can put the reasoning in a hidden field if we ever want to show "Why this calorie count?"
-        // For now, we trust the agent.
+        dietary_fiber: item.nutrition.dietary_fiber,
+        sugar: item.nutrition.sugar,
+        saturated_fat: item.nutrition.saturated_fat,
+        sodium_mg: item.nutrition.sodium_mg,
+        potassium_mg: item.nutrition.potassium_mg,
+        cholesterol_mg: item.nutrition.cholesterol_mg,
+        calcium_mg: item.nutrition.calcium_mg,
+        iron_mg: item.nutrition.iron_mg,
+        vitamin_a_mcg: item.nutrition.vitamin_a_mcg,
+        vitamin_c_mg: item.nutrition.vitamin_c_mg,
+        vitamin_d_mcg: item.nutrition.vitamin_d_mcg,
+        vitamin_b12_mcg: item.nutrition.vitamin_b12_mcg,
       });
     }
 

@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
@@ -242,201 +242,203 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
           activeOpacity={1}
           onPress={handleCloseModal}
         >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
-          >
-            {selectedFood && (
-              <>
-                <View style={styles.modalHeader}>
-                  <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                    {selectedFood.name}
-                  </Text>
-                  <TouchableOpacity
-                    onPress={handleCloseModal}
-                    style={styles.closeButton}
-                  >
-                    <Feather name="x" size={20} color={theme.colors.textPrimary} />
-                  </TouchableOpacity>
-                </View>
+          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
+            <View style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, maxHeight: '85%' }]}>
+              {selectedFood && (
+                <>
+                  <View style={styles.modalHeader}>
+                    <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+                      {selectedFood.name}
+                    </Text>
+                    <TouchableOpacity
+                      onPress={handleCloseModal}
+                      style={styles.closeButton}
+                    >
+                      <Feather name="x" size={20} color={theme.colors.textPrimary} />
+                    </TouchableOpacity>
+                  </View>
 
-                <View style={styles.modalNutrition}>
-                  <Text style={[styles.nutritionLabel, { color: theme.colors.textSecondary }]}>
-                    Edit nutrition
-                  </Text>
-                  <View style={styles.nutritionGrid}>
-                    <View style={styles.nutritionItem}>
-                      <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>Calories</Text>
-                      <TextInput
-                        style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
-                        keyboardType="numeric"
-                        value={String(selectedFood.calories)}
-                        onChangeText={(text) => {
-                          const newCalories = Number(text) || 0;
-                          const oldCalories = baseFood?.calories || 1; // avoid div by 0
-                          const ratio = newCalories / oldCalories;
-
-                          setSelectedFood({
-                            ...selectedFood,
-                            calories: newCalories,
-                            protein: parseFloat(((baseFood?.protein || 0) * ratio).toFixed(1)),
-                            carbs: parseFloat(((baseFood?.carbs || 0) * ratio).toFixed(1)),
-                            fat: parseFloat(((baseFood?.fat || 0) * ratio).toFixed(1)),
-                            dietary_fiber: baseFood?.dietary_fiber ? parseFloat((baseFood.dietary_fiber * ratio).toFixed(1)) : undefined,
-                            sugar: baseFood?.sugar ? parseFloat((baseFood.sugar * ratio).toFixed(1)) : undefined,
-                            saturated_fat: baseFood?.saturated_fat ? parseFloat((baseFood.saturated_fat * ratio).toFixed(1)) : undefined,
-                            sodium_mg: baseFood?.sodium_mg ? Math.round(baseFood.sodium_mg * ratio) : undefined,
-                            potassium_mg: baseFood?.potassium_mg ? Math.round(baseFood.potassium_mg * ratio) : undefined,
-                            cholesterol_mg: baseFood?.cholesterol_mg ? Math.round(baseFood.cholesterol_mg * ratio) : undefined,
-                          });
-                        }}
-                      />
-                    </View>
-                    {['Protein', 'Carbs', 'Fat'].map((label) => {
-                      const key = label.toLowerCase() as keyof ParsedFood;
-                      return (
-                        <View key={label} style={styles.nutritionItem}>
-                          <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>{label}</Text>
+                  <ScrollView showsVerticalScrollIndicator={false}>
+                    <View style={styles.modalNutrition}>
+                      <Text style={[styles.nutritionLabel, { color: theme.colors.textSecondary }]}>
+                        Edit nutrition
+                      </Text>
+                      <View style={styles.nutritionGrid}>
+                        <View style={styles.nutritionItem}>
+                          <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>Calories</Text>
                           <TextInput
                             style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                             keyboardType="numeric"
-                            value={String(selectedFood[key] ?? '')}
+                            value={String(selectedFood.calories)}
                             onChangeText={(text) => {
-                              const newVal = Number(text) || 0;
-                              const updatedFood = { ...selectedFood, [key]: newVal };
-                              // Auto-update calories if macro changes (Bidirectional convenience)
-                              const p = Number(key === 'protein' ? newVal : updatedFood.protein || 0);
-                              const c = Number(key === 'carbs' ? newVal : updatedFood.carbs || 0);
-                              const f = Number(key === 'fat' ? newVal : updatedFood.fat || 0);
-                              updatedFood.calories = Math.round(p * 4 + c * 4 + f * 9);
-                              setSelectedFood(updatedFood);
+                              const newCalories = Number(text) || 0;
+                              const oldCalories = baseFood?.calories || 1; // avoid div by 0
+                              const ratio = newCalories / oldCalories;
+
+                              setSelectedFood({
+                                ...selectedFood,
+                                calories: newCalories,
+                                protein: parseFloat(((baseFood?.protein || 0) * ratio).toFixed(1)),
+                                carbs: parseFloat(((baseFood?.carbs || 0) * ratio).toFixed(1)),
+                                fat: parseFloat(((baseFood?.fat || 0) * ratio).toFixed(1)),
+                                dietary_fiber: baseFood?.dietary_fiber ? parseFloat((baseFood.dietary_fiber * ratio).toFixed(1)) : undefined,
+                                sugar: baseFood?.sugar ? parseFloat((baseFood.sugar * ratio).toFixed(1)) : undefined,
+                                saturated_fat: baseFood?.saturated_fat ? parseFloat((baseFood.saturated_fat * ratio).toFixed(1)) : undefined,
+                                sodium_mg: baseFood?.sodium_mg ? Math.round(baseFood.sodium_mg * ratio) : undefined,
+                                potassium_mg: baseFood?.potassium_mg ? Math.round(baseFood.potassium_mg * ratio) : undefined,
+                                cholesterol_mg: baseFood?.cholesterol_mg ? Math.round(baseFood.cholesterol_mg * ratio) : undefined,
+                              });
                             }}
                           />
                         </View>
-                      );
-                    })}
-                  </View>
+                        {['Protein', 'Carbs', 'Fat'].map((label) => {
+                          const key = label.toLowerCase() as keyof ParsedFood;
+                          return (
+                            <View key={label} style={styles.nutritionItem}>
+                              <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>{label}</Text>
+                              <TextInput
+                                style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                                keyboardType="numeric"
+                                value={String(selectedFood[key] ?? '')}
+                                onChangeText={(text) => {
+                                  const newVal = Number(text) || 0;
+                                  const updatedFood = { ...selectedFood, [key]: newVal };
+                                  // Auto-update calories if macro changes (Bidirectional convenience)
+                                  const p = Number(key === 'protein' ? newVal : updatedFood.protein || 0);
+                                  const c = Number(key === 'carbs' ? newVal : updatedFood.carbs || 0);
+                                  const f = Number(key === 'fat' ? newVal : updatedFood.fat || 0);
+                                  updatedFood.calories = Math.round(p * 4 + c * 4 + f * 9);
+                                  setSelectedFood(updatedFood);
+                                }}
+                              />
+                            </View>
+                          );
+                        })}
+                      </View>
 
-                  {/* Detailed Nutrition Facts Label */}
-                  <View style={[styles.nutritionFactsContainer, { borderColor: theme.colors.border }]}>
-                    <Text style={[styles.nutritionFactsTitle, { color: theme.colors.textPrimary }]}>Nutrition Facts</Text>
-                    <View style={styles.divider} />
+                      {/* Detailed Nutrition Facts Label */}
+                      <View style={[styles.nutritionFactsContainer, { borderColor: theme.colors.border }]}>
+                        <Text style={[styles.nutritionFactsTitle, { color: theme.colors.textPrimary }]}>Nutrition Facts</Text>
+                        <View style={styles.divider} />
 
-                    {[
-                      { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
-                      { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
-                      { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
-                      { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
-                      { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
-                      { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
+                        {[
+                          { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
+                          { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
+                          { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
+                          { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
+                          { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
+                          { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
 
-                      { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
+                          { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
 
-                      { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
-                      { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
-                      { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
-                      { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
-                      { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
+                          { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
+                          { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
+                          { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
+                          { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
+                          { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
 
-                      { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
-                      { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
+                          { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
+                          { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
 
-                      { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
-                      { label: 'Iron', key: 'iron_mg', unit: 'mg' },
-                      { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
+                          { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
+                          { label: 'Iron', key: 'iron_mg', unit: 'mg' },
+                          { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
 
-                      { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
-                      { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
-                      { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
-                      { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
-                      { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
-                      { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
-                    ].map((item) => {
-                      // We show headers too if they aren't the main 3 managed above (though carbs/fat/protein are above).
-                      // User requested specific structure. The structure implies listing them. 
-                      // If key is present in main editor, editing here should update main editor too.
-                      // Since 'carbs', 'protein', 'fat' are `isHeader`, we can show them as read-only or editable?
-                      // User said "Nutrition Facts ... -Total Carbohydrates ...". It's standard to list them.
+                          { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
+                          { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
+                          { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
+                          { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
+                          { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
+                          { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
+                        ].map((item) => {
+                          // We show headers too if they aren't the main 3 managed above (though carbs/fat/protein are above).
+                          // User requested specific structure. The structure implies listing them. 
+                          // If key is present in main editor, editing here should update main editor too.
+                          // Since 'carbs', 'protein', 'fat' are `isHeader`, we can show them as read-only or editable?
+                          // User said "Nutrition Facts ... -Total Carbohydrates ...". It's standard to list them.
 
-                      return (
-                        <View key={item.key} style={[
-                          styles.factRow,
-                          {
-                            paddingLeft: (item.indent || 0) * 16,
-                            borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth // Only lines for top level? Or all? Standard is all usually.
-                            // Let's keep all lines for clarity or mimic label.
-                          }
-                        ]}>
-                          <Text style={[
-                            styles.factLabel,
-                            {
-                              color: theme.colors.textSecondary,
-                              fontWeight: item.isHeader ? 'bold' : 'normal'
-                            }
-                          ]}>
-                            {item.indent ? `- ${item.label}` : item.label}
-                          </Text>
-                          <View style={styles.factInputContainer}>
-                            <TextInput
-                              style={[styles.factInput, { color: theme.colors.textPrimary }]}
-                              keyboardType="numeric"
-                              placeholder="-"
-                              placeholderTextColor={theme.colors.textTertiary}
-                              value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
-                              onChangeText={(text) => {
-                                const val = text === '' ? undefined : Number(text);
-                                const updated = { ...selectedFood, [item.key]: val };
-
-                                // Recalculate calories if main macros change here
-                                if (['protein', 'carbs', 'fat'].includes(item.key)) {
-                                  const p = Number(updated.protein || 0);
-                                  const c = Number(updated.carbs || 0);
-                                  const f = Number(updated.fat || 0);
-                                  updated.calories = Math.round(p * 4 + c * 4 + f * 9);
+                          return (
+                            <View key={item.key} style={[
+                              styles.factRow,
+                              {
+                                paddingLeft: (item.indent || 0) * 16,
+                                borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth // Only lines for top level? Or all? Standard is all usually.
+                                // Let's keep all lines for clarity or mimic label.
+                              }
+                            ]}>
+                              <Text style={[
+                                styles.factLabel,
+                                {
+                                  color: theme.colors.textSecondary,
+                                  fontWeight: item.isHeader ? 'bold' : 'normal'
                                 }
+                              ]}>
+                                {item.indent ? `- ${item.label}` : item.label}
+                              </Text>
+                              <View style={styles.factInputContainer}>
+                                <TextInput
+                                  style={[styles.factInput, { color: theme.colors.textPrimary }]}
+                                  keyboardType="numeric"
+                                  placeholder="-"
+                                  placeholderTextColor={theme.colors.textTertiary}
+                                  value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
+                                  onChangeText={(text) => {
+                                    const val = text === '' ? undefined : Number(text);
+                                    const updated = { ...selectedFood, [item.key]: val };
 
-                                setSelectedFood(updated);
-                              }}
-                            />
-                            <Text style={[styles.factUnit, { color: theme.colors.textTertiary }]}>{item.unit}</Text>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                </View>
+                                    // Recalculate calories if main macros change here
+                                    if (['protein', 'carbs', 'fat'].includes(item.key)) {
+                                      const p = Number(updated.protein || 0);
+                                      const c = Number(updated.carbs || 0);
+                                      const f = Number(updated.fat || 0);
+                                      updated.calories = Math.round(p * 4 + c * 4 + f * 9);
+                                    }
 
-                {onUpdateFood && selectedMealId && (
-                  <View style={styles.modalActions}>
-                    <TouchableOpacity
-                      style={[styles.modalButtonSecondary, { borderColor: theme.colors.border }]}
-                      onPress={handleCloseModal}
-                    >
-                      <Text style={[styles.modalButtonSecondaryText, { color: theme.colors.textSecondary }]}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
-                      onPress={() => {
-                        if (selectedFood && onUpdateFood && selectedMealId) {
-                          const p = Number(selectedFood.protein || 0);
-                          const c = Number(selectedFood.carbs || 0);
-                          const f = Number(selectedFood.fat || 0);
-                          onUpdateFood(selectedMealId, {
-                            ...selectedFood,
-                            calories: Math.max(0, Math.round(p * 4 + c * 4 + f * 9)),
-                          });
-                        }
-                        handleCloseModal();
-                      }}
-                    >
-                      <Text style={[styles.modalButtonPrimaryText, { color: theme.colors.primaryForeground }]}>Save</Text>
-                    </TouchableOpacity>
-                  </View>
-                )}
-              </>
-            )}
-          </TouchableOpacity>
+                                    setSelectedFood(updated);
+                                  }}
+                                />
+                                <Text style={[styles.factUnit, { color: theme.colors.textTertiary }]}>{item.unit}</Text>
+                              </View>
+                            </View>
+                          );
+                        })}
+                      </View>
+                    </View>
+                  </ScrollView>
+
+                  {
+                    onUpdateFood && selectedMealId && (
+                      <View style={[styles.modalActions, { marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }]}>
+                        <TouchableOpacity
+                          style={[styles.modalButtonSecondary, { borderColor: theme.colors.border }]}
+                          onPress={handleCloseModal}
+                        >
+                          <Text style={[styles.modalButtonSecondaryText, { color: theme.colors.textSecondary }]}>Cancel</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
+                          onPress={() => {
+                            if (selectedFood && onUpdateFood && selectedMealId) {
+                              const p = Number(selectedFood.protein || 0);
+                              const c = Number(selectedFood.carbs || 0);
+                              const f = Number(selectedFood.fat || 0);
+                              onUpdateFood(selectedMealId, {
+                                ...selectedFood,
+                                calories: Math.max(0, Math.round(p * 4 + c * 4 + f * 9)),
+                              });
+                            }
+                            handleCloseModal();
+                          }}
+                        >
+                          <Text style={[styles.modalButtonPrimaryText, { color: theme.colors.primaryForeground }]}>Save</Text>
+                        </TouchableOpacity>
+                      </View>
+                    )
+                  }
+                </>
+              )}
+            </View>
+          </TouchableWithoutFeedback>
         </TouchableOpacity>
       </Modal>
     </>
@@ -674,7 +676,7 @@ const styles = StyleSheet.create({
   },
   factUnit: {
     fontSize: Typography.fontSize.xs,
-    width: 20,
+    width: 30,
     textAlign: 'right',
   },
 });

@@ -127,6 +127,16 @@ export const HomeScreen: React.FC = () => {
   const [shouldFocusInput, setShouldFocusInput] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+
+  // Derived Premium 
+  const isPremium = React.useMemo(() => {
+    if (userPlan === 'premium') return true;
+    if (accountInfo?.premiumUntil) {
+      return new Date(accountInfo.premiumUntil) > new Date();
+    }
+    return false;
+  }, [userPlan, accountInfo]);
+
   const [entryTasks, setEntryTasks] = useState<EntryTasksStatus>({
     customPlanCompleted: false,
     registrationCompleted: false,
@@ -138,6 +148,7 @@ export const HomeScreen: React.FC = () => {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughHideOffer, setWalkthroughHideOffer] = useState(false);
   const [accountInitialMode, setAccountInitialMode] = useState<'signin' | 'signup'>('signin');
+  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
 
 
   // Streak Freeze State
@@ -334,8 +345,11 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleSettingsBack = () => {
+  const handleSettingsBack = async () => {
     setShowSettings(false);
+    // Reload preferences in case they changed
+    const prefs = await dataStorage.loadPreferences();
+    setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
   };
 
   const handleOpenSubscription = () => {
@@ -740,6 +754,10 @@ export const HomeScreen: React.FC = () => {
         setTotalEarnedEntries(0);
       }
 
+      // Load Preferences
+      const prefs = await dataStorage.loadPreferences();
+      setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+
     } catch (e) {
       console.error("Failed to load home screen data", e);
     }
@@ -949,26 +967,13 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const canAddEntry = async () => {
-    if (userPlan === 'premium') return true;
+  const canAddEntry = () => {
+    if (isPremium) return true;
 
-    // Get base free limit
-    const baseLimit = FREE_ENTRY_LIMIT; // 20
-
-    // Get bonus entries from referrals
-    const accountInfo = await dataStorage.loadAccountInfo();
-    let bonusEntries = 0;
-    if (accountInfo?.email) {
-      bonusEntries = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-    }
-
-    // Calculate effective limit
-    const effectiveLimit = baseLimit + bonusEntries + taskBonusEntries;
-
-    // Read entry count from storage to avoid stale state
-    const currentEntryCount = await dataStorage.loadEntryCount();
-
-    return currentEntryCount < effectiveLimit;
+    // Check daily limit (3 meals per day)
+    const dateKey = getDateKey(new Date()); // Use current date for new entries
+    const todayMeals = mealsByDate[dateKey] || [];
+    return todayMeals.length < 3;
   };
 
   const handleInputSubmit = async (text: string) => {
@@ -976,14 +981,24 @@ export const HomeScreen: React.FC = () => {
 
     const trimmed = text.trim();
     if (!trimmed) return;
-    // Enforce free plan entry limit for new prompts
-    if (!(await canAddEntry())) {
+
+    // Enforce 3/day limit
+    if (!canAddEntry()) {
       Alert.alert(
-        'Entry Limit Reached',
-        'You have reached your free entry limit. Upgrade to Premium for unlimited entries.',
+        'Daily Limit Reached',
+        'Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!',
         [
           { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => handleOpenSubscription() },
+          {
+            text: 'View Offer', onPress: () => {
+              // Setup to show offer. Since Walkthrough might be dismissed, 
+              // maybe open Subscription or FreeEntries?
+              // User said "Claim 10 free days".
+              // We can open Subscription screen or just trigger the logic?
+              // Simplest: Open Subscription screen which should now show the offer or upgrade.
+              handleOpenSubscription();
+            }
+          },
         ]
       );
       return;
@@ -1452,6 +1467,19 @@ export const HomeScreen: React.FC = () => {
     }
 
     try {
+      // Check Daily Limit
+      const dateKey = getDateKey(selectedDate);
+      const todayMeals = mealsByDate[dateKey] || [];
+      if (!isPremium && todayMeals.length >= 3) {
+        Alert.alert(
+          "Daily Limit Reached",
+          "Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!"
+        );
+        resetUploadState();
+        setIsAnalyzingFood(false);
+        return;
+      }
+
       setIsAnalyzingFood(true);
       if (__DEV__) console.log('Starting image analysis for URI:', uriToAnalyze);
 
@@ -2065,8 +2093,8 @@ export const HomeScreen: React.FC = () => {
             scrollEnabled={scrollEnabled}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Daily AI Coach Card */}
-            {isSameDay(selectedDate, new Date()) && (
+            {/* Daily AI Coach Card - Premium Only */}
+            {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner
                 onLogSuggestion={(text) => {
                   setTranscribedText(text);
@@ -2127,8 +2155,8 @@ export const HomeScreen: React.FC = () => {
             <View style={styles.bottomSpacer} />
           </ScrollView>
 
-          {/* Floating AI Coach Button */}
-          {!isAnalyzingFood && !isRecording && (
+          {/* Floating AI Coach Button - Premium Only */}
+          {!isAnalyzingFood && !isRecording && isPremium && (
             <TouchableOpacity
               onPress={() => setShowChatCoach(true)}
               style={{
@@ -2264,7 +2292,7 @@ export const HomeScreen: React.FC = () => {
         <Modal
           visible={showNutritionAnalysis}
           animationType="slide"
-          presentationStyle="pageSheet"
+          presentationStyle="fullScreen"
           onRequestClose={handleNutritionAnalysisBack}
         >
           <NutritionAnalysisScreen
@@ -2277,7 +2305,7 @@ export const HomeScreen: React.FC = () => {
             targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
             targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
             targetFat={goalsSet ? savedGoals.fatGrams : undefined}
-            isPremium={userPlan === 'premium'}
+            isPremium={isPremium}
           />
         </Modal>
 
@@ -2289,7 +2317,7 @@ export const HomeScreen: React.FC = () => {
         >
           <AdvancedAnalyticsScreen
             onBack={handleAdvancedAnalyticsBack}
-            userPlan={userPlan}
+            userPlan={isPremium ? 'premium' : 'free'}
             summariesByDate={summariesByDate}
             userGoals={savedGoals}
           />
@@ -2324,8 +2352,30 @@ export const HomeScreen: React.FC = () => {
         <AppWalkthroughModal
           visible={showWalkthrough}
           onClose={handleWalkthroughClose}
-          onSignUp={() => handleAccount('signup')}
-          hideOffer={walkthroughHideOffer}
+          onSignUp={async (claimedOffer) => {
+            if (claimedOffer) {
+              const expiry = new Date();
+              expiry.setDate(expiry.getDate() + 10);
+              const isoExpiry = expiry.toISOString();
+
+              // Update State
+              setAccountInfo(prev => ({ ...(prev || {}), premiumUntil: isoExpiry }));
+
+              // Persist
+              try {
+                const currentStr = await AsyncStorage.getItem('@trackkal:accountInfo');
+                const current = currentStr ? JSON.parse(currentStr) : {};
+                const updated = { ...current, premiumUntil: isoExpiry };
+                await AsyncStorage.setItem('@trackkal:accountInfo', JSON.stringify(updated));
+                Alert.alert("Trial Activated 🚀", "You now have 10 days of Premium access! Enjoy unlimited logging and your AI Coach.");
+              } catch (e) {
+                console.error("Failed to save trial", e);
+              }
+            } else {
+              handleAccount('signup');
+            }
+          }}
+          hideOffer={walkthroughHideOffer || isPremium}
         />
       </View>
     </SafeAreaView>

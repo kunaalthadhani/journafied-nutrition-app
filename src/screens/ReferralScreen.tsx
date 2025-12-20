@@ -149,7 +149,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
               {referralCode || 'loading'}
             </Text>
             <Text style={[styles.helper, { color: theme.colors.textSecondary }]}>
-              share this with friends each friend who logs meals unlocks free entries for both of you
+              share this with friends each friend who logs meals unlocks 3 free premium days for both of you
             </Text>
             <View style={styles.actionsRow}>
               <TouchableOpacity
@@ -176,27 +176,17 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
             ]}
           >
             <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
-              Free entries
+              Premium Rewards
             </Text>
             <View style={styles.freeRow}>
               <View>
                 <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
-                  From referrals
+                  Earned Premium Days
                 </Text>
                 <Text style={[styles.freeValue, { color: theme.colors.primary }]}>
-                  +{totalEarnedEntriesFromReferrals}
+                  +{totalEarnedEntriesFromReferrals} Days
                 </Text>
               </View>
-              {remainingEntries !== null && (
-                <View style={styles.freeRight}>
-                  <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
-                    Remaining entries
-                  </Text>
-                  <Text style={[styles.freeValue, { color: theme.colors.textPrimary }]}>
-                    {remainingEntries}
-                  </Text>
-                </View>
-              )}
             </View>
           </View>
 
@@ -215,7 +205,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
               </Text>
             ) : rows.length === 0 ? (
               <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
-                no referrals yet share your code to start earning entries
+                no referrals yet share your code to start earning
               </Text>
             ) : (
               <View style={styles.table}>
@@ -224,7 +214,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
                     Friend
                   </Text>
                   <Text style={[styles.tableHeaderText, { color: theme.colors.textSecondary }]}>
-                    Entries
+                    Days
                   </Text>
                 </View>
                 {rows.map((row) => (

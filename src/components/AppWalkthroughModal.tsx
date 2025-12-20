@@ -17,7 +17,7 @@ const { width, height } = Dimensions.get('window');
 interface WalkthroughModalProps {
     visible: boolean;
     onClose: (dontShowAgain: boolean) => void;
-    onSignUp: () => void;
+    onSignUp: (claimedOffer?: boolean) => void;
     hideOffer?: boolean;
 }
 
@@ -123,7 +123,9 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
                 index: currentIndex + 1,
                 animated: true,
             });
-        } // else finish?
+        } else {
+            handleFinish();
+        }
     };
 
     const handleFinish = () => {
@@ -213,6 +215,7 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
                         keyExtractor={(item) => item.id}
                         horizontal
                         pagingEnabled
+                        scrollEnabled={false}
                         showsHorizontalScrollIndicator={false}
                         onViewableItemsChanged={onViewableItemsChanged}
                         viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}

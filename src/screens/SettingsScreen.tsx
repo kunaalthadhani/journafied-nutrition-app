@@ -404,11 +404,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 onValueChange={async (val) => {
                   setSmartSuggestEnabled(val);
                   // Persist
-                  const prefs = await dataStorage.loadPreferences();
-                  if (prefs) {
-                    prefs.smartSuggestEnabled = val;
-                    await dataStorage.savePreferences(prefs);
-                  }
+                  const current = await dataStorage.loadPreferences() || {};
+                  // @ts-ignore
+                  const newPrefs = { ...current, smartSuggestEnabled: val };
+                  // @ts-ignore
+                  await dataStorage.savePreferences(newPrefs);
                 }}
                 trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
                 thumbColor={Colors.white}

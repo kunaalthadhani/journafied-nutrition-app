@@ -85,7 +85,17 @@ export interface AccountInfo {
   supabaseUserId?: string;
   passwordHash?: string; // Should be hashed, not plain text
   hasUsedReferralCode?: boolean; // Track if user has used a referral code
+  premiumUntil?: string; // ISO date string for premium trial expiry
 }
+
+// ... existing code ...
+
+// Helper to check premium status
+export const isUserPremium = (plan: string, premiumUntil?: string): boolean => {
+  if (plan === 'premium') return true;
+  if (!premiumUntil) return false;
+  return new Date(premiumUntil) > new Date();
+};
 
 export interface Preferences {
   weightUnit: 'kg' | 'lbs';
@@ -2560,7 +2570,7 @@ export const dataStorage = {
       };
 
       let dayCount = 0;
-      const verifiedKeys: string[] = []; // for common foods scan
+      let verifiedKeys: string[] = []; // for common foods scan
 
       for (let i = 0; i < 7; i++) {
         const d = new Date();
