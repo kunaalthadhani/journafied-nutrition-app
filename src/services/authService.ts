@@ -44,6 +44,18 @@ export const authService = {
     });
   },
 
+  async sendSignupOtp(email: string) {
+    ensureClient();
+    const normalizedEmail = email.trim().toLowerCase();
+    return supabase!.auth.signInWithOtp({
+      email: normalizedEmail,
+      options: {
+        shouldCreateUser: true,
+        emailRedirectTo: undefined,
+      },
+    });
+  },
+
   async verifyOtp(email: string, token: string) {
     ensureClient();
     return supabase!.auth.verifyOtp({

@@ -90,6 +90,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
+  const [otpCode, setOtpCode] = useState('');
 
   const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Default UAE
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -360,71 +361,100 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     let hasError = false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
-    if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
-    if (!password.trim() || password.length < 6) { setAuthMessage('Password must be at least 6 chars.'); hasError = true; }
+    if (!otpSent) {
+      // Phase 1: Validation
+      if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
+      if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
 
-    // Phone Validation
-    const cleanPhone = phoneInput.replace(/\D/g, ''); // Remove non-digits
-    // Strip leading zero if present (User might type 050...)
-    const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
+      // Phone Validation
+      const cleanPhone = phoneInput.replace(/\D/g, '');
+      const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
 
-    if (!finalPhoneBody || finalPhoneBody.length < 5) { // Basic check
-      setPhoneError(true);
-      hasError = true;
-    } else {
-      setPhoneError(false);
-    }
-
-    if (!hasAcceptedTerms) { setTermsError(true); hasError = true; } else setTermsError(false);
-
-    if (hasError) return;
-
-    try {
-      setAuthStatus('sending');
-      setAuthMessage(null);
-
-      const fullPhoneNumber = `${selectedCountry.dial_code}${finalPhoneBody}`;
-
-      // 1. Sign Up
-      const { data, error } = await authService.signUp(emailInput.trim(), password);
-      if (error) throw error;
-
-      if (data.session) {
-        // Immediate login success (if confirm email off)
-        // Save Name/Phone logic
-        const provisional: AccountInfo = {
-          ...(accountInfo || {}),
-          name: name.trim(),
-          email: emailInput.trim(),
-          phoneNumber: fullPhoneNumber,
-          supabaseUserId: data.session.user.id,
-        };
-        await dataStorage.saveAccountInfo(provisional); // Save mostly for name
-        await syncAccountInfoFromSession(data.session);
-
-        // Referrals
-        if (referralCode.trim()) {
-          const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput.trim());
-          if (validation.valid) {
-            await referralService.createReferralRedemption(validation.referralCode!, emailInput.trim(), name.trim());
-          }
-        }
-
-        // Bonus
-        const taskResult = await dataStorage.completeEntryTask('registration');
-        if (taskResult.awarded) Alert.alert('Welcome!', 'Account created. +5 free entries.');
-
-        await loadLocalData();
+      if (!finalPhoneBody || finalPhoneBody.length < 5) {
+        setPhoneError(true);
+        hasError = true;
       } else {
-        // Email confirmation required
-        Alert.alert('Verify Email', 'Please check your email to confirm your account.');
-        setAuthMode('signin'); // Switch to login
+        setPhoneError(false);
       }
-    } catch (e: any) {
-      setAuthMessage(e.message || 'Sign up failed.');
-    } finally {
-      setAuthStatus('idle');
+
+      if (!hasAcceptedTerms) { setTermsError(true); hasError = true; } else setTermsError(false);
+
+      if (hasError) return;
+
+      // Send OTP
+      try {
+        setAuthStatus('sending');
+        setAuthMessage(null);
+        const { error } = await authService.sendSignupOtp(emailInput.trim());
+        if (error) throw error;
+        setOtpSent(true);
+        Alert.alert('Code Sent', `We sent a verification code to ${emailInput.trim()}.`);
+      } catch (e: any) {
+        setAuthMessage(e.message || 'Failed to send code.');
+      } finally {
+        setAuthStatus('idle');
+      }
+
+    } else {
+      // Phase 2: Verify & Create
+      if (!otpCode.trim() || otpCode.length < 6) {
+        setAuthMessage('Please enter the 6-digit code.');
+        return;
+      }
+
+      try {
+        setAuthStatus('verifying');
+        setAuthMessage(null);
+
+        const { data, error } = await authService.verifyOtp(emailInput.trim(), otpCode.trim());
+        if (error) throw error;
+
+        if (data.session) {
+          const cleanPhone = phoneInput.replace(/\D/g, '');
+          const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
+          const fullPhoneNumber = `${selectedCountry.dial_code}${finalPhoneBody}`;
+
+          const existingInfo = await dataStorage.loadAccountInfo();
+          const provisional: AccountInfo = {
+            ...(existingInfo || {}),
+            name: name.trim(),
+            email: emailInput.trim(),
+            phoneNumber: fullPhoneNumber,
+            supabaseUserId: data.session.user.id,
+          };
+
+          // Referrals + Premium Bonus (3 Days)
+          if (referralCode.trim()) {
+            const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput.trim());
+            if (validation.valid) {
+              await referralService.createReferralRedemption(validation.referralCode!, emailInput.trim(), name.trim());
+
+              // Grant 3 Days Premium
+              let currentExpiry = provisional.premiumUntil ? new Date(provisional.premiumUntil) : new Date();
+              if (currentExpiry < new Date()) currentExpiry = new Date(); // If expired, start from now
+              currentExpiry.setDate(currentExpiry.getDate() + 3);
+
+              provisional.premiumUntil = currentExpiry.toISOString();
+              Alert.alert('Referral Bonus Unlocked! 🎉', '+3 Days Premium Access & 5 Free Entries');
+            }
+          }
+
+          await dataStorage.saveAccountInfo(provisional);
+          await syncAccountInfoFromSession(data.session);
+
+          // Registraton Bonus Task
+          const taskResult = await dataStorage.completeEntryTask('registration');
+          if (taskResult.awarded) {
+            if (!referralCode.trim()) Alert.alert('Welcome!', 'Account created. +5 free entries.');
+          }
+
+          await loadLocalData();
+        }
+      } catch (e: any) {
+        setAuthMessage(e.message || 'Verification failed.');
+      } finally {
+        setAuthStatus('idle');
+      }
     }
   };
 
@@ -548,20 +578,53 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             autoCapitalize="none"
           />
 
-          {/* Password Input */}
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
-          <TextInput
-            style={[styles.input, {
-              backgroundColor: theme.colors.input,
-              color: theme.colors.textPrimary,
-              borderColor: theme.colors.border
-            }]}
-            placeholder="••••••"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={password}
-            onChangeText={setPassword}
-            secureTextEntry
-          />
+          {/* OTP Input (Signup Only - Phase 2) */}
+          {authMode === 'signup' && otpSent ? (
+            <>
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Verification Code</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: theme.colors.primary,
+                  textAlign: 'center',
+                  letterSpacing: 8,
+                  fontSize: 24,
+                  fontWeight: 'bold'
+                }]}
+                placeholder="000000"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={otpCode}
+                onChangeText={setOtpCode}
+                keyboardType="number-pad"
+                maxLength={6}
+              />
+              <TouchableOpacity onPress={() => { setOtpSent(false); setAuthMessage('Resend code or edit email.'); }} style={{ marginTop: 8 }}>
+                <Text style={{ color: theme.colors.primary, fontSize: 13, textAlign: 'center' }}>Wrong email? Edit details</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              {/* Password Input (SignIn Only) */}
+              {authMode === 'signin' && (
+                <>
+                  <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
+                  <TextInput
+                    style={[styles.input, {
+                      backgroundColor: theme.colors.input,
+                      color: theme.colors.textPrimary,
+                      borderColor: theme.colors.border
+                    }]}
+                    placeholder="••••••"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    value={password}
+                    onChangeText={setPassword}
+                    secureTextEntry
+                  />
+                </>
+              )}
+            </>
+          )}
 
           {authMode === 'signin' && (
             <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
@@ -653,7 +716,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             {authStatus !== 'idle' ? (
               <ActivityIndicator color="white" />
             ) : (
-              <Text style={styles.primaryButtonText}>{authMode === 'signup' ? 'Create Account' : 'Sign In'}</Text>
+              <Text style={styles.primaryButtonText}>
+                {authMode === 'signup'
+                  ? (otpSent ? 'Verify & Create Account' : 'Send Verification Code')
+                  : 'Sign In'}
+              </Text>
             )}
           </TouchableOpacity>
         </View>
