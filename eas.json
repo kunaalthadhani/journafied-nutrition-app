@@ -11,16 +11,13 @@
       }
     },
     "preview": {
-      "distribution": "internal"
+      "distribution": "internal",
+      "android": {
+        "buildType": "apk"
+      }
     },
     "production": {
       "distribution": "store",
-      "env": {
-        "TRACKKCAL_KEYSTORE_BASE64": "",
-        "TRACKKCAL_KEYSTORE_PASSWORD": "",
-        "TRACKKCAL_KEY_ALIAS": "",
-        "TRACKKCAL_KEY_PASSWORD": ""
-      },
       "android": {
         "buildType": "app-bundle"
       }
@@ -30,15 +27,3 @@
     "production": {}
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-

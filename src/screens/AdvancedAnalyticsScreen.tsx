@@ -72,7 +72,8 @@ const AdvancedAnalyticsScreen: React.FC<AdvancedAnalyticsScreenProps> = ({
             await dataStorage.saveAnalyticsFeedback({
                 id: Date.now().toString(),
                 timestamp: new Date().toISOString(),
-                helpful: true
+                type: 'general',
+                rating: 5
             });
             setShowFeedbackPrompt(false);
             // Maybe show a small "Thanks!" toast
@@ -87,8 +88,9 @@ const AdvancedAnalyticsScreen: React.FC<AdvancedAnalyticsScreenProps> = ({
         await dataStorage.saveAnalyticsFeedback({
             id: Date.now().toString(),
             timestamp: new Date().toISOString(),
-            helpful: false,
-            suggestion: suggestionText
+            type: 'general',
+            rating: 1,
+            message: suggestionText
         });
         setShowFeedbackInput(false);
         Alert.alert("Thank You", "Your feedback helps us improve.");

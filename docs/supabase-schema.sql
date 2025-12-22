@@ -307,5 +307,51 @@ create table if not exists referral_rewards (
 create index if not exists idx_referral_rewards_user_id on referral_rewards (user_id);
 create index if not exists idx_referral_rewards_redemption_id on referral_rewards (related_redemption_id);
 
+-- Streak Freezes
+create table if not exists streak_freezes (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references app_users(id) on delete cascade unique,
+  freezes_available integer default 0,
+  last_reset_date date,
+  used_on_dates jsonb default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_streak_freezes_updated on streak_freezes;
+create trigger trg_streak_freezes_updated
+before update on streak_freezes
+for each row execute function set_updated_at();
+
+-- Grocery List Items
+create table if not exists grocery_items (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references app_users(id) on delete cascade,
+  name text not null,
+  category text,
+  is_checked boolean default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+drop trigger if exists trg_grocery_items_updated on grocery_items;
+create trigger trg_grocery_items_updated
+before update on grocery_items
+for each row execute function set_updated_at();
+
+-- Analytics Events
+create table if not exists analytics_events (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references app_users(id) on delete cascade,
+  event_name text not null,
+  properties jsonb,
+  timestamp timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_analytics_events_user_id on analytics_events(user_id);
+create index if not exists idx_analytics_events_name on analytics_events(event_name);
+create index if not exists idx_analytics_events_timestamp on analytics_events(timestamp);
+
 
 

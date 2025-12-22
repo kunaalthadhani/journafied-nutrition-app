@@ -97,6 +97,20 @@ export const isUserPremium = (plan: string, premiumUntil?: string): boolean => {
   return new Date(premiumUntil) > new Date();
 };
 
+export interface GroceryItem {
+  id: string;
+  name: string;
+  category?: string;
+  isChecked: boolean;
+  updatedAt?: string;
+}
+
+export interface AnalyticsEvent {
+  eventName: string;
+  properties?: Record<string, any>;
+  timestamp: string;
+}
+
 export interface Preferences {
   weightUnit: 'kg' | 'lbs';
   notificationsEnabled: boolean;
@@ -356,7 +370,12 @@ type SyncOperation =
   | { entity: 'entry_tasks'; action: 'upsert'; payload: EntryTasksStatus }
   | { entity: 'referral_code'; action: 'upsert'; payload: ReferralCode }
   | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
-  | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward };
+  | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
+  | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward }
+  | { entity: 'streak_freeze'; action: 'upsert'; payload: StreakFreezeData }
+  | { entity: 'grocery_item'; action: 'upsert'; payload: GroceryItem }
+  | { entity: 'grocery_item'; action: 'delete'; payload: { id: string } }
+  | { entity: 'analytics_event'; action: 'log'; payload: AnalyticsEvent };
 
 const readSyncQueue = async (): Promise<SyncOperation[]> => {
   try {
@@ -466,6 +485,23 @@ const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo)
       if (op.action === 'upsert') {
         await supabaseDataService.saveReferralReward(accountInfo, op.payload);
       }
+      break;
+    case 'streak_freeze':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertStreakFreeze(accountInfo, op.payload);
+      }
+      break;
+    case 'grocery_item':
+      if (op.action === 'upsert') {
+        await supabaseDataService.upsertGroceryItem(accountInfo, op.payload);
+      } else {
+        await supabaseDataService.deleteGroceryItem(accountInfo, op.payload.id);
+      }
+      break;
+    case 'analytics_event':
+      // Fire and forget for analytics to avoid blocking sync? 
+      // Or await it. Usually fine to await.
+      await supabaseDataService.logAnalyticsEvent(accountInfo, op.payload);
       break;
   }
 };
@@ -1037,13 +1073,35 @@ export const dataStorage = {
     }
   },
 
-  // Save streak freeze data
   async saveStreakFreeze(data: StreakFreezeData): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.STREAK_FREEZE, JSON.stringify(data));
-      // TODO: Consider syncing this to backend later if needed
+
+      await enqueueSyncOperation({
+        entity: 'streak_freeze',
+        action: 'upsert',
+        payload: data
+      });
     } catch (error) {
       console.error('Error saving streak freeze data:', error);
+    }
+  },
+
+  async logAnalyticsEvent(eventName: string, properties?: any): Promise<void> {
+    try {
+      const payload: AnalyticsEvent = {
+        eventName,
+        properties,
+        timestamp: new Date().toISOString()
+      };
+
+      await enqueueSyncOperation({
+        entity: 'analytics_event',
+        action: 'log',
+        payload
+      });
+    } catch (e) {
+      console.warn('Error queuing analytics', e);
     }
   },
 
@@ -2300,23 +2358,7 @@ export const dataStorage = {
     }
   },
 
-  saveStreakFreeze: async (data: StreakFreezeData): Promise<void> => {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.STREAK_FREEZE, JSON.stringify(data));
-    } catch (e) {
-      console.error('Failed to save streak freeze', e);
-    }
-  },
 
-  loadStreakFreeze: async (): Promise<StreakFreezeData | null> => {
-    try {
-      const json = await AsyncStorage.getItem(STORAGE_KEYS.STREAK_FREEZE);
-      if (json) return JSON.parse(json);
-    } catch (e) {
-      console.error('Failed to load streak freeze', e);
-    }
-    return null;
-  },
 
   saveAdjustmentHistory: async (history: AdjustmentRecord[]): Promise<void> => {
     try {
@@ -2812,6 +2854,14 @@ export const dataStorage = {
       const today = new Date().toISOString().split('T')[0];
       return stored === today;
     } catch (e) { return false; }
+  },
+
+  async clearAllData(): Promise<void> {
+    try {
+      await AsyncStorage.clear();
+    } catch (e) {
+      console.error('Error clearing all local data:', e);
+    }
   },
 
   async debug_injectPlateauData(): Promise<void> {

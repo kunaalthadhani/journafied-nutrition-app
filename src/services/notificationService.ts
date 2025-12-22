@@ -9,7 +9,8 @@ Notifications.setNotificationHandler({
   handleNotification: async () => ({
     shouldPlaySound: true,
     shouldSetBadge: false,
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
   }),
 });
 
@@ -66,8 +67,8 @@ export const notificationService = {
       if (!projectId) {
         console.warn(
           '[notifications] Registration error: No "projectId" found in Expo config. ' +
-            'If you are running a bare or custom dev client, set EAS projectId or EXPO_PUBLIC_EAS_PROJECT_ID. ' +
-            'Skipping push token registration for now.'
+          'If you are running a bare or custom dev client, set EAS projectId or EXPO_PUBLIC_EAS_PROJECT_ID. ' +
+          'Skipping push token registration for now.'
         );
         return { status: 'error', error: 'Missing projectId in Expo config' };
       }

@@ -238,9 +238,9 @@ export const HomeScreen: React.FC = () => {
             content: {
               title: "🔥 Don't lose your streak!",
               body: `You're on a ${currentStreak} day streak. Log a meal by midnight to keep it going!`,
-              sound: true,
+              sound: 'default',
             },
-            trigger: triggerDate,
+            trigger: triggerDate as any,
           });
         }
       }
@@ -371,7 +371,8 @@ export const HomeScreen: React.FC = () => {
     setShowWeightTracker(false);
   };
 
-  const handleAccount = () => {
+  const handleAccount = (mode?: 'signin' | 'signup') => {
+    if (mode) setAccountInitialMode(mode);
     analyticsService.trackAccountScreenOpen();
     setMenuVisible(false);
     setShowSettings(false);

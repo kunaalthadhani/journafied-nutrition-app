@@ -47,6 +47,11 @@
       "expo-web-browser",
       "react-native-health",
       "react-native-health-connect"
-    ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "cddbc23a-d73d-4d55-a6cc-af95eb1747e7"
+      }
+    }
   }
 }

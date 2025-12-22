@@ -161,10 +161,10 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                         <div class="subtitle">Focus: ${groceryData.primaryFocus} • Duration: ${durationWeeks} Week${durationWeeks > 1 ? 's' : ''}</div>
                     </div>
                     
-                    ${explanation?.generalAdvice ? `
+                    ${explanation?.summary ? `
                     <div class="coach-card">
                         <div class="coach-title">Coach Insight</div>
-                        <div class="coach-text">${explanation.generalAdvice}</div>
+                        <div class="coach-text">${explanation.summary}</div>
                     </div>` : ''}
                     
                     <div class="list">

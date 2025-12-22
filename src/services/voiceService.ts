@@ -1,3 +1,4 @@
+
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
@@ -17,7 +18,7 @@ class VoiceService {
       if (Platform.OS === 'web') {
         return true; // Web permissions are handled differently
       }
-      
+
       const { status } = await Audio.requestPermissionsAsync();
       return status === 'granted';
     } catch (error) {
@@ -49,22 +50,24 @@ class VoiceService {
 
       // Create new recording with optimized settings for speech recognition
       // Using mono channel and 16kHz sample rate (optimal for speech)
-      const { recording } = await Audio.Recording.createAsync({
+      // Create new recording with optimized settings for speech recognition
+      // Using mono channel and 16kHz sample rate (optimal for speech)
+      const recordingOptions = {
         android: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_FORMAT_MPEG_4,
-          audioEncoder: Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC,
-          sampleRate: 16000, // Optimal for speech recognition
-          numberOfChannels: 1, // Mono is better for speech
-          bitRate: 64000, // Adequate for speech
+          outputFormat: 2, // Audio.RECORDING_FORMAT_MPEG_4
+          audioEncoder: 3, // Audio.RECORDING_OPTION_ANDROID_AUDIO_ENCODER_AAC
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 64000,
         },
         ios: {
           extension: '.m4a',
-          outputFormat: Audio.RECORDING_FORMAT_MPEG_4,
-          audioQuality: Audio.RECORDING_OPTION_IOS_AUDIO_QUALITY_HIGH,
-          sampleRate: 16000, // Optimal for speech recognition
-          numberOfChannels: 1, // Mono is better for speech
-          bitRate: 64000, // Adequate for speech
+          outputFormat: 'mp4', // IOSOutputFormat.MPEG4
+          audioQuality: 0x7F, // IOSAudioQuality.MAX
+          sampleRate: 16000,
+          numberOfChannels: 1,
+          bitRate: 64000,
           linearPCMBitDepth: 16,
           linearPCMIsBigEndian: false,
           linearPCMIsFloat: false,
@@ -73,11 +76,13 @@ class VoiceService {
           mimeType: 'audio/webm',
           bitsPerSecond: 64000,
         },
-      });
+      };
+
+      const { recording } = await Audio.Recording.createAsync(recordingOptions);
 
       this.recording = recording;
       this.isRecording = true;
-      
+
       console.log('Recording started');
       return true;
     } catch (error) {
@@ -95,19 +100,19 @@ class VoiceService {
 
       await this.recording.stopAndUnloadAsync();
       const uri = this.recording.getURI();
-      
+
       // Reset recording state
       this.recording = null;
       this.isRecording = false;
 
       console.log('Recording stopped, URI:', uri);
-      
+
       // Transcribe the audio
       if (uri) {
         const transcription = await this.transcribeAudio(uri);
         return transcription;
       }
-      
+
       return null;
     } catch (error) {
       console.error('Failed to stop recording:', error);
@@ -120,16 +125,16 @@ class VoiceService {
   private async transcribeAudio(audioUri: string): Promise<string> {
     try {
       console.log('Transcribing audio from URI:', audioUri);
-      
+
       // Check if API key is configured
       if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
         console.warn('OpenAI API key not configured, using fallback');
         return await this.mockTranscription();
       }
-      
+
       // Use OpenAI Whisper API for transcription
       return await this.transcribeWithOpenAI(audioUri);
-      
+
     } catch (error) {
       console.error('Transcription failed:', error);
       // Fallback to mock if real transcription fails
@@ -144,7 +149,7 @@ class VoiceService {
   private async mockTranscription(): Promise<string> {
     // Mock delay to simulate API call
     await new Promise(resolve => setTimeout(resolve, 2000));
-    
+
     // Return mock transcription
     const mockResponses = [
       "I had a chicken salad for lunch with some vegetables",
@@ -153,23 +158,23 @@ class VoiceService {
       "I had pizza and soda for dinner",
       "Ate an apple and some nuts as a snack"
     ];
-    
+
     return mockResponses[Math.floor(Math.random() * mockResponses.length)];
   }
 
   async transcribeWithOpenAI(audioUri: string): Promise<string> {
     try {
       console.log('Starting OpenAI Whisper transcription...');
-      
+
       // Read the audio file
       const fileInfo = await FileSystem.getInfoAsync(audioUri);
       if (!fileInfo.exists) {
         throw new Error('Audio file does not exist');
       }
-      
+
       // Create FormData for multipart/form-data upload
       const formData = new FormData();
-      
+
       // For React Native, we need to append the file differently
       // The file needs to be in a format that React Native's FormData understands
       formData.append('file', {
@@ -177,7 +182,7 @@ class VoiceService {
         type: Platform.OS === 'ios' ? 'audio/m4a' : 'audio/mp4',
         name: Platform.OS === 'ios' ? 'audio.m4a' : 'audio.mp4',
       } as any);
-      
+
       formData.append('model', 'whisper-1');
       formData.append('language', 'en'); // Optional: specify language for better accuracy
 
@@ -185,7 +190,7 @@ class VoiceService {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
+          'Authorization': `Bearer ${config.OPENAI_API_KEY} `,
           // Don't set Content-Type header - let fetch set it with boundary for multipart/form-data
         },
         body: formData,
@@ -194,15 +199,15 @@ class VoiceService {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('OpenAI API error:', response.status, errorText);
-        throw new Error(`OpenAI API error: ${response.status} - ${errorText}`);
+        throw new Error(`OpenAI API error: ${response.status} - ${errorText} `);
       }
 
       const result = await response.json();
       const transcription = result.text || 'Could not transcribe audio';
-      
+
       console.log('Transcription successful:', transcription);
       return transcription;
-      
+
     } catch (error) {
       console.error('OpenAI transcription failed:', error);
       throw error; // Re-throw to let caller handle fallback

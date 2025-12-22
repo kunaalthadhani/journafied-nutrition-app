@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStorage } from './dataStorage';
 
 const ANALYTICS_KEY = '@trackkal:analytics';
 
@@ -165,6 +166,9 @@ class AnalyticsService {
     this.analytics.currentSessionStart = now;
     this.analytics.sessionCount++;
     await this.save();
+
+    // Sync to Supabase
+    dataStorage.logAnalyticsEvent('app_open', { timestamp: now });
   }
 
   async trackAppClose(): Promise<void> {
@@ -421,6 +425,8 @@ class AnalyticsService {
     this.analytics.referralCodesShared += 1;
     this.analytics.referralCodesSharedByMethod[method] += 1;
     await this.save();
+
+    dataStorage.logAnalyticsEvent('referral_shared', { userId, method });
   }
 
   async trackReferralCodeRedeemed(referralCode: string, refereeEmail: string): Promise<void> {
@@ -448,6 +454,12 @@ class AnalyticsService {
     await this.initialize();
     this.analytics.referralCodeClicks += 1;
     await this.save();
+  }
+
+
+  // Generic tracking for events not explicitly handled locally
+  async trackEvent(eventName: string, properties?: any): Promise<void> {
+    await dataStorage.logAnalyticsEvent(eventName, properties);
   }
 }
 

@@ -5,6 +5,7 @@ import { config } from '../config/env';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
+import { NutritionLibraryItem } from './dataStorage';
 
 interface OpenAIResponse {
   choices: {
@@ -110,6 +111,42 @@ Return ONLY a JSON array in the following shape:
 ]
 
 If you cannot identify any exercises, return an empty array [].
+`;
+
+const NUTRITION_ESTIMATION_PROMPT = `
+You are an expert food scientist. Given a food name, provide the standard nutritional values per 100g.
+Return ONLY a valid JSON object with no explanations.
+
+Required JSON structure:
+{
+  "name": "Standard food name",
+  "calories_per_100g": number,
+  "protein_per_100g": number,
+  "carbs_per_100g": number,
+  "fat_per_100g": number,
+  "fiber_per_100g": number,
+  "sugar_per_100g": number,
+  "added_sugars_per_100g": number,
+  "sugar_alcohols_per_100g": number,
+  "net_carbs_per_100g": number,
+  "saturated_fat_per_100g": number,
+  "trans_fat_per_100g": number,
+  "polyunsaturated_fat_per_100g": number,
+  "monounsaturated_fat_per_100g": number,
+  "sodium_mg_per_100g": number,
+  "potassium_mg_per_100g": number,
+  "cholesterol_mg_per_100g": number,
+  "calcium_mg_per_100g": number,
+  "iron_mg_per_100g": number,
+  "vitamin_a_mcg_per_100g": number,
+  "vitamin_c_mg_per_100g": number,
+  "vitamin_d_mcg_per_100g": number,
+  "vitamin_e_mg_per_100g": number,
+  "vitamin_k_mcg_per_100g": number,
+  "vitamin_b12_mcg_per_100g": number,
+  "standard_unit": "e.g., cup, slice, piece",
+  "standard_serving_weight_g": number
+}
 `;
 
 // New Types for Step 1 Parsing

@@ -1,5 +1,6 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
+import { dataStorage } from './dataStorage';
 
 type AuthListener = (event: AuthChangeEvent, session: Session | null) => void;
 
@@ -100,6 +101,7 @@ export const authService = {
 
   async signOut() {
     ensureClient();
+    await dataStorage.clearAllData();
     return supabase!.auth.signOut();
   },
 };

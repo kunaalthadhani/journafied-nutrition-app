@@ -1,10 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Text, TextStyle } from 'react-native';
+import { Text, TextStyle, StyleProp } from 'react-native';
 
 interface NumberTickerProps {
   value: number;
   duration?: number; // milliseconds
-  style?: TextStyle;
+  style?: StyleProp<TextStyle>;
   decimalPlaces?: number;
 }
 
@@ -15,14 +15,14 @@ export const NumberTicker: React.FC<NumberTickerProps> = ({
   decimalPlaces = 0,
 }) => {
   const [displayValue, setDisplayValue] = useState(value);
-  const prevValueRef = useRef(value);
-  const animationFrameRef = useRef<number>();
-  const startTimeRef = useRef<number>();
+  const prevValueRef = useRef<number>(value);
+  const animationFrameRef = useRef<number | undefined>(undefined);
+  const startTimeRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
     const startValue = prevValueRef.current;
     const endValue = value;
-    
+
     // If values are the same, just set it
     if (startValue === endValue) {
       setDisplayValue(endValue);

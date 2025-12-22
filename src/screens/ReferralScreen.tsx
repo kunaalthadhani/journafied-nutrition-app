@@ -48,7 +48,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
         const [referrerRedemptions, refereeRedemptions, allRewards] = await Promise.all([
           dataStorage.getReferralRedemptionsForUser(userEmail, 'referrer'),
           dataStorage.getReferralRedemptionsForUser(userEmail, 'referee'),
-          dataStorage.getReferralRewardsForUser(userEmail),
+          dataStorage.loadReferralRewardsForUser(userEmail),
         ]);
         const combinedRedemptions = [...referrerRedemptions, ...refereeRedemptions];
         combinedRedemptions.sort(

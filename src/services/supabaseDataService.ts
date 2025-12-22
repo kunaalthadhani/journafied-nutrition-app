@@ -13,7 +13,10 @@ import type {
   ReferralReward,
   MealEntry,
   NutritionLibraryItem,
-  ReferralCode
+  ReferralCode,
+  StreakFreezeData,
+  GroceryItem,
+  AnalyticsEvent
 } from './dataStorage';
 
 import { ExerciseEntry } from '../components/ExerciseLogSection';
@@ -1187,6 +1190,73 @@ export const supabaseDataService = {
     } catch (e) {
       console.error('Exception saving to nutrition_library:', e);
     }
+  },
+
+  // Streak Freeze
+  async upsertStreakFreeze(accountInfo: AccountInfo | null, freeze: StreakFreezeData): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('streak_freezes').upsert(
+        {
+          user_id: user.id,
+          freezes_available: freeze.freezesAvailable,
+          last_reset_date: freeze.lastResetDate,
+          used_on_dates: freeze.usedOnDates,
+          updated_at: new Date().toISOString()
+        },
+        { onConflict: 'user_id' }
+      );
+      if (error) console.error('Error saving streak freeze:', error);
+    } catch (e) { console.error('Exception saving streak freeze:', e); }
+  },
+
+  // Grocery Items
+  async upsertGroceryItem(accountInfo: AccountInfo | null, item: GroceryItem): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('grocery_items').upsert({
+        id: item.id,
+        user_id: user.id,
+        name: item.name,
+        category: item.category || null,
+        is_checked: item.isChecked,
+        updated_at: item.updatedAt || new Date().toISOString()
+      }, { onConflict: 'id' });
+      if (error) console.error('Error saving grocery item:', error);
+    } catch (e) { }
+  },
+
+  async deleteGroceryItem(accountInfo: AccountInfo | null, id: string): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      await supabase.from('grocery_items').delete().eq('id', id).eq('user_id', user.id);
+    } catch (e) { }
+  },
+
+  // Analytics
+  async logAnalyticsEvent(accountInfo: AccountInfo | null, event: AnalyticsEvent): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('analytics_events').insert({
+        user_id: user.id,
+        event_name: event.eventName,
+        properties: event.properties || null,
+        timestamp: event.timestamp
+      });
+      if (error) console.warn('Failed to log analytics event:', error);
+    } catch (e) { }
   },
 };
 

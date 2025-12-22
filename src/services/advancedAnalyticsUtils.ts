@@ -41,7 +41,10 @@ export function calculateTrends(
         const d = subDays(today, i);
         const dateKey = format(d, 'yyyy-MM-dd');
         const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
+        const cals = dayMeals.reduce((acc, m) => {
+            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
+            return acc + mealCals;
+        }, 0);
         if (dayMeals.length > 0) currentWeek.push(cals);
     }
 
@@ -49,7 +52,10 @@ export function calculateTrends(
         const d = subDays(today, i);
         const dateKey = format(d, 'yyyy-MM-dd');
         const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
+        const cals = dayMeals.reduce((acc, m) => {
+            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
+            return acc + mealCals;
+        }, 0);
         if (dayMeals.length > 0) previousWeek.push(cals);
     }
 
@@ -103,7 +109,10 @@ export function calculateHeatmapData(meals: Record<string, Meal[]>): Consistency
     days.forEach(day => {
         const dateKey = format(day, 'yyyy-MM-dd');
         const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => acc + (m.calories || 0), 0);
+        const cals = dayMeals.reduce((acc, m) => {
+            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
+            return acc + mealCals;
+        }, 0);
 
         let status: 'LOGGED' | 'PARTIAL' | 'MISSED' = 'MISSED';
         let score = 0;
@@ -140,7 +149,10 @@ export function calculateMacroPatterns(meals: Record<string, Meal[]>): MacroPatt
         const dayMeals = meals[dateKey] || [];
         if (dayMeals.length === 0) continue;
 
-        const protein = dayMeals.reduce((acc, m) => acc + (m.protein || 0), 0);
+        const protein = dayMeals.reduce((acc, m) => {
+            const mealProtein = m.foods.reduce((sum, f) => sum + (f.protein || 0), 0);
+            return acc + mealProtein;
+        }, 0);
         const dayOfWeek = getDay(d); // 0 = Sun, 6 = Sat
 
         if (dayOfWeek === 0 || dayOfWeek === 6) {
