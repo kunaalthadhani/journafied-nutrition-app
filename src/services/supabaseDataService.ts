@@ -16,7 +16,8 @@ import type {
   ReferralCode,
   StreakFreezeData,
   GroceryItem,
-  AnalyticsEvent
+  AnalyticsEvent,
+  DailyUserMetric
 } from './dataStorage';
 
 import { ExerciseEntry } from '../components/ExerciseLogSection';
@@ -1257,6 +1258,64 @@ export const supabaseDataService = {
       });
       if (error) console.warn('Failed to log analytics event:', error);
     } catch (e) { }
+  },
+
+  // Daily User Metrics
+  async saveDailyUserMetric(accountInfo: AccountInfo | null, metric: DailyUserMetric): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      const { error } = await supabase.from('daily_user_metrics').upsert({
+        user_id: user.id,
+        metric_date: metric.date,
+        meals_logged: metric.mealsLogged,
+        exercise_logged: metric.exerciseLogged,
+        calories_logged: metric.caloriesLogged,
+        push_received: metric.pushReceived,
+        push_clicked: metric.pushClicked,
+        streak_active: metric.streakActive,
+      }, { onConflict: 'user_id,metric_date' });
+
+      if (error) console.error('Error saving daily user metric:', error);
+    } catch (e) {
+      console.error('Exception saving daily user metric:', e);
+    }
+  },
+
+  async fetchDailyUserMetrics(accountInfo: AccountInfo | null, limit = 30): Promise<DailyUserMetric[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return [];
+
+    try {
+      const { data, error } = await supabase
+        .from('daily_user_metrics')
+        .select('*')
+        .eq('user_id', user.id)
+        .order('metric_date', { ascending: false })
+        .limit(limit);
+
+      if (error) {
+        console.error('Error fetching daily user metrics:', error);
+        return [];
+      }
+
+      return data?.map(row => ({
+        date: row.metric_date,
+        mealsLogged: row.meals_logged || 0,
+        exerciseLogged: row.exercise_logged || 0,
+        caloriesLogged: row.calories_logged || 0,
+        pushReceived: row.push_received || 0,
+        pushClicked: row.push_clicked || 0,
+        streakActive: row.streak_active || false,
+        createdAt: row.created_at
+      })) || [];
+    } catch (e) {
+      console.error('Exception fetching daily user metrics:', e);
+      return [];
+    }
   },
 };
 

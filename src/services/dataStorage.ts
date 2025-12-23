@@ -224,6 +224,17 @@ export interface AnalyticsFeedback {
   rating?: number;
 }
 
+export interface DailyUserMetric {
+  date: string; // YYYY-MM-DD
+  mealsLogged: number;
+  exerciseLogged: number;
+  caloriesLogged: number;
+  pushReceived: number;
+  pushClicked: number;
+  streakActive: boolean;
+  createdAt?: string;
+}
+
 export interface UserMetricsSnapshot {
   generatedAt: string;
   userGoals: {
