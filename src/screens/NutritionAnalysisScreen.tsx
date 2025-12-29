@@ -19,6 +19,7 @@ import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, P
 import { Meal } from '../components/FoodLogSection';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
+import { DailySummary } from '../services/dataStorage';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
@@ -26,6 +27,7 @@ interface NutritionAnalysisScreenProps {
   onRequestLogMealForDate?: (date: Date) => void;
   onRequestSetGoals?: () => void;
   mealsByDate?: Record<string, Meal[]>;
+  summariesByDate?: Record<string, DailySummary>;
   targetCalories?: number;
   targetProtein?: number;
   targetCarbs?: number;
@@ -50,6 +52,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   onRequestLogMealForDate,
   onRequestSetGoals,
   mealsByDate = {},
+  summariesByDate,
   targetCalories: targetCaloriesProp,
   targetProtein: targetProteinProp,
   targetCarbs: targetCarbsProp,
@@ -67,45 +70,59 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     }
   };
 
-  // Transform mealsByDate into DailyNutrition format
+  // Transform data into DailyNutrition format
   const nutritionData = useMemo<DailyNutrition[]>(() => {
     const dailyData: DailyNutrition[] = [];
 
-    // Iterate through all dates with meals
-    Object.keys(mealsByDate).forEach((dateKey) => {
-      const meals = mealsByDate[dateKey];
-      if (!meals || meals.length === 0) return;
-
-      // Aggregate all foods from all meals for this date
-      let totalCalories = 0;
-      let totalProtein = 0;
-      let totalCarbs = 0;
-      let totalFat = 0;
-
-      meals.forEach((meal) => {
-        meal.foods.forEach((food) => {
-          totalCalories += food.calories || 0;
-          totalProtein += food.protein || 0;
-          totalCarbs += food.carbs || 0;
-          totalFat += food.fat || 0;
+    // Priority: Use summariesByDate if available
+    if (summariesByDate && Object.keys(summariesByDate).length > 0) {
+      Object.values(summariesByDate).forEach(summary => {
+        dailyData.push({
+          date: parseISO(summary.date),
+          calories: summary.totalCalories,
+          protein: summary.totalProtein,
+          fat: summary.totalFat,
+          carbs: summary.totalCarbs,
         });
       });
+    } else {
+      // Fallback: Aggregate from mealsByDate (legacy/partial)
+      // Iterate through all dates with meals
+      Object.keys(mealsByDate).forEach((dateKey) => {
+        const meals = mealsByDate[dateKey];
+        if (!meals || meals.length === 0) return;
 
-      // Parse the date key (YYYY-MM-DD) into a Date object
-      const date = parseISO(dateKey);
+        // Aggregate all foods from all meals for this date
+        let totalCalories = 0;
+        let totalProtein = 0;
+        let totalCarbs = 0;
+        let totalFat = 0;
 
-      dailyData.push({
-        date,
-        calories: totalCalories,
-        protein: totalProtein,
-        carbs: totalCarbs,
-        fat: totalFat,
+        meals.forEach((meal) => {
+          meal.foods.forEach((food) => {
+            totalCalories += food.calories || 0;
+            totalProtein += food.protein || 0;
+            totalCarbs += food.carbs || 0;
+            totalFat += food.fat || 0;
+          });
+        });
+
+        // Parse the date key (YYYY-MM-DD) into a Date object
+        const date = parseISO(dateKey);
+
+        dailyData.push({
+          date,
+          calories: totalCalories,
+          protein: totalProtein,
+          carbs: totalCarbs,
+          fat: totalFat,
+        });
       });
-    });
+    }
 
     // Sort by date (oldest first)
     return dailyData.sort((a, b) => a.date.getTime() - b.date.getTime());
-  }, [mealsByDate]);
+  }, [mealsByDate, summariesByDate]);
 
   // Filter data based on time range
   const getFilteredData = () => {
@@ -761,24 +778,26 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     Macros
                   </Text>
                 </TouchableOpacity>
-                <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    activeTab === 'Insights' && { backgroundColor: theme.colors.primary },
-                  ]}
-                  onPress={() => setActiveTab('Insights')}
-                >
-                  <Text
+                {isPremium && (
+                  <TouchableOpacity
                     style={[
-                      styles.tabText,
-                      {
-                        color: activeTab === 'Insights' ? theme.colors.primaryForeground : theme.colors.textSecondary,
-                      },
+                      styles.tab,
+                      activeTab === 'Insights' && { backgroundColor: theme.colors.primary },
                     ]}
+                    onPress={() => setActiveTab('Insights')}
                   >
-                    {isPremium ? '✨ Insights' : '🔒 Insights'}
-                  </Text>
-                </TouchableOpacity>
+                    <Text
+                      style={[
+                        styles.tabText,
+                        {
+                          color: activeTab === 'Insights' ? theme.colors.primaryForeground : theme.colors.textSecondary,
+                        },
+                      ]}
+                    >
+                      ✨ Insights
+                    </Text>
+                  </TouchableOpacity>
+                )}
               </View>
 
               {/* Calories Chart Section */}

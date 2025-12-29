@@ -194,39 +194,40 @@ OR
 
 B) If you have enough info (or are making safe assumptions):
 {
-  "items": [
-    {
-      "log_name": "String",
-      "reasoning": "String",
-      "quantity": Number,
-      "unit": "String",
-      "total_weight_g": Number,
-      "nutrition": {
-        "calories": Number,
-        "protein": Number,
-        "carbs": Number,
-        "fat": Number,
-        "dietary_fiber": Number,
-        "sugar": Number,
-        "saturated_fat": Number,
-        "sodium_mg": Number,
-        "potassium_mg": Number,
-        "cholesterol_mg": Number,
-        "calcium_mg": Number,
-        "iron_mg": Number,
-        "vitamin_a_mcg": Number,
-        "vitamin_c_mg": Number,
-        "vitamin_d_mcg": Number,
-        "vitamin_b12_mcg": Number
-      }
+      "summary": "String (Short, clean summary with emojis, e.g. '🍜 2 Packets of Noodles, 🍎 1 Apple')",
+      "items": [
+        {
+          "log_name": "String",
+          "reasoning": "String",
+          "quantity": Number,
+          "unit": "String",
+          "total_weight_g": Number,
+          "nutrition": {
+            "calories": Number,
+            "protein": Number,
+            "carbs": Number,
+            "fat": Number,
+            "dietary_fiber": Number,
+            "sugar": Number,
+            "saturated_fat": Number,
+            "sodium_mg": Number,
+            "potassium_mg": Number,
+            "cholesterol_mg": Number,
+            "calcium_mg": Number,
+            "iron_mg": Number,
+            "vitamin_a_mcg": Number,
+            "vitamin_c_mg": Number,
+            "vitamin_d_mcg": Number,
+            "vitamin_b12_mcg": Number
+          }
+        }
+      ]
     }
-  ]
-}
 
 - Return ONLY valid JSON.
 `;
 
-export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods: ParsedFood[], clarificationQuestion?: string }> {
+export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
   // Validate API key
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
     throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
@@ -296,7 +297,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods
       });
     }
 
-    return { foods: finalFoods };
+    return { foods: finalFoods, summary: result.summary };
 
   } catch (error) {
     if (__DEV__) console.error('Error in agentic food analysis:', error);
@@ -505,7 +506,7 @@ function validateFoodResponse(foods: any[]): boolean {
 /**
  * Analyze food from an image using OpenAI Vision API
  */
-export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood[]> {
+export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: ParsedFood[], summary?: string }> {
   // Validate API key before making request
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
     throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
@@ -583,7 +584,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<ParsedFood
     // For now, we assume the Vision description was good enough. 
     // If it *still* asks for clarification, it returns empty foods.
     // To handle this better, we could recursively call with "Ignore ambiguity" flag, but let's trust gpt-4o vision + text.
-    return result.foods;
+    return { foods: result.foods, summary: result.summary };
 
   } catch (error) {
     if (__DEV__) console.error('Error in image analysis:', error);
@@ -635,25 +636,33 @@ export async function getCoachChatResponse(sessionMessages: { role: string; cont
 
 const SMART_SUGGEST_PROMPT = `
 You are a proactive nutrition assistant called "Smart Suggest".
-Your goal is to suggest the OPTIMUM NEXT MEAL for the user based on what they have already eaten today and their specific goals.
+Your goal is to suggest the OPTIMUM NEXT MEAL for the user based on what they have already eaten today and **only suggesting foods they are known to eat**.
 
 ### User Context
 You will receive:
-1.  **Remaining Calories & Macros:** (e.g. 500 kcal left, needs 30g protein).
-2.  **Current Time:** To know if it's lunch, dinner, or snack time.
-3.  **Recent Logged Meals:** What they just ate (avoid recommending the exact same thing unless they love it).
-4.  **Goal:** e.g. "Lose Weight" or "Gain Muscle".
+1.  **Remaining Calories & Macros:** (e.g. 500 kcal left).
+2.  **Current Time:** (Lunch, Dinner, etc).
+3.  **Recent Logged Meals:** What they just ate today.
+4.  **Available Foods:** A list of foods the user has logged in the past 30 days.
+
+### Strict Rules
+1.  **Hyper-Personalization:** You MUST suggest a meal composed of items found in the **Available Foods** list. Do not suggest generic foods (e.g., "Salmon") if it is not in their history, unless they have absolutely zero history.
+2.  **Macro-Matching:** Select the meal from their history that best fits their remaining calorie/protein gap.
+3.  **Variety:** Do not suggest exactly what they just ate in their last meal today.
+4.  **Quantity:** Specify exact portions (e.g., "Repeat your Greek Yogurt Bowl but add...", "Have your usual Chicken Wrap").
 
 ### Logic
-- If it's morning (before 11am) and they listed 0 meals, suggest a high-protein breakfast.
-- If they have many calories left but low protein, suggest a lean protein source.
-- If they have few calories left, suggest a high-volume, low-cal snack.
-- **ALWAYS include specific quantities and weights** (e.g., "150g Grilled Chicken", "200g Greek Yogurt").
+- **Morning:** Suggest their most common breakfast item that fits.
+- **High Calorie Gap:** Suggest one of their larger known meals.
+- **Low Calorie Gap:** Suggest one of their known snacks.
+- **Missing Data / Low History:** If 'Available Foods' is empty or very short, you may suggest generic healthy options that fit the macros, but prefer their logged foods if possible. Mention "Based on what I've seen so far..."
 
 ### Output Format
-- Return a **single plain text recommendation**.
-- Be concise (max 2 sentences).
-- Start directly with the suggestion (e.g., "Try a 200g Chicken Salad...").
+Return a strictly valid JSON object:
+{
+  "display_text": "Try a 200g Chicken Salad to hit your protein goal!",
+  "loggable_text": "200g Grilled Chicken Breast, 100g Lettuce, 20g Dressing"
+}
 `;
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -661,33 +670,44 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const SMART_SUGGEST_LIMIT_KEY = 'smart_suggest_limit_v1';
 const DAILY_LIMIT = 2;
 
-export async function generateSmartSuggestion(context: any, forceNew: boolean = false): Promise<string> {
+interface SmartSuggestionResult {
+  displayText: string;
+  loggableText: string;
+}
+
+export async function generateSmartSuggestion(context: any, forceNew: boolean = false): Promise<SmartSuggestionResult> {
+  const fallback = { displayText: "Upgrade to Premium for Smart Suggestions!", loggableText: "" };
+
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    return "Upgrade to Premium to unlock Smart Suggestions based on your unique metabolism!";
+    return fallback;
   }
 
   try {
     // 1. Check Daily Limit and Cache
     const now = new Date();
-    const todayKey = now.toISOString().split('T')[0]; // "2023-10-27"
+    const todayKey = now.toISOString().split('T')[0];
 
     const storedData = await AsyncStorage.getItem(SMART_SUGGEST_LIMIT_KEY);
-    let usage = { date: todayKey, count: 0, suggestion: '' };
+    let usage = { date: todayKey, count: 0, suggestion: null as SmartSuggestionResult | null };
 
     if (storedData) {
       const parsed = JSON.parse(storedData);
       if (parsed.date === todayKey) {
+        // Handle migration from old string suggestions
+        if (typeof parsed.suggestion === 'string') {
+          parsed.suggestion = { displayText: parsed.suggestion, loggableText: parsed.suggestion };
+        }
         usage = parsed;
       }
     }
 
-    // Return cached suggestion if available and not forcing new
+    // Return cached suggestion if available
     if (!forceNew && usage.suggestion) {
       return usage.suggestion;
     }
 
     if (usage.count >= DAILY_LIMIT) {
-      return "You've reached your daily Smart Suggest limit. Check back tomorrow!";
+      return { displayText: "Daily limit reached. Check back tomorrow!", loggableText: "" };
     }
 
     // 2. call API with Cheaper Model
@@ -698,30 +718,48 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
         'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
       },
       body: JSON.stringify({
-        model: 'gpt-4o-mini', // Cost optimized
+        model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SMART_SUGGEST_PROMPT },
           { role: 'user', content: JSON.stringify(context) }
         ],
         temperature: 0.7,
-        max_tokens: 150,
+        response_format: { type: "json_object" }
       }),
     });
 
-    if (!response.ok) return "Unable to generate smart suggestion right now.";
+    if (!response.ok) return { displayText: "Unable to generate suggestion right now.", loggableText: "" };
 
     const data: OpenAIResponse = await response.json();
-    const suggestion = data.choices[0]?.message?.content || "Keep hitting those macros!";
+    const content = data.choices[0]?.message?.content;
+
+    let result: SmartSuggestionResult = {
+      displayText: "Keep hitting those macros!",
+      loggableText: "Healthy Meal"
+    };
+
+    if (content) {
+      try {
+        const parsed = JSON.parse(content);
+        result = {
+          displayText: parsed.display_text || content,
+          loggableText: parsed.loggable_text || content
+        };
+      } catch (e) {
+        // Fallback if JSON parsing fails (unlikely with json_object mode but safe)
+        result = { displayText: content, loggableText: content };
+      }
+    }
 
     // 3. Increment Limit and Save Cache
     usage.count += 1;
-    usage.suggestion = suggestion; // Cache the new suggestion
+    usage.suggestion = result;
     await AsyncStorage.setItem(SMART_SUGGEST_LIMIT_KEY, JSON.stringify(usage));
 
-    return suggestion;
+    return result;
 
   } catch (error) {
     console.error('Error generating smart suggestion:', error);
-    return "Smart Suggest is temporarily offline.";
+    return { displayText: "Smart Suggest is temporarily offline.", loggableText: "" };
   }
 }

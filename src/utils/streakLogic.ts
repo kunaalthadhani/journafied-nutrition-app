@@ -24,12 +24,19 @@ export const checkMissedDaysAndFreeze = async (
     // Check Yesterday:
     // If user has NO meals logged for yesterday
     // AND yesterday is NOT already in the "usedOnDates" list
+    // AND user HAD a streak alive the day before (logged or frozen on D-2)
     // => Consume 1 freeze token
     const hasMealsYesterday = meals[yesterdayKey] && meals[yesterdayKey].length > 0;
     const isYesterdayFrozen = updatedFreeze.usedOnDates.includes(yesterdayKey);
 
     if (!hasMealsYesterday && !isYesterdayFrozen) {
-        if (updatedFreeze.freezesAvailable > 0) {
+        // Check Day Before Yesterday (D-2) to ensure we are protecting an actual streak
+        const dayBeforeYesterday = subDays(new Date(), 2);
+        const dayBeforeKey = format(dayBeforeYesterday, 'yyyy-MM-dd');
+        const hasMealsDayBefore = meals[dayBeforeKey] && meals[dayBeforeKey].length > 0;
+        const isDayBeforeFrozen = updatedFreeze.usedOnDates.includes(dayBeforeKey);
+
+        if ((hasMealsDayBefore || isDayBeforeFrozen) && updatedFreeze.freezesAvailable > 0) {
             console.log(`[StreakLogic] Auto-freezing missed day: ${yesterdayKey}`);
             updatedFreeze.freezesAvailable -= 1;
             updatedFreeze.usedOnDates = [...updatedFreeze.usedOnDates, yesterdayKey];

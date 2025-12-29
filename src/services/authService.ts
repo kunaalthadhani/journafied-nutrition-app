@@ -1,6 +1,7 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { dataStorage } from './dataStorage';
+import { supabaseDataService } from './supabaseDataService';
 
 type AuthListener = (event: AuthChangeEvent, session: Session | null) => void;
 
@@ -104,6 +105,26 @@ export const authService = {
     await dataStorage.clearAllData();
     return supabase!.auth.signOut();
   },
+
+  async deleteAccount() {
+    ensureClient();
+    try {
+      // 1. Delete all remote data for this user
+      const { data: { session } } = await supabase!.auth.getSession();
+      if (session?.user) {
+        const accountInfo = { supabaseUserId: session.user.id, email: session.user.email };
+        await supabaseDataService.deleteAllUserData(accountInfo);
+      }
+    } catch (e) {
+      console.error("Error deleting remote data", e);
+    }
+
+    // 2. Clear local data
+    await dataStorage.clearAllData();
+
+    // 3. Sign out (which effectively invalidates session)
+    return supabase!.auth.signOut();
+  }
 };
 
 

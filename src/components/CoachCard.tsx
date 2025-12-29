@@ -20,7 +20,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
-    const [suggestion, setSuggestion] = useState<string | null>(null);
+    const [suggestion, setSuggestion] = useState<{ displayText: string; loggableText: string } | null>(null);
 
     useEffect(() => {
         const checkPref = async () => {
@@ -40,7 +40,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
             const ctx = await chatCoachService.buildContext();
 
             if (ctx.dataQuality === 'insufficient') {
-                Alert.alert("Calibrating...", "Need 7 days of logs first!");
+                Alert.alert("No Data", "Please log at least one meal to get smart suggestions!");
                 setLoading(false);
                 return;
             }
@@ -64,11 +64,17 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
                 remainingProtein: targetProt - eatenProt,
                 itemsEatenCount: logs.length,
                 timeOfDay: new Date().getHours(),
-                goal: goals.goalType
+                goal: goals.goalType,
+                availableFoods: ctx.topFoods || []
             };
 
-            const text = await generateSmartSuggestion(promptContext, forceNew);
-            setSuggestion(text);
+            const result = await generateSmartSuggestion(promptContext, forceNew);
+            // Handle legacy string return just in case, though we updated service
+            if (typeof result === 'string') {
+                setSuggestion({ displayText: result, loggableText: result });
+            } else {
+                setSuggestion(result);
+            }
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setExpanded(true);
         } catch (e) {
@@ -136,14 +142,14 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
                 <View style={styles.content}>
                     <View style={[styles.suggestionBox, { backgroundColor: theme.colors.secondaryBg }]}>
                         <Text style={[styles.suggestionText, { color: theme.colors.textPrimary }]}>
-                            {suggestion}
+                            {suggestion.displayText}
                         </Text>
                     </View>
 
                     <View style={styles.actions}>
                         <TouchableOpacity
                             style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => onLogSuggestion?.(suggestion)}
+                            onPress={() => onLogSuggestion?.(suggestion.loggableText)}
                         >
                             <Feather name="plus-circle" size={16} color="white" />
                             <Text style={styles.logButtonText}>Log This Meal</Text>

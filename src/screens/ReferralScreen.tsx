@@ -21,7 +21,6 @@ interface ReferralScreenProps {
   userEmail: string | null;
   referralCode: string | null;
   totalEarnedEntriesFromReferrals: number;
-  remainingEntries: number | null;
   onBack: () => void;
   onLoginPress: () => void;
 }
@@ -31,7 +30,6 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
   userEmail,
   referralCode,
   totalEarnedEntriesFromReferrals,
-  remainingEntries,
   onBack,
   onLoginPress,
 }) => {

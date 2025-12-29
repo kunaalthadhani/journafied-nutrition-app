@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, InteractionManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
@@ -67,6 +67,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
+  const [showDetailedStats, setShowDetailedStats] = useState(false);
 
   const savedPromptLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -80,6 +81,12 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
     setSelectedFood({ ...food });
     setBaseFood({ ...food }); // Snapshot for scaling
     setSelectedMealId(mealId);
+    setShowDetailedStats(false);
+
+    // Delay rendering detailed stats until after modal animation/interaction
+    InteractionManager.runAfterInteractions(() => {
+      setShowDetailedStats(true);
+    });
   };
 
   const handleCloseModal = () => {
@@ -140,7 +147,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                         style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
                         numberOfLines={2}
                       >
-                        {meal.prompt || "Food from image"}
+                        {meal.summary || meal.prompt || "Food from image"}
                       </Text>
                     </View>
                   </View>
@@ -171,7 +178,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     ) : (
                       <View style={styles.promptDisplay}>
                         <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
-                          {meal.prompt}
+                          {meal.summary || meal.prompt}
                         </Text>
                         <View style={styles.promptActions}>
                           {onToggleSavePrompt && (
@@ -316,93 +323,100 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                         })}
                       </View>
 
-                      {/* Detailed Nutrition Facts Label */}
-                      <View style={[styles.nutritionFactsContainer, { borderColor: theme.colors.border }]}>
-                        <Text style={[styles.nutritionFactsTitle, { color: theme.colors.textPrimary }]}>Nutrition Facts</Text>
-                        <View style={styles.divider} />
 
-                        {[
-                          { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
-                          { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
-                          { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
-                          { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
-                          { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
-                          { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
+                      {/* Detailed Nutrition Facts Label - Render only after interaction */}
+                      {showDetailedStats ? (
+                        <View style={[styles.nutritionFactsContainer, { borderColor: theme.colors.border }]}>
+                          <Text style={[styles.nutritionFactsTitle, { color: theme.colors.textPrimary }]}>Nutrition Facts</Text>
+                          <View style={styles.divider} />
 
-                          { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
+                          {[
+                            { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
+                            { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
+                            { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
+                            { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
+                            { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
+                            { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
 
-                          { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
-                          { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
-                          { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
-                          { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
-                          { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
+                            { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
 
-                          { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
-                          { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
+                            { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
+                            { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
+                            { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
+                            { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
+                            { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
 
-                          { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
-                          { label: 'Iron', key: 'iron_mg', unit: 'mg' },
-                          { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
+                            { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
+                            { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
 
-                          { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
-                          { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
-                          { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
-                          { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
-                          { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
-                          { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
-                        ].map((item) => {
-                          // We show headers too if they aren't the main 3 managed above (though carbs/fat/protein are above).
-                          // User requested specific structure. The structure implies listing them. 
-                          // If key is present in main editor, editing here should update main editor too.
-                          // Since 'carbs', 'protein', 'fat' are `isHeader`, we can show them as read-only or editable?
-                          // User said "Nutrition Facts ... -Total Carbohydrates ...". It's standard to list them.
+                            { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
+                            { label: 'Iron', key: 'iron_mg', unit: 'mg' },
+                            { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
 
-                          return (
-                            <View key={item.key} style={[
-                              styles.factRow,
-                              {
-                                paddingLeft: (item.indent || 0) * 16,
-                                borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth // Only lines for top level? Or all? Standard is all usually.
-                                // Let's keep all lines for clarity or mimic label.
-                              }
-                            ]}>
-                              <Text style={[
-                                styles.factLabel,
+                            { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
+                            { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
+                            { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
+                            { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
+                            { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
+                            { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
+                          ].map((item) => {
+                            // We show headers too if they aren't the main 3 managed above (though carbs/fat/protein are above).
+                            // User requested specific structure. The structure implies listing them. 
+                            // If key is present in main editor, editing here should update main editor too.
+                            // Since 'carbs', 'protein', 'fat' are `isHeader`, we can show them as read-only or editable?
+                            // User said "Nutrition Facts ... -Total Carbohydrates ...". It's standard to list them.
+
+                            return (
+                              <View key={item.key} style={[
+                                styles.factRow,
                                 {
-                                  color: theme.colors.textSecondary,
-                                  fontWeight: item.isHeader ? 'bold' : 'normal'
+                                  paddingLeft: (item.indent || 0) * 16,
+                                  borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth // Only lines for top level? Or all? Standard is all usually.
+                                  // Let's keep all lines for clarity or mimic label.
                                 }
                               ]}>
-                                {item.indent ? `- ${item.label}` : item.label}
-                              </Text>
-                              <View style={styles.factInputContainer}>
-                                <TextInput
-                                  style={[styles.factInput, { color: theme.colors.textPrimary }]}
-                                  keyboardType="numeric"
-                                  placeholder="-"
-                                  placeholderTextColor={theme.colors.textTertiary}
-                                  value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
-                                  onChangeText={(text) => {
-                                    const val = text === '' ? undefined : Number(text);
-                                    const updated = { ...selectedFood, [item.key]: val };
+                                <Text style={[
+                                  styles.factLabel,
+                                  {
+                                    color: theme.colors.textSecondary,
+                                    fontWeight: item.isHeader ? 'bold' : 'normal'
+                                  }
+                                ]}>
+                                  {item.indent ? `- ${item.label}` : item.label}
+                                </Text>
+                                <View style={styles.factInputContainer}>
+                                  <TextInput
+                                    style={[styles.factInput, { color: theme.colors.textPrimary }]}
+                                    keyboardType="numeric"
+                                    placeholder="-"
+                                    placeholderTextColor={theme.colors.textTertiary}
+                                    value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
+                                    onChangeText={(text) => {
+                                      const val = text === '' ? undefined : Number(text);
+                                      const updated = { ...selectedFood, [item.key]: val };
 
-                                    // Recalculate calories if main macros change here
-                                    if (['protein', 'carbs', 'fat'].includes(item.key)) {
-                                      const p = Number(updated.protein || 0);
-                                      const c = Number(updated.carbs || 0);
-                                      const f = Number(updated.fat || 0);
-                                      updated.calories = Math.round(p * 4 + c * 4 + f * 9);
-                                    }
+                                      // Recalculate calories if main macros change here
+                                      if (['protein', 'carbs', 'fat'].includes(item.key)) {
+                                        const p = Number(updated.protein || 0);
+                                        const c = Number(updated.carbs || 0);
+                                        const f = Number(updated.fat || 0);
+                                        updated.calories = Math.round(p * 4 + c * 4 + f * 9);
+                                      }
 
-                                    setSelectedFood(updated);
-                                  }}
-                                />
-                                <Text style={[styles.factUnit, { color: theme.colors.textTertiary }]}>{item.unit}</Text>
+                                      setSelectedFood(updated);
+                                    }}
+                                  />
+                                  <Text style={[styles.factUnit, { color: theme.colors.textTertiary }]}>{item.unit}</Text>
+                                </View>
                               </View>
-                            </View>
-                          );
-                        })}
-                      </View>
+                            );
+                          })}
+                        </View>
+                      ) : (
+                        <View style={{ height: 100, alignItems: 'center', justifyContent: 'center' }}>
+                          <Text style={{ color: theme.colors.textTertiary }}>Loading details...</Text>
+                        </View>
+                      )}
                     </View>
                   </ScrollView>
 

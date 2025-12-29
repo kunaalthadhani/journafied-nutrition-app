@@ -39,7 +39,7 @@ interface AccountScreenProps {
   initialGoals?: ExtendedGoalData | null;
   initialReferralCode?: string | null;
   initialTotalEarnedEntries?: number;
-  initialTaskBonusEntries?: number;
+
   onRequestSync: () => Promise<void>;
   initialStreakFreeze?: StreakFreezeData | null;
   initialFrozenDates?: string[];
@@ -55,7 +55,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   initialGoals,
   initialReferralCode,
   initialTotalEarnedEntries,
-  initialTaskBonusEntries,
+
   onRequestSync,
   initialStreakFreeze,
   initialFrozenDates,
@@ -113,7 +113,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [entryCount, setEntryCount] = useState(initialEntryCount || 0);
   const [plan, setPlan] = useState<'free' | 'premium'>(initialPlan || 'free');
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(initialTotalEarnedEntries || 0);
-  const [taskBonusEntries, setTaskBonusEntries] = useState(initialTaskBonusEntries || 0);
+
   const [streakFreeze, setStreakFreeze] = useState<StreakFreezeData | null>(initialStreakFreeze || null);
   const [goals, setGoals] = useState<ExtendedGoalData | null>(initialGoals || null);
   const [weightSummary, setWeightSummary] = useState<{
@@ -230,9 +230,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         setReferralDetails({ code: null, totalReferrals: 0, entriesFromReferrals: 0 });
       }
 
-      // Tasks
-      const tasksStatus = await dataStorage.loadEntryTasks();
-      setTaskBonusEntries(dataStorage.getEntryTaskBonus(tasksStatus));
+
 
     } catch (error) {
       console.error('Failed to load local data', error);
@@ -442,11 +440,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           await dataStorage.saveAccountInfo(provisional);
           await syncAccountInfoFromSession(data.session);
 
-          // Registraton Bonus Task
-          const taskResult = await dataStorage.completeEntryTask('registration');
-          if (taskResult.awarded) {
-            if (!referralCode.trim()) Alert.alert('Welcome!', 'Account created. +5 free entries.');
-          }
+
 
           await loadLocalData();
         }

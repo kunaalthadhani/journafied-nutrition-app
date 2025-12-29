@@ -25,73 +25,44 @@ const STEPS = [
     {
         id: '1',
         title: 'Just say it',
-        description: 'tap the mic and say what you ate or just type it out naturally like texting a friend',
+        description: 'Log meals in the easiest way.\nSay it out loud or type it naturally.',
         icon: 'mic',
-    },
-    {
-        id: '99',
-        title: 'Quick Logs',
-        description: 'save your favorite meals as quick prompts to log them in one tap next time',
-        icon: 'bookmark',
     },
     {
         id: '2',
         title: 'Snap and track',
-        description: 'take a photo of your meal and let ai identify ingredients and calculate calories instantly',
+        description: 'Take a photo of your meal.\nWe identify ingredients and calculate calories.',
         icon: 'camera',
     },
     {
         id: '3',
-        title: 'Full control',
-        description: 'tap any food item to edit details or dive deep into nutritional breakdown',
-        icon: 'edit-2',
+        title: 'Your plan, built for you',
+        description: 'Calories and macros are personalized using your age, body, and goals.\nThis keeps everything accurate.',
+        icon: 'target',
     },
     {
         id: '4',
         title: 'See the trends',
-        description: 'track your weight daily and visualize how your nutrition impacts your progress',
-        icon: 'activity',
+        description: 'Track your weight and see how nutrition affects your progress over time.',
+        icon: 'trending-up',
     },
     {
         id: '5',
-        title: 'Unlimited Access',
-        description: 'log as many meals as you want without restrictions',
-        icon: 'unlock',
-        isPremium: true
+        title: 'Adjusts as you go',
+        description: 'Your targets update as you log meals to help you stay on track.',
+        icon: 'sliders',
     },
     {
         id: '6',
-        title: 'Smart suggestions',
-        description: 'get intelligent meal recommendations based on your remaining macros',
-        icon: 'zap',
-        isPremium: true
+        title: 'Personalized guidance',
+        description: 'Get meal suggestions and feedback based on your plan.',
+        icon: 'message-circle',
     },
     {
         id: '7',
-        title: 'Auto pilot',
-        description: 'smart adjustments tweak your targets as you progress to prevent plateaus',
-        icon: 'sliders',
-        isPremium: true
-    },
-    {
-        id: '8',
-        title: 'Smart cart',
-        description: 'your weekly grocery list curated automatically from your habits',
-        icon: 'shopping-cart',
-        isPremium: true
-    },
-    {
-        id: '9',
-        title: 'Personal Nutritionist',
-        description: 'hyper personalized advice and real time feedback from your AI coach',
-        icon: 'message-circle',
-        isPremium: true
-    },
-    {
-        id: '10',
-        title: 'Start your journey',
-        description: 'unlock the full experience free for 10 days by creating your account now',
-        icon: 'star',
+        title: 'Build your plan',
+        description: 'We’ll use a few details to personalize calories and goals.\nTakes about 2 minutes.',
+        icon: 'play-circle',
         isFinal: true
     },
 ];
@@ -151,20 +122,11 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
 
     const renderItem = ({ item }: { item: typeof STEPS[0] }) => {
         const isFinal = item.isFinal;
-        const isPremium = item.isPremium;
 
         return (
             <View style={[styles.stepContainer, { width: width - 80 }]}>
-                {isPremium && !isFinal && (
-                    <View style={{ position: 'absolute', top: 0, alignItems: 'center', width: '100%' }}>
-                        <View style={{ backgroundColor: theme.colors.primary, paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 }}>
-                            <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold', textAlign: 'center' }}>PREMIUM</Text>
-                        </View>
-                    </View>
-                )}
-
-                <View style={[styles.iconContainer, { backgroundColor: isFinal ? 'rgba(255, 215, 0, 0.1)' : theme.colors.background }]}>
-                    <Feather name={item.icon as any} size={64} color={isFinal ? '#FFD700' : theme.colors.primary} />
+                <View style={[styles.iconContainer, { backgroundColor: isFinal ? 'rgba(56, 189, 248, 0.1)' : theme.colors.background }]}>
+                    <Feather name={item.icon as any} size={64} color={isFinal ? theme.colors.primary : theme.colors.primary} />
                 </View>
 
                 <Text style={[styles.title, { color: theme.colors.textPrimary, textAlign: 'center' }]}>{item.title}</Text>
@@ -176,11 +138,11 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
                             style={[styles.button, { backgroundColor: theme.colors.primary, shadowColor: theme.colors.primary, shadowOpacity: 0.3, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }]}
                             onPress={handleSignUpPress}
                         >
-                            <Text style={styles.buttonText}>Claim 10 Days Free</Text>
+                            <Text style={styles.buttonText}>Continue</Text>
                         </TouchableOpacity>
 
                         <TouchableOpacity onPress={handleFinish} style={{ padding: 12 }}>
-                            <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', fontSize: 14 }}>maybe later</Text>
+                            <Text style={{ color: theme.colors.textSecondary, textAlign: 'center', fontSize: 14 }}>Explore without a plan</Text>
                         </TouchableOpacity>
                     </View>
                 )}

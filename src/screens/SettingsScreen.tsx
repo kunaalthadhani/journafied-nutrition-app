@@ -19,15 +19,13 @@ import { TimePickerModal } from '../components/TimePickerModal';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { featureFlags } from '../config/featureFlags';
 import { dataStorage, AccountInfo } from '../services/dataStorage';
+import { authService } from '../services/authService';
 
 interface SettingsScreenProps {
   onBack: () => void;
   plan?: 'free' | 'premium';
   onOpenSubscription?: () => void;
-  entryCount?: number;
-  freeEntryLimit?: number;
-  totalEarnedEntries?: number;
-  taskBonusEntries?: number;
+
   onLogin?: () => void;
   onIntegrations?: () => void;
   onDowngradeToFree?: () => void;
@@ -125,10 +123,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onBack,
   plan = 'free',
   onOpenSubscription,
-  entryCount = 0,
-  freeEntryLimit = 20,
-  totalEarnedEntries,
-  taskBonusEntries,
+
   onLogin,
   onIntegrations,
   onDowngradeToFree,
@@ -139,9 +134,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const { weightUnit, setWeightUnit } = usePreferences();
   const [notificationsEnabled, setNotificationsEnabled] = useState(true);
   const [showUnitSelector, setShowUnitSelector] = useState(false);
-  const referralBonus = totalEarnedEntries || 0;
-  const challengeBonus = taskBonusEntries || 0;
-  const totalBonusEntries = referralBonus + challengeBonus;
+
 
   // Meal reminder settings
   const [breakfastReminder, setBreakfastReminder] = useState<MealReminder>({
@@ -268,6 +261,30 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             }
           },
         },
+      ]
+    );
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account & Data',
+      'This will disable your account and permanently delete all your data from our servers and this device. This action CANNOT be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Everything',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              Alert.alert('Processing...', 'Deleting your data... please wait.');
+              await authService.deleteAccount();
+              Alert.alert('Account Deleted', 'Your account and data have been removed. You will be signed out.');
+              // Trigger sign out callback if any context needs update, otherwise authService.deleteAccount() already signed out
+            } catch (error) {
+              Alert.alert('Error', 'Failed to delete account completely. Local data cleared.');
+            }
+          }
+        }
       ]
     );
   };
@@ -474,14 +491,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </TouchableOpacity>
             )}
 
-            {plan === 'free' && (
-              <Text style={[styles.remainingText, { color: theme.colors.textSecondary }]}>
-                {Math.max(0, freeEntryLimit + totalBonusEntries - entryCount)} entries remaining
-                {totalBonusEntries > 0 && (
-                  <Text style={{ color: theme.colors.primary }}> (+{totalBonusEntries} bonus)</Text>
-                )}
-              </Text>
-            )}
+
 
             <TouchableOpacity
               style={{ marginTop: 24, alignSelf: 'center' }}
@@ -613,6 +623,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             title="Clear Cache"
             subtitle="Delete all app data (meals, weights, goals, settings)"
             onPress={handleClearCache}
+          />
+          <SettingItem
+            icon="user-x"
+            title="Delete Account & Data"
+            subtitle="Permanently remove your account and remote data"
+            onPress={handleDeleteAccount}
           />
         </SettingSection>
 

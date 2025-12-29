@@ -35,13 +35,12 @@ import AdvancedAnalyticsScreen from './AdvancedAnalyticsScreen';
 import { AboutScreen } from './AboutScreen';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
-import { FreeEntriesScreen } from './FreeEntriesScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
 import { FoodLogSection } from '../components/FoodLogSection';
-import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, EntryTasksStatus, StreakFreezeData, AdjustmentRecord, DailySummary } from '../services/dataStorage';
+import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
@@ -72,6 +71,7 @@ import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
   const [selectedDate, setSelectedDate] = useState(new Date());
+  const [showFirstLogMessage, setShowFirstLogMessage] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showSetGoals, setShowSetGoals] = useState(false);
@@ -137,12 +137,8 @@ export const HomeScreen: React.FC = () => {
     return false;
   }, [userPlan, accountInfo]);
 
-  const [entryTasks, setEntryTasks] = useState<EntryTasksStatus>({
-    customPlanCompleted: false,
-    registrationCompleted: false,
-  });
-  const [taskBonusEntries, setTaskBonusEntries] = useState(0);
-  const [showFreeEntries, setShowFreeEntries] = useState(false);
+
+
   const [showGrocerySuggestions, setShowGrocerySuggestions] = useState(false);
   const [showChatCoach, setShowChatCoach] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
@@ -400,7 +396,7 @@ export const HomeScreen: React.FC = () => {
         const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
         setTotalEarnedEntries(earned);
       }
-      await refreshEntryTasks();
+
     } catch (error) {
       if (__DEV__) console.error('Error reloading account data:', error);
     }
@@ -437,14 +433,7 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleOpenFreeEntries = () => {
-    setMenuVisible(false);
-    setShowFreeEntries(true);
-  };
 
-  const handleFreeEntriesBack = () => {
-    setShowFreeEntries(false);
-  };
 
   const handleGrocerySuggestions = () => {
     setShowSettings(false);
@@ -456,15 +445,7 @@ export const HomeScreen: React.FC = () => {
     setShowSettings(true);
   };
 
-  const handleCustomPlanTaskNavigate = () => {
-    setShowFreeEntries(false);
-    handleSetGoals();
-  };
 
-  const handleRegistrationTaskNavigate = () => {
-    setShowFreeEntries(false);
-    handleAccount();
-  };
 
   const handleAdminPush = () => {
     if (__DEV__) console.log('Opening admin push console');
@@ -533,9 +514,8 @@ export const HomeScreen: React.FC = () => {
 
   // Entry limit persistence
   const ENTRY_COUNT_KEY = '@trackkal:entryCount';
-  const FREE_ENTRY_LIMIT = 20;
   const MAX_SAVED_PROMPTS = 6;
-  const TASK_BONUS_PER_ACTION = 5;
+
   const normalizePromptText = (value: string) => value.trim().toLowerCase();
   const createSavedPrompt = (text: string): SavedPrompt => {
     const timestamp = new Date().toISOString();
@@ -553,14 +533,7 @@ export const HomeScreen: React.FC = () => {
       if (__DEV__) console.error('Error persisting saved prompts:', error);
     }
   };
-  const calculateTaskBonus = (status: EntryTasksStatus) =>
-    (status.customPlanCompleted ? TASK_BONUS_PER_ACTION : 0) +
-    (status.registrationCompleted ? TASK_BONUS_PER_ACTION : 0);
-  const refreshEntryTasks = async () => {
-    const status = await dataStorage.loadEntryTasks();
-    setEntryTasks(status);
-    setTaskBonusEntries(calculateTaskBonus(status));
-  };
+
 
   // Logic to handle missed days and auto-freeze
   const checkMissedDaysAndFreeze = async (
@@ -720,10 +693,7 @@ export const HomeScreen: React.FC = () => {
         setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
       }
 
-      // ENTRY TASKS
-      const tasksStatus = await dataStorage.loadEntryTasks();
-      setEntryTasks(tasksStatus);
-      setTaskBonusEntries(calculateTaskBonus(tasksStatus));
+
 
       // DEVICE INFO
       const deviceInfo = {
@@ -888,10 +858,7 @@ export const HomeScreen: React.FC = () => {
         setShowReferral(false);
         return true;
       }
-      if (showFreeEntries) {
-        setShowFreeEntries(false);
-        return true;
-      }
+
       if (showCalendar) {
         setShowCalendar(false);
         return true;
@@ -917,9 +884,6 @@ export const HomeScreen: React.FC = () => {
     showAccount,
     showAbout,
     showReferral,
-    showFreeEntries,
-    showGrocerySuggestions,
-    showCalendar,
     menuVisible,
   ]);
 
@@ -1010,6 +974,7 @@ export const HomeScreen: React.FC = () => {
     try {
       // Use ChatGPT for real-time food analysis
       let parsedFoods: ParsedFood[] = [];
+      let summary: string | undefined;
       try {
         const analysisResult = await analyzeFoodWithChatGPT(trimmed);
         if (analysisResult.clarificationQuestion) {
@@ -1025,6 +990,8 @@ export const HomeScreen: React.FC = () => {
           return;
         }
         parsedFoods = analysisResult.foods;
+        summary = analysisResult.summary;
+
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           Alert.alert(
@@ -1037,12 +1004,18 @@ export const HomeScreen: React.FC = () => {
         throw apiError; // Re-throw other errors
       }
 
+      // Check for first log ever
+      if (entryCount === 0) {
+        setShowFirstLogMessage(true);
+      }
+
       if (parsedFoods.length > 0) {
         // Create a new meal entry with the prompt and foods
         const createdAt = Date.now();
         const newMeal: Meal = {
           id: generateId(),
           prompt: trimmed,
+          summary: summary, // Add summary
           foods: parsedFoods,
           timestamp: createdAt,
           updatedAt: new Date().toISOString(),
@@ -1293,18 +1266,12 @@ export const HomeScreen: React.FC = () => {
     );
   };
 
-  const handleCustomPlanTaskReward = async () => {
-    const result = await dataStorage.completeEntryTask('customPlan');
-    if (result.awarded) {
-      const bonus = calculateTaskBonus(result.status);
-      setEntryTasks(result.status);
-      setTaskBonusEntries(bonus);
-      Alert.alert('Bonus Unlocked', 'Custom plan created! +5 free entries added to your limit.');
-    }
-  };
+
 
   const handleToggleSavePrompt = async (meal: Meal) => {
-    const trimmedPrompt = meal.prompt?.trim();
+    // PREFER SUMMARY if available (AI refined), else use prompt
+    const textToSave = meal.summary || meal.prompt;
+    const trimmedPrompt = textToSave?.trim();
     if (!trimmedPrompt) return;
 
     const normalized = normalizePromptText(trimmedPrompt);
@@ -1485,15 +1452,20 @@ export const HomeScreen: React.FC = () => {
       if (__DEV__) console.log('Starting image analysis for URI:', uriToAnalyze);
 
       // Add timeout to prevent infinite hanging
-      let parsedFoods;
+      let parsedFoods: ParsedFood[] = [];
+      let summary: string | undefined;
+
       try {
         const analysisPromise = analyzeFoodFromImage(uriToAnalyze);
-        const timeoutPromise = new Promise<ParsedFood[]>((_, reject) =>
+        const timeoutPromise = new Promise<{ foods: ParsedFood[], summary?: string }>((_, reject) =>
           setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
         );
 
         // Analyze the image using OpenAI Vision API
-        parsedFoods = await Promise.race([analysisPromise, timeoutPromise]);
+        const result = await Promise.race([analysisPromise, timeoutPromise]);
+        parsedFoods = result.foods || [];
+        summary = result.summary;
+
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           setUploadStatus('failed');
@@ -1508,6 +1480,11 @@ export const HomeScreen: React.FC = () => {
       if (__DEV__) console.log('Analysis complete, parsed foods:', parsedFoods);
 
       if (parsedFoods.length > 0) {
+        // Check for first log ever
+        if (entryCount === 0) {
+          setShowFirstLogMessage(true);
+        }
+
         // Get current date key at the time of analysis
         const dateKey = getDateKey(selectedDate);
 
@@ -1516,6 +1493,7 @@ export const HomeScreen: React.FC = () => {
         const newMeal: Meal = {
           id: generateId(),
           prompt: `Image`,
+          summary: summary,
           foods: parsedFoods,
           timestamp: createdAt,
           imageUri: uriToAnalyze,
@@ -1809,22 +1787,7 @@ export const HomeScreen: React.FC = () => {
 
   // Removed floating blob animation
 
-  const entryTaskItems = [
-    {
-      id: 'customPlan',
-      title: 'Create a Custom Plan',
-      description: '+5 free entries when you finish the questionnaire.',
-      completed: entryTasks.customPlanCompleted,
-      onPress: handleCustomPlanTaskNavigate,
-    },
-    {
-      id: 'registration',
-      title: 'Register your TrackKcal account',
-      description: '+5 free entries and sync across devices.',
-      completed: entryTasks.registrationCompleted,
-      onPress: handleRegistrationTaskNavigate,
-    },
-  ];
+
 
   const formattedDate = format(selectedDate, 'd MMM, yyyy');
 
@@ -1840,11 +1803,7 @@ export const HomeScreen: React.FC = () => {
         onBack={handleGoalsBack}
         onSave={handleGoalsSave}
         initialGoals={savedGoals}
-        onStartCustomPlan={() => {
-          setShowSetGoals(false);
-          setShowSetGoals(true);
-        }}
-        onCustomPlanCompleted={handleCustomPlanTaskReward}
+
       />
     );
   }
@@ -1863,10 +1822,7 @@ export const HomeScreen: React.FC = () => {
         onBack={handleSettingsBack}
         plan={userPlan}
         onOpenSubscription={handleOpenSubscription}
-        entryCount={entryCount}
-        freeEntryLimit={FREE_ENTRY_LIMIT}
-        totalEarnedEntries={totalEarnedEntries}
-        taskBonusEntries={taskBonusEntries}
+
         onLogin={handleAccount}
         onIntegrations={() => {
           setShowSettings(false);
@@ -1888,7 +1844,7 @@ export const HomeScreen: React.FC = () => {
 
           // We need to close Settings to show Walkthrough?
           setShowSettings(false);
-          setWalkthroughHideOffer(true);
+          setWalkthroughHideOffer(false);
           setShowWalkthrough(true);
         }}
       />
@@ -1935,7 +1891,7 @@ export const HomeScreen: React.FC = () => {
           initialGoals={savedGoals}
           initialReferralCode={referralCode}
           initialTotalEarnedEntries={totalEarnedEntries}
-          initialTaskBonusEntries={taskBonusEntries}
+
           initialStreakFreeze={streakFreeze}
           initialFrozenDates={streakFreeze?.usedOnDates}
           onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
@@ -1964,29 +1920,15 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-  if (showFreeEntries) {
-    return (
-      <FreeEntriesScreen
-        tasks={entryTaskItems}
-        onBack={handleFreeEntriesBack}
-      />
-    );
-  }
 
   if (showReferral) {
     const isLoggedIn = !!accountInfo?.email;
-    const isPremium = userPlan === 'premium';
-    const remaining = isPremium
-      ? null
-      : Math.max(0, FREE_ENTRY_LIMIT + totalEarnedEntries + taskBonusEntries - entryCount);
-
     return (
       <ReferralScreen
         isLoggedIn={isLoggedIn}
         userEmail={accountInfo?.email || null}
         referralCode={referralCode}
         totalEarnedEntriesFromReferrals={totalEarnedEntries}
-        remainingEntries={remaining}
         onBack={handleReferralBack}
         onLoginPress={handleAccount}
       />
@@ -2105,6 +2047,13 @@ export const HomeScreen: React.FC = () => {
             )}
 
             {/* Food Log Section */}
+            {showFirstLogMessage && (
+              <View style={{ marginBottom: 16, marginHorizontal: 16, padding: 12, backgroundColor: theme.colors.primary + '10', borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary + '30' }}>
+                <Text style={{ textAlign: 'center', color: theme.colors.primary, fontSize: 13, fontWeight: '600' }}>
+                  "Most people improve simply by paying attention."
+                </Text>
+              </View>
+            )}
             <FoodLogSection
               meals={currentDayMeals}
               onRemoveFood={handleRemoveFood}
@@ -2220,10 +2169,9 @@ export const HomeScreen: React.FC = () => {
           onAbout={handleAbout}
           onAdminPush={handleAdminPush}
           onReferral={handleOpenReferral}
-          onFreeEntries={handleOpenFreeEntries}
           onHowItWorks={() => {
             setMenuVisible(false);
-            setWalkthroughHideOffer(true);
+            setWalkthroughHideOffer(false);
             setShowWalkthrough(true);
           }}
         />
@@ -2302,6 +2250,7 @@ export const HomeScreen: React.FC = () => {
             onRequestLogMealForDate={handleRequestLogMealForDate}
             onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
             mealsByDate={mealsByDate}
+            summariesByDate={summariesByDate}
             targetCalories={goalsSet ? savedGoals.calories : undefined}
             targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
             targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
@@ -2353,28 +2302,8 @@ export const HomeScreen: React.FC = () => {
         <AppWalkthroughModal
           visible={showWalkthrough}
           onClose={handleWalkthroughClose}
-          onSignUp={async (claimedOffer) => {
-            if (claimedOffer) {
-              const expiry = new Date();
-              expiry.setDate(expiry.getDate() + 10);
-              const isoExpiry = expiry.toISOString();
-
-              // Update State
-              setAccountInfo(prev => ({ ...(prev || {}), premiumUntil: isoExpiry }));
-
-              // Persist
-              try {
-                const currentStr = await AsyncStorage.getItem('@trackkal:accountInfo');
-                const current = currentStr ? JSON.parse(currentStr) : {};
-                const updated = { ...current, premiumUntil: isoExpiry };
-                await AsyncStorage.setItem('@trackkal:accountInfo', JSON.stringify(updated));
-                Alert.alert("Trial Activated 🚀", "You now have 10 days of Premium access! Enjoy unlimited logging and your AI Coach.");
-              } catch (e) {
-                console.error("Failed to save trial", e);
-              }
-            } else {
-              handleAccount('signup');
-            }
+          onSignUp={() => {
+            handleSetGoals();
           }}
           hideOffer={walkthroughHideOffer || isPremium}
         />

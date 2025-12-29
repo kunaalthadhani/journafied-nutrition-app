@@ -1317,5 +1317,46 @@ export const supabaseDataService = {
       return [];
     }
   },
+  async deleteAllUserData(accountInfo: AccountInfo | null): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+
+    try {
+      // Delete from all tables where user_id is the foreign key
+      const tables = [
+        'food_logs',
+        'weight_entries',
+        'exercise_logs',
+        'nutrition_goals',
+        'push_tokens',
+        'push_history',
+        'saved_prompts',
+        'user_preferences',
+        'entry_tasks',
+        'referral_codes',
+        'referral_redemptions',
+        'referral_rewards',
+        'grocery_items',
+        'streak_freezes',
+        'analytics_events'
+      ];
+
+      // Execute deletions in parallel or sequence
+      // Note: Some might fail if tables don't exist or RLS prevents it, but we try our best.
+      await Promise.all(
+        tables.map(table =>
+          supabase!.from(table).delete().eq('user_id', user.id)
+        )
+      );
+
+      // Finally delete the app_user record itself
+      await supabase.from('app_users').delete().eq('id', user.id);
+
+    } catch (error) {
+      console.error('Error deleting user data from Supabase:', error);
+      throw error;
+    }
+  },
 };
 

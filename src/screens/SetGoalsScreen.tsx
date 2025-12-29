@@ -6,21 +6,26 @@ import {
   TouchableOpacity,
   ScrollView,
   Alert,
+  LayoutAnimation,
+  Platform,
+  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
+import { Typography } from '../constants/typography';
 import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
+
+if (Platform.OS === 'android') {
+  if (UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+  }
+}
 
 interface SetGoalsScreenProps {
   onBack: () => void;
   onSave: (goals: GoalData) => void;
   initialGoals?: GoalData;
-  onStartCustomPlan?: () => void;
-  onCustomPlanCompleted?: () => void;
 }
 
 interface GoalData {
@@ -55,8 +60,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
   onSave,
   initialGoals,
-  onStartCustomPlan,
-  onCustomPlanCompleted,
 }) => {
   const theme = useTheme();
   const [calories, setCalories] = useState(initialGoals?.calories || 1500);
@@ -77,6 +80,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [trackingGoal, setTrackingGoal] = useState<string | undefined>(initialGoals?.trackingGoal);
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'very' | undefined>(initialGoals?.activityLevel);
 
+  const [isEditingMacros, setIsEditingMacros] = useState(false);
+
+  // Check if a custom plan essentially exists
+  const hasCustomPlan = !!goal;
+
   // Calculate grams based on calories per gram
   const calculateMacros = () => {
     const proteinCalories = (calories * proteinPercentage) / 100;
@@ -95,7 +103,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 
   const handleStartCustomPlan = () => {
     setShowCalculator(true);
-    onStartCustomPlan?.();
   };
 
   const handleCalculatedCalories = (result: CalorieCalculationResult) => {
@@ -117,7 +124,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
     setShowCalculator(false);
-    onCustomPlanCompleted?.();
   };
 
   const handleCalculatorBack = () => {
@@ -174,6 +180,10 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     onBack();
   };
 
+  const handleToggleCustomize = () => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setIsEditingMacros(!isEditingMacros);
+  };
 
   if (showCalculator) {
     return (
@@ -216,32 +226,44 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         contentContainerStyle={styles.contentContainer}
         showsVerticalScrollIndicator={false}
       >
-        {/* Custom Plan Hero Card */}
-        {/* Custom Plan Button (Simplified) */}
-        <TouchableOpacity
-          onPress={handleStartCustomPlan}
-          activeOpacity={0.7}
-          style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
-        >
-          <View style={styles.customPlanContent}>
-            <View style={[styles.iconBox, { backgroundColor: theme.colors.secondaryBg }]}>
-              <Feather name="zap" size={20} color={theme.colors.textPrimary} />
-            </View>
-            <View style={styles.customPlanTextContainer}>
-              <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
-                Create Custom Plan
+        {/* Custom Plan Hero Card or Title */}
+        {hasCustomPlan ? (
+          <View style={styles.planHeaderContainer}>
+            <View style={styles.planHeaderTextContainer}>
+              <Text style={[styles.planHeaderTitle, { color: theme.colors.textPrimary }]}>
+                Your plan
               </Text>
-              <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
-                AI-powered macro calculation
+              <Text style={[styles.planHeaderSubtitle, { color: theme.colors.textSecondary }]}>
+                Based on your goals and body details
               </Text>
             </View>
           </View>
-          <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
-        </TouchableOpacity>
+        ) : (
+          <TouchableOpacity
+            onPress={handleStartCustomPlan}
+            activeOpacity={0.7}
+            style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
+          >
+            <View style={styles.customPlanContent}>
+              <View style={[styles.iconBox, { backgroundColor: theme.colors.secondaryBg }]}>
+                <Feather name="zap" size={20} color={theme.colors.textPrimary} />
+              </View>
+              <View style={styles.customPlanTextContainer}>
+                <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
+                  Create Custom Plan
+                </Text>
+                <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
+                  AI-powered macro calculation
+                </Text>
+              </View>
+            </View>
+            <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
+        )}
 
         {/* Daily Calories Section */}
         <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>DAILY TARGET</Text>
+          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Daily balance</Text>
           <View style={[
             styles.caloriesCard,
             {
@@ -258,10 +280,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             </View>
             <TouchableOpacity
               style={[styles.editCaloriesButton, { backgroundColor: theme.colors.secondaryBg }]}
-              // For now, custom plan is the primary way, but maybe visual "touch" implies editability
               onPress={handleStartCustomPlan}
             >
-              <Text style={[styles.editCaloriesText, { color: theme.colors.textSecondary }]}>Recalculate</Text>
+              <Text style={[styles.editCaloriesText, { color: theme.colors.textSecondary }]}>
+                {hasCustomPlan ? 'Starting point' : 'Recalculate'}
+              </Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -269,18 +292,21 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         {/* Macros Section */}
         <View style={styles.sectionContainer}>
           <View style={styles.macroHeaderRow}>
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>MACRO DISTRIBUTION</Text>
-            <View style={[
-              styles.totalBadge,
-              { backgroundColor: totalPercentage === 100 ? theme.colors.successBg : theme.colors.error + '15' }
-            ]}>
-              <Text style={[
-                styles.totalBadgeText,
-                { color: totalPercentage === 100 ? theme.colors.success : theme.colors.error }
+            {/* Removed 'Macro Distribution' title entirely as requested */}
+            <View />
+            {isEditingMacros && (
+              <View style={[
+                styles.totalBadge,
+                { backgroundColor: totalPercentage === 100 ? theme.colors.successBg : theme.colors.error + '15' }
               ]}>
-                {totalPercentage}% Total
-              </Text>
-            </View>
+                <Text style={[
+                  styles.totalBadgeText,
+                  { color: totalPercentage === 100 ? theme.colors.success : theme.colors.error }
+                ]}>
+                  {totalPercentage}% Total
+                </Text>
+              </View>
+            )}
           </View>
 
           {/* Protein Card */}
@@ -291,6 +317,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             gramValue={proteinGrams}
             onChange={handleProteinChange}
             theme={theme}
+            isEditing={isEditingMacros}
           />
 
           {/* Carbs Card */}
@@ -301,6 +328,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             gramValue={carbsGrams}
             onChange={handleCarbsChange}
             theme={theme}
+            isEditing={isEditingMacros}
           />
 
           {/* Fat Card */}
@@ -311,7 +339,34 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             gramValue={fatGrams}
             onChange={handleFatChange}
             theme={theme}
+            isEditing={isEditingMacros}
           />
+
+          {!isEditingMacros && (
+            <>
+              <TouchableOpacity
+                style={[styles.customizeMacrosButton]}
+                onPress={handleToggleCustomize}
+              >
+                <Text style={[styles.customizeMacrosText, { color: theme.colors.textSecondary }]}>Customize macros</Text>
+                <Feather name="chevron-down" size={16} color={theme.colors.textSecondary} />
+              </TouchableOpacity>
+
+              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+                You can adjust this anytime
+              </Text>
+            </>
+          )}
+
+          {isEditingMacros && (
+            <TouchableOpacity
+              style={[styles.customizeMacrosButton]}
+              onPress={handleToggleCustomize}
+            >
+              <Text style={[styles.customizeMacrosText, { color: theme.colors.textSecondary }]}>Done formatting</Text>
+              <Feather name="chevron-up" size={16} color={theme.colors.textSecondary} />
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
 
@@ -322,14 +377,14 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           onPress={handleSave}
           activeOpacity={0.8}
         >
-          <Text style={[styles.saveButtonText, { color: theme.colors.primaryForeground }]}>Save Changes</Text>
+          <Text style={[styles.saveButtonText, { color: theme.colors.primaryForeground }]}>Use this plan</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-// Subcomponent for Macro Card to reduce repetition
+// Subcomponent for Macro Card
 interface MacroCardProps {
   label: string;
   color: string;
@@ -337,43 +392,77 @@ interface MacroCardProps {
   gramValue: number;
   onChange: (val: number) => void;
   theme: any;
+  isEditing: boolean;
 }
 
-const MacroCard: React.FC<MacroCardProps> = ({ label, color, percentage, gramValue, onChange, theme }) => {
+const MacroCard: React.FC<MacroCardProps> = ({ label, color, percentage, gramValue, onChange, theme, isEditing }) => {
+  // Helper to add opacity to hex color
+  const hexToRgba = (hex: string, alpha: number) => {
+    const r = parseInt(hex.slice(1, 3), 16);
+    const g = parseInt(hex.slice(3, 5), 16);
+    const b = parseInt(hex.slice(5, 7), 16);
+    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
+  };
+
+  const trackColor = hexToRgba(color, 0.2); // Faint background
+  const fillColor = hexToRgba(color, 0.6); // Slightly transparent fill
+
   return (
     <View style={[styles.macroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-      <View style={styles.macroTopRow}>
-        <View style={styles.macroLabelContainer}>
-          <View style={[styles.macroDot, { backgroundColor: color }]} />
-          <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
-        </View>
-        <Text style={[styles.macroGrams, { color: theme.colors.textSecondary }]}>{gramValue}g</Text>
-      </View>
 
-      <View style={styles.sliderContainer}>
-        <TouchableOpacity
-          style={[styles.adjustButton, { borderColor: theme.colors.border }]}
-          onPress={() => onChange(percentage - 5)}
-        >
-          <Feather name="minus" size={16} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-
-        <View style={styles.progressSection}>
-          <View style={[styles.progressBarBg, { backgroundColor: theme.colors.secondaryBg }]}>
-            <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
+      {/* Read-only / Consolidated View */}
+      {!isEditing ? (
+        <View>
+          {/* Progress Bar Background (Simple line) - Reduced Opacity */}
+          <View style={[styles.progressBarBg, { marginBottom: 8, height: 8, backgroundColor: trackColor }]}>
+            <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: fillColor }]} />
           </View>
-          <Text style={[styles.percentageText, { color: theme.colors.textPrimary }]}>{percentage}%</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+            <View style={styles.macroLabelContainer}>
+              <View style={[styles.macroDot, { backgroundColor: color }]} />
+              <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
+            </View>
+            <Text style={{ fontSize: 15, color: theme.colors.textSecondary, fontWeight: '500' }}>
+              {percentage}% • {gramValue}g
+            </Text>
+          </View>
         </View>
+      ) : (
+        <>
+          <View style={styles.macroTopRow}>
+            <View style={styles.macroLabelContainer}>
+              <View style={[styles.macroDot, { backgroundColor: color }]} />
+              <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
+            </View>
+            <Text style={[styles.macroGrams, { color: theme.colors.textSecondary }]}>{gramValue}g</Text>
+          </View>
 
-        <TouchableOpacity
-          style={[styles.adjustButton, { borderColor: theme.colors.border }]}
-          onPress={() => onChange(percentage + 5)}
-        >
-          <Feather name="plus" size={16} color={theme.colors.textPrimary} />
-        </TouchableOpacity>
-      </View>
+          <View style={styles.sliderContainer}>
+            <TouchableOpacity
+              style={[styles.adjustButton, { borderColor: theme.colors.border }]}
+              onPress={() => onChange(percentage - 5)}
+            >
+              <Feather name="minus" size={16} color={theme.colors.textPrimary} />
+            </TouchableOpacity>
+
+            <View style={styles.progressSection}>
+              <View style={[styles.progressBarBg, { backgroundColor: theme.colors.secondaryBg }]}>
+                <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
+              </View>
+              <Text style={[styles.percentageText, { color: theme.colors.textPrimary }]}>{percentage}%</Text>
+            </View>
+
+            <TouchableOpacity
+              style={[styles.adjustButton, { borderColor: theme.colors.border }]}
+              onPress={() => onChange(percentage + 5)}
+            >
+              <Feather name="plus" size={16} color={theme.colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+        </>
+      )}
     </View>
-  );
+  ); // Added closing parenthesis
 };
 
 const styles = StyleSheet.create({
@@ -404,6 +493,20 @@ const styles = StyleSheet.create({
   contentContainer: {
     padding: 20,
     paddingBottom: 100,
+  },
+  planHeaderContainer: {
+    marginBottom: 24,
+  },
+  planHeaderTextContainer: {
+    gap: 4,
+  },
+  planHeaderTitle: {
+    fontSize: 28,
+    fontWeight: 'bold',
+  },
+  planHeaderSubtitle: {
+    fontSize: Typography.fontSize.md,
+    lineHeight: 22,
   },
   customPlanButton: {
     marginBottom: 24,
@@ -547,7 +650,7 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     overflow: 'hidden',
-    marginBottom: 6,
+    backgroundColor: '#eee', // Fallback
   },
   progressBarFill: {
     height: '100%',
@@ -556,6 +659,24 @@ const styles = StyleSheet.create({
   percentageText: {
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
+    marginTop: 6,
+  },
+  customizeMacrosButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 12,
+    borderRadius: 12,
+    gap: 8,
+  },
+  customizeMacrosText: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+  },
+  helperText: {
+    fontSize: Typography.fontSize.xs,
+    marginTop: -4,
+    textAlign: 'center',
   },
   footer: {
     position: 'absolute',
@@ -565,7 +686,7 @@ const styles = StyleSheet.create({
     padding: 16,
     paddingBottom: 32,
     borderTopWidth: 1,
-    borderTopColor: 'transparent', // using shadow/blur usually, but keep simple
+    borderTopColor: 'transparent',
   },
   saveButton: {
     height: 56,

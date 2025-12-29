@@ -135,9 +135,9 @@ export const chatCoachService = {
         // 1. Get the latest snapshot
         let snapshot = await dataStorage.getUserMetricsSnapshot();
 
-        // Fallback: Generate if missing
-        if (!snapshot) {
-            console.log("[ChatCoach] No snapshot found. Generating fresh metrics...");
+        // Fallback: Generate if missing OR if strictly missing the new field we need
+        if (!snapshot || typeof snapshot.loggedDaysCount === 'undefined') {
+            console.log("[ChatCoach] Snapshot stale or missing. Generating fresh metrics...");
             snapshot = await dataStorage.generateUserMetricsSnapshot();
         }
 
@@ -146,13 +146,11 @@ export const chatCoachService = {
         let isSufficient = false;
 
         if (snapshot) {
-            // Check Food Data sufficiency
-            const hasFoodData = snapshot.commonFoods.length >= 5 || snapshot.consistencyScore > 10;
+            // NEW CRITERIA: At least 1 day of logging history
+            const hasFoodData = (snapshot.loggedDaysCount || 0) >= 1;
 
-            // Check Weight Data sufficiency (Snapshot has weightTrend, if current is null, no weight).
-            const hasWeightData = snapshot.weightTrend.current !== null && snapshot.weightTrend.current > 0;
-
-            isSufficient = hasFoodData && hasWeightData;
+            // Allow functionality even without weight data, as requested ("one meal logged")
+            isSufficient = hasFoodData;
         }
 
         // 3. If STILL no snapshot or Insufficient, return safe skeleton
@@ -210,7 +208,7 @@ export const chatCoachService = {
                 consistencyScore: snapshot.consistencyScore,
                 streakDays: snapshot.currentStreak
             },
-            topFoods: snapshot.commonFoods.slice(0, 10).map(f => f.name), // Top 10
+            topFoods: snapshot.commonFoods.slice(0, 50).map(f => f.name), // Top 50 for variety
             dataQuality: 'sufficient'
         };
     },

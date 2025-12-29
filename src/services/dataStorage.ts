@@ -6,9 +6,11 @@ import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
 import { calculateStreak } from '../utils/streakUtils';
 
+// Modification to MealEntry interface to support summary
 export interface MealEntry {
   id: string;
   prompt: string;
+  summary?: string; // AI Summary of the meal
   foods: ParsedFood[];
   timestamp: number;
   imageUri?: string;
@@ -289,6 +291,7 @@ export interface UserMetricsSnapshot {
     avgKcal: number;
   }[]; // top 10 recent
   recentDailySummaries: DailySummary[]; // last 7 days of summaries for granular rules
+  loggedDaysCount: number;
 }
 
 export interface Insight {
@@ -2625,6 +2628,11 @@ export const dataStorage = {
       let dayCount = 0;
       let verifiedKeys: string[] = []; // for common foods scan
 
+      // Calculate logged days from MEALS directly (source of truth)
+      const allMeals = await this.loadMeals();
+      const loggedDaysCount = Object.values(allMeals).filter(meals => meals && meals.length > 0).length;
+
+      // Stats loop (keep 7 days for averages, but we'll use more for foods)
       for (let i = 0; i < 7; i++) {
         const d = new Date();
         d.setDate(today.getDate() - i);
@@ -2636,6 +2644,17 @@ export const dataStorage = {
           totalC += s.totalCarbs;
           totalF += s.totalFat;
           dayCount++;
+          verifiedKeys.push(k);
+        }
+      }
+
+      // Common Foods Loop (Last 30 days to get rich history)
+      for (let i = 0; i < 30; i++) {
+        const d = new Date();
+        d.setDate(today.getDate() - i);
+        const k = d.toISOString().split('T')[0];
+        const s = summaries[k];
+        if (s && s.entryCount > 0 && !verifiedKeys.includes(k)) {
           verifiedKeys.push(k);
         }
       }
@@ -2800,7 +2819,8 @@ export const dataStorage = {
         currentStreak: streak,
         weakNutrients: weak,
         commonFoods,
-        recentDailySummaries: Object.values(summaries).filter(s => verifiedKeys.includes(s.date))
+        recentDailySummaries: Object.values(summaries).filter(s => verifiedKeys.includes(s.date)),
+        loggedDaysCount,
       };
 
       await this.saveUserMetricsSnapshot(snapshot);

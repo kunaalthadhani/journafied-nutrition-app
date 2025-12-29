@@ -1036,7 +1036,22 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
-            onPress={() => setShowLogModal(true)}
+            onPress={() => {
+              // Check if already logged today
+              const today = new Date();
+              const todayKey = format(today, 'yyyy-MM-dd');
+              const alreadyLogged = weightEntries.some(e => format(new Date(e.date), 'yyyy-MM-dd') === todayKey);
+
+              if (alreadyLogged) {
+                Alert.alert(
+                  'Weight Already Logged',
+                  'You’ve already logged today’s weight.\nYou can edit it anytime if you need to make a change.',
+                  [{ text: 'OK' }]
+                );
+                return;
+              }
+              setShowLogModal(true);
+            }}
           >
             <Text style={styles.logButtonText}>Log Weight</Text>
           </TouchableOpacity>

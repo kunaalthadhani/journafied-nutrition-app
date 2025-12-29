@@ -26,7 +26,7 @@ interface SidebarMenuProps {
   onAbout?: () => void;
   onAdminPush?: () => void;
   onReferral?: () => void;
-  onFreeEntries?: () => void;
+
   onHowItWorks?: () => void;
 }
 
@@ -107,7 +107,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onAbout,
   onAdminPush,
   onReferral,
-  onFreeEntries,
+
   onHowItWorks,
 }) => {
   const theme = useTheme();
@@ -199,10 +199,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     onClose();
   };
 
-  const handleFreeEntries = () => {
-    onFreeEntries?.();
-    onClose();
-  };
+
 
   const resetSecretTap = () => {
     setSecretTapCount(0);
@@ -325,7 +322,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
               <MenuItem icon="book-open" label="How it Works" onPress={() => { onHowItWorks?.(); onClose(); }} isBottom />
-              <MenuItem icon="gift" label="Get Free Entries" onPress={handleFreeEntries} isBottom />
+
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="users" label="Refer Friends" onPress={handleReferral} isBottom />
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
