@@ -20,7 +20,8 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
-    const [suggestion, setSuggestion] = useState<{ displayText: string; loggableText: string } | null>(null);
+    const [suggestion, setSuggestion] = useState<{ displayText: string; loggableText: string; reasoning?: string } | null>(null);
+    const [isDayComplete, setIsDayComplete] = useState(false);
 
     useEffect(() => {
         const checkPref = async () => {
@@ -34,7 +35,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
         checkPref();
     }, []);
 
-    const fetchSuggestion = async (forceNew: boolean) => {
+    const fetchSuggestion = async (forceNew: boolean, forceHungry: boolean = false) => {
         setLoading(true);
         try {
             const ctx = await chatCoachService.buildContext();
@@ -58,9 +59,30 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
 
             const targetCals = ctx.recentPerformance.calorieGoal || 2000;
             const targetProt = ctx.recentPerformance.proteinGoal || 150;
+            const remainingCalories = targetCals - eatenCals;
+
+            // Check if day is complete (0 or negative calories left)
+            if (remainingCalories <= 0 && !forceHungry) {
+                // Day Done - No API call
+                setSuggestion({
+                    displayText: "You've hit your calorie goal for the day! Outstanding work.",
+                    loggableText: "",
+                    reasoning: "Staying within your budget is the key to progress. Close the kitchen and let your body do its work!"
+                });
+                setIsDayComplete(true);
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setExpanded(true);
+                setLoading(false);
+                return;
+            }
+
+            // Reset day complete if we're forcing a hungry suggestion
+            if (forceHungry) {
+                setIsDayComplete(false);
+            }
 
             const promptContext = {
-                remainingCalories: targetCals - eatenCals,
+                remainingCalories: remainingCalories,
                 remainingProtein: targetProt - eatenProt,
                 itemsEatenCount: logs.length,
                 timeOfDay: new Date().getHours(),
@@ -68,7 +90,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
                 availableFoods: ctx.topFoods || []
             };
 
-            const result = await generateSmartSuggestion(promptContext, forceNew);
+            const result = await generateSmartSuggestion(promptContext, forceNew, { forceHungry });
             // Handle legacy string return just in case, though we updated service
             if (typeof result === 'string') {
                 setSuggestion({ displayText: result, loggableText: result });
@@ -144,16 +166,37 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
                         <Text style={[styles.suggestionText, { color: theme.colors.textPrimary }]}>
                             {suggestion.displayText}
                         </Text>
+                        {suggestion.reasoning && (
+                            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border + '40' }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                                    <Feather name="info" size={12} color={theme.colors.primary} style={{ marginRight: 6 }} />
+                                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: theme.colors.primary, textTransform: 'uppercase' }}>Why this option?</Text>
+                                </View>
+                                <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic', lineHeight: 18 }}>
+                                    {suggestion.reasoning}
+                                </Text>
+                            </View>
+                        )}
                     </View>
 
                     <View style={styles.actions}>
-                        <TouchableOpacity
-                            style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
-                            onPress={() => onLogSuggestion?.(suggestion.loggableText)}
-                        >
-                            <Feather name="plus-circle" size={16} color="white" />
-                            <Text style={styles.logButtonText}>Log This Meal</Text>
-                        </TouchableOpacity>
+                        {isDayComplete ? (
+                            <TouchableOpacity
+                                style={[styles.logButton, { backgroundColor: theme.colors.warning || '#f59e0b' }]}
+                                onPress={() => fetchSuggestion(true, true)}
+                            >
+                                <Feather name="alert-triangle" size={16} color="white" />
+                                <Text style={styles.logButtonText}>I'm Hungry, Suggest Me</Text>
+                            </TouchableOpacity>
+                        ) : (
+                            <TouchableOpacity
+                                style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
+                                onPress={() => onLogSuggestion?.(suggestion.loggableText)}
+                            >
+                                <Feather name="plus-circle" size={16} color="white" />
+                                <Text style={styles.logButtonText}>Log This Meal</Text>
+                            </TouchableOpacity>
+                        )}
 
                         <View style={styles.miniActions}>
                             <TouchableOpacity onPress={handleRefresh} style={styles.miniButton}>

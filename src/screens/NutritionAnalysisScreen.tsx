@@ -553,9 +553,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   }, [averageProtein, averageCarbs, averageFat, averageCalories, targetProtein, targetCarbs, targetFat, targetCalories, graphData]);
 
   const renderRadarChart = () => {
-    const size = 300;
+    const size = 220; // Reduced from 300
     const center = size / 2;
-    const radius = 90; // Fixed radius to ensure labels fit (center +/- ~110px range)
+    const radius = 65; // Reduced from 90 to fit new size comfortably
 
     if (radarData.length === 0) return null;
 
@@ -582,7 +582,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     });
 
     return (
-      <View style={{ alignItems: 'center', justifyContent: 'center', height: 320 }}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', height: 240 }}>
         <Svg height={size} width={size}>
           {/* Webs */}
           {webs.map((pointsStr, i) => (
@@ -600,7 +600,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           {/* Labels */}
           {radarData.map((d, i) => {
             const angle = i * angleStep - Math.PI / 2;
-            const labelRadius = radius + 15;
+            const labelRadius = radius + 18; // Slightly closer
             const x = center + labelRadius * Math.cos(angle);
             const y = center + labelRadius * Math.sin(angle);
             return (
@@ -1476,15 +1476,149 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         {(() => {
                           // 1. Process Data
                           const buckets = {
-                            Morning: { p: 0, c: 0, f: 0, count: 0 },
-                            Afternoon: { p: 0, c: 0, f: 0, count: 0 },
-                            Evening: { p: 0, c: 0, f: 0, count: 0 }
+                            Morning: { cals: 0, count: 0 },
+                            Afternoon: { cals: 0, count: 0 },
+                            Evening: { cals: 0, count: 0 }
                           };
-                          let globalTotalCarbs = 0;
-                          let eveningCarbs = 0;
 
                           const now = new Date();
-                          // Determine cutoff based on timeRange state from parent
+                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const cutoff = subDays(now, rangeDays);
+
+                          let totalRangeCals = 0;
+                          let totalDaysWithData = new Set<string>();
+
+                          Object.values(mealsByDate).flat().forEach(meal => {
+                            const d = new Date(meal.timestamp);
+                            if (d < cutoff) return;
+
+                            totalDaysWithData.add(d.toISOString().split('T')[0]);
+
+                            const h = d.getHours();
+                            let bucket: keyof typeof buckets = 'Evening';
+                            if (h >= 4 && h < 12) bucket = 'Morning';
+                            else if (h >= 12 && h < 17) bucket = 'Afternoon';
+
+                            const mealCals = meal.foods.reduce((acc, f) => acc + (f.calories || 0), 0);
+                            buckets[bucket].cals += mealCals;
+                            buckets[bucket].count++;
+                            totalRangeCals += mealCals;
+                          });
+
+                          const daysCount = Math.max(1, totalDaysWithData.size);
+
+                          const periods = [
+                            { key: 'Morning', label: 'Morning', subLabel: '4AM - 12PM', icon: 'sunrise', color: '#F59E0B' },
+                            { key: 'Afternoon', label: 'Afternoon', subLabel: '12PM - 5PM', icon: 'sun', color: '#3B82F6' },
+                            { key: 'Evening', label: 'Evening', subLabel: '5PM - 4AM', icon: 'moon', color: '#8B5CF6' },
+                          ] as const;
+
+                          // Find max for bar scaling (relative to total helps visualize distribution better)
+                          // Actually, for distribution, % of Total is best.
+
+                          return (
+                            <View style={{ gap: 20 }}>
+                              {periods.map((p) => {
+                                const bucket = buckets[p.key];
+                                const percentage = totalRangeCals > 0 ? (bucket.cals / totalRangeCals) : 0;
+                                const avgCals = Math.round(bucket.cals / daysCount);
+
+                                return (
+                                  <View key={p.key}>
+                                    {/* Header Row */}
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <View style={{
+                                          width: 32, height: 32, borderRadius: 8,
+                                          backgroundColor: `${p.color}15`,
+                                          alignItems: 'center', justifyContent: 'center'
+                                        }}>
+                                          <Feather name={p.icon as any} size={16} color={p.color} />
+                                        </View>
+                                        <View>
+                                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>
+                                            {p.label}
+                                          </Text>
+                                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                                            {p.subLabel}
+                                          </Text>
+                                        </View>
+                                      </View>
+
+                                      <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary }}>
+                                          {(percentage * 100).toFixed(0)}%
+                                        </Text>
+                                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                                          ~{avgCals} Kcal
+                                        </Text>
+                                      </View>
+                                    </View>
+
+                                    {/* Progress Bar */}
+                                    <View style={{
+                                      height: 8,
+                                      backgroundColor: theme.colors.input,
+                                      borderRadius: 4,
+                                      overflow: 'hidden'
+                                    }}>
+                                      <View style={{
+                                        width: `${percentage * 100}%`,
+                                        height: '100%',
+                                        backgroundColor: p.color,
+                                        borderRadius: 4
+                                      }} />
+                                    </View>
+                                  </View>
+                                );
+                              })}
+
+                              {/* Insight Box */}
+                              <View style={{
+                                marginTop: 8,
+                                padding: 12,
+                                backgroundColor: theme.colors.input,
+                                borderRadius: 12,
+                                borderLeftWidth: 4,
+                                borderLeftColor: theme.colors.primary
+                              }}>
+                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                                  <Text style={{ fontWeight: 'bold' }}>Quick Tip: </Text>
+                                  {(() => {
+                                    // Simple logic for tip
+                                    const mP = buckets.Morning.cals / (totalRangeCals || 1);
+                                    const eP = buckets.Evening.cals / (totalRangeCals || 1);
+
+                                    if (totalRangeCals === 0) return "Log more meals to see your timing patterns.";
+                                    if (eP > 0.5) return "Heavy evening eating can impact sleep quality. Try moving some calories to lunch.";
+                                    if (mP < 0.15) return "Starting the day with a small breakfast can help stabilize energy levels.";
+                                    return "Your meal timing is well balanced across the day.";
+                                  })()}
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })()}
+                      </View>
+
+                      {/* Sugar Load Analysis Card */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 24 }]}>
+                        <View style={{ marginBottom: 20 }}>
+                          <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
+                            Sugar Load
+                          </Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                            Natural vs. Added Sugars (Daily Avg)
+                          </Text>
+                        </View>
+
+                        {(() => {
+                          // 1. Calculate Sugar Averages
+                          let totalSugar = 0;
+                          let addedSugar = 0;
+                          let daysWithData = new Set<string>();
+
+                          const now = new Date();
                           const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
                           const cutoff = subDays(now, rangeDays);
 
@@ -1492,90 +1626,97 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             const d = new Date(meal.timestamp);
                             if (d < cutoff) return;
 
-                            const h = d.getHours();
-                            let bucket: keyof typeof buckets = 'Evening';
-                            if (h >= 4 && h < 12) bucket = 'Morning';
-                            else if (h >= 12 && h < 17) bucket = 'Afternoon';
-
+                            daysWithData.add(d.toISOString().split('T')[0]);
                             meal.foods.forEach(f => {
-                              buckets[bucket].p += f.protein || 0;
-                              buckets[bucket].c += f.carbs || 0;
-                              buckets[bucket].f += f.fat || 0;
-
-                              globalTotalCarbs += f.carbs || 0;
-                              if (bucket === 'Evening') eveningCarbs += f.carbs || 0;
+                              totalSugar += (f.sugar || 0);
+                              addedSugar += (f.added_sugars || 0);
                             });
-                            buckets[bucket].count++;
                           });
 
-                          const maxVal = Math.max(
-                            ...Object.values(buckets).map(b => b.p + b.c + b.f)
-                          ) || 1; // Avoid div/0
+                          const count = Math.max(1, daysWithData.size);
+                          const avgTotal = Math.round(totalSugar / count);
+                          const avgAdded = Math.round(addedSugar / count);
+                          const avgNatural = Math.max(0, avgTotal - avgAdded);
 
-                          const barHeight = 120;
-                          const barWidth = 40;
-                          const spacing = 40;
+                          // Recommended limits (e.g. AHA says ~36g for men, ~25g for women. Let's pick 50g as a general upper bound context)
+                          const dailyLimit = 50;
+                          const maxBar = Math.max(avgTotal, dailyLimit * 1.2);
+
+                          const widthAdded = (avgAdded / maxBar) * 100;
+                          const widthNatural = (avgNatural / maxBar) * 100;
+                          const limitPos = (dailyLimit / maxBar) * 100;
 
                           return (
                             <View>
-                              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', height: barHeight + 30, gap: spacing }}>
-                                {(['Morning', 'Afternoon', 'Evening'] as const).map(period => {
-                                  const b = buckets[period];
-                                  const total = b.p + b.c + b.f;
-                                  if (total === 0) return (
-                                    <View key={period} style={{ alignItems: 'center', width: barWidth }}>
-                                      <View style={{ height: 2, width: '100%', backgroundColor: theme.colors.border }} />
-                                      <Text style={{ marginTop: 8, fontSize: 11, color: theme.colors.textSecondary }}>{period}</Text>
-                                    </View>
-                                  );
-
-                                  const hP = (b.p / maxVal) * barHeight;
-                                  const hC = (b.c / maxVal) * barHeight;
-                                  const hF = (b.f / maxVal) * barHeight;
-
-                                  return (
-                                    <View key={period} style={{ alignItems: 'center', width: barWidth }}>
-                                      {/* Stacked Bar */}
-                                      <View style={{ width: '100%', borderRadius: 8, overflow: 'hidden', backgroundColor: theme.colors.input }}>
-                                        {/* Fat (Top) */}
-                                        <View style={{ height: hF, backgroundColor: '#FEF08A' }} />
-                                        {/* Carbs (Middle) */}
-                                        <View style={{ height: hC, backgroundColor: '#BFDBFE' }} />
-                                        {/* Protein (Bottom) */}
-                                        <View style={{ height: hP, backgroundColor: '#BBF7D0' }} />
-                                      </View>
-                                      <Text style={{ marginTop: 8, fontSize: 11, color: theme.colors.textSecondary }}>{period}</Text>
-                                    </View>
-                                  )
-                                })}
-                              </View>
-
-                              {/* Legend */}
-                              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 12 }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#BBF7D0' }} />
-                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Protein</Text>
+                              {/* Legend / Stats Row */}
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
+                                <View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FB7185' }} />
+                                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Added</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgAdded}g</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#BFDBFE' }} />
-                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Carbs</Text>
+
+                                <View style={{ height: '100%', width: 1, backgroundColor: theme.colors.border }} />
+
+                                <View>
+                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
+                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ADE80' }} />
+                                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Natural</Text>
+                                  </View>
+                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgNatural}g</Text>
                                 </View>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FEF08A' }} />
-                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Fat</Text>
+
+                                <View style={{ height: '100%', width: 1, backgroundColor: theme.colors.border }} />
+
+                                <View>
+                                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>Total</Text>
+                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgTotal}g</Text>
                                 </View>
                               </View>
 
-                              {/* Generated Insight */}
-                              <View style={{ marginTop: 20, padding: 12, backgroundColor: theme.colors.input, borderRadius: 12 }}>
-                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
-                                  <Text style={{ fontWeight: 'bold' }}>Insight: </Text>
-                                  {globalTotalCarbs > 0 && (eveningCarbs / globalTotalCarbs) > 0.4
-                                    ? `You consume ${Math.round((eveningCarbs / globalTotalCarbs) * 100)}% of your carbs in the evening. Try shifting some to lunch for better energy.`
-                                    : "Your meal distribution is well-balanced across the day."
-                                  }
-                                </Text>
+                              {/* The Bar Chart */}
+                              <View style={{ marginBottom: 8 }}>
+                                <View style={{ height: 24, width: '100%', backgroundColor: theme.colors.input, borderRadius: 12, flexDirection: 'row', overflow: 'hidden', position: 'relative' }}>
+                                  {/* Added Sugar Segment */}
+                                  <View style={{ width: `${widthAdded}%`, height: '100%', backgroundColor: '#FB7185' }} />
+                                  {/* Natural Sugar Segment */}
+                                  <View style={{ width: `${widthNatural}%`, height: '100%', backgroundColor: '#4ADE80' }} />
+
+                                  {/* Limit Line */}
+                                  <View style={{ position: 'absolute', left: `${limitPos}%`, top: 0, bottom: 0, width: 2, backgroundColor: theme.colors.textPrimary, zIndex: 10 }} />
+                                </View>
+                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
+                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>0g</Text>
+                                  <Text style={{ fontSize: 10, color: theme.colors.textPrimary, fontWeight: '600', transform: [{ translateX: 10 }] }}>Limit ({dailyLimit}g)</Text>
+                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{(maxBar).toFixed(0)}g+</Text>
+                                </View>
                               </View>
+
+                              {/* AI Insight Box */}
+                              <View style={{
+                                marginTop: 16,
+                                padding: 12,
+                                backgroundColor: theme.colors.input,
+                                borderRadius: 12,
+                                borderLeftWidth: 4,
+                                borderLeftColor: avgAdded > dailyLimit ? '#FB7185' : '#4ADE80'
+                              }}>
+                                <View style={{ flexDirection: 'row', gap: 8 }}>
+                                  <Feather name="activity" size={16} color={avgAdded > dailyLimit ? '#FB7185' : '#4ADE80'} style={{ marginTop: 2 }} />
+                                  <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20, flex: 1 }}>
+                                    <Text style={{ fontWeight: 'bold' }}>Coach Insight: </Text>
+                                    {(() => {
+                                      if (avgTotal === 0) return "Log your food to see your sugar breakdown.";
+                                      if (avgAdded > dailyLimit) return `Your added sugar average (${avgAdded}g) is high. Watch out for sugary drinks and processed snacks.`;
+                                      if (avgAdded > 25) return "You're doing okay, but try swapping one sweet treat for fruit to lower added sugar.";
+                                      return "Great job keeping added consumption low! Natural sugars from fruit are fueling you well.";
+                                    })()}
+                                  </Text>
+                                </View>
+                              </View>
+
                             </View>
                           );
                         })()}

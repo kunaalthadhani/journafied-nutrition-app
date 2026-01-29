@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, InteractionManager } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, InteractionManager, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
@@ -208,30 +208,49 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                 )}
               </View>
 
-              {/* Food List */}
-              <View style={styles.foodList}>
-                {meal.foods.map((food, idx) => (
-                  <TouchableOpacity
-                    key={`${food.id}-${idx}`}
-                    style={[
-                      styles.foodItem,
-                      idx < meal.foods.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
-                    ]}
-                    onPress={() => handleFoodPress(meal.id, food)}
-                  >
-                    <View style={styles.foodInfo}>
-                      <Text style={[styles.foodName, { color: theme.colors.textPrimary }]}>
-                        {food.name}
-                        <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
-                      </Text>
-                      <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
-                        {food.calories} kcal · P:{food.protein} C:{food.carbs} F:{food.fat}
-                      </Text>
+              {/* Food List or Loading State */}
+              {meal.isLoading ? (
+                <View style={{ padding: 16, gap: 12 }}>
+                  {/* Skeleton Item 1 */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, opacity: 0.6 }}>
+                    <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: theme.colors.border }} />
+                    <View style={{ gap: 6, flex: 1 }}>
+                      <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: theme.colors.border }} />
+                      <View style={{ width: '40%', height: 10, borderRadius: 5, backgroundColor: theme.colors.border }} />
                     </View>
-                    <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
-                  </TouchableOpacity>
-                ))}
-              </View>
+                  </View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={theme.colors.primary} />
+                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontStyle: 'italic' }}>
+                      AI is parsing your meal...
+                    </Text>
+                  </View>
+                </View>
+              ) : (
+                <View style={styles.foodList}>
+                  {meal.foods.map((food, idx) => (
+                    <TouchableOpacity
+                      key={`${food.id}-${idx}`}
+                      style={[
+                        styles.foodItem,
+                        idx < meal.foods.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                      ]}
+                      onPress={() => handleFoodPress(meal.id, food)}
+                    >
+                      <View style={styles.foodInfo}>
+                        <Text style={[styles.foodName, { color: theme.colors.textPrimary }]}>
+                          {food.name}
+                          <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
+                        </Text>
+                        <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
+                          {food.calories} kcal · P:{food.protein} C:{food.carbs} F:{food.fat}
+                        </Text>
+                      </View>
+                      <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
             </View>
           );
         })}

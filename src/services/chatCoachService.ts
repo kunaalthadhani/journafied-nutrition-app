@@ -52,6 +52,17 @@ export interface ChatCoachContext {
     };
     topFoods: string[]; // e.g. ["Chicken", "Rice", "Pizza"]
     dataQuality: 'sufficient' | 'insufficient';
+    // NEW: Real-time Context
+    todaysLog: {
+        totalCalories: number;
+        meals: { name: string; calories: number; time: string }[];
+    };
+    remainingMacros: {
+        calories: number;
+        protein: number;
+        carbs: number;
+        fat: number;
+    };
 }
 
 export const COACH_SYSTEM_PROMPT = `
@@ -63,8 +74,16 @@ You are the AI Nutrition Coach for the "Journafied" app.
 - **Expertise:** Deep knowledge of metabolism and macros, delivered with maximum efficiency.
 
 ### METADATA CONTEXT
-You will be provided with a JSON "Context" containing the user's stats, recent averages, and top foods.
-- **USE THIS DATA.** Look at \`recentPerformance\` and \`trends\` and give a specific, data-backed answer (e.g., "Calories are on track (1800 avg), but protein is low (80g). Increase protein to support maintenance.")
+You will be provided with a JSON "Context" containing the user's stats, recent averages, top foods, and today's logs.
+- **Current Status:** Look at \`todaysLog\` to see what they have ALREADY eaten.
+- **Goal Gap:** Look at \`remainingMacros\` to see exactly what is left.
+- **The Menu:** \`topFoods\` is the list of foods the user actually eats.
+
+### STRICT MENU-MATCHING PROTOCOL
+**CRITICAL RULE:** When suggesting specific food items, you must ONLY suggest foods found in the \`topFoods\` list.
+- **FORBIDDEN:** Do NOT suggest generic "healthy foods" like Salmon, Quinoa, Kale, or Greek Yogurt unless they appear in \`topFoods\`.
+- **Reasoning:** We do not want to suggest foods the user hates or doesn't buy.
+- **Fallback:** If \`topFoods\` is empty or doesn't have a good fit, do NOT guess. Instead, say: "I don't know your food preferences yet. Log more meals so I can suggest what YOU like." or suggest a macro composition (e.g., "You need 30g of protein") without naming a specific food.
 
 ### SAFETY & SECURITY PROTOCOLS (STRICT)
 1.  **Topic Lockdown:** Nutrition and Fitness ONLY. If off-topic, reply: "I only discuss nutrition."
@@ -168,11 +187,40 @@ export const chatCoachService = {
                 },
                 trends: { weightTrend: 'flat', consistencyScore: 0, streakDays: 0 },
                 topFoods: [],
-                dataQuality: 'insufficient'
+                dataQuality: 'insufficient',
+                todaysLog: { totalCalories: 0, meals: [] },
+                remainingMacros: { calories: 0, protein: 0, carbs: 0, fat: 0 }
             };
         }
 
-        // 4. Construct the full robust context
+        // 4. Fetch TODAY'S Logs for Hyper-Personalization
+        const todayKey = new Date().toISOString().split('T')[0];
+        const todaysMeals = await dataStorage.getDailyLog(todayKey); // Assuming getDailyLog is public or specific method exists
+
+        let todayCals = 0;
+        let todayP = 0;
+        let todayC = 0;
+        let todayF = 0;
+
+        const mealSummaries = todaysMeals.map(m => {
+            const cals = m.foods.reduce((acc, f) => acc + (f.calories || 0), 0);
+            const p = m.foods.reduce((acc, f) => acc + (f.protein || 0), 0);
+            const c = m.foods.reduce((acc, f) => acc + (f.carbs || 0), 0);
+            const f = m.foods.reduce((acc, f) => acc + (f.fat || 0), 0);
+
+            todayCals += cals;
+            todayP += p;
+            todayC += c;
+            todayF += f;
+
+            return {
+                name: m.summary || m.prompt || "Meal",
+                calories: Math.round(cals),
+                time: new Date(m.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+            };
+        });
+
+        // 5. Construct the full robust context
         return {
             userProfile: {
                 weight: snapshot.weightTrend.current || 0,
@@ -208,8 +256,18 @@ export const chatCoachService = {
                 consistencyScore: snapshot.consistencyScore,
                 streakDays: snapshot.currentStreak
             },
-            topFoods: snapshot.commonFoods.slice(0, 50).map(f => f.name), // Top 50 for variety
-            dataQuality: 'sufficient'
+            topFoods: snapshot.commonFoods.slice(0, 50).map(f => f.name),
+            dataQuality: 'sufficient',
+            todaysLog: {
+                totalCalories: Math.round(todayCals),
+                meals: mealSummaries
+            },
+            remainingMacros: {
+                calories: Math.max(0, snapshot.userGoals.calories - todayCals),
+                protein: Math.max(0, snapshot.userGoals.protein - todayP),
+                carbs: Math.max(0, snapshot.userGoals.carbs - todayC),
+                fat: Math.max(0, snapshot.userGoals.fat - todayF)
+            }
         };
     },
 

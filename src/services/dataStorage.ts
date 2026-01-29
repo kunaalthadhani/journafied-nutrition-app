@@ -17,6 +17,34 @@ export interface MealEntry {
   updatedAt?: string;
   date?: string; // Optional if we store it by date key
   userId?: string;
+  isLoading?: boolean;
+  loadingState?: 'analyzing' | 'done' | 'failed';
+}
+
+// Premium: Detected Pattern
+export interface DetectedPattern {
+  id: string;
+  type: 'correlation' | 'trigger' | 'outcome';
+  title: string; // e.g., "Low-protein breakfasts lead to evening overeating"
+  description: string; // Free user sees this
+  fix?: string; // Premium-only actionable advice
+  confidence: number; // 0-100, only show if >70
+  dataPoints: number; // How many days/meals support this pattern
+  detectedAt: string; // ISO timestamp
+  dismissed?: boolean;
+}
+
+// Premium: Weekly Action Plan
+export interface WeeklyActionPlan {
+  id: string;
+  weekStartDate: string; // ISO date for Monday
+  actions: {
+    id: string;
+    description: string; // e.g., "Add 20g protein to breakfast 3x this week"
+    rationale: string; // Why this action
+    completed?: boolean;
+  }[];
+  generatedAt: string;
 }
 
 const STORAGE_KEYS = {
@@ -41,6 +69,9 @@ const STORAGE_KEYS = {
   ADJUSTMENT_HISTORY: '@trackkal:adjustmentHistory',
   ANALYTICS_FEEDBACK: '@trackkal:analyticsFeedback',
   SUMMARIES: '@trackkal:summaries',
+  // Premium
+  DETECTED_PATTERNS: '@trackkal:detectedPatterns',
+  WEEKLY_ACTION_PLAN: '@trackkal:weeklyActionPlan',
   // Helper to generate daily keys
   dailyLog: (date: string) => `@trackkal:log:${date}`,
   USER_METRICS_SNAPSHOT: '@trackkal:userMetricsSnapshot',
@@ -2976,6 +3007,54 @@ export const dataStorage = {
     // 4. Force Snapshot Update
     await this.generateUserMetricsSnapshot();
     console.log('Debug data injected.');
+  },
+
+  // Premium: Detected Patterns
+  async saveDetectedPattern(pattern: DetectedPattern): Promise<void> {
+    const existing = await this.getDetectedPatterns();
+    const updated = [...existing.filter(p => p.id !== pattern.id), pattern];
+    await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+  },
+
+  async getDetectedPatterns(): Promise<DetectedPattern[]> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.DETECTED_PATTERNS);
+    return data ? JSON.parse(data) : [];
+  },
+
+  async dismissPattern(patternId: string): Promise<void> {
+    const patterns = await this.getDetectedPatterns();
+    const updated = patterns.map(p => p.id === patternId ? { ...p, dismissed: true } : p);
+    await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+  },
+
+  // Premium: Weekly Action Plan
+  async saveWeeklyActionPlan(plan: WeeklyActionPlan): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.WEEKLY_ACTION_PLAN, JSON.stringify(plan));
+  },
+
+  async getCurrentWeekPlan(): Promise<WeeklyActionPlan | null> {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.WEEKLY_ACTION_PLAN);
+    if (!data) return null;
+
+    const plan: WeeklyActionPlan = JSON.parse(data);
+    // Check if plan is still current week
+    const now = new Date();
+    const planDate = new Date(plan.weekStartDate);
+    const daysSince = Math.floor((now.getTime() - planDate.getTime()) / (1000 * 60 * 60 * 24));
+
+    // Return null if plan is older than 7 days
+    return daysSince < 7 ? plan : null;
+  },
+
+  async markActionComplete(actionId: string): Promise<void> {
+    const plan = await this.getCurrentWeekPlan();
+    if (!plan) return;
+
+    const updated = {
+      ...plan,
+      actions: plan.actions.map(a => a.id === actionId ? { ...a, completed: true } : a)
+    };
+    await this.saveWeeklyActionPlan(updated);
   },
 };
 

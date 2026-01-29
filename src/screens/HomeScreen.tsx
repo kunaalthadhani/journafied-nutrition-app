@@ -13,6 +13,7 @@ import {
   Alert,
   KeyboardAvoidingView,
   BackHandler,
+  Keyboard,
   Modal,
 } from 'react-native';
 import { BlurView } from 'expo-blur';
@@ -67,6 +68,9 @@ import { SmartSuggestBanner } from '../components/CoachCard';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
+import { PatternDetectionCard } from '../components/PatternDetectionCard';
+import { patternDetectionService } from '../services/patternDetectionService';
+import { DetectedPattern } from '../services/dataStorage';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
@@ -145,6 +149,9 @@ export const HomeScreen: React.FC = () => {
   const [walkthroughHideOffer, setWalkthroughHideOffer] = useState(false);
   const [accountInitialMode, setAccountInitialMode] = useState<'signin' | 'signup'>('signin');
   const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
+
+  // Premium: Pattern Detection
+  const [detectedPatterns, setDetectedPatterns] = useState<DetectedPattern[]>([]);
 
 
   // Streak Freeze State
@@ -729,6 +736,22 @@ export const HomeScreen: React.FC = () => {
       const prefs = await dataStorage.loadPreferences();
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
 
+      // Load Pattern Detection (Premium Feature)
+      const patterns = await patternDetectionService.getActivePatterns();
+      setDetectedPatterns(patterns);
+
+      // Trigger background pattern detection if needed (non-blocking)
+      if (isPremium) {
+        const shouldRun = await patternDetectionService.shouldRunDetection();
+        if (shouldRun) {
+          patternDetectionService.analyzePatterns().then(newPatterns => {
+            if (newPatterns.length > 0) {
+              setDetectedPatterns(newPatterns);
+            }
+          }).catch(err => console.error('Pattern detection failed:', err));
+        }
+      }
+
     } catch (e) {
       console.error("Failed to load home screen data", e);
     }
@@ -942,6 +965,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleInputSubmit = async (text: string) => {
+    Keyboard.dismiss(); // Dismiss keyboard immediately
     if (__DEV__) console.log('Input submitted:', text);
 
     const trimmed = text.trim();
@@ -956,11 +980,6 @@ export const HomeScreen: React.FC = () => {
           { text: 'Cancel', style: 'cancel' },
           {
             text: 'View Offer', onPress: () => {
-              // Setup to show offer. Since Walkthrough might be dismissed, 
-              // maybe open Subscription or FreeEntries?
-              // User said "Claim 10 free days".
-              // We can open Subscription screen or just trigger the logic?
-              // Simplest: Open Subscription screen which should now show the offer or upgrade.
               handleOpenSubscription();
             }
           },
@@ -969,18 +988,49 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
-    setIsAnalyzingFood(true);
+    // --- OPTIMISTIC UI START ---
+    // 1. Create Pending Meal
+    const pendingId = generateId();
+    const createdAt = Date.now();
+    const pendingMeal: Meal = {
+      id: pendingId,
+      prompt: trimmed,
+      summary: "Parsing...",
+      foods: [], // Empty initially
+      timestamp: createdAt,
+      updatedAt: new Date().toISOString(),
+      isLoading: true, // Show Skeleton
+      loadingState: 'analyzing'
+    };
+
+    // 2. Add to State Immediately
+    setMealsByDate((prev) => ({
+      ...prev,
+      [currentDateKey]: [...(prev[currentDateKey] || []), pendingMeal],
+    }));
+
+    // Scroll to bottom? Or handled by list.
+
+    // NO blocking overlay
+    // setIsAnalyzingFood(true); 
 
     try {
       // Use ChatGPT for real-time food analysis
       let parsedFoods: ParsedFood[] = [];
       let summary: string | undefined;
+
       try {
         const analysisResult = await analyzeFoodWithChatGPT(trimmed);
+
+        // Handle Clarification
         if (analysisResult.clarificationQuestion) {
-          setIsAnalyzingFood(false);
-          // Put text back and ask for clarification
-          setTranscribedText(trimmed);
+          // Remove pending meal since we are aborting to ask question
+          setMealsByDate(prev => ({
+            ...prev,
+            [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
+          }));
+
+          setTranscribedText(trimmed); // Put text back
           setShouldFocusInput(true);
           Alert.alert(
             'Clarification Needed',
@@ -989,16 +1039,20 @@ export const HomeScreen: React.FC = () => {
           );
           return;
         }
+
         parsedFoods = analysisResult.foods;
         summary = analysisResult.summary;
 
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
+          setMealsByDate(prev => ({
+            ...prev,
+            [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
+          }));
           Alert.alert(
             'Food Analysis Not Configured',
             'Food analysis is not configured. Please contact support.'
           );
-          setIsAnalyzingFood(false);
           return;
         }
         throw apiError; // Re-throw other errors
@@ -1010,50 +1064,42 @@ export const HomeScreen: React.FC = () => {
       }
 
       if (parsedFoods.length > 0) {
-        // Create a new meal entry with the prompt and foods
-        const createdAt = Date.now();
-        const newMeal: Meal = {
-          id: generateId(),
-          prompt: trimmed,
-          summary: summary, // Add summary
+        // SUCCESS: Update Pending Meal
+        const finalizedMeal: Meal = {
+          ...pendingMeal,
+          summary: summary || pendingMeal.summary,
           foods: parsedFoods,
-          timestamp: createdAt,
-          updatedAt: new Date().toISOString(),
+          isLoading: false,
+          loadingState: 'done'
         };
 
-        // Add meal to the current selected date
-        setMealsByDate((prev) => ({
-          ...prev,
-          [currentDateKey]: [...(prev[currentDateKey] || []), newMeal],
-        }));
+        setMealsByDate((prev) => {
+          const currentList = prev[currentDateKey] || [];
+          return {
+            ...prev,
+            [currentDateKey]: currentList.map(m => m.id === pendingId ? finalizedMeal : m),
+          };
+        });
+
         // Count this new prompt as an entry
         await incrementEntryCount();
-        // Track meal logged
         await analyticsService.trackMealLogged(selectedDate);
         if (__DEV__) console.log('ChatGPT parsed foods:', parsedFoods);
 
-        // Check referral progress after meal is successfully added
+        // Check referral progress
         const accountInfo = await dataStorage.loadAccountInfo();
         if (accountInfo?.email) {
           const referralResult = await referralService.processMealLoggingProgress(accountInfo.email);
-
           if (referralResult.rewardsAwarded && referralResult.entriesAwarded) {
-            // Show success message
+            // ... notification code ...
             Alert.alert(
               '🎉 Referral Reward Earned!',
-              referralResult.message ||
-              `You've earned +${referralResult.entriesAwarded} free entries!`,
+              referralResult.message || `You've earned +${referralResult.entriesAwarded} free entries!`,
               [{ text: 'Awesome!', style: 'default' }]
             );
-
-            // Reload total earned entries from referrals (this affects the limit, not the count)
             const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
             setTotalEarnedEntries(earned);
-
-            // Note: We don't reload entryCount here because it was just incremented above
-            // The entry count is correct, and the bonus entries increase the limit, not the count
           }
-          // Note: Progress messages are optional and can be noisy, so we're not showing them
         }
         return;
       }
@@ -1063,18 +1109,17 @@ export const HomeScreen: React.FC = () => {
       try {
         parsedExercises = await analyzeExerciseWithChatGPT(trimmed);
       } catch (apiError: any) {
-        if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
-          Alert.alert(
-            'Exercise Analysis Not Configured',
-            'Exercise analysis is not configured. Please contact support.'
-          );
-          setIsAnalyzingFood(false);
-          return;
-        }
+        // Handle error similarly...
         throw apiError;
       }
 
       if (parsedExercises.length > 0) {
+        // IT WAS EXERCISE: Remove Pending Meal, Add Exercise
+        setMealsByDate(prev => ({
+          ...prev,
+          [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
+        }));
+
         const newExerciseEntry: ExerciseEntry = {
           id: generateId(),
           prompt: trimmed,
@@ -1092,7 +1137,12 @@ export const HomeScreen: React.FC = () => {
         return;
       }
 
+      // NOTHING DETECTED
       if (__DEV__) console.log('No foods or exercises recognized:', trimmed);
+      setMealsByDate(prev => ({
+        ...prev,
+        [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
+      }));
       Alert.alert(
         'No Entry Detected',
         'We couldn’t recognize any foods or exercises. Try adding more detail or separate your entries.',
@@ -1100,14 +1150,18 @@ export const HomeScreen: React.FC = () => {
       );
     } catch (error) {
       if (__DEV__) console.error('Error processing food input:', error);
+      // ERROR: Remove Pending Meal
+      setMealsByDate(prev => ({
+        ...prev,
+        [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
+      }));
       Alert.alert(
         'Error',
         'Something went wrong while processing your log. Please try again.',
         [{ text: 'OK' }]
       );
-    } finally {
-      setIsAnalyzingFood(false);
     }
+    // Finally removed since we handled cleanup in individual paths
   };
 
   const handleRemoveFood = (foodId: string) => {
@@ -2005,6 +2059,61 @@ export const HomeScreen: React.FC = () => {
           </View>
         ) : null}
 
+        {/* 🧪 TEMPORARY: Demo Pattern Test Button (Remove in production) */}
+        {__DEV__ && (
+          <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 8 }}>
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              <TouchableOpacity
+                onPress={async () => {
+                  await patternDetectionService.injectDemoPattern();
+                  const patterns = await patternDetectionService.getActivePatterns();
+                  setDetectedPatterns(patterns);
+                  Alert.alert('✅ Test Pattern Injected!', 'Scroll down to see the pattern card.');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.primary + '20',
+                  borderWidth: 1,
+                  borderColor: theme.colors.primary,
+                  borderRadius: 8,
+                  padding: 10,
+                  alignItems: 'center',
+                  borderStyle: 'dashed'
+                }}
+              >
+                <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: '600' }}>
+                  🧪 Inject Pattern
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                onPress={async () => {
+                  const patterns = await dataStorage.getDetectedPatterns();
+                  for (const p of patterns) {
+                    await dataStorage.dismissPattern(p.id);
+                  }
+                  setDetectedPatterns([]);
+                  Alert.alert('🗑️ Cleared!', 'All test patterns removed.');
+                }}
+                style={{
+                  flex: 1,
+                  backgroundColor: theme.colors.error + '20',
+                  borderWidth: 1,
+                  borderColor: theme.colors.error,
+                  borderRadius: 8,
+                  padding: 10,
+                  alignItems: 'center',
+                  borderStyle: 'dashed'
+                }}
+              >
+                <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600' }}>
+                  🗑️ Clear All
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+
         {/* Date Selector (horizontal scroll/pan within the bar only) */}
         <DateSelector
           selectedDate={selectedDate}
@@ -2043,6 +2152,22 @@ export const HomeScreen: React.FC = () => {
                 }}
               />
             )}
+
+            {/* Pattern Detection Cards */}
+            {isSameDay(selectedDate, new Date()) && detectedPatterns.length > 0 && detectedPatterns.slice(0, 1).map(pattern => (
+              <View key={pattern.id} style={{ paddingHorizontal: 16, marginBottom: 16 }}>
+                <PatternDetectionCard
+                  pattern={pattern}
+                  isPremium={isPremium}
+                  onUnlockPress={() => setShowSubscription(true)}
+                  onDismiss={async () => {
+                    await dataStorage.dismissPattern(pattern.id);
+                    const updated = detectedPatterns.filter(p => p.id !== pattern.id);
+                    setDetectedPatterns(updated);
+                  }}
+                />
+              </View>
+            ))}
 
             {/* Food Log Section */}
             {showFirstLogMessage && (

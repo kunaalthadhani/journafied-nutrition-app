@@ -181,6 +181,10 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
    - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, and key Vitamins (A, C, D, B12), Calcium, and Iron. Use standard nutritional data.
+   - **CRITICAL SUGAR BREAKDOWN:**
+     - For items high in sugar (candy, soda, desserts, processed snacks), you **MUST** estimate \`added_sugars\`. 
+     - Do NOT leave \`added_sugars\` as 0 if the item is clearly a sweet treat (e.g. invalid: Candy Bar with 20g Sugar but 0g Added Sugar).
+     - If the item is "Sugar Free" or "Keto" but sweet, you **MUST** estimate \`sugar_alcohols\`.
 
 ### OUTPUT INSTRUCTIONS:
 Return a JSON Object.
@@ -209,6 +213,8 @@ B) If you have enough info (or are making safe assumptions):
             "fat": Number,
             "dietary_fiber": Number,
             "sugar": Number,
+            "added_sugars": Number,
+            "sugar_alcohols": Number,
             "saturated_fat": Number,
             "sodium_mg": Number,
             "potassium_mg": Number,
@@ -289,6 +295,8 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
         fat: item.nutrition.fat,
         dietary_fiber: item.nutrition.dietary_fiber,
         sugar: item.nutrition.sugar,
+        added_sugars: item.nutrition.added_sugars,
+        sugar_alcohols: item.nutrition.sugar_alcohols,
         saturated_fat: item.nutrition.saturated_fat,
         sodium_mg: item.nutrition.sodium_mg,
         potassium_mg: item.nutrition.potassium_mg,
@@ -649,12 +657,25 @@ You will receive:
 2.  **Current Time:** (Lunch, Dinner, etc).
 3.  **Recent Logged Meals:** What they just ate today.
 4.  **Available Foods:** A list of foods the user has logged in the past 30 days.
+5.  **Special Mode Flag:** If "force_hungry" is true, the user has hit their calorie goal but is still hungry.
 
 ### Strict Rules
 1.  **Hyper-Personalization:** You MUST suggest a meal composed of items found in the **Available Foods** list. Do not suggest generic foods (e.g., "Salmon") if it is not in their history, unless they have absolutely zero history.
 2.  **Macro-Matching:** Select the meal from their history that best fits their remaining calorie/protein gap.
-3.  **Variety:** Do not suggest exactly what they just ate in their last meal today.
-4.  **Quantity:** Specify exact portions (e.g., "Repeat your Greek Yogurt Bowl but add...", "Have your usual Chicken Wrap").
+3.  **Optimization Hierarchy:**
+      1. **Protein:** Prioritize hitting the protein goal first.
+      2. **Fiber:** Then prioritize high fiber options.
+      3. **Calorie Control:** Ensure it fits within the remaining calories.
+4.  **Variety:** Do not suggest exactly what they just ate in their last meal today.
+5.  **Quantity:** Specify exact portions (e.g., "Repeat your Greek Yogurt Bowl but add...", "Have your usual Chicken Wrap").
+
+### Special Mode: FORCE_HUNGRY
+If "force_hungry" is true:
+- **OVERRIDE GOAL:** Ignore the remaining macros. The user has hit their limit but is genuinely hungry.
+- **NEW PRIORITY:** Find the meal/snack from their history with:
+  1. **HIGHEST SATIETY** (High Volume + High Fiber + High Protein)
+  2. **LOWEST CALORIES**
+- **Reasoning Focus:** Explain how this option will fill them up for the minimal calorie cost (e.g., "This Greek Salad is massive, packed with fiber, and only 150 kcal").
 
 ### Logic
 - **Morning:** Suggest their most common breakfast item that fits.
@@ -666,7 +687,8 @@ You will receive:
 Return a strictly valid JSON object:
 {
   "display_text": "Try a 200g Chicken Salad to hit your protein goal!",
-  "loggable_text": "200g Grilled Chicken Breast, 100g Lettuce, 20g Dressing"
+  "loggable_text": "200g Grilled Chicken Breast, 100g Lettuce, 20g Dressing",
+  "reasoning": "This choice packs 30g of protein and 8g of fiber, perfectly closing your gap for the day while keeping calories low."
 }
 `;
 
@@ -678,9 +700,10 @@ const DAILY_LIMIT = 2;
 interface SmartSuggestionResult {
   displayText: string;
   loggableText: string;
+  reasoning?: string;
 }
 
-export async function generateSmartSuggestion(context: any, forceNew: boolean = false): Promise<SmartSuggestionResult> {
+export async function generateSmartSuggestion(context: any, forceNew: boolean = false, options?: { forceHungry?: boolean }): Promise<SmartSuggestionResult> {
   const fallback = { displayText: "Upgrade to Premium for Smart Suggestions!", loggableText: "" };
 
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
@@ -711,11 +734,12 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
       return usage.suggestion;
     }
 
-    if (usage.count >= DAILY_LIMIT) {
-      return { displayText: "Daily limit reached. Check back tomorrow!", loggableText: "" };
-    }
-
     // 2. call API with Cheaper Model
+    const enrichedContext = {
+      ...context,
+      force_hungry: options?.forceHungry || false
+    };
+
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
       headers: {
@@ -726,7 +750,7 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
         model: 'gpt-4o-mini',
         messages: [
           { role: 'system', content: SMART_SUGGEST_PROMPT },
-          { role: 'user', content: JSON.stringify(context) }
+          { role: 'user', content: JSON.stringify(enrichedContext) }
         ],
         temperature: 0.7,
         response_format: { type: "json_object" }
@@ -748,7 +772,8 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
         const parsed = JSON.parse(content);
         result = {
           displayText: parsed.display_text || content,
-          loggableText: parsed.loggable_text || content
+          loggableText: parsed.loggable_text || content,
+          reasoning: parsed.reasoning
         };
       } catch (e) {
         // Fallback if JSON parsing fails (unlikely with json_object mode but safe)
@@ -756,8 +781,7 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
       }
     }
 
-    // 3. Increment Limit and Save Cache
-    usage.count += 1;
+    // 3. Save Cache (No Limit Increment)
     usage.suggestion = result;
     await AsyncStorage.setItem(SMART_SUGGEST_LIMIT_KEY, JSON.stringify(usage));
 
