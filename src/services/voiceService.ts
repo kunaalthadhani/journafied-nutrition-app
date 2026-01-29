@@ -179,8 +179,8 @@ class VoiceService {
       // The file needs to be in a format that React Native's FormData understands
       formData.append('file', {
         uri: audioUri,
-        type: Platform.OS === 'ios' ? 'audio/m4a' : 'audio/mp4',
-        name: Platform.OS === 'ios' ? 'audio.m4a' : 'audio.mp4',
+        type: 'audio/m4a',
+        name: 'audio.m4a',
       } as any);
 
       formData.append('model', 'whisper-1');
@@ -190,7 +190,7 @@ class VoiceService {
       const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${config.OPENAI_API_KEY} `,
+          'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
           // Don't set Content-Type header - let fetch set it with boundary for multipart/form-data
         },
         body: formData,

@@ -227,7 +227,7 @@ B) If you have enough info (or are making safe assumptions):
 - Return ONLY valid JSON.
 `;
 
-export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
+export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
   // Validate API key
   if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
     throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
@@ -235,6 +235,11 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods
 
   try {
     if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
+
+    let finalPrompt = AGENTIC_ANALYSIS_PROMPT;
+    if (!allowClarification) {
+      finalPrompt += `\n\nCRITICAL OVERRIDE: failed to clarify. You MUST NOT return a "clarification_question". You MUST make reasonable assumptions for any missing details and return the nutritional JSON.`;
+    }
 
     const response = await fetch(config.API_ENDPOINTS.OPENAI, {
       method: 'POST',
@@ -245,7 +250,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods
       body: JSON.stringify({
         model: 'gpt-4o', // Strongly recommended for this logic depth
         messages: [
-          { role: 'system', content: AGENTIC_ANALYSIS_PROMPT },
+          { role: 'system', content: finalPrompt },
           { role: 'user', content: foodInput }
         ],
         temperature: 0.3,
@@ -260,7 +265,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string): Promise<{ foods
 
     const result = JSON.parse(content);
 
-    if (result.clarification_question) {
+    if (result.clarification_question && allowClarification) {
       return { foods: [], clarificationQuestion: result.clarification_question };
     }
 
@@ -578,7 +583,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
 
     // Step 2: Text Agent analyzes the description
     // using the centralized logic (Gatekeeper -> Chef -> Physicist)
-    const result = await analyzeFoodWithChatGPT(description);
+    const result = await analyzeFoodWithChatGPT(description, false);
 
     // If clarification is needed, we (unfortunately) can't ask the user in this flow yet without refactoring HomeScreen.
     // For now, we assume the Vision description was good enough. 

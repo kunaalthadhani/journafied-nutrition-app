@@ -124,6 +124,11 @@ export const authService = {
 
     // 3. Sign out (which effectively invalidates session)
     return supabase!.auth.signOut();
+  },
+
+  async updatePassword(password: string) {
+    ensureClient();
+    return supabase!.auth.updateUser({ password });
   }
 };
 

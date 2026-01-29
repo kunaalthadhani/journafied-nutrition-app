@@ -537,25 +537,25 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const cScore = Math.min(1.2, averageCarbs / targetCarbs);
     const fScore = Math.min(1.2, averageFat / targetFat);
 
-    // Check consistency (simple variance proxy)
-    // Lower variance = higher consistency score
-    const calorieVariance = graphData.reduce((acc, curr) => acc + Math.pow(curr.calories - (averageCalories || 0), 2), 0) / graphData.length;
-    const calorieStdDev = Math.sqrt(calorieVariance);
-    // arbitrary scaling: if stdDev is 0, score is 1. If stdDev is 500, score is ~0.
-    const consistScore = Math.max(0.2, 1 - (calorieStdDev / 1000));
+    // Calorie adherence score
+    const calScore = targetCalories ? Math.min(1.2, (averageCalories || 0) / targetCalories) : 0;
+
+    // We still calculate variance for internal logic if needed, but for the chart we use Calories
+    // const calorieVariance = graphData.reduce((acc, curr) => acc + Math.pow(curr.calories - (averageCalories || 0), 2), 0) / graphData.length;
+    // const consistScore = Math.max(0.2, 1 - (Math.sqrt(calorieVariance) / 1000));
 
     return [
       { label: 'Protein', value: pScore },
       { label: 'Carbs', value: cScore },
       { label: 'Fat', value: fScore },
-      { label: 'Consistency', value: consistScore },
+      { label: 'Calories', value: calScore },
     ];
-  }, [averageProtein, averageCarbs, averageFat, targetProtein, targetCarbs, targetFat, graphData]);
+  }, [averageProtein, averageCarbs, averageFat, averageCalories, targetProtein, targetCarbs, targetFat, targetCalories, graphData]);
 
   const renderRadarChart = () => {
-    const size = 200;
+    const size = 300;
     const center = size / 2;
-    const radius = (size - 40) / 2; // leave padding for labels
+    const radius = 90; // Fixed radius to ensure labels fit (center +/- ~110px range)
 
     if (radarData.length === 0) return null;
 
@@ -582,7 +582,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     });
 
     return (
-      <View style={{ alignItems: 'center', justifyContent: 'center', height: 240 }}>
+      <View style={{ alignItems: 'center', justifyContent: 'center', height: 320 }}>
         <Svg height={size} width={size}>
           {/* Webs */}
           {webs.map((pointsStr, i) => (
@@ -1334,62 +1334,260 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </Text>
                     </View>
                   ) : (
-                    <View>
+                    <View style={{ gap: 20 }}>
                       {/* Radar Chart Card */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card }]}>
-                        <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, fontSize: 16, marginBottom: 4 }]}>
-                          Nutrition Balance
-                        </Text>
-                        <Text style={{ textAlign: 'center', color: theme.colors.textSecondary, fontSize: 12, marginBottom: 20 }}>
-                          Goal Adherence (Target vs Actual)
-                        </Text>
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, paddingVertical: 24, alignItems: 'center' }]}>
+                        <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                          <View>
+                            <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
+                              Nutrition Balance
+                            </Text>
+                            <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                              Target vs. Actual
+                            </Text>
+                          </View>
+
+                          {/* Time Range Badge/Selector */}
+                          <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4 }}>
+                            {(['1W', '1M', '6M', '1Y'] as TimeRange[]).map((range) => (
+                              <TouchableOpacity
+                                key={range}
+                                onPress={() => handleTimeRangeChange(range)}
+                                style={{
+                                  paddingHorizontal: 8,
+                                  paddingVertical: 4,
+                                  borderRadius: 8,
+                                  backgroundColor: timeRange === range ? theme.colors.card : 'transparent',
+                                  shadowColor: timeRange === range ? '#000' : 'transparent',
+                                  shadowOpacity: timeRange === range ? 0.05 : 0,
+                                  shadowRadius: 2,
+                                }}
+                              >
+                                <Text style={{
+                                  fontSize: 11,
+                                  fontWeight: '600',
+                                  color: timeRange === range ? theme.colors.textPrimary : theme.colors.textSecondary
+                                }}>
+                                  {range}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </View>
+
                         {renderRadarChart()}
                       </View>
 
-                      {/* AI Insight Card */}
-                      <View style={{
-                        backgroundColor: 'rgba(139, 92, 246, 0.1)', // Violet tint
-                        borderRadius: 16,
-                        padding: 20,
-                        borderWidth: 1,
-                        borderColor: 'rgba(139, 92, 246, 0.2)',
-                        marginBottom: 16
-                      }}>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                          <Text style={{ fontSize: 20 }}>✨</Text>
-                          <Text style={{ color: '#8B5CF6', fontWeight: 'bold', fontSize: 16 }}>Smart Insights</Text>
+                      {/* New Visual Consistency Scorecard */}
+                      <View style={{ flexDirection: 'row', gap: 12 }}>
+                        {/* Score Card */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 20,
+                          padding: 16,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                        }}>
+                          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8, letterSpacing: 0.5 }}>
+                            CALORIES
+                          </Text>
+                          <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center', width: 80, height: 80 }}>
+                            <Svg height="80" width="80" viewBox="0 0 100 100">
+                              <Circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                stroke={theme.colors.input}
+                                strokeWidth="8"
+                                fill="transparent"
+                              />
+                              <Circle
+                                cx="50"
+                                cy="50"
+                                r="40"
+                                stroke={theme.colors.primary}
+                                strokeWidth="8"
+                                fill="transparent"
+                                strokeDasharray={`${2 * Math.PI * 40}`}
+                                strokeDashoffset={`${2 * Math.PI * 40 * (1 - Math.min(1, (radarData.find(d => d.label === 'Calories')?.value || 0)))}`}
+                                strokeLinecap="round"
+                                origin="50, 50"
+                                rotation="-90"
+                              />
+                            </Svg>
+                            <View style={{ position: 'absolute' }}>
+                              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>
+                                {Math.round((radarData.find(d => d.label === 'Calories')?.value || 0) * 100)}%
+                              </Text>
+                            </View>
+                          </View>
                         </View>
 
-                        {isGeneratingInsight ? (
-                          <Text style={{ color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your weekly trends...</Text>
-                        ) : (
-                          <Text style={{ color: theme.colors.textPrimary, lineHeight: 22, fontSize: 15 }}>
-                            {insightText || "Keep logging consistently to unlock personalized AI insights about your nutrition patterns."}
+                        {/* Status/Badge Card */}
+                        <View style={{
+                          flex: 1,
+                          backgroundColor: theme.colors.card,
+                          borderRadius: 20,
+                          padding: 16,
+                          justifyContent: 'center',
+                          borderWidth: 1,
+                          borderColor: theme.colors.border,
+                        }}>
+                          <View style={{ marginBottom: 12 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, letterSpacing: 0.5 }}>RATING</Text>
+                          </View>
+                          <Text style={{ fontSize: 22, fontWeight: 'bold', color: theme.colors.textPrimary, marginBottom: 4 }}>
+                            {(() => {
+                              const val = (radarData.find(d => d.label === 'Calories')?.value || 0) * 100;
+                              if (val >= 90 && val <= 110) return 'Perfect';
+                              if (val >= 80 && val <= 120) return 'Good';
+                              return 'Off Track';
+                            })()}
                           </Text>
-                        )}
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 16 }}>
+                            {(() => {
+                              const val = (radarData.find(d => d.label === 'Calories')?.value || 0) * 100;
+                              if (val >= 90 && val <= 110) return "You're hitting your calorie goals spot on!";
+                              if (val >= 80 && val <= 120) return "You're close to your calorie target. Keep it up.";
+                              return "Try to adjust your intake to meet your daily goals.";
+                            })()}
+                          </Text>
+                        </View>
                       </View>
 
-                      {/* Weekly Consistency */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 24 }]}>
-                        <View>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 14 }}>Consistency Score</Text>
-                          <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold', fontSize: 24, marginTop: 4 }}>
-                            {(radarData.find(d => d.label === 'Consistency')?.value || 0) * 100 > 80 ? 'Excellent' : 'Good'}
-                          </Text>
-                        </View>
-                        <View style={{ alignItems: 'flex-end' }}>
-                          <Text style={{ fontSize: 32, fontWeight: 'bold', color: theme.colors.primary }}>
-                            {Math.round((radarData.find(d => d.label === 'Consistency')?.value || 0) * 100)}%
-                          </Text>
-                        </View>
-                      </View>
 
+
+
+                      {/* Meal Timing Analysis Card */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 24 }]}>
+                        <View style={{ marginBottom: 20 }}>
+                          <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
+                            Meal Timing
+                          </Text>
+                          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
+                            When are you eating?
+                          </Text>
+                        </View>
+
+                        {/* Chart Drawing */}
+                        {(() => {
+                          // 1. Process Data
+                          const buckets = {
+                            Morning: { p: 0, c: 0, f: 0, count: 0 },
+                            Afternoon: { p: 0, c: 0, f: 0, count: 0 },
+                            Evening: { p: 0, c: 0, f: 0, count: 0 }
+                          };
+                          let globalTotalCarbs = 0;
+                          let eveningCarbs = 0;
+
+                          const now = new Date();
+                          // Determine cutoff based on timeRange state from parent
+                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const cutoff = subDays(now, rangeDays);
+
+                          Object.values(mealsByDate).flat().forEach(meal => {
+                            const d = new Date(meal.timestamp);
+                            if (d < cutoff) return;
+
+                            const h = d.getHours();
+                            let bucket: keyof typeof buckets = 'Evening';
+                            if (h >= 4 && h < 12) bucket = 'Morning';
+                            else if (h >= 12 && h < 17) bucket = 'Afternoon';
+
+                            meal.foods.forEach(f => {
+                              buckets[bucket].p += f.protein || 0;
+                              buckets[bucket].c += f.carbs || 0;
+                              buckets[bucket].f += f.fat || 0;
+
+                              globalTotalCarbs += f.carbs || 0;
+                              if (bucket === 'Evening') eveningCarbs += f.carbs || 0;
+                            });
+                            buckets[bucket].count++;
+                          });
+
+                          const maxVal = Math.max(
+                            ...Object.values(buckets).map(b => b.p + b.c + b.f)
+                          ) || 1; // Avoid div/0
+
+                          const barHeight = 120;
+                          const barWidth = 40;
+                          const spacing = 40;
+
+                          return (
+                            <View>
+                              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'flex-end', height: barHeight + 30, gap: spacing }}>
+                                {(['Morning', 'Afternoon', 'Evening'] as const).map(period => {
+                                  const b = buckets[period];
+                                  const total = b.p + b.c + b.f;
+                                  if (total === 0) return (
+                                    <View key={period} style={{ alignItems: 'center', width: barWidth }}>
+                                      <View style={{ height: 2, width: '100%', backgroundColor: theme.colors.border }} />
+                                      <Text style={{ marginTop: 8, fontSize: 11, color: theme.colors.textSecondary }}>{period}</Text>
+                                    </View>
+                                  );
+
+                                  const hP = (b.p / maxVal) * barHeight;
+                                  const hC = (b.c / maxVal) * barHeight;
+                                  const hF = (b.f / maxVal) * barHeight;
+
+                                  return (
+                                    <View key={period} style={{ alignItems: 'center', width: barWidth }}>
+                                      {/* Stacked Bar */}
+                                      <View style={{ width: '100%', borderRadius: 8, overflow: 'hidden', backgroundColor: theme.colors.input }}>
+                                        {/* Fat (Top) */}
+                                        <View style={{ height: hF, backgroundColor: '#FEF08A' }} />
+                                        {/* Carbs (Middle) */}
+                                        <View style={{ height: hC, backgroundColor: '#BFDBFE' }} />
+                                        {/* Protein (Bottom) */}
+                                        <View style={{ height: hP, backgroundColor: '#BBF7D0' }} />
+                                      </View>
+                                      <Text style={{ marginTop: 8, fontSize: 11, color: theme.colors.textSecondary }}>{period}</Text>
+                                    </View>
+                                  )
+                                })}
+                              </View>
+
+                              {/* Legend */}
+                              <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 16, marginTop: 12 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#BBF7D0' }} />
+                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Protein</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#BFDBFE' }} />
+                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Carbs</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FEF08A' }} />
+                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>Fat</Text>
+                                </View>
+                              </View>
+
+                              {/* Generated Insight */}
+                              <View style={{ marginTop: 20, padding: 12, backgroundColor: theme.colors.input, borderRadius: 12 }}>
+                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                                  <Text style={{ fontWeight: 'bold' }}>Insight: </Text>
+                                  {globalTotalCarbs > 0 && (eveningCarbs / globalTotalCarbs) > 0.4
+                                    ? `You consume ${Math.round((eveningCarbs / globalTotalCarbs) * 100)}% of your carbs in the evening. Try shifting some to lunch for better energy.`
+                                    : "Your meal distribution is well-balanced across the day."
+                                  }
+                                </Text>
+                              </View>
+                            </View>
+                          );
+                        })()}
+                      </View>
                     </View>
+
                   )}
                 </View>
               )}
             </React.Fragment>
           )}
+
         </ScrollView>
       </Animated.View>
     </SafeAreaView>

@@ -1793,18 +1793,21 @@ export const HomeScreen: React.FC = () => {
 
   if (showAdminPush) {
     return (
-      <AdminPushScreen onBack={handleAdminPushBack} />
+      <Modal visible={showAdminPush} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleAdminPushBack}>
+        <AdminPushScreen onBack={handleAdminPushBack} />
+      </Modal>
     );
   }
 
   if (showSetGoals) {
     return (
-      <SetGoalsScreen
-        onBack={handleGoalsBack}
-        onSave={handleGoalsSave}
-        initialGoals={savedGoals}
-
-      />
+      <Modal visible={showSetGoals} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleGoalsBack}>
+        <SetGoalsScreen
+          onBack={handleGoalsBack}
+          onSave={handleGoalsSave}
+          initialGoals={savedGoals}
+        />
+      </Modal>
     );
   }
 
@@ -1818,70 +1821,61 @@ export const HomeScreen: React.FC = () => {
 
   if (showSettings) {
     return (
-      <SettingsScreen
-        onBack={handleSettingsBack}
-        plan={userPlan}
-        onOpenSubscription={handleOpenSubscription}
+      <Modal visible={showSettings} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSettingsBack}>
+        <SettingsScreen
+          onBack={handleSettingsBack}
+          plan={userPlan}
+          onOpenSubscription={handleOpenSubscription}
 
-        onLogin={handleAccount}
-        onIntegrations={() => {
-          setShowSettings(false);
-          // Small timeout to allow transition
-          setTimeout(() => setShowIntegrations(true), 100);
-        }}
-        onDowngradeToFree={handleDowngradeToFree}
-        onGrocerySuggestions={handleGrocerySuggestions}
-        onHowItWorks={() => {
-          // We might want to close settings? Or keep it open?
-          // If we close settings, we lose context.
-          // But Walkthrough is a modal.
-          // SettingsScreen is also a full screen return.
-          // If we set showWalkthrough(true), it will render WalkthroughModal over Settings IF Walkthrough is in a Portal or valid location.
-          // But HomeScreen structure is `if (showSettings) return <SettingsScreen ... />`.
-          // So if we set `showWalkthrough(true)`, `HomeScreen` will still return `SettingsScreen`.
-          // `AppWalkthroughModal` is rendered in the MAIN return of `HomeScreen` (at the bottom).
-          // So if `showSettings` is true, we don't see `AppWalkthroughModal`.
+          onLogin={handleAccount}
 
-          // We need to close Settings to show Walkthrough?
-          setShowSettings(false);
-          setWalkthroughHideOffer(false);
-          setShowWalkthrough(true);
-        }}
-      />
+          onDowngradeToFree={handleDowngradeToFree}
+          onGrocerySuggestions={handleGrocerySuggestions}
+          onHowItWorks={() => {
+            setShowSettings(false);
+            setWalkthroughHideOffer(false);
+            setShowWalkthrough(true);
+          }}
+        />
+      </Modal>
     );
   }
 
   if (showGrocerySuggestions) {
     return (
-      <GrocerySuggestionsScreen
-        onBack={handleGrocerySuggestionsBack}
-        userMetrics={{
-          goal: savedGoals.goal,
-          targetCalories: savedGoals.calories || 2000,
-          proteinRatio: savedGoals.proteinPercentage || 30,
-          carbsRatio: savedGoals.carbsPercentage || 40,
-          fatRatio: savedGoals.fatPercentage || 30,
-          recentMeals: Object.values(mealsByDate).flat(),
-        }}
-      />
-    );
-  }
-
-  if (showIntegrations) {
-    return (
-      <IntegrationsScreen onBack={() => setShowIntegrations(false)} />
+      <Modal visible={showGrocerySuggestions} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleGrocerySuggestionsBack}>
+        <GrocerySuggestionsScreen
+          onBack={handleGrocerySuggestionsBack}
+          userMetrics={{
+            goal: savedGoals.goal,
+            targetCalories: savedGoals.calories || 2000,
+            proteinRatio: savedGoals.proteinPercentage || 30,
+            carbsRatio: savedGoals.carbsPercentage || 40,
+            fatRatio: savedGoals.fatPercentage || 30,
+            recentMeals: Object.values(mealsByDate).flat(),
+          }}
+        />
+      </Modal>
     );
   }
 
   if (showSubscription) {
     return (
-      <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+      <Modal visible={showSubscription} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSubscriptionBack}>
+        <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+      </Modal>
     );
   }
 
+  // Account Screen (already handled in previous step, skipping here to avoid duplicate if block, but keeping order)
   if (showAccount) {
     return (
-      <>
+      <Modal
+        visible={showAccount}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={handleAccountBack}
+      >
         <AccountScreen
           onBack={handleAccountBack}
           onRequestSync={handleSyncAccount}
@@ -1910,13 +1904,15 @@ export const HomeScreen: React.FC = () => {
             userGoals={savedGoals}
           />
         </Modal>
-      </>
+      </Modal>
     );
   }
 
   if (showAbout) {
     return (
-      <AboutScreen onBack={handleAboutBack} />
+      <Modal visible={showAbout} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleAboutBack}>
+        <AboutScreen onBack={handleAboutBack} />
+      </Modal>
     );
   }
 
@@ -1924,14 +1920,16 @@ export const HomeScreen: React.FC = () => {
   if (showReferral) {
     const isLoggedIn = !!accountInfo?.email;
     return (
-      <ReferralScreen
-        isLoggedIn={isLoggedIn}
-        userEmail={accountInfo?.email || null}
-        referralCode={referralCode}
-        totalEarnedEntriesFromReferrals={totalEarnedEntries}
-        onBack={handleReferralBack}
-        onLoginPress={handleAccount}
-      />
+      <Modal visible={showReferral} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleReferralBack}>
+        <ReferralScreen
+          isLoggedIn={isLoggedIn}
+          userEmail={accountInfo?.email || null}
+          referralCode={referralCode}
+          totalEarnedEntriesFromReferrals={totalEarnedEntries}
+          onBack={handleReferralBack}
+          onLoginPress={handleAccount}
+        />
+      </Modal>
     );
   }
 

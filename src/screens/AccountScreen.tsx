@@ -364,6 +364,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
       if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
 
+      if (!password.trim() || password.length < 6) {
+        setAuthMessage("Password must be at least 6 characters.");
+        hasError = true;
+      }
+
       // Phone Validation
       const cleanPhone = phoneInput.replace(/\D/g, '');
       const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
@@ -408,6 +413,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         if (error) throw error;
 
         if (data.session) {
+          // Update Password for future logins
+          if (password.trim()) {
+            await authService.updatePassword(password.trim());
+          }
+
           const cleanPhone = phoneInput.replace(/\D/g, '');
           const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
           const fullPhoneNumber = `${selectedCountry.dial_code}${finalPhoneBody}`;
@@ -439,8 +449,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
           await dataStorage.saveAccountInfo(provisional);
           await syncAccountInfoFromSession(data.session);
-
-
 
           await loadLocalData();
         }
@@ -600,23 +608,20 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           ) : (
             <>
               {/* Password Input (SignIn Only) */}
-              {authMode === 'signin' && (
-                <>
-                  <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
-                  <TextInput
-                    style={[styles.input, {
-                      backgroundColor: theme.colors.input,
-                      color: theme.colors.textPrimary,
-                      borderColor: theme.colors.border
-                    }]}
-                    placeholder="••••••"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={password}
-                    onChangeText={setPassword}
-                    secureTextEntry
-                  />
-                </>
-              )}
+              {/* Password Input (Sign In & Sign Up) */}
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: theme.colors.border
+                }]}
+                placeholder="••••••"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={password}
+                onChangeText={setPassword}
+                secureTextEntry
+              />
             </>
           )}
 
