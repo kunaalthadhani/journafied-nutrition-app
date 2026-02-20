@@ -1040,7 +1040,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               // Check if already logged today
               const today = new Date();
               const todayKey = format(today, 'yyyy-MM-dd');
-              const alreadyLogged = weightEntries.some(e => format(new Date(e.date), 'yyyy-MM-dd') === todayKey);
+              const alreadyLogged = weightEntries.some(e => format(e.date, 'yyyy-MM-dd') === todayKey);
 
               if (alreadyLogged) {
                 Alert.alert(

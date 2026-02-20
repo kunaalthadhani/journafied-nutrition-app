@@ -167,10 +167,49 @@ class HealthService {
             const end = new Date(date);
             end.setHours(23, 59, 59, 999);
 
-            // Not implementing readRecords call here to keep types simple without explicit 'TimeRangeFilter' type import
-            // which might crash if package not present.
-            return { steps: 0, calories: 0, distance: 0 };
+            const timeRangeFilter = {
+                operator: 'between',
+                startTime: start.toISOString(),
+                endTime: end.toISOString(),
+            };
+
+            let steps = 0;
+            let calories = 0;
+            let distance = 0;
+
+            // Steps
+            try {
+                const stepsResult = await HealthConnect.readRecords('Steps', { timeRangeFilter });
+                for (const record of (stepsResult?.records ?? [])) {
+                    steps += record.count ?? 0;
+                }
+            } catch (e) {
+                console.log('[Health] Error reading steps:', e);
+            }
+
+            // Active Calories Burned
+            try {
+                const calResult = await HealthConnect.readRecords('ActiveCaloriesBurned', { timeRangeFilter });
+                for (const record of (calResult?.records ?? [])) {
+                    calories += record.energy?.inKilocalories ?? 0;
+                }
+            } catch (e) {
+                console.log('[Health] Error reading calories:', e);
+            }
+
+            // Distance
+            try {
+                const distResult = await HealthConnect.readRecords('Distance', { timeRangeFilter });
+                for (const record of (distResult?.records ?? [])) {
+                    distance += record.distance?.inMeters ?? 0;
+                }
+            } catch (e) {
+                console.log('[Health] Error reading distance:', e);
+            }
+
+            return { steps: Math.round(steps), calories: Math.round(calories), distance: Math.round(distance) };
         } catch (err) {
+            console.log('[Health] Android Health Connect read error:', err);
             return { steps: 0, calories: 0, distance: 0 };
         }
     }

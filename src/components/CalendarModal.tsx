@@ -14,7 +14,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
-import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth } from 'date-fns';
+import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth, parseISO } from 'date-fns';
 import { Meal } from './FoodLogSection';
 import { calculateTotalNutrition } from '../utils/foodNutrition';
 import { AdjustmentRecord } from '../services/dataStorage';
@@ -204,7 +204,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                     <View style={[styles.barIndicator, { backgroundColor: indicatorColor }]} />
 
                     {/* Adjustment Indicator */}
-                    {adjustments?.some(a => a.status === 'applied' && isSameDay(new Date(a.date), dayData.date)) && (
+                    {adjustments?.some(a => a.status === 'applied' && isSameDay(parseISO(a.date), dayData.date)) && (
                       <View style={{ position: 'absolute', top: 2, right: 2 }}>
                         <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary }} />
                       </View>

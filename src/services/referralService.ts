@@ -169,16 +169,17 @@ export const referralService = {
       deviceId: deviceId,
     };
 
+    // Check for potential fraud — block if suspicious
+    const fraudCheck = await this.detectPotentialFraud(deviceId);
+    if (fraudCheck.suspicious) {
+      console.warn('[Referral] Fraud blocked:', fraudCheck.message);
+      throw new Error('This device has been flagged for suspicious referral activity. Redemption blocked.');
+    }
+
     await dataStorage.saveReferralRedemption(redemption);
 
     // Track analytics
     await analyticsService.trackReferralCodeRedeemed(referralCode.code, refereeEmail);
-
-    // Check for potential fraud (log only, don't block)
-    const fraudCheck = await this.detectPotentialFraud(deviceId);
-    if (fraudCheck.suspicious) {
-      console.warn('[Referral] Potential fraud detected:', fraudCheck.message);
-    }
 
     return redemption;
   },
@@ -244,16 +245,23 @@ export const referralService = {
 
     // Check if 5 meals reached
     if (updatedMealsLogged >= 5) {
+      // Idempotency guard: check if rewards were already awarded for this redemption
+      const existingRewards = await dataStorage.getReferralRewardsForRedemption(pendingRedemption.id);
+      if (existingRewards && existingRewards.length > 0) {
+        return { rewardsAwarded: false, message: 'Rewards already awarded for this referral.' };
+      }
+
+      // Mark as completed FIRST to prevent concurrent duplicate awards
+      await dataStorage.updateReferralRedemption(pendingRedemption.id, {
+        status: 'completed',
+        completedAt: new Date().toISOString(),
+      });
+
       // Award rewards to both referrer and referee
       const rateLimitCheck = await this.checkReferralRateLimit(pendingRedemption.referrerEmail);
 
       if (!rateLimitCheck.canRefer) {
-        // Update redemption status but don't award to referrer (rate limited)
-        await dataStorage.updateReferralRedemption(pendingRedemption.id, {
-          status: 'failed',
-        });
-
-        // Award to referee only
+        // Award to referee only (referrer is rate limited)
         const refereeReward: ReferralReward = {
           id: generateId(),
           userId: pendingRedemption.refereeEmail,
@@ -273,7 +281,7 @@ export const referralService = {
 
         return {
           rewardsAwarded: true,
-          entriesAwarded: 10, // Referee still gets reward
+          entriesAwarded: 10,
           message:
             'You earned +10 free entries! Your friend has reached their referral limit, so they did not receive a reward.',
         };
@@ -324,12 +332,6 @@ export const referralService = {
         console.error('Error sending referral reward notification:', error);
         // Don't fail the reward process if notification fails
       }
-
-      // Update redemption status
-      await dataStorage.updateReferralRedemption(pendingRedemption.id, {
-        status: 'completed',
-        completedAt: new Date().toISOString(),
-      });
 
       // Update referral code stats
       const referralCode = await dataStorage.getReferralCodeByCode(

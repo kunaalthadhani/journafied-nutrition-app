@@ -31,6 +31,26 @@ import { authService } from '../services/authService';
 import { COUNTRIES, Country } from '../constants/countries';
 import { FlatList } from 'react-native';
 
+/**
+ * Parse a stored full phone number (e.g. "+971501234567") into
+ * its matching Country and local body (e.g. "501234567").
+ * Falls back to COUNTRIES[0] (UAE) and empty string if no match.
+ */
+function parseStoredPhone(full?: string | null): { country: Country; local: string } {
+  if (!full) return { country: COUNTRIES[0], local: '' };
+
+  // Sort by longest dial_code first so "+353" matches before "+3"
+  const sorted = [...COUNTRIES].sort((a, b) => b.dial_code.length - a.dial_code.length);
+  for (const c of sorted) {
+    if (full.startsWith(c.dial_code)) {
+      return { country: c, local: full.slice(c.dial_code.length) };
+    }
+  }
+
+  // No match — return raw digits without leading '+'
+  return { country: COUNTRIES[0], local: full.replace(/^\+/, '') };
+}
+
 interface AccountScreenProps {
   onBack: () => void;
   initialAccountInfo?: AccountInfo | null;
@@ -77,28 +97,20 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   // -- Form State --
   const [name, setName] = useState(initialAccountInfo?.name || '');
   const [emailInput, setEmailInput] = useState(initialAccountInfo?.email || '');
-  const [phoneInput, setPhoneInput] = useState(() => {
-    // If we have an initial phone, we might need to parse it? 
-    // For now, simpler to start empty or just raw. 
-    // If initialAccountInfo.phoneNumber exists, it's likely full string "+97150..."
-    // We should parse it ideally, but for now let's just leave it blank or raw
-    // and let user fix it if they edit.
-    // simpler:
-    return '';
-  });
+  const _initialPhone = parseStoredPhone(initialAccountInfo?.phoneNumber);
+  const [phoneInput, setPhoneInput] = useState(_initialPhone.local);
   const [password, setPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
   const [otpCode, setOtpCode] = useState('');
 
-  const [selectedCountry, setSelectedCountry] = useState<Country>(COUNTRIES[0]); // Default UAE
+  const [selectedCountry, setSelectedCountry] = useState<Country>(_initialPhone.country);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearchQuery, setCountrySearchQuery] = useState('');
 
   // -- Forgot Password State --
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
-  const [forgotPasswordMode, setForgotPasswordMode] = useState<'email' | 'phone'>('email');
   const [resetInput, setResetInput] = useState('');
 
   // -- Validation State --
@@ -199,7 +211,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       setAccountInfo(info);
       if (info?.name) setName(info.name);
       if (info?.email) setEmailInput(info.email);
-      if (info?.phoneNumber) setPhoneInput(info.phoneNumber);
+      if (info?.phoneNumber) {
+        const parsed = parseStoredPhone(info.phoneNumber);
+        setPhoneInput(parsed.local);
+        setSelectedCountry(parsed.country);
+      }
 
       setEntryCount(count);
       setPlan(planValue);
@@ -246,7 +262,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       ...(existing || {}),
       email,
       name: existing?.name ?? (name.trim() || undefined),
-      phoneNumber: existing?.phoneNumber ?? (phoneInput.trim() || undefined),
+      phoneNumber: existing?.phoneNumber ?? (phoneInput.trim() ? `${selectedCountry.dial_code}${phoneInput.trim()}` : undefined),
       supabaseUserId: session.user.id,
     };
 
@@ -333,7 +349,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   const handleForgotPassword = async () => {
     if (!resetInput.trim()) {
-      Alert.alert("Missing Info", `Please enter your ${forgotPasswordMode}.`);
+      Alert.alert("Missing Info", "Please enter your email.");
       return;
     }
 
@@ -341,15 +357,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       setAuthMessage(null); // Clear previous
       setForgotPasswordVisible(false); // Close modal
 
-      if (forgotPasswordMode === 'email') {
-        await authService.resetPasswordForEmail(resetInput.trim());
-        Alert.alert("Reset Link Sent", "Check your email for password reset instructions.");
-      } else {
-        // Phone flow (simulated as we might not have SMS set up, or standard OTP login)
-        // Using signInWithOTP for phone is the standard way to 'verify' ownership then they can change password?
-        // Or actually just 'Login with OTP'.
-        Alert.alert("Coming Soon", "SMS reset is currently being configured. Please use Email reset for now.");
-      }
+      await authService.resetPasswordForEmail(resetInput.trim());
+      Alert.alert("Reset Link Sent", "Check your email for password reset instructions.");
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to send reset link.");
     }
@@ -982,78 +991,23 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 </TouchableOpacity>
               </View>
 
-              {/* Type Selection */}
-              <View style={{ flexDirection: 'row', marginBottom: 16, borderRadius: 8, backgroundColor: theme.colors.secondaryBg, padding: 4 }}>
-                <TouchableOpacity
-                  style={{ flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6, backgroundColor: forgotPasswordMode === 'email' ? theme.colors.card : 'transparent', shadowOpacity: forgotPasswordMode === 'email' ? 0.1 : 0 }}
-                  onPress={() => setForgotPasswordMode('email')}
-                >
-                  <Text style={{ fontWeight: '600', color: forgotPasswordMode === 'email' ? theme.colors.textPrimary : theme.colors.textSecondary }}>Email</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={{ flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6, backgroundColor: forgotPasswordMode === 'phone' ? theme.colors.card : 'transparent', shadowOpacity: forgotPasswordMode === 'phone' ? 0.1 : 0 }}
-                  onPress={() => setForgotPasswordMode('phone')}
-                >
-                  <Text style={{ fontWeight: '600', color: forgotPasswordMode === 'phone' ? theme.colors.textPrimary : theme.colors.textSecondary }}>SMS</Text>
-                </TouchableOpacity>
-              </View>
-
               <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 8 }}>
-                Enter your {forgotPasswordMode} to receive a reset code.
+                Enter your email to receive a reset link.
               </Text>
 
-              {forgotPasswordMode === 'email' ? (
-                <TextInput
-                  style={[styles.input, {
-                    backgroundColor: theme.colors.input,
-                    color: theme.colors.textPrimary,
-                    borderColor: theme.colors.border
-                  }]}
-                  placeholder="john@example.com"
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={resetInput}
-                  onChangeText={setResetInput}
-                  keyboardType="email-address"
-                  autoCapitalize="none"
-                />
-              ) : (
-                <View style={{ flexDirection: 'row', gap: 10 }}>
-                  <TouchableOpacity
-                    style={{
-                      height: 50,
-                      backgroundColor: theme.colors.input,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                      borderRadius: 8,
-                      paddingHorizontal: 12,
-                      justifyContent: 'center',
-                      alignItems: 'center',
-                      minWidth: 80
-                    }}
-                    onPress={() => setShowCountryPicker(true)}
-                  >
-                    <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold' }}>{selectedCountry.dial_code}</Text>
-                    <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>{selectedCountry.code}</Text>
-                  </TouchableOpacity>
-
-                  <TextInput
-                    style={[styles.input, {
-                      flex: 1,
-                      backgroundColor: theme.colors.input,
-                      color: theme.colors.textPrimary,
-                      borderColor: theme.colors.border
-                    }]}
-                    placeholder={selectedCountry.placeholder}
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={resetInput}
-                    onChangeText={(text) => {
-                      if (text.length === 1 && text === '0') return;
-                      setResetInput(text);
-                    }}
-                    keyboardType="phone-pad"
-                  />
-                </View>
-              )}
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: theme.colors.border
+                }]}
+                placeholder="john@example.com"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={resetInput}
+                onChangeText={setResetInput}
+                keyboardType="email-address"
+                autoCapitalize="none"
+              />
 
               <TouchableOpacity
                 style={[styles.primaryButton, { marginTop: 16 }]}

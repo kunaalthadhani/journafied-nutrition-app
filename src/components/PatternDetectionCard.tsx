@@ -1,10 +1,14 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
+import React, { useState } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { DetectedPattern } from '../services/dataStorage';
 import { PremiumBlurredContent } from './PremiumBlurredContent';
+
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+    UIManager.setLayoutAnimationEnabledExperimental(true);
+}
 
 interface PatternDetectionCardProps {
     pattern: DetectedPattern;
@@ -14,8 +18,8 @@ interface PatternDetectionCardProps {
 }
 
 /**
- * Displays a detected behavioral pattern
- * Free users see the problem, premium users see the fix
+ * Displays a detected behavioral pattern (Insight)
+ * Collapsible to avoid cluttering the UI
  */
 export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
     pattern,
@@ -24,6 +28,13 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
     onDismiss
 }) => {
     const theme = useTheme();
+    const [isCollapsed, setIsCollapsed] = useState(true);
+    const [feedback, setFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
+
+    const toggleCollapse = () => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setIsCollapsed(!isCollapsed);
+    };
 
     const getPatternIcon = () => {
         switch (pattern.type) {
@@ -40,13 +51,49 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
         return theme.colors.textSecondary;
     };
 
+    const handleFeedback = (type: 'helpful' | 'not_helpful') => {
+        setFeedback(type);
+        // Here you would typically send this to analytics or backend
+    };
+
+    if (isCollapsed) {
+        return (
+            <TouchableOpacity
+                onPress={toggleCollapse}
+                activeOpacity={0.8}
+                style={[styles.container, styles.collapsedContainer, {
+                    backgroundColor: theme.colors.card,
+                    borderColor: theme.colors.border,
+                }]}
+            >
+                <View style={styles.collapsedContent}>
+                    <View style={styles.collapsedLeft}>
+                        <View style={[styles.iconBoxSmall, { backgroundColor: theme.colors.primary + '15' }]}>
+                            <Feather name="zap" size={16} color={theme.colors.primary} />
+                        </View>
+                        <Text style={[styles.collapsedTitle, { color: theme.colors.textPrimary }]}>
+                            New Insight Available ✨
+                        </Text>
+                    </View>
+                    <View style={styles.collapsedRight}>
+                        <Feather name="chevron-down" size={20} color={theme.colors.textTertiary} />
+                    </View>
+                </View>
+            </TouchableOpacity>
+        );
+    }
+
     return (
         <View style={[styles.container, {
             backgroundColor: theme.colors.card,
             borderColor: theme.colors.border
         }]}>
             {/* Header */}
-            <View style={styles.header}>
+            <TouchableOpacity
+                activeOpacity={1}
+                onPress={toggleCollapse}
+                style={styles.header}
+            >
                 <View style={styles.leftHeader}>
                     <View style={[styles.iconBox, { backgroundColor: theme.colors.primary + '20' }]}>
                         <Feather name={getPatternIcon()} size={18} color={theme.colors.primary} />
@@ -63,12 +110,17 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
                     </View>
                 </View>
 
-                <TouchableOpacity onPress={onDismiss} style={styles.dismissButton}>
-                    <Feather name="x" size={18} color={theme.colors.textSecondary} />
-                </TouchableOpacity>
-            </View>
+                <View style={styles.headerActions}>
+                    <TouchableOpacity onPress={toggleCollapse} style={styles.actionButton}>
+                        <Feather name="chevron-up" size={20} color={theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={onDismiss} style={styles.actionButton}>
+                        <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                    </TouchableOpacity>
+                </View>
+            </TouchableOpacity>
 
-            {/* Description (Always Visible) */}
+            {/* Description (Always Visible in Expanded) */}
             <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
                 {pattern.description}
             </Text>
@@ -98,10 +150,33 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
                 </PremiumBlurredContent>
             ) : null}
 
-            {/* Data Points Info */}
-            <Text style={[styles.dataPoints, { color: theme.colors.textTertiary }]}>
-                Based on {pattern.dataPoints} days of your data
-            </Text>
+            {/* Footer: Data Points & Feedback */}
+            <View style={styles.footer}>
+                <Text style={[styles.dataPoints, { color: theme.colors.textTertiary }]}>
+                    Based on {pattern.dataPoints} days of your data
+                </Text>
+
+                {isPremium && (
+                    <View style={styles.feedbackContainer}>
+                        {feedback ? (
+                            <Text style={[styles.feedbackThanks, { color: theme.colors.textSecondary }]}>Thanks for your feedback!</Text>
+                        ) : (
+                            <>
+                                <Text style={[styles.feedbackLabel, { color: theme.colors.textTertiary }]}>Helpful?</Text>
+                                <View style={styles.feedbackButtons}>
+                                    <TouchableOpacity onPress={() => handleFeedback('helpful')} style={styles.feedbackButton}>
+                                        <Feather name="thumbs-up" size={14} color={theme.colors.textSecondary} />
+                                    </TouchableOpacity>
+                                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                                    <TouchableOpacity onPress={() => handleFeedback('not_helpful')} style={styles.feedbackButton}>
+                                        <Feather name="thumbs-down" size={14} color={theme.colors.textSecondary} />
+                                    </TouchableOpacity>
+                                </View>
+                            </>
+                        )}
+                    </View>
+                )}
+            </View>
         </View>
     );
 };
@@ -112,6 +187,37 @@ const styles = StyleSheet.create({
         borderWidth: 1,
         padding: 16,
         gap: 12,
+        overflow: 'hidden',
+    },
+    collapsedContainer: {
+        padding: 12,
+        paddingVertical: 10, // More compact
+    },
+    collapsedContent: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+    },
+    collapsedLeft: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8, // Tighter gap
+    },
+    collapsedRight: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 12,
+    },
+    iconBoxSmall: {
+        width: 28, // Smaller icon box
+        height: 28,
+        borderRadius: 8,
+        justifyContent: 'center',
+        alignItems: 'center',
+    },
+    collapsedTitle: {
+        fontSize: 14,
+        fontFamily: Typography.fontFamily.medium, // Slightly lighter weight for "teaser" feel
     },
     header: {
         flexDirection: 'row',
@@ -122,6 +228,14 @@ const styles = StyleSheet.create({
         flexDirection: 'row',
         gap: 12,
         flex: 1,
+    },
+    headerActions: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 4
+    },
+    actionButton: {
+        padding: 4,
     },
     iconBox: {
         width: 40,
@@ -146,9 +260,6 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontFamily: Typography.fontFamily.semiBold,
         lineHeight: 20,
-    },
-    dismissButton: {
-        padding: 4,
     },
     description: {
         fontSize: 14,
@@ -176,9 +287,43 @@ const styles = StyleSheet.create({
         fontFamily: Typography.fontFamily.medium,
         lineHeight: 18,
     },
+    footer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginTop: 4,
+    },
     dataPoints: {
         fontSize: 11,
         fontFamily: Typography.fontFamily.regular,
+        fontStyle: 'italic',
+    },
+    feedbackContainer: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 8,
+    },
+    feedbackButtons: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        backgroundColor: 'rgba(0,0,0,0.03)',
+        borderRadius: 12,
+        padding: 2,
+    },
+    feedbackButton: {
+        padding: 6,
+    },
+    divider: {
+        width: 1,
+        height: 12,
+    },
+    feedbackLabel: {
+        fontSize: 11,
+        fontFamily: Typography.fontFamily.medium,
+    },
+    feedbackThanks: {
+        fontSize: 11,
+        fontFamily: Typography.fontFamily.medium,
         fontStyle: 'italic',
     },
 });

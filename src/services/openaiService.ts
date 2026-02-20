@@ -1,19 +1,57 @@
 // OpenAI API service for food analysis
 import { ParsedFood } from '../utils/foodNutrition';
 import { ParsedExercise, parseExerciseInput } from '../utils/exerciseParser';
-import { config } from '../config/env';
+import { invokeAI } from './aiProxyService';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
 import { NutritionLibraryItem } from './dataStorage';
+import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-interface OpenAIResponse {
-  choices: {
-    message: {
-      content: string;
-    };
-  }[];
+// ─── Food Analysis Cache ───────────────────────────────────────
+// Caches AI results in AsyncStorage so repeat meals return instantly.
+const FOOD_CACHE_PREFIX = '@food_cache:';
+const FOOD_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
+
+interface CachedFoodResult {
+  foods: Omit<ParsedFood, 'id'>[];
+  summary?: string;
+  cachedAt: number;
 }
+
+function normalizeFoodInput(input: string): string {
+  return input.toLowerCase().trim().replace(/\s+/g, ' ');
+}
+
+async function getCachedFood(input: string): Promise<CachedFoodResult | null> {
+  try {
+    const key = FOOD_CACHE_PREFIX + normalizeFoodInput(input);
+    const raw = await AsyncStorage.getItem(key);
+    if (!raw) return null;
+    const cached: CachedFoodResult = JSON.parse(raw);
+    if (Date.now() - cached.cachedAt > FOOD_CACHE_MAX_AGE_MS) {
+      AsyncStorage.removeItem(key);
+      return null;
+    }
+    return cached;
+  } catch {
+    return null;
+  }
+}
+
+async function setCachedFood(input: string, foods: ParsedFood[], summary?: string): Promise<void> {
+  try {
+    const key = FOOD_CACHE_PREFIX + normalizeFoodInput(input);
+    // Strip IDs before caching — fresh IDs are generated on each cache hit
+    const stripped = foods.map(({ id, ...rest }) => rest);
+    const entry: CachedFoodResult = { foods: stripped, summary, cachedAt: Date.now() };
+    await AsyncStorage.setItem(key, JSON.stringify(entry));
+  } catch {
+    // Cache write failure is non-critical
+  }
+}
+
 
 const FOOD_ANALYSIS_PROMPT = `
 You are an expert nutritionist and food analyst. Your job is to understand what the user ate and provide accurate nutritional information.
@@ -234,38 +272,34 @@ B) If you have enough info (or are making safe assumptions):
 `;
 
 export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
-  // Validate API key
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
-  }
-
   try {
     if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
+
+    // ── Cache check: return near-instantly for repeat meals ──
+    const cached = await getCachedFood(foodInput);
+    if (cached && cached.foods.length > 0) {
+      if (__DEV__) console.log('Cache HIT for:', foodInput);
+      await new Promise(resolve => setTimeout(resolve, 1200)); // Brief delay so it feels "fetched"
+      const cachedFoods: ParsedFood[] = cached.foods.map(f => ({ ...f, id: generateId() }));
+      return { foods: cachedFoods, summary: cached.summary };
+    }
 
     let finalPrompt = AGENTIC_ANALYSIS_PROMPT;
     if (!allowClarification) {
       finalPrompt += `\n\nCRITICAL OVERRIDE: failed to clarify. You MUST NOT return a "clarification_question". You MUST make reasonable assumptions for any missing details and return the nutritional JSON.`;
     }
 
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o', // Strongly recommended for this logic depth
-        messages: [
-          { role: 'system', content: finalPrompt },
-          { role: 'user', content: foodInput }
-        ],
-        temperature: 0.3,
-        response_format: { type: "json_object" }
-      }),
+    const data = await invokeAI({
+      model: 'gpt-4o',
+      messages: [
+        { role: 'system', content: finalPrompt },
+        { role: 'user', content: sanitizeForAI(foodInput) }
+      ],
+      temperature: 0.3,
+      response_format: { type: "json_object" },
+      call_type: 'food-analysis',
     });
 
-    if (!response.ok) throw new Error(`OpenAI API error: ${response.status}`);
-    const data: OpenAIResponse = await response.json();
     const content = data.choices[0]?.message?.content;
     if (!content) throw new Error('No response from OpenAI');
 
@@ -279,10 +313,6 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     const finalFoods: ParsedFood[] = [];
 
     for (const item of items) {
-      // We skip the sequential DB lookup for the *macros* because the Agent has done a better job 
-      // of calculating the composite macros (Chicken + Sauce + Pasta) than our generic DB would (just "Pasta").
-      // However, we still format it as ParsedFood.
-
       finalFoods.push({
         id: generateId(),
         name: item.log_name,
@@ -310,6 +340,11 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
       });
     }
 
+    // ── Cache the result for future instant lookups ──
+    if (finalFoods.length > 0) {
+      setCachedFood(foodInput, finalFoods, result.summary);
+    }
+
     return { foods: finalFoods, summary: result.summary };
 
   } catch (error) {
@@ -323,24 +358,15 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
 // Helper to fetch deterministic factors for the library
 async function fetchNutritionFactors(foodName: string): Promise<NutritionLibraryItem | null> {
   try {
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: config.OPENAI_CONFIG.model,
-        messages: [
-          { role: 'system', content: NUTRITION_ESTIMATION_PROMPT },
-          { role: 'user', content: foodName }
-        ],
-        temperature: 0.2,
-      }),
+    const data = await invokeAI({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: NUTRITION_ESTIMATION_PROMPT },
+        { role: 'user', content: sanitizeForAI(foodName, 500) }
+      ],
+      temperature: 0.2,
+      call_type: 'nutrition-factors',
     });
-
-    if (!response.ok) return null;
-    const data: OpenAIResponse = await response.json();
     const content = data.choices[0]?.message?.content;
     if (!content) return null;
 
@@ -387,33 +413,17 @@ async function fetchNutritionFactors(foodName: string): Promise<NutritionLibrary
 }
 
 export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise<ParsedExercise[]> {
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
-  }
-
   try {
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: config.OPENAI_CONFIG.model,
-        messages: [
-          { role: 'system', content: EXERCISE_ANALYSIS_PROMPT },
-          { role: 'user', content: exerciseInput },
-        ],
-        temperature: Math.min(0.8, Math.max(0.2, config.OPENAI_CONFIG.temperature)),
-        max_tokens: config.OPENAI_CONFIG.max_tokens,
-      }),
+    const data = await invokeAI({
+      model: 'gpt-4',
+      messages: [
+        { role: 'system', content: EXERCISE_ANALYSIS_PROMPT },
+        { role: 'user', content: sanitizeForAI(exerciseInput) },
+      ],
+      temperature: 0.3,
+      max_tokens: 1000,
+      call_type: 'exercise-analysis',
     });
-
-    if (!response.ok) {
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data: OpenAIResponse = await response.json();
     const content = data.choices[0]?.message?.content;
     if (!content) {
       throw new Error('No response from OpenAI');
@@ -455,43 +465,28 @@ export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise
 // ... (existing code)
 
 export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    // Return a default canned insight if no API key
-    return "Great job tracking this week! Your protein intake is steady. Try boosting fiber next week for even better energy.";
-  }
-
   try {
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: config.OPENAI_CONFIG.model,
-        messages: [
-          {
-            role: 'system',
-            content: `You are a friendly, encouraging nutrition coach. 
-            Analyze the provided weekly nutrition summary. 
-            Give ONE brilliant, specific, and positive insight about their eating patterns. 
-            Keep it under 30 words. 
-            Focus on trends like "You tend to eat more protein on weekends" or "Your calorie stability is impressive". 
+    const data = await invokeAI({
+      model: 'gpt-4',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a friendly, encouraging nutrition coach.
+            Analyze the provided weekly nutrition summary.
+            Give ONE brilliant, specific, and positive insight about their eating patterns.
+            Keep it under 30 words.
+            Focus on trends like "You tend to eat more protein on weekends" or "Your calorie stability is impressive".
             Avoid negative or judgmental language. Use emojis sparingly.`
-          },
-          {
-            role: 'user',
-            content: JSON.stringify(weeklyData)
-          }
-        ],
-        temperature: 0.7,
-        max_tokens: 60,
-      }),
+        },
+        {
+          role: 'user',
+          content: JSON.stringify(sanitizeObjectForAI(weeklyData))
+        }
+      ],
+      temperature: 0.7,
+      max_tokens: 60,
+      call_type: 'weekly-insights',
     });
-
-    if (!response.ok) return "You're doing great! Consistent tracking is the key to success. Keep it up!";
-
-    const data: OpenAIResponse = await response.json();
     return data.choices[0]?.message?.content || "Keep up the good work! Your consistency allows us to spot helpful trends.";
   } catch (error) {
     if (__DEV__) console.error('Error generating insights:', error);
@@ -520,11 +515,6 @@ function validateFoodResponse(foods: any[]): boolean {
  * Analyze food from an image using OpenAI Vision API
  */
 export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: ParsedFood[], summary?: string }> {
-  // Validate API key before making request
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
-  }
-
   try {
     if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
     // Read image as base64 using legacy API
@@ -539,50 +529,37 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
     if (__DEV__) console.log('Sending request to OpenAI Vision API (Describer Mode)...');
 
     // Step 1: Vision AI describes the food
-    const visionResponse = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o',
-        messages: [
-          {
-            role: 'system',
-            content: `You are a specialized Food Analyst. 
-            Describe the food in this image in extreme detail. 
+    const visionData = await invokeAI({
+      model: 'gpt-4o',
+      messages: [
+        {
+          role: 'system',
+          content: `You are a specialized Food Analyst.
+            Describe the food in this image in extreme detail.
             Identify every visible ingredient, sauce (e.g. "Creamy Alfredo", "Tomato Basil"), and estimate precise portion sizes (e.g. "Approx 200g", "1 Large Bowl").
             If you see oil or butter sheen, mention it.
             Return ONLY the description text.`
-          },
-          {
-            role: 'user',
-            content: [
-              {
-                type: 'text',
-                text: 'Describe this dish for caloric analysis.'
-              },
-              {
-                type: 'image_url',
-                image_url: {
-                  url: imageDataUrl
-                }
+        },
+        {
+          role: 'user',
+          content: [
+            {
+              type: 'text',
+              text: 'Describe this dish for caloric analysis.'
+            },
+            {
+              type: 'image_url',
+              image_url: {
+                url: imageDataUrl
               }
-            ]
-          }
-        ],
-        max_tokens: 300,
-      }),
+            }
+          ]
+        }
+      ],
+      max_tokens: 300,
+      call_type: 'food-image-vision',
     });
 
-    if (!visionResponse.ok) {
-      const errorText = await visionResponse.text();
-      if (__DEV__) console.error('Vision API error response:', errorText);
-      throw new Error(`Vision API error: ${visionResponse.status} - ${errorText}`);
-    }
-
-    const visionData = await visionResponse.json();
     const description = visionData.choices[0]?.message?.content;
 
     if (!description) throw new Error('No description from Vision AI');
@@ -606,40 +583,27 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
 }
 
 export async function getCoachChatResponse(sessionMessages: { role: string; content: string }[]): Promise<string> {
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    throw new Error('OPENAI_API_KEY_NOT_CONFIGURED');
-  }
-
   try {
     const systemMessageContent = await chatCoachService.generateSystemMessage();
 
     // Construct the full payload: System Context + Session History
+    // Sanitize user messages to prevent prompt injection
+    const sanitizedMessages = sessionMessages.map(m => ({
+      role: m.role,
+      content: m.role === 'user' ? sanitizeForAI(m.content) : m.content,
+    }));
     const finalMessages = [
       { role: 'system', content: systemMessageContent },
-      ...sessionMessages
+      ...sanitizedMessages
     ];
 
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o', // Use high-intelligence model for the Coach personality
-        messages: finalMessages,
-        temperature: 0.7, // Allow some creativity/wit
-        max_tokens: 600,
-      }),
+    const data = await invokeAI({
+      model: 'gpt-4o',
+      messages: finalMessages,
+      temperature: 0.7,
+      max_tokens: 600,
+      call_type: 'coach-chat',
     });
-
-    if (!response.ok) {
-      const errText = await response.text();
-      console.error('OpenAI Error details:', errText);
-      throw new Error(`OpenAI API error: ${response.status}`);
-    }
-
-    const data: OpenAIResponse = await response.json();
     return data.choices[0]?.message?.content || "I'm drawing a blank. Try again?";
 
   } catch (error) {
@@ -692,8 +656,6 @@ Return a strictly valid JSON object:
 }
 `;
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
-
 const SMART_SUGGEST_LIMIT_KEY = 'smart_suggest_limit_v1';
 const DAILY_LIMIT = 2;
 
@@ -704,12 +666,6 @@ interface SmartSuggestionResult {
 }
 
 export async function generateSmartSuggestion(context: any, forceNew: boolean = false, options?: { forceHungry?: boolean }): Promise<SmartSuggestionResult> {
-  const fallback = { displayText: "Upgrade to Premium for Smart Suggestions!", loggableText: "" };
-
-  if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-    return fallback;
-  }
-
   try {
     // 1. Check Daily Limit and Cache
     const now = new Date();
@@ -740,26 +696,16 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
       force_hungry: options?.forceHungry || false
     };
 
-    const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini',
-        messages: [
-          { role: 'system', content: SMART_SUGGEST_PROMPT },
-          { role: 'user', content: JSON.stringify(enrichedContext) }
-        ],
-        temperature: 0.7,
-        response_format: { type: "json_object" }
-      }),
+    const data = await invokeAI({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: SMART_SUGGEST_PROMPT },
+        { role: 'user', content: JSON.stringify(sanitizeObjectForAI(enrichedContext)) }
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" },
+      call_type: 'smart-suggestion',
     });
-
-    if (!response.ok) return { displayText: "Unable to generate suggestion right now.", loggableText: "" };
-
-    const data: OpenAIResponse = await response.json();
     const content = data.choices[0]?.message?.content;
 
     let result: SmartSuggestionResult = {

@@ -1,8 +1,8 @@
 
 // Utility functions for Advanced Analytics Calculations
 
-import { Meal } from '../components/FoodLogSection';
-import { eachDayOfInterval, format, getDay, isSameDay, startOfDay, subDays } from 'date-fns';
+import { DailySummary } from './dataStorage';
+import { eachDayOfInterval, format, getDay, subDays } from 'date-fns';
 
 export interface TrendInsight {
     type: 'CALORIES' | 'PROTEIN' | 'WEIGHT';
@@ -26,7 +26,7 @@ export interface ConsistencyData {
 
 // Helper to calculate trends (7 days vs previous 7 days)
 export function calculateTrends(
-    meals: Record<string, Meal[]>,
+    summaries: Record<string, DailySummary>,
     goals: any
 ): TrendInsight[] {
     const insights: TrendInsight[] = [];
@@ -40,23 +40,19 @@ export function calculateTrends(
     for (let i = 0; i < 7; i++) {
         const d = subDays(today, i);
         const dateKey = format(d, 'yyyy-MM-dd');
-        const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => {
-            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
-            return acc + mealCals;
-        }, 0);
-        if (dayMeals.length > 0) currentWeek.push(cals);
+        const summary = summaries[dateKey];
+        if (summary && summary.entryCount > 0) {
+            currentWeek.push(summary.totalCalories);
+        }
     }
 
     for (let i = 7; i < 14; i++) {
         const d = subDays(today, i);
         const dateKey = format(d, 'yyyy-MM-dd');
-        const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => {
-            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
-            return acc + mealCals;
-        }, 0);
-        if (dayMeals.length > 0) previousWeek.push(cals);
+        const summary = summaries[dateKey];
+        if (summary && summary.entryCount > 0) {
+            previousWeek.push(summary.totalCalories);
+        }
     }
 
     const avgCurrent = currentWeek.length ? currentWeek.reduce((a, b) => a + b, 0) / currentWeek.length : 0;
@@ -96,7 +92,7 @@ export function calculateTrends(
 }
 
 // Helper for Heatmap Data (Status per day for last 30 days)
-export function calculateHeatmapData(meals: Record<string, Meal[]>): ConsistencyData[] {
+export function calculateHeatmapData(summaries: Record<string, DailySummary>): ConsistencyData[] {
     const result: ConsistencyData[] = [];
     const today = new Date();
 
@@ -108,19 +104,17 @@ export function calculateHeatmapData(meals: Record<string, Meal[]>): Consistency
 
     days.forEach(day => {
         const dateKey = format(day, 'yyyy-MM-dd');
-        const dayMeals = meals[dateKey] || [];
-        const cals = dayMeals.reduce((acc, m) => {
-            const mealCals = m.foods.reduce((sum, f) => sum + f.calories, 0);
-            return acc + mealCals;
-        }, 0);
+        const summary = summaries[dateKey];
+        const entryCount = summary?.entryCount ?? 0;
+        const cals = summary?.totalCalories ?? 0;
 
         let status: 'LOGGED' | 'PARTIAL' | 'MISSED' = 'MISSED';
         let score = 0;
 
-        if (dayMeals.length >= 3 && cals > 1200) {
+        if (entryCount >= 3 && cals > 1200) {
             status = 'LOGGED';
             score = 1;
-        } else if (dayMeals.length > 0) {
+        } else if (entryCount > 0) {
             status = 'PARTIAL';
             score = 0.5;
         }
@@ -136,7 +130,7 @@ export function calculateHeatmapData(meals: Record<string, Meal[]>): Consistency
 }
 
 // Helper for Macro Patterns (Weekday vs Weekend)
-export function calculateMacroPatterns(meals: Record<string, Meal[]>): MacroPattern[] {
+export function calculateMacroPatterns(summaries: Record<string, DailySummary>): MacroPattern[] {
     const patterns: MacroPattern[] = [];
     const weekdayProtein: number[] = [];
     const weekendProtein: number[] = [];
@@ -146,19 +140,15 @@ export function calculateMacroPatterns(meals: Record<string, Meal[]>): MacroPatt
     for (let i = 0; i < 30; i++) {
         const d = subDays(today, i);
         const dateKey = format(d, 'yyyy-MM-dd');
-        const dayMeals = meals[dateKey] || [];
-        if (dayMeals.length === 0) continue;
+        const summary = summaries[dateKey];
+        if (!summary || summary.entryCount === 0) continue;
 
-        const protein = dayMeals.reduce((acc, m) => {
-            const mealProtein = m.foods.reduce((sum, f) => sum + (f.protein || 0), 0);
-            return acc + mealProtein;
-        }, 0);
         const dayOfWeek = getDay(d); // 0 = Sun, 6 = Sat
 
         if (dayOfWeek === 0 || dayOfWeek === 6) {
-            weekendProtein.push(protein);
+            weekendProtein.push(summary.totalProtein);
         } else {
-            weekdayProtein.push(protein);
+            weekdayProtein.push(summary.totalProtein);
         }
     }
 

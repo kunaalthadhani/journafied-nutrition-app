@@ -1,7 +1,8 @@
 
-import { config } from '../config/env';
+import { invokeAI } from './aiProxyService';
 import { UserMetricsSnapshot, Insight } from './dataStorage';
 import { GrocerySuggestionResult } from './GrocerySuggestionService';
+import { sanitizeObjectForAI } from '../utils/sanitizeAI';
 
 export interface GroceryContext {
     userGoal: string; // lose, maintain, gain
@@ -22,13 +23,6 @@ export interface GroceryCoachExplanation {
     };
 }
 
-interface OpenAIResponse {
-    choices: {
-        message: {
-            content: string;
-        };
-    }[];
-}
 
 const GROCERY_COACH_SYSTEM_PROMPT = `
 You are a calm, practical, and non-preachy nutrition coach.
@@ -75,44 +69,27 @@ export const groceryCoachService = {
         context: GroceryContext
     ): Promise<GroceryCoachExplanation | null> {
 
-        // 1. Check Config/Guardrails
-        if (!process.env.OPENAI_API_KEY && (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here')) {
-            console.log('OpenAI API Key missing, skipping AI explanation.');
-            return null;
-        }
-
         try {
-            // 2. Prepare Context
-            const contextString = JSON.stringify(context, null, 2);
-            const listString = JSON.stringify(groceryResult.items.map(i => ({ name: i.name, category: i.category })));
+            // 1. Prepare Context (sanitize user-controlled food names to prevent prompt injection)
+            const safeContext = sanitizeObjectForAI(context);
+            const safeItems = sanitizeObjectForAI(groceryResult.items.map(i => ({ name: i.name, category: i.category })));
+            const contextString = JSON.stringify(safeContext, null, 2);
+            const listString = JSON.stringify(safeItems);
 
             const userPrompt = `Please explain this grocery list.\n\nGROCERY LIST:\n${listString}\n\nUSER CONTEXT:\n${contextString}`;
 
-            // 3. Call OpenAI
-            const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                    model: config.OPENAI_CONFIG.model || 'gpt-3.5-turbo',
-                    messages: [
-                        { role: 'system', content: GROCERY_COACH_SYSTEM_PROMPT },
-                        { role: 'user', content: userPrompt }
-                    ],
-                    temperature: 0.5,
-                    max_tokens: 450,
-                    response_format: { type: "json_object" } // Ensure JSON
-                }),
+            // 2. Call AI via proxy
+            const data = await invokeAI({
+                model: 'gpt-4',
+                messages: [
+                    { role: 'system', content: GROCERY_COACH_SYSTEM_PROMPT },
+                    { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.5,
+                max_tokens: 450,
+                response_format: { type: "json_object" },
+                call_type: 'grocery-coach',
             });
-
-            if (!response.ok) {
-                console.error('Grocery Coach API Error:', response.status);
-                return null;
-            }
-
-            const data: OpenAIResponse = await response.json();
             const content = data.choices[0]?.message?.content;
 
             if (!content) return null;

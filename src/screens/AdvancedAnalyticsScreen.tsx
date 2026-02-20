@@ -39,20 +39,15 @@ const AdvancedAnalyticsScreen: React.FC<AdvancedAnalyticsScreenProps> = ({
 
     // -- Effects --
     useEffect(() => {
-        if (userPlan === 'premium') {
-            // Note: Trend functions need to be updated to handle Summaries or we map summaries to legacy format temporarily
-            // For Step 2 strictness, we just pass summaries. Using "as any" if utils expect meals, 
-            // but effectively we want utils to use summaries.
-            // Assumption: calculateTrends etc, will be refactored or we pass a mock.
-            // For now, let's pretend utilities can handel it or just pass empty since we are optimizing memory.
-            // Actual Fix: The Utils likely need refactoring too, but that wasn't explicitly in the 5 file list,
-            // so we will pass null/empty to stop the crash/memory usage on this screen for now.
-            // Or better:
-
-            // const t = calculateTrends(summariesByDate, userGoals); 
-            // setTrends(t);
+        if (userPlan === 'premium' && summariesByDate) {
+            const t = calculateTrends(summariesByDate, userGoals);
+            setTrends(t);
+            const h = calculateHeatmapData(summariesByDate);
+            setHeatmapData(h);
+            const m = calculateMacroPatterns(summariesByDate);
+            setMacroPatterns(m);
         }
-    }, [userPlan, summariesByDate]);
+    }, [userPlan, summariesByDate, userGoals]);
 
     // Feedback Timer
     useEffect(() => {

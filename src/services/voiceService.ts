@@ -2,7 +2,7 @@
 import { Audio } from 'expo-av';
 import { Platform } from 'react-native';
 import * as FileSystem from 'expo-file-system/legacy';
-import { config } from '../config/env';
+import { invokeWhisper } from './aiProxyService';
 
 export interface VoiceRecordingResult {
   transcription: string;
@@ -125,19 +125,9 @@ class VoiceService {
   private async transcribeAudio(audioUri: string): Promise<string> {
     try {
       console.log('Transcribing audio from URI:', audioUri);
-
-      // Check if API key is configured
-      if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-        console.warn('OpenAI API key not configured, using fallback');
-        return await this.mockTranscription();
-      }
-
-      // Use OpenAI Whisper API for transcription
       return await this.transcribeWithOpenAI(audioUri);
-
     } catch (error) {
       console.error('Transcription failed:', error);
-      // Fallback to mock if real transcription fails
       try {
         return await this.mockTranscription();
       } catch (fallbackError) {
@@ -166,51 +156,25 @@ class VoiceService {
     try {
       console.log('Starting OpenAI Whisper transcription...');
 
-      // Read the audio file
       const fileInfo = await FileSystem.getInfoAsync(audioUri);
       if (!fileInfo.exists) {
         throw new Error('Audio file does not exist');
       }
 
-      // Create FormData for multipart/form-data upload
-      const formData = new FormData();
-
-      // For React Native, we need to append the file differently
-      // The file needs to be in a format that React Native's FormData understands
-      formData.append('file', {
-        uri: audioUri,
-        type: 'audio/m4a',
-        name: 'audio.m4a',
-      } as any);
-
-      formData.append('model', 'whisper-1');
-      formData.append('language', 'en'); // Optional: specify language for better accuracy
-
-      console.log('Sending request to OpenAI Whisper API...');
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-          // Don't set Content-Type header - let fetch set it with boundary for multipart/form-data
-        },
-        body: formData,
+      // Read audio as base64 and send through the Edge Function proxy
+      const audioBase64 = await FileSystem.readAsStringAsync(audioUri, {
+        encoding: FileSystem.EncodingType.Base64,
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('OpenAI API error:', response.status, errorText);
-        throw new Error(`OpenAI API error: ${response.status} - ${errorText} `);
-      }
-
-      const result = await response.json();
-      const transcription = result.text || 'Could not transcribe audio';
+      console.log('Sending audio to AI proxy for transcription...');
+      const transcription = await invokeWhisper(audioBase64);
 
       console.log('Transcription successful:', transcription);
-      return transcription;
+      return transcription || 'Could not transcribe audio';
 
     } catch (error) {
       console.error('OpenAI transcription failed:', error);
-      throw error; // Re-throw to let caller handle fallback
+      throw error;
     }
   }
 

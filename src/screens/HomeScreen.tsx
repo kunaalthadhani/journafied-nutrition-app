@@ -744,10 +744,10 @@ export const HomeScreen: React.FC = () => {
       if (isPremium) {
         const shouldRun = await patternDetectionService.shouldRunDetection();
         if (shouldRun) {
-          patternDetectionService.analyzePatterns().then(newPatterns => {
-            if (newPatterns.length > 0) {
-              setDetectedPatterns(newPatterns);
-            }
+          patternDetectionService.analyzePatterns().then(async () => {
+            // Always refresh from storage — clears stale patterns even if none detected
+            const fresh = await patternDetectionService.getActivePatterns();
+            setDetectedPatterns(fresh);
           }).catch(err => console.error('Pattern detection failed:', err));
         }
       }
@@ -2059,60 +2059,7 @@ export const HomeScreen: React.FC = () => {
           </View>
         ) : null}
 
-        {/* 🧪 TEMPORARY: Demo Pattern Test Button (Remove in production) */}
-        {__DEV__ && (
-          <View style={{ paddingHorizontal: 16, paddingTop: 8, gap: 8 }}>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              <TouchableOpacity
-                onPress={async () => {
-                  await patternDetectionService.injectDemoPattern();
-                  const patterns = await patternDetectionService.getActivePatterns();
-                  setDetectedPatterns(patterns);
-                  Alert.alert('✅ Test Pattern Injected!', 'Scroll down to see the pattern card.');
-                }}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.primary + '20',
-                  borderWidth: 1,
-                  borderColor: theme.colors.primary,
-                  borderRadius: 8,
-                  padding: 10,
-                  alignItems: 'center',
-                  borderStyle: 'dashed'
-                }}
-              >
-                <Text style={{ color: theme.colors.primary, fontSize: 12, fontWeight: '600' }}>
-                  🧪 Inject Pattern
-                </Text>
-              </TouchableOpacity>
 
-              <TouchableOpacity
-                onPress={async () => {
-                  const patterns = await dataStorage.getDetectedPatterns();
-                  for (const p of patterns) {
-                    await dataStorage.dismissPattern(p.id);
-                  }
-                  setDetectedPatterns([]);
-                  Alert.alert('🗑️ Cleared!', 'All test patterns removed.');
-                }}
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.colors.error + '20',
-                  borderWidth: 1,
-                  borderColor: theme.colors.error,
-                  borderRadius: 8,
-                  padding: 10,
-                  alignItems: 'center',
-                  borderStyle: 'dashed'
-                }}
-              >
-                <Text style={{ color: theme.colors.error, fontSize: 12, fontWeight: '600' }}>
-                  🗑️ Clear All
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        )}
 
         {/* Date Selector (horizontal scroll/pan within the bar only) */}
         <DateSelector
@@ -2402,7 +2349,7 @@ export const HomeScreen: React.FC = () => {
           presentationStyle="pageSheet"
           onRequestClose={() => setShowChatCoach(false)}
         >
-          <ChatCoachScreen onClose={() => setShowChatCoach(false)} />
+          <ChatCoachScreen onClose={() => setShowChatCoach(false)} isPremium={isPremium} />
         </Modal>
 
         <CalendarModal

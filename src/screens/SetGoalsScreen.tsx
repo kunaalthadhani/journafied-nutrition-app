@@ -146,20 +146,36 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   };
 
   const handleSave = () => {
-    if (totalPercentage !== 100) {
+    if (totalPercentage < 99 || totalPercentage > 101) {
       Alert.alert(
         "Invalid Percentages",
-        `The total percentage is ${totalPercentage}%. Please adjust your macronutrient percentages to equal 100%.`,
+        `The total percentage is ${totalPercentage}%. Please adjust your macronutrient percentages to be within 99-101%.`,
         [{ text: "OK" }]
       );
       return;
     }
 
+    // Normalize to exactly 100% if within tolerance (99-101)
+    let normProtein = proteinPercentage;
+    let normCarbs = carbsPercentage;
+    let normFat = fatPercentage;
+    const diff = totalPercentage - 100;
+    if (diff !== 0) {
+      // Adjust the largest macro to absorb the 1% difference
+      if (normProtein >= normCarbs && normProtein >= normFat) {
+        normProtein -= diff;
+      } else if (normCarbs >= normFat) {
+        normCarbs -= diff;
+      } else {
+        normFat -= diff;
+      }
+    }
+
     const goalData: GoalData = {
       calories,
-      proteinPercentage,
-      carbsPercentage,
-      fatPercentage,
+      proteinPercentage: normProtein,
+      carbsPercentage: normCarbs,
+      fatPercentage: normFat,
       proteinGrams,
       carbsGrams,
       fatGrams,
@@ -297,11 +313,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             {isEditingMacros && (
               <View style={[
                 styles.totalBadge,
-                { backgroundColor: totalPercentage === 100 ? theme.colors.successBg : theme.colors.error + '15' }
+                { backgroundColor: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.successBg : theme.colors.error + '15' }
               ]}>
                 <Text style={[
                   styles.totalBadgeText,
-                  { color: totalPercentage === 100 ? theme.colors.success : theme.colors.error }
+                  { color: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.success : theme.colors.error }
                 ]}>
                   {totalPercentage}% Total
                 </Text>

@@ -155,8 +155,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     return nutritionData.filter(entry => entry.date >= startDate);
   };
 
-  const filteredData = getFilteredData();
-  const graphData = filteredData;
+  const graphData = useMemo(() => getFilteredData(), [nutritionData, timeRange]);
 
   // Target values (in grams) - in a real app, these would come from saved goals
   const targetProtein = targetProteinProp && targetProteinProp > 0 ? targetProteinProp : undefined;
@@ -505,9 +504,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Insights State
   const [insightText, setInsightText] = useState<string | null>(null);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
+  const insightRequestInFlight = useRef(false);
 
   useEffect(() => {
-    if (activeTab === 'Insights' && isPremium && !insightText && graphData.length > 0) {
+    if (activeTab === 'Insights' && isPremium && !insightText && !insightRequestInFlight.current && graphData.length > 0) {
+      insightRequestInFlight.current = true;
       setIsGeneratingInsight(true);
       // Prepare summary for AI
       const weeklySummary = {
@@ -524,18 +525,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           setInsightText(text);
         })
         .catch(err => console.error(err))
-        .finally(() => setIsGeneratingInsight(false));
+        .finally(() => {
+          setIsGeneratingInsight(false);
+          insightRequestInFlight.current = false;
+        });
     }
-  }, [activeTab, isPremium, graphData]); // Removed insightText dependency to avoid loops, though strict mode might differ.
+  }, [activeTab, isPremium, graphData]);
 
   // Radar Chart Data Calculation
   const radarData = useMemo(() => {
-    if (!averageProtein || !averageCarbs || !averageFat || !targetProtein || !targetCarbs || !targetFat) return [];
+    if (!targetProtein || !targetCarbs || !targetFat) return [];
 
     // Normalize to 0-1 range (capped at 1.2 for over-performance visualization)
-    const pScore = Math.min(1.2, averageProtein / targetProtein);
-    const cScore = Math.min(1.2, averageCarbs / targetCarbs);
-    const fScore = Math.min(1.2, averageFat / targetFat);
+    const pScore = Math.min(1.2, (averageProtein ?? 0) / targetProtein);
+    const cScore = Math.min(1.2, (averageCarbs ?? 0) / targetCarbs);
+    const fScore = Math.min(1.2, (averageFat ?? 0) / targetFat);
 
     // Calorie adherence score
     const calScore = targetCalories ? Math.min(1.2, (averageCalories || 0) / targetCalories) : 0;

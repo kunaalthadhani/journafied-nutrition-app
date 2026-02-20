@@ -26,9 +26,10 @@ interface Message {
 
 interface ChatCoachScreenProps {
     onClose?: () => void;
+    isPremium?: boolean;
 }
 
-export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose }) => {
+export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPremium = false }) => {
     const theme = useTheme();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
@@ -54,7 +55,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose }) => 
             // I'll assume Free User by default for testing safety, or maybe I should check? 
             // For now, let's treat everyone as Free (3 limit) to prove the limit works, or Premium to prove text.
             // I will use 'false' (Free) default to test the limit logic.
-            const limit = await chatCoachService.checkDailyLimit(false);
+            const limit = await chatCoachService.checkDailyLimit(isPremium);
             setLimitStatus(limit);
 
             // 3. Initial Greeting
@@ -81,7 +82,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose }) => 
         if (!inputText.trim()) return;
 
         // 1. Limit Check
-        const currentLimit = await chatCoachService.checkDailyLimit(false); // Check fresh
+        const currentLimit = await chatCoachService.checkDailyLimit(isPremium);
         if (!currentLimit.allowed) {
             setLimitStatus(currentLimit); // Update UI
             return; // Block sending
@@ -106,7 +107,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose }) => 
 
             // 4. Increment Usage
             await chatCoachService.incrementUsage();
-            const newLimit = await chatCoachService.checkDailyLimit(false);
+            const newLimit = await chatCoachService.checkDailyLimit(isPremium);
             setLimitStatus(newLimit);
 
         } catch (e) {

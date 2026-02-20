@@ -1,15 +1,5 @@
-import { config } from '../config/env';
+import { invokeAI } from './aiProxyService';
 import { dataStorage, UserMetricsSnapshot, Insight } from './dataStorage';
-
-interface OpenAIChoice {
-    message: {
-        content: string;
-    };
-}
-
-interface OpenAIResponse {
-    choices: OpenAIChoice[];
-}
 
 const COACH_SYSTEM_PROMPT = `
 You are a direct, data-driven nutrition coach.
@@ -68,41 +58,20 @@ export const aiCoachService = {
             return "I don't have enough data to generate a coaching insight yet. Please complete your profile and log some meals.";
         }
 
-        // Guardrail: No API Key (Offline/Dev mode text generation)
-        if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY.includes('your-key')) {
-            // Deterministic fallback
-            if (userQuestion?.toLowerCase().includes('weight')) {
-                return `You are currently ${snapshot.weightTrend.change && snapshot.weightTrend.change < 0 ? 'down' : 'stable'} ${Math.abs(snapshot.weightTrend.change || 0)}kg over the last ${snapshot.weightTrend.periodDays} days. Consistency is ${snapshot.consistencyScore}%.`;
-            }
-            const topInsight = insights.length > 0 ? insights[0].description : "You're on track.";
-            return `Your 7-day consistency is ${snapshot.consistencyScore}%. ${topInsight}`;
-        }
-
         try {
             const messages = [
                 { role: 'system', content: COACH_SYSTEM_PROMPT },
                 { role: 'user', content: buildUserMessage(snapshot, insights, userQuestion) }
             ];
 
-            const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                    model: config.OPENAI_CONFIG.model || 'gpt-3.5-turbo',
-                    messages,
-                    temperature: 0.5,
-                    max_tokens: 150,
-                }),
+            const data = await invokeAI({
+                model: 'gpt-4',
+                messages,
+                temperature: 0.5,
+                max_tokens: 150,
+                call_type: 'ai-coach',
             });
 
-            if (!response.ok) {
-                throw new Error(`AI API error: ${response.status}`);
-            }
-
-            const data: OpenAIResponse = await response.json();
             const content = data.choices[0]?.message?.content;
             return content || "I couldn't generate a response at this time.";
 

@@ -5,6 +5,19 @@ import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
 import { calculateStreak } from '../utils/streakUtils';
+import { parseISO } from 'date-fns';
+
+// --- Write serialization to prevent race conditions on rapid saves ---
+// Per-key promise chain: ensures read-modify-write operations for the same
+// key (e.g., same date or the summaries blob) execute one at a time.
+const _writeLocks: Record<string, Promise<void>> = {};
+
+function withWriteLock(key: string, fn: () => Promise<void>): Promise<void> {
+  const prev = _writeLocks[key] || Promise.resolve();
+  const next = prev.then(fn, fn); // run fn after previous completes (even on failure)
+  _writeLocks[key] = next.then(() => {}, () => {}); // keep chain alive, swallow errors
+  return next;
+}
 
 // Modification to MealEntry interface to support summary
 export interface MealEntry {
@@ -820,17 +833,16 @@ export const dataStorage = {
   },
 
   async saveDailyLog(date: string, meals: MealEntry[]): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(meals));
+    return withWriteLock('log:' + date, async () => {
+      try {
+        await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(meals));
 
-      // Update summary automatically
-      await this.updateSummaryForDate(date, meals);
-
-      // Sync to Supabase logic will be handled by caller or queue for now to keep this atomic
-      // But typically we should sync here.
-    } catch (error) {
-      console.error(`Error saving daily log for ${date}:`, error);
-    }
+        // Update summary automatically
+        await this.updateSummaryForDate(date, meals);
+      } catch (error) {
+        console.error(`Error saving daily log for ${date}:`, error);
+      }
+    });
   },
 
   async deleteDailyLog(date: string): Promise<void> {
@@ -1037,7 +1049,7 @@ export const dataStorage = {
       if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
         return localEntries.map((entry) => ({
           id: entry.id,
-          date: new Date(entry.date),
+          date: parseISO(entry.date),
           weight: entry.weight,
           updatedAt: entry.updatedAt,
         }));
@@ -1049,7 +1061,7 @@ export const dataStorage = {
         await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(merged));
         return merged.map((entry) => ({
           id: entry.id,
-          date: new Date(entry.date),
+          date: parseISO(entry.date),
           weight: entry.weight,
           updatedAt: entry.updatedAt,
         }));
@@ -1057,7 +1069,7 @@ export const dataStorage = {
 
       return localEntries.map((entry) => ({
         id: entry.id,
-        date: new Date(entry.date),
+        date: parseISO(entry.date),
         weight: entry.weight,
         updatedAt: entry.updatedAt,
       }));
@@ -2029,6 +2041,16 @@ export const dataStorage = {
     }
   },
 
+  async getReferralRewardsForRedemption(redemptionId: string): Promise<ReferralReward[]> {
+    try {
+      const rewards = await this.loadReferralRewards();
+      return rewards.filter(r => r.relatedRedemptionId === redemptionId);
+    } catch (error) {
+      console.error('Error loading referral rewards for redemption:', error);
+      return [];
+    }
+  },
+
   async loadReferralRewardsForUser(userId: string): Promise<ReferralReward[]> {
     try {
       // Try Supabase first if we have account info
@@ -2127,17 +2149,16 @@ export const dataStorage = {
   },
 
   async updateSummaryForDate(dateKey: string, mealsForDay: MealEntry[]): Promise<void> {
-    try {
-      const summaries = await this.loadDailySummaries();
-      const newSummary = this.recalculateDailySummary(dateKey, mealsForDay);
-      summaries[dateKey] = newSummary;
-      await this.saveDailySummaries(summaries);
-
-      // Sync summary to Supabase (Step 2 - Todo)
-      // await supabaseDataService.upsertDailySummary(...)
-    } catch (e) {
-      console.error("Error updating summary for date", e);
-    }
+    return withWriteLock('summaries', async () => {
+      try {
+        const summaries = await this.loadDailySummaries();
+        const newSummary = this.recalculateDailySummary(dateKey, mealsForDay);
+        summaries[dateKey] = newSummary;
+        await this.saveDailySummaries(summaries);
+      } catch (e) {
+        console.error("Error updating summary for date", e);
+      }
+    });
   },
 
   async migrateMealsToSummaries(): Promise<void> {
@@ -2602,10 +2623,15 @@ export const dataStorage = {
   },
 
   saveMeal: async (date: string, meal: MealEntry): Promise<void> => {
-    const meals = await dataStorage.loadMeals();
-    const dayMeals = meals[date] || [];
-    meals[date] = [...dayMeals, meal];
-    await dataStorage.saveMeals(meals);
+    // Use per-date lock to serialize the read-modify-write cycle.
+    // Writes directly to AsyncStorage + updates summary to avoid nested lock
+    // with saveDailyLog (which holds the same per-date lock).
+    return withWriteLock('log:' + date, async () => {
+      const dayMeals = await dataStorage.getDailyLog(date);
+      const updated = [...dayMeals, meal];
+      await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(updated));
+      await dataStorage.updateSummaryForDate(date, updated);
+    });
   },
 
   // --- USER METRICS SNAPSHOT ---

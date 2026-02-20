@@ -30,7 +30,7 @@ export const authService = {
     } catch (error: any) {
       const msg = error?.message?.toString().toLowerCase() ?? '';
       // Ignore "already registered" / "user already exists" errors.
-      if (!msg.includes('already') || !msg.includes('registered')) {
+      if (!msg.includes('already') && !msg.includes('registered')) {
         throw error;
       }
     }

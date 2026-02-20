@@ -1,10 +1,7 @@
 import { dataStorage, DetectedPattern } from './dataStorage';
 import { generateId } from '../utils/uuid';
-import { config } from '../config/env';
-
-interface OpenAIResponse {
-    choices: { message: { content: string } }[];
-}
+import { invokeAI } from './aiProxyService';
+import { sanitizeObjectForAI } from '../utils/sanitizeAI';
 
 /**
  * Pattern Detection Service
@@ -59,7 +56,11 @@ export const patternDetectionService = {
      */
     async analyzePatterns(): Promise<DetectedPattern[]> {
         try {
-            // 1. Gather last 21 days of data
+            // 1. Load user goals for accurate goal-adherence analysis
+            const goals = await dataStorage.loadGoals();
+            const calorieTarget = goals?.calories || 0;
+
+            // 2. Gather last 21 days of data
             const dailyData = [];
             const today = new Date();
 
@@ -71,6 +72,7 @@ export const patternDetectionService = {
                 const meals = await dataStorage.getDailyLog(dateKey);
 
                 if (meals.length > 0) {
+                    const totalCalories = meals.reduce((sum, m) => sum + m.foods.reduce((s, f) => s + f.calories, 0), 0);
                     dailyData.push({
                         date: dateKey,
                         meals: meals.map(m => ({
@@ -78,7 +80,9 @@ export const patternDetectionService = {
                             totalCalories: m.foods.reduce((sum, f) => sum + f.calories, 0),
                             totalProtein: m.foods.reduce((sum, f) => sum + f.protein, 0),
                             foods: m.foods.map(f => f.name)
-                        }))
+                        })),
+                        totalCalories,
+                        exceededGoal: calorieTarget > 0 ? totalCalories > calorieTarget : null,
                     });
                 }
             }
@@ -88,34 +92,21 @@ export const patternDetectionService = {
                 return [];
             }
 
-            // 2. Call AI for pattern detection
-            if (!config.OPENAI_API_KEY || config.OPENAI_API_KEY === 'your-openai-api-key-here') {
-                return [];
-            }
-
-            const response = await fetch(config.API_ENDPOINTS.OPENAI, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${config.OPENAI_API_KEY}`,
-                },
-                body: JSON.stringify({
-                    model: 'gpt-4o-mini',
-                    messages: [
-                        { role: 'system', content: PATTERN_DETECTION_PROMPT },
-                        { role: 'user', content: JSON.stringify({ dailyData: dailyData.slice(0, 14) }) }
-                    ],
-                    temperature: 0.3, // Lower temperature for more deterministic analysis
-                    response_format: { type: "json_object" }
-                }),
+            // 3. Call AI for pattern detection
+            const data = await invokeAI({
+                model: 'gpt-4o-mini',
+                messages: [
+                    { role: 'system', content: PATTERN_DETECTION_PROMPT },
+                    { role: 'user', content: JSON.stringify(sanitizeObjectForAI({
+                        dailyCalorieTarget: calorieTarget || undefined,
+                        dailyData: dailyData.slice(0, 14),
+                    })) }
+                ],
+                temperature: 0.3,
+                response_format: { type: "json_object" },
+                call_type: 'pattern-detection',
             });
 
-            if (!response.ok) {
-                console.error('Pattern detection API failed');
-                return [];
-            }
-
-            const data: OpenAIResponse = await response.json();
             const content = data.choices[0]?.message?.content;
 
             if (!content) return [];
@@ -149,11 +140,17 @@ export const patternDetectionService = {
     },
 
     /**
-     * Get active (non-dismissed) patterns
+     * Get active (non-dismissed) patterns, excluding stale ones (>14 days old)
      */
     async getActivePatterns(): Promise<DetectedPattern[]> {
         const all = await dataStorage.getDetectedPatterns();
-        return all.filter(p => !p.dismissed);
+        const now = Date.now();
+        const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
+        return all.filter(p => {
+            if (p.dismissed) return false;
+            const age = now - new Date(p.detectedAt).getTime();
+            return age <= MAX_AGE_MS;
+        });
     },
 
     /**
