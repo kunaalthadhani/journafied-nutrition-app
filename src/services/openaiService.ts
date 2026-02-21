@@ -483,7 +483,6 @@ Return a strictly valid JSON object:
 `;
 
 const SMART_SUGGEST_LIMIT_KEY = 'smart_suggest_limit_v1';
-const DAILY_LIMIT = 2;
 
 interface SmartSuggestionResult {
   displayText: string;
@@ -528,7 +527,7 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
         { role: 'system', content: SMART_SUGGEST_PROMPT },
         { role: 'user', content: JSON.stringify(sanitizeObjectForAI(enrichedContext)) }
       ],
-      temperature: 0.7,
+      temperature: 0.3,
       response_format: { type: "json_object" },
       call_type: 'smart-suggestion',
     });

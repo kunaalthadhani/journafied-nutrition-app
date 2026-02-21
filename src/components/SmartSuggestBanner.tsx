@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, Alert, LayoutAnimation, Platform, UIManager } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
@@ -12,10 +12,11 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 }
 
 export interface SmartSuggestBannerProps {
+    isPremium: boolean;
     onLogSuggestion?: (suggestion: string) => void;
 }
 
-export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSuggestion }) => {
+export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremium, onLogSuggestion }) => {
     const theme = useTheme();
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -38,32 +39,23 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
     const fetchSuggestion = async (forceNew: boolean, forceHungry: boolean = false) => {
         setLoading(true);
         try {
-            const ctx = await chatCoachService.buildContext();
+            const ctx = await chatCoachService.buildContext({ minLoggedDays: 3, requireWeight: false });
 
             if (ctx.dataQuality === 'insufficient') {
-                Alert.alert("No Data", "Please log at least one meal to get smart suggestions!");
+                setSuggestion({
+                    displayText: "Smart Suggest needs a few days of meal data to learn what you eat. Keep logging and check back soon.",
+                    loggableText: "",
+                });
+                LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                setExpanded(true);
                 setLoading(false);
                 return;
             }
 
-            const today = new Date().toISOString().split('T')[0];
-            const logs = await dataStorage.getDailyLog(today);
-            const goals = ctx.userProfile;
-
-            let eatenCals = 0;
-            let eatenProt = 0;
-            logs.forEach(m => m.foods.forEach(f => {
-                eatenCals += f.calories;
-                eatenProt += f.protein;
-            }));
-
-            const targetCals = ctx.recentPerformance.calorieGoal || 2000;
-            const targetProt = ctx.recentPerformance.proteinGoal || 150;
-            const remainingCalories = targetCals - eatenCals;
+            const remainingCalories = ctx.remainingMacros.calories;
 
             // Check if day is complete (0 or negative calories left)
             if (remainingCalories <= 0 && !forceHungry) {
-                // Day Done - No API call
                 setSuggestion({
                     displayText: "You've hit your calorie goal for the day! Outstanding work.",
                     loggableText: "",
@@ -83,10 +75,12 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
 
             const promptContext = {
                 remainingCalories: remainingCalories,
-                remainingProtein: targetProt - eatenProt,
-                itemsEatenCount: logs.length,
+                remainingProtein: ctx.remainingMacros.protein,
+                remainingCarbs: ctx.remainingMacros.carbs,
+                remainingFat: ctx.remainingMacros.fat,
+                mealsEatenToday: ctx.todaysLog.meals.length,
                 timeOfDay: new Date().getHours(),
-                goal: goals.goalType,
+                goal: ctx.userProfile.goalType,
                 availableFoods: ctx.topFoods || []
             };
 
@@ -100,7 +94,12 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
             LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
             setExpanded(true);
         } catch (e) {
-            Alert.alert("Error", "Could not generate suggestion.");
+            setSuggestion({
+                displayText: "Could not generate a suggestion right now. Please try again later.",
+                loggableText: "",
+            });
+            LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+            setExpanded(true);
         } finally {
             setLoading(false);
         }
@@ -125,7 +124,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
         setExpanded(false);
     };
 
-    if (!visible) return null;
+    if (!visible || !isPremium) return null;
 
     return (
         <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
@@ -167,12 +166,12 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ onLogSug
                             {suggestion.displayText}
                         </Text>
                         {suggestion.reasoning && (
-                            <View style={{ marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: theme.colors.border + '40' }}>
-                                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
-                                    <Feather name="info" size={12} color={theme.colors.primary} style={{ marginRight: 6 }} />
-                                    <Text style={{ fontSize: 11, fontWeight: 'bold', color: theme.colors.primary, textTransform: 'uppercase' }}>Why this option?</Text>
+                            <View style={[styles.reasoningContainer, { borderTopColor: theme.colors.border + '40' }]}>
+                                <View style={styles.reasoningHeader}>
+                                    <Feather name="info" size={12} color={theme.colors.primary} style={styles.reasoningIcon} />
+                                    <Text style={[styles.reasoningLabel, { color: theme.colors.primary }]}>Why this option?</Text>
                                 </View>
-                                <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic', lineHeight: 18 }}>
+                                <Text style={[styles.reasoningText, { color: theme.colors.textSecondary }]}>
                                     {suggestion.reasoning}
                                 </Text>
                             </View>
@@ -318,5 +317,28 @@ const styles = StyleSheet.create({
     miniButtonText: {
         fontFamily: Typography.fontFamily.medium,
         fontSize: 12,
-    }
+    },
+    reasoningContainer: {
+        marginTop: 12,
+        paddingTop: 12,
+        borderTopWidth: 1,
+    },
+    reasoningHeader: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        marginBottom: 4,
+    },
+    reasoningIcon: {
+        marginRight: 6,
+    },
+    reasoningLabel: {
+        fontSize: 11,
+        fontFamily: Typography.fontFamily.bold,
+        textTransform: 'uppercase',
+    },
+    reasoningText: {
+        fontSize: 13,
+        fontStyle: 'italic',
+        lineHeight: 18,
+    },
 });

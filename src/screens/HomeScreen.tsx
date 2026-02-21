@@ -64,7 +64,7 @@ import { generateId } from '../utils/uuid';
 import { calculateStreak } from '../utils/streakUtils';
 import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
-import { SmartSuggestBanner } from '../components/CoachCard';
+import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
@@ -2093,9 +2093,11 @@ export const HomeScreen: React.FC = () => {
             {/* Daily AI Coach Card - Premium Only */}
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner
+                isPremium={isPremium}
                 onLogSuggestion={(text) => {
-                  setTranscribedText(text);
-                  setShouldFocusInput(true);
+                  if (text.trim()) {
+                    handleInputSubmit(text);
+                  }
                 }}
               />
             )}

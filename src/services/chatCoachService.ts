@@ -151,7 +151,10 @@ export const chatCoachService = {
     /**
      * Builds the context object from recent user data.
      */
-    buildContext: async (): Promise<ChatCoachContext> => {
+    buildContext: async (options?: { minLoggedDays?: number; requireWeight?: boolean }): Promise<ChatCoachContext> => {
+        const minDays = options?.minLoggedDays ?? 14;
+        const requireWeight = options?.requireWeight ?? true;
+
         // 1. Get the latest snapshot
         let snapshot = await dataStorage.getUserMetricsSnapshot();
 
@@ -162,13 +165,11 @@ export const chatCoachService = {
         }
 
         // 2. Check strict data sufficiency
-        // Criteria: ~14 days of data (Proxy: Common Foods >= 5 or Consistency > 10) AND at least some weight data.
         let isSufficient = false;
 
         if (snapshot) {
-            // Require 14 days of logging for meaningful coaching data
-            const hasFoodData = (snapshot.loggedDaysCount || 0) >= 14;
-            const hasWeightData = snapshot.weightTrend.current !== null && snapshot.weightTrend.current > 0;
+            const hasFoodData = (snapshot.loggedDaysCount || 0) >= minDays;
+            const hasWeightData = !requireWeight || (snapshot.weightTrend.current !== null && snapshot.weightTrend.current > 0);
             isSufficient = hasFoodData && hasWeightData;
         }
 
