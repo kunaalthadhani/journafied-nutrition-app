@@ -77,17 +77,17 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
               ]}>
                 {dateData.dayName}
               </Text>
-              <View style={styles.dayNumberContainer}>
+              <View style={[
+                styles.dayNumberContainer,
+                isActive && [styles.activeBg, { backgroundColor: theme.colors.primary }],
+              ]}>
                 <Text style={[
                   styles.dayNumber,
                   { color: theme.colors.textTertiary },
-                  isActive && { color: theme.colors.textPrimary, fontWeight: Typography.fontWeight.bold },
+                  isActive && { color: theme.colors.primaryForeground, fontWeight: Typography.fontWeight.bold },
                 ]}>
                   {dateData.dayNumber}
                 </Text>
-                {isActive && (
-                  <View style={[styles.activeIndicator, { backgroundColor: theme.colors.primary }]} />
-                )}
               </View>
             </TouchableOpacity>
           )
@@ -128,15 +128,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  activeBg: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
   dayNumber: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.medium,
     color: Colors.tertiaryText,
-  },
-  activeIndicator: {
-    width: 4,
-    height: 4,
-    borderRadius: 2,
-    marginTop: 4,
   },
 });

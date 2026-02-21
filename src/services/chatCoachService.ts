@@ -166,11 +166,10 @@ export const chatCoachService = {
         let isSufficient = false;
 
         if (snapshot) {
-            // NEW CRITERIA: At least 1 day of logging history
-            const hasFoodData = (snapshot.loggedDaysCount || 0) >= 1;
-
-            // Allow functionality even without weight data, as requested ("one meal logged")
-            isSufficient = hasFoodData;
+            // Require 14 days of logging for meaningful coaching data
+            const hasFoodData = (snapshot.loggedDaysCount || 0) >= 14;
+            const hasWeightData = snapshot.weightTrend.current !== null && snapshot.weightTrend.current > 0;
+            isSufficient = hasFoodData && hasWeightData;
         }
 
         // 3. If STILL no snapshot or Insufficient, return safe skeleton

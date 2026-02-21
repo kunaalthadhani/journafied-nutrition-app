@@ -243,7 +243,10 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                           <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
                         </Text>
                         <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
-                          {food.calories} kcal · P:{food.protein} C:{food.carbs} F:{food.fat}
+                          {food.calories} kcal ·{' '}
+                          <Text style={{ color: '#3B82F6' }}>P:{food.protein}</Text>{' '}
+                          <Text style={{ color: '#F59E0B' }}>C:{food.carbs}</Text>{' '}
+                          <Text style={{ color: '#8B5CF6' }}>F:{food.fat}</Text>
                         </Text>
                       </View>
                       <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />

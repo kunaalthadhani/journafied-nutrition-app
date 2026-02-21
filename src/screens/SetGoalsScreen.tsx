@@ -51,10 +51,12 @@ interface GoalData {
 }
 
 const MACRO_COLORS = {
-  protein: '#3b82f6', // Blue 500
-  carbs: '#f59e0b',   // Amber 500
-  fat: '#ec4899',     // Pink 500
+  protein: '#3B82F6',
+  carbs: '#F59E0B',
+  fat: '#8B5CF6',
 };
+
+const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
@@ -62,11 +64,13 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   initialGoals,
 }) => {
   const theme = useTheme();
+  const isFirstTime = !initialGoals?.goal;
+
   const [calories, setCalories] = useState(initialGoals?.calories || 1500);
   const [proteinPercentage, setProteinPercentage] = useState(initialGoals?.proteinPercentage || 30);
   const [carbsPercentage, setCarbsPercentage] = useState(initialGoals?.carbsPercentage || 45);
   const [fatPercentage, setFatPercentage] = useState(initialGoals?.fatPercentage || 25);
-  const [showCalculator, setShowCalculator] = useState(false);
+  const [showCalculator, setShowCalculator] = useState(isFirstTime);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(initialGoals?.currentWeightKg ?? null);
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(initialGoals?.targetWeightKg ?? null);
   const [age, setAge] = useState<number | undefined>(initialGoals?.age);
@@ -82,37 +86,22 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 
   const [isEditingMacros, setIsEditingMacros] = useState(false);
 
-  // Check if a custom plan essentially exists
-  const hasCustomPlan = !!goal;
-
-  // Calculate grams based on calories per gram
-  const calculateMacros = () => {
-    const proteinCalories = (calories * proteinPercentage) / 100;
-    const carbsCalories = (calories * carbsPercentage) / 100;
-    const fatCalories = (calories * fatPercentage) / 100;
-
-    return {
-      proteinGrams: Math.round(proteinCalories / 4), // 4 cal/g
-      carbsGrams: Math.round(carbsCalories / 4), // 4 cal/g
-      fatGrams: Math.round(fatCalories / 9), // 9 cal/g
-    };
-  };
-
-  const { proteinGrams, carbsGrams, fatGrams } = calculateMacros();
+  const proteinGrams = macroGrams(calories, proteinPercentage, 4);
+  const carbsGrams = macroGrams(calories, carbsPercentage, 4);
+  const fatGrams = macroGrams(calories, fatPercentage, 9);
   const totalPercentage = proteinPercentage + carbsPercentage + fatPercentage;
 
-  const handleStartCustomPlan = () => {
-    setShowCalculator(true);
-  };
+  const goalLabel = goal === 'lose' ? 'Lose weight' : goal === 'gain' ? 'Gain weight' : 'Maintain weight';
+  const activityLabel = activityLevel === 'sedentary' ? 'Sedentary'
+    : activityLevel === 'light' ? 'Lightly active'
+    : activityLevel === 'moderate' ? 'Moderately active'
+    : activityLevel === 'very' ? 'Very active' : '';
 
   const handleCalculatedCalories = (result: CalorieCalculationResult) => {
+    // Update all state from result
     setCalories(result.calories);
-    if (typeof result.currentWeightKg === 'number' && !isNaN(result.currentWeightKg)) {
-      setCurrentWeightKg(result.currentWeightKg);
-    }
-    if (typeof result.targetWeightKg === 'number' && !isNaN(result.targetWeightKg)) {
-      setTargetWeightKg(result.targetWeightKg);
-    }
+    if (typeof result.currentWeightKg === 'number' && !isNaN(result.currentWeightKg)) setCurrentWeightKg(result.currentWeightKg);
+    if (typeof result.targetWeightKg === 'number' && !isNaN(result.targetWeightKg)) setTargetWeightKg(result.targetWeightKg);
     if (result.age !== undefined) setAge(result.age);
     if (result.gender !== undefined) setGender(result.gender);
     if (result.heightCm !== undefined) setHeightCm(result.heightCm);
@@ -123,82 +112,67 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.name !== undefined) setName(result.name);
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
+
+    // First-time flow: calculator includes macros → auto-save and close
+    if (isFirstTime && result.proteinPercentage !== undefined) {
+      const pPct = result.proteinPercentage;
+      const cPct = result.carbsPercentage ?? 45;
+      const fPct = result.fatPercentage ?? 25;
+      const goalData: GoalData = {
+        calories: result.calories,
+        proteinPercentage: pPct,
+        carbsPercentage: cPct,
+        fatPercentage: fPct,
+        proteinGrams: macroGrams(result.calories, pPct, 4),
+        carbsGrams: macroGrams(result.calories, cPct, 4),
+        fatGrams: macroGrams(result.calories, fPct, 9),
+        currentWeightKg: result.currentWeightKg || null,
+        targetWeightKg: result.targetWeightKg || null,
+        age: result.age, gender: result.gender,
+        heightCm: result.heightCm, heightFeet: result.heightFeet, heightInches: result.heightInches,
+        goal: result.goal, activityRate: result.activityRate,
+        activityLevel: result.activityLevel,
+      };
+      onSave(goalData);
+      onBack();
+      return;
+    }
+
+    // Returning user: just update calories, keep existing macros
     setShowCalculator(false);
   };
 
   const handleCalculatorBack = () => {
+    if (isFirstTime) { onBack(); return; } // first-time user closes calculator = cancel
     setShowCalculator(false);
   };
 
-  const handleProteinChange = (value: number) => {
-    const newProtein = Math.max(0, Math.min(100, Math.round(value)));
-    setProteinPercentage(newProtein);
-  };
-
-  const handleCarbsChange = (value: number) => {
-    const newCarbs = Math.max(0, Math.min(100, Math.round(value)));
-    setCarbsPercentage(newCarbs);
-  };
-
-  const handleFatChange = (value: number) => {
-    const newFat = Math.max(0, Math.min(100, Math.round(value)));
-    setFatPercentage(newFat);
+  const handleMacroChange = (which: 'p' | 'c' | 'f', delta: number) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    if (which === 'p') setProteinPercentage(v => Math.max(5, Math.min(80, Math.round(v + delta))));
+    else if (which === 'c') setCarbsPercentage(v => Math.max(5, Math.min(80, Math.round(v + delta))));
+    else setFatPercentage(v => Math.max(5, Math.min(80, Math.round(v + delta))));
   };
 
   const handleSave = () => {
     if (totalPercentage < 99 || totalPercentage > 101) {
-      Alert.alert(
-        "Invalid Percentages",
-        `The total percentage is ${totalPercentage}%. Please adjust your macronutrient percentages to be within 99-101%.`,
-        [{ text: "OK" }]
-      );
+      Alert.alert("Invalid Percentages", `Total is ${totalPercentage}%. Adjust macros to be within 99-101%.`, [{ text: "OK" }]);
       return;
     }
-
-    // Normalize to exactly 100% if within tolerance (99-101)
-    let normProtein = proteinPercentage;
-    let normCarbs = carbsPercentage;
-    let normFat = fatPercentage;
+    let normP = proteinPercentage, normC = carbsPercentage, normF = fatPercentage;
     const diff = totalPercentage - 100;
     if (diff !== 0) {
-      // Adjust the largest macro to absorb the 1% difference
-      if (normProtein >= normCarbs && normProtein >= normFat) {
-        normProtein -= diff;
-      } else if (normCarbs >= normFat) {
-        normCarbs -= diff;
-      } else {
-        normFat -= diff;
-      }
+      if (normP >= normC && normP >= normF) normP -= diff;
+      else if (normC >= normF) normC -= diff;
+      else normF -= diff;
     }
-
-    const goalData: GoalData = {
-      calories,
-      proteinPercentage: normProtein,
-      carbsPercentage: normCarbs,
-      fatPercentage: normFat,
-      proteinGrams,
-      carbsGrams,
-      fatGrams,
-      currentWeightKg,
-      targetWeightKg,
-      age,
-      gender,
-      heightCm,
-      heightFeet,
-      heightInches,
-      goal,
-      activityRate,
-      name,
-      trackingGoal,
-      activityLevel,
-    };
-    onSave(goalData);
+    onSave({
+      calories, proteinPercentage: normP, carbsPercentage: normC, fatPercentage: normF,
+      proteinGrams, carbsGrams, fatGrams,
+      currentWeightKg, targetWeightKg, age, gender, heightCm, heightFeet, heightInches,
+      goal, activityRate, name, trackingGoal, activityLevel,
+    });
     onBack();
-  };
-
-  const handleToggleCustomize = () => {
-    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-    setIsEditingMacros(!isEditingMacros);
   };
 
   if (showCalculator) {
@@ -207,516 +181,169 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         onBack={handleCalculatorBack}
         onCalculated={handleCalculatedCalories}
         initialData={{
-          name,
-          trackingGoal,
-          currentWeightKg,
-          targetWeightKg,
-          age,
-          gender,
-          heightCm,
-          heightFeet,
-          heightInches,
-          goal,
-          activityRate,
-          activityLevel
+          currentWeightKg, targetWeightKg, age, gender,
+          heightCm, heightFeet, heightInches,
+          goal, activityRate, activityLevel,
+          proteinPercentage, carbsPercentage, fatPercentage,
         }}
       />
     );
   }
 
+  const macros = [
+    { key: 'p' as const, label: 'Protein', color: MACRO_COLORS.protein, pct: proteinPercentage, g: proteinGrams },
+    { key: 'c' as const, label: 'Carbs', color: MACRO_COLORS.carbs, pct: carbsPercentage, g: carbsGrams },
+    { key: 'f' as const, label: 'Fat', color: MACRO_COLORS.fat, pct: fatPercentage, g: fatGrams },
+  ];
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+      <View style={[st.header, { borderBottomColor: theme.colors.border }]}>
+        <TouchableOpacity onPress={onBack} style={st.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          Nutrition Goals
-        </Text>
-        <View style={styles.headerRight} />
+        <Text style={[st.headerTitle, { color: theme.colors.textPrimary }]}>Nutrition Goals</Text>
+        <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Custom Plan Hero Card or Title */}
-        {hasCustomPlan ? (
-          <View style={styles.planHeaderContainer}>
-            <View style={styles.planHeaderTextContainer}>
-              <Text style={[styles.planHeaderTitle, { color: theme.colors.textPrimary }]}>
-                Your plan
-              </Text>
-              <Text style={[styles.planHeaderSubtitle, { color: theme.colors.textSecondary }]}>
-                Based on your goals and body details
-              </Text>
-            </View>
-          </View>
-        ) : (
-          <TouchableOpacity
-            onPress={handleStartCustomPlan}
-            activeOpacity={0.7}
-            style={[styles.customPlanButton, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
-          >
-            <View style={styles.customPlanContent}>
-              <View style={[styles.iconBox, { backgroundColor: theme.colors.secondaryBg }]}>
-                <Feather name="zap" size={20} color={theme.colors.textPrimary} />
-              </View>
-              <View style={styles.customPlanTextContainer}>
-                <Text style={[styles.customPlanTitle, { color: theme.colors.textPrimary }]}>
-                  Create Custom Plan
-                </Text>
-                <Text style={[styles.customPlanSubtitle, { color: theme.colors.textSecondary }]}>
-                  AI-powered macro calculation
-                </Text>
-              </View>
-            </View>
-            <Feather name="chevron-right" size={20} color={theme.colors.textSecondary} />
-          </TouchableOpacity>
-        )}
+      <ScrollView style={st.content} contentContainerStyle={st.contentInner} showsVerticalScrollIndicator={false}>
 
-        {/* Daily Calories Section */}
-        <View style={styles.sectionContainer}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Daily balance</Text>
-          <View style={[
-            styles.caloriesCard,
-            {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
-              shadowColor: theme.colors.shadow,
-            }
-          ]}>
-            <View style={styles.caloriesHeader}>
-              <Text style={[styles.caloriesValue, { color: theme.colors.textPrimary }]}>
-                {calories}
-              </Text>
-              <Text style={[styles.caloriesUnit, { color: theme.colors.textSecondary }]}>kcal</Text>
-            </View>
-            <TouchableOpacity
-              style={[styles.editCaloriesButton, { backgroundColor: theme.colors.secondaryBg }]}
-              onPress={handleStartCustomPlan}
-            >
-              <Text style={[styles.editCaloriesText, { color: theme.colors.textSecondary }]}>
-                {hasCustomPlan ? 'Starting point' : 'Recalculate'}
-              </Text>
-            </TouchableOpacity>
+        {/* Goal headline */}
+        <Text style={[st.goalTitle, { color: theme.colors.textPrimary }]}>{goalLabel}</Text>
+        <Text style={[st.goalSub, { color: theme.colors.textSecondary }]}>
+          {activityLabel}{activityRate ? ` · ${activityRate} kg/week` : ''}
+        </Text>
+
+        {/* Calorie card */}
+        <View style={[st.calCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={st.calRow}>
+            <Text style={[st.calNum, { color: theme.colors.textPrimary }]}>{calories}</Text>
+            <Text style={[st.calUnit, { color: theme.colors.textSecondary }]}>kcal/day</Text>
           </View>
+          <TouchableOpacity style={[st.recalcBtn, { backgroundColor: theme.colors.secondaryBg }]} onPress={() => setShowCalculator(true)}>
+            <Feather name="refresh-cw" size={14} color={theme.colors.textSecondary} />
+            <Text style={[st.recalcTxt, { color: theme.colors.textSecondary }]}>Recalculate</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Macros Section */}
-        <View style={styles.sectionContainer}>
-          <View style={styles.macroHeaderRow}>
-            {/* Removed 'Macro Distribution' title entirely as requested */}
-            <View />
-            {isEditingMacros && (
-              <View style={[
-                styles.totalBadge,
-                { backgroundColor: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.successBg : theme.colors.error + '15' }
-              ]}>
-                <Text style={[
-                  styles.totalBadgeText,
-                  { color: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.success : theme.colors.error }
-                ]}>
-                  {totalPercentage}% Total
-                </Text>
+        {/* Macro section */}
+        <Text style={[st.sectionLabel, { color: theme.colors.textSecondary }]}>MACRO SPLIT</Text>
+
+        {/* Stacked bar */}
+        <View style={[st.macroBar, { backgroundColor: theme.colors.border }]}>
+          <View style={[st.macroSeg, { flex: proteinPercentage, backgroundColor: MACRO_COLORS.protein, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }]} />
+          <View style={[st.macroSeg, { flex: carbsPercentage, backgroundColor: MACRO_COLORS.carbs }]} />
+          <View style={[st.macroSeg, { flex: fatPercentage, backgroundColor: MACRO_COLORS.fat, borderTopRightRadius: 6, borderBottomRightRadius: 6 }]} />
+        </View>
+
+        {/* Macro rows */}
+        <View style={st.macroRows}>
+          {macros.map(m => (
+            <View key={m.key} style={st.macroRow}>
+              <View style={st.macroLblRow}>
+                <View style={[st.macroDot, { backgroundColor: m.color }]} />
+                <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+              </View>
+              <Text style={[st.macroVal, { color: theme.colors.textSecondary }]}>{m.pct}% · {m.g}g</Text>
+            </View>
+          ))}
+        </View>
+
+        {/* Customize toggle */}
+        <TouchableOpacity style={st.customizeBtn} onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingMacros(v => !v); }}>
+          <Text style={[st.customizeTxt, { color: theme.colors.textSecondary }]}>{isEditingMacros ? 'Done' : 'Customize macros'}</Text>
+          <Feather name={isEditingMacros ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textSecondary} />
+        </TouchableOpacity>
+
+        {/* Editing controls */}
+        {isEditingMacros && (
+          <View style={st.editSection}>
+            {totalPercentage !== 100 && (
+              <View style={[st.totalBadge, { backgroundColor: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.successBg : theme.colors.error + '15' }]}>
+                <Text style={[st.totalTxt, { color: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.success : theme.colors.error }]}>{totalPercentage}% Total</Text>
               </View>
             )}
+            {macros.map(m => (
+              <View key={m.key} style={[st.editRow, { borderColor: theme.colors.border }]}>
+                <View style={st.macroLblRow}>
+                  <View style={[st.macroDot, { backgroundColor: m.color }]} />
+                  <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+                </View>
+                <View style={st.editControls}>
+                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => handleMacroChange(m.key, -5)}>
+                    <Feather name="minus" size={14} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <Text style={[st.editPct, { color: theme.colors.textPrimary }]}>{m.pct}%</Text>
+                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => handleMacroChange(m.key, 5)}>
+                    <Feather name="plus" size={14} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ))}
           </View>
+        )}
 
-          {/* Protein Card */}
-          <MacroCard
-            label="Protein"
-            color={MACRO_COLORS.protein}
-            percentage={proteinPercentage}
-            gramValue={proteinGrams}
-            onChange={handleProteinChange}
-            theme={theme}
-            isEditing={isEditingMacros}
-          />
-
-          {/* Carbs Card */}
-          <MacroCard
-            label="Carbs"
-            color={MACRO_COLORS.carbs}
-            percentage={carbsPercentage}
-            gramValue={carbsGrams}
-            onChange={handleCarbsChange}
-            theme={theme}
-            isEditing={isEditingMacros}
-          />
-
-          {/* Fat Card */}
-          <MacroCard
-            label="Fat"
-            color={MACRO_COLORS.fat}
-            percentage={fatPercentage}
-            gramValue={fatGrams}
-            onChange={handleFatChange}
-            theme={theme}
-            isEditing={isEditingMacros}
-          />
-
-          {!isEditingMacros && (
-            <>
-              <TouchableOpacity
-                style={[styles.customizeMacrosButton]}
-                onPress={handleToggleCustomize}
-              >
-                <Text style={[styles.customizeMacrosText, { color: theme.colors.textSecondary }]}>Customize macros</Text>
-                <Feather name="chevron-down" size={16} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
-
-              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
-                You can adjust this anytime
-              </Text>
-            </>
-          )}
-
-          {isEditingMacros && (
-            <TouchableOpacity
-              style={[styles.customizeMacrosButton]}
-              onPress={handleToggleCustomize}
-            >
-              <Text style={[styles.customizeMacrosText, { color: theme.colors.textSecondary }]}>Done formatting</Text>
-              <Feather name="chevron-up" size={16} color={theme.colors.textSecondary} />
-            </TouchableOpacity>
-          )}
-        </View>
+        {!isEditingMacros && (
+          <Text style={[st.helperTxt, { color: theme.colors.textSecondary }]}>You can adjust this anytime</Text>
+        )}
       </ScrollView>
 
-      {/* Save Button */}
-      <View style={[styles.footer, { backgroundColor: theme.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }]}>
-        <TouchableOpacity
-          style={[styles.saveButton, { backgroundColor: theme.colors.primary }]}
-          onPress={handleSave}
-          activeOpacity={0.8}
-        >
-          <Text style={[styles.saveButtonText, { color: theme.colors.primaryForeground }]}>Use this plan</Text>
+      {/* Save button */}
+      <View style={[st.footer, { backgroundColor: theme.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }]}>
+        <TouchableOpacity style={[st.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSave} activeOpacity={0.8}>
+          <Text style={[st.saveTxt, { color: theme.colors.primaryForeground }]}>Save Changes</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-// Subcomponent for Macro Card
-interface MacroCardProps {
-  label: string;
-  color: string;
-  percentage: number;
-  gramValue: number;
-  onChange: (val: number) => void;
-  theme: any;
-  isEditing: boolean;
-}
+const st = StyleSheet.create({
+  safe: { flex: 1 },
+  header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
+  headerTitle: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold },
+  backBtn: { padding: 4 },
+  content: { flex: 1 },
+  contentInner: { padding: 20, paddingBottom: 100 },
 
-const MacroCard: React.FC<MacroCardProps> = ({ label, color, percentage, gramValue, onChange, theme, isEditing }) => {
-  // Helper to add opacity to hex color
-  const hexToRgba = (hex: string, alpha: number) => {
-    const r = parseInt(hex.slice(1, 3), 16);
-    const g = parseInt(hex.slice(3, 5), 16);
-    const b = parseInt(hex.slice(5, 7), 16);
-    return `rgba(${r}, ${g}, ${b}, ${alpha})`;
-  };
+  // Goal headline
+  goalTitle: { fontSize: 26, fontWeight: 'bold', marginBottom: 4 },
+  goalSub: { fontSize: Typography.fontSize.md, marginBottom: 24 },
 
-  const trackColor = hexToRgba(color, 0.2); // Faint background
-  const fillColor = hexToRgba(color, 0.6); // Slightly transparent fill
+  // Calorie card
+  calCard: { borderRadius: 16, padding: 20, borderWidth: 1, alignItems: 'center', marginBottom: 28 },
+  calRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 10 },
+  calNum: { fontSize: 44, fontWeight: '800', letterSpacing: -1 },
+  calUnit: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.medium, marginLeft: 6 },
+  recalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
+  recalcTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
 
-  return (
-    <View style={[styles.macroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+  // Macros
+  sectionLabel: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' },
+  macroBar: { width: '100%', height: 14, borderRadius: 7, flexDirection: 'row', overflow: 'hidden', marginBottom: 16 },
+  macroSeg: { height: '100%' },
+  macroRows: { gap: 12, marginBottom: 8 },
+  macroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
+  macroLblRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  macroDot: { width: 10, height: 10, borderRadius: 5 },
+  macroName: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium },
+  macroVal: { fontSize: Typography.fontSize.sm, fontWeight: '500' },
 
-      {/* Read-only / Consolidated View */}
-      {!isEditing ? (
-        <View>
-          {/* Progress Bar Background (Simple line) - Reduced Opacity */}
-          <View style={[styles.progressBarBg, { marginBottom: 8, height: 8, backgroundColor: trackColor }]}>
-            <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: fillColor }]} />
-          </View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View style={styles.macroLabelContainer}>
-              <View style={[styles.macroDot, { backgroundColor: color }]} />
-              <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
-            </View>
-            <Text style={{ fontSize: 15, color: theme.colors.textSecondary, fontWeight: '500' }}>
-              {percentage}% • {gramValue}g
-            </Text>
-          </View>
-        </View>
-      ) : (
-        <>
-          <View style={styles.macroTopRow}>
-            <View style={styles.macroLabelContainer}>
-              <View style={[styles.macroDot, { backgroundColor: color }]} />
-              <Text style={[styles.macroLabel, { color: theme.colors.textPrimary }]}>{label}</Text>
-            </View>
-            <Text style={[styles.macroGrams, { color: theme.colors.textSecondary }]}>{gramValue}g</Text>
-          </View>
+  customizeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, width: '100%' },
+  customizeTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
 
-          <View style={styles.sliderContainer}>
-            <TouchableOpacity
-              style={[styles.adjustButton, { borderColor: theme.colors.border }]}
-              onPress={() => onChange(percentage - 5)}
-            >
-              <Feather name="minus" size={16} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
+  editSection: { gap: 12, marginBottom: 8 },
+  totalBadge: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  totalTxt: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold },
+  editRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  editControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
+  adjBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
+  editPct: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, width: 40, textAlign: 'center' },
 
-            <View style={styles.progressSection}>
-              <View style={[styles.progressBarBg, { backgroundColor: theme.colors.secondaryBg }]}>
-                <View style={[styles.progressBarFill, { width: `${percentage}%`, backgroundColor: color }]} />
-              </View>
-              <Text style={[styles.percentageText, { color: theme.colors.textPrimary }]}>{percentage}%</Text>
-            </View>
+  helperTxt: { fontSize: Typography.fontSize.xs, textAlign: 'center', marginTop: -4 },
 
-            <TouchableOpacity
-              style={[styles.adjustButton, { borderColor: theme.colors.border }]}
-              onPress={() => onChange(percentage + 5)}
-            >
-              <Feather name="plus" size={16} color={theme.colors.textPrimary} />
-            </TouchableOpacity>
-          </View>
-        </>
-      )}
-    </View>
-  ); // Added closing parenthesis
-};
-
-const styles = StyleSheet.create({
-  safeArea: {
-    flex: 1,
-  },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-  },
-  headerTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  backButton: {
-    padding: 4,
-  },
-  headerRight: {
-    width: 32,
-  },
-  content: {
-    flex: 1,
-  },
-  contentContainer: {
-    padding: 20,
-    paddingBottom: 100,
-  },
-  planHeaderContainer: {
-    marginBottom: 24,
-  },
-  planHeaderTextContainer: {
-    gap: 4,
-  },
-  planHeaderTitle: {
-    fontSize: 28,
-    fontWeight: 'bold',
-  },
-  planHeaderSubtitle: {
-    fontSize: Typography.fontSize.md,
-    lineHeight: 22,
-  },
-  customPlanButton: {
-    marginBottom: 24,
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  customPlanContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-  },
-  iconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  customPlanTextContainer: {
-    flex: 1,
-  },
-  customPlanTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: 2,
-  },
-  customPlanSubtitle: {
-    fontSize: Typography.fontSize.sm,
-  },
-  sectionContainer: {
-    marginBottom: 28,
-  },
-  sectionTitle: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
-    letterSpacing: 1,
-    marginBottom: 12,
-    textTransform: 'uppercase',
-  },
-  caloriesCard: {
-    borderRadius: 16,
-    padding: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  caloriesHeader: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    marginBottom: 8,
-  },
-  caloriesValue: {
-    fontSize: 48,
-    fontWeight: '800', // heavy weight
-    letterSpacing: -1,
-  },
-  caloriesUnit: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.medium,
-    marginLeft: 6,
-  },
-  editCaloriesButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 6,
-    borderRadius: 20,
-    marginTop: 8,
-  },
-  editCaloriesText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  macroHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  totalBadge: {
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  totalBadgeText: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.bold,
-  },
-  macroCard: {
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 16,
-    borderWidth: 1,
-  },
-  macroTopRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 16,
-  },
-  macroLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  macroDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  macroLabel: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  macroGrams: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  sliderContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  adjustButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    borderWidth: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressSection: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  progressBarBg: {
-    width: '100%',
-    height: 12,
-    borderRadius: 6,
-    overflow: 'hidden',
-    backgroundColor: '#eee', // Fallback
-  },
-  progressBarFill: {
-    height: '100%',
-    borderRadius: 6,
-  },
-  percentageText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginTop: 6,
-  },
-  customizeMacrosButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    borderRadius: 12,
-    gap: 8,
-  },
-  customizeMacrosText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  helperText: {
-    fontSize: Typography.fontSize.xs,
-    marginTop: -4,
-    textAlign: 'center',
-  },
-  footer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 16,
-    paddingBottom: 32,
-    borderTopWidth: 1,
-    borderTopColor: 'transparent',
-  },
-  saveButton: {
-    height: 56,
-    borderRadius: 28,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  saveButtonText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.bold,
-  },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: 'transparent' },
+  saveBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
+  saveTxt: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold },
 });

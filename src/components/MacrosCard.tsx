@@ -7,6 +7,8 @@ import { MacroData } from '../types';
 import { useTheme } from '../constants/theme';
 import { NumberTicker } from './NumberTicker';
 
+const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
+
 interface MacrosCardProps {
   data?: MacroData;
 }
@@ -43,16 +45,17 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={StyleSheet.flatten([
                 styles.currentText,
-                { color: theme.colors.textPrimary },
+                { color: MACRO_COLORS.carbs },
               ])}
             />
             <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
               /{data.carbs.target}g
             </Text>
           </View>
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Carbs
-          </Text>
+          <View style={styles.labelRow}>
+            <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.carbs }]} />
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Carbs</Text>
+          </View>
         </View>
 
         <View style={[styles.statColumn, styles.middleColumn, { borderColor: theme.colors.lightBorder }]}>
@@ -63,16 +66,17 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={StyleSheet.flatten([
                 styles.currentText,
-                { color: theme.colors.textPrimary },
+                { color: MACRO_COLORS.protein },
               ])}
             />
             <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
               /{data.protein.target}g
             </Text>
           </View>
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Protein
-          </Text>
+          <View style={styles.labelRow}>
+            <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.protein }]} />
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Protein</Text>
+          </View>
         </View>
 
         <View style={styles.statColumn}>
@@ -83,16 +87,17 @@ export const MacrosCard: React.FC<MacrosCardProps> = ({
               decimalPlaces={0}
               style={StyleSheet.flatten([
                 styles.currentText,
-                { color: theme.colors.textPrimary },
+                { color: MACRO_COLORS.fat },
               ])}
             />
             <Text style={[styles.targetText, { color: theme.colors.textTertiary }]}>
               /{data.fat.target}g
             </Text>
           </View>
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
-            Fat
-          </Text>
+          <View style={styles.labelRow}>
+            <View style={[styles.macroDot, { backgroundColor: MACRO_COLORS.fat }]} />
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Fat</Text>
+          </View>
         </View>
       </View>
     </View>
@@ -158,5 +163,15 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
     textAlign: 'center',
     lineHeight: Typography.lineHeight.tight * Typography.fontSize.xs,
+  },
+  labelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  macroDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
   },
 });

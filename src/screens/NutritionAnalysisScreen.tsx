@@ -11,11 +11,10 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
-import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon } from 'react-native-svg';
+import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
@@ -187,12 +186,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const hasTargetCalories = targetCalories !== undefined;
 
   // Calculate graph dimensions
-  const graphWidth = 300;
+  const screenWidth = Dimensions.get('window').width;
+  const graphWidth = screenWidth - 32 - 36; // content paddingHorizontal (16*2) + graphCard padding (18*2)
   const graphHeight = 260;
   const padding = 20;
-  const innerWidth = graphWidth - padding * 2;
+  const paddingLeft = 45; // extra room for Y-axis labels
+  const innerWidth = graphWidth - paddingLeft - padding;
   const innerHeight = graphHeight - padding * 2;
-  const LINE_DRAW_LENGTH = 1000; // used for left-to-right draw animations
+  // Estimate SVG path length from points (bezier curves are ~1.5x longer than straight-line segments)
+  const estimatePathLength = (points: { x: number; y: number }[]): number => {
+    if (points.length < 2) return 0;
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x;
+      const dy = points[i].y - points[i - 1].y;
+      length += Math.sqrt(dx * dx + dy * dy);
+    }
+    return Math.ceil(length * 1.5);
+  };
 
   // Find max value across all macronutrients for Y-axis scaling
   const maxProtein = graphData.length > 0
@@ -241,22 +252,22 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const caloriesPadding = caloriesRange * 0.1;
 
   // Generate smooth bezier curve path for a line with improved smoothness
-  const generateSmoothPath = (values: number[]) => {
-    if (values.length === 0) return '';
+  const generateSmoothPath = (values: number[]): { path: string; length: number } => {
+    if (values.length === 0) return { path: '', length: 0 };
 
     const points = values.map((value, index) => {
-      const x = padding + (index / (values.length - 1 || 1)) * innerWidth;
+      const x = paddingLeft + (index / (values.length - 1 || 1)) * innerWidth;
       const normalizedValue = value / maxValue;
       const y = padding + innerHeight - (normalizedValue * innerHeight);
       return { x, y, value };
     });
 
     if (points.length === 1) {
-      return `M ${points[0].x} ${points[0].y}`;
+      return { path: `M ${points[0].x} ${points[0].y}`, length: 0 };
     }
 
     if (points.length === 2) {
-      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+      return { path: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`, length: estimatePathLength(points) };
     }
 
     // Create smooth bezier curve with better control points
@@ -283,29 +294,29 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
 
-    return path;
+    return { path, length: estimatePathLength(points) };
   };
 
   // Generate smooth path for calories chart with improved smoothness
-  const generateCaloriesPath = () => {
-    if (caloriesData.length === 0) return '';
+  const generateCaloriesPath = (): { path: string; length: number } => {
+    if (caloriesData.length === 0) return { path: '', length: 0 };
 
     const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-    const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+    const minCal = Math.max(0, Math.floor((minCalories - caloriesPadding) / 100) * 100);
 
     const points = caloriesData.map((entry, index) => {
-      const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
+      const x = paddingLeft + (index / (caloriesData.length - 1 || 1)) * innerWidth;
       const normalizedCalories = (entry.calories - minCal) / (maxCal - minCal);
       const y = padding + innerHeight - (normalizedCalories * innerHeight);
       return { x, y, calories: entry.calories };
     });
 
     if (points.length === 1) {
-      return `M ${points[0].x} ${points[0].y}`;
+      return { path: `M ${points[0].x} ${points[0].y}`, length: 0 };
     }
 
     if (points.length === 2) {
-      return `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`;
+      return { path: `M ${points[0].x} ${points[0].y} L ${points[1].x} ${points[1].y}`, length: estimatePathLength(points) };
     }
 
     // Create smooth bezier curve with better control points
@@ -332,7 +343,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
 
-    return path;
+    return { path, length: estimatePathLength(points) };
   };
 
   const handleTimeRangeChange = (range: TimeRange) => {
@@ -340,7 +351,32 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     setTimeRange(range);
   };
 
-  const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
+  const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y'];
+
+  // Pill-style time range selector used across all tabs
+  const renderTimeRangePills = () => (
+    <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4, alignSelf: 'center', marginBottom: 8 }}>
+      {timeRanges.map((range) => (
+        <TouchableOpacity
+          key={range}
+          onPress={() => handleTimeRangeChange(range)}
+          style={{
+            paddingHorizontal: 12,
+            paddingVertical: 6,
+            borderRadius: 8,
+            backgroundColor: timeRange === range ? theme.colors.card : 'transparent',
+            shadowColor: timeRange === range ? '#000' : 'transparent',
+            shadowOpacity: timeRange === range ? 0.05 : 0,
+            shadowRadius: 2,
+          }}
+        >
+          <Text style={{ fontSize: 12, fontWeight: '600', color: timeRange === range ? theme.colors.textPrimary : theme.colors.textSecondary }}>
+            {range}
+          </Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
   // Screen-level slide-up for smooth navigation
   const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
@@ -383,10 +419,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const [proteinPath, setProteinPath] = useState<string>('');
   const [carbsPath, setCarbsPath] = useState<string>('');
   const [fatPath, setFatPath] = useState<string>('');
-  const caloriesLineProgress = useRef(new Animated.Value(1)).current;
-  const macrosLineProgress = useRef(new Animated.Value(1)).current;
-  const caloriesChartOpacity = useRef(new Animated.Value(1)).current;
-  const macrosChartOpacity = useRef(new Animated.Value(1)).current;
+  const [caloriesDrawLength, setCaloriesDrawLength] = useState(0);
+  const [macrosDrawLength, setMacrosDrawLength] = useState(0);
+  const caloriesLineProgress = useRef(new Animated.Value(0)).current;
+  const macrosLineProgress = useRef(new Animated.Value(0)).current;
+  const caloriesChartOpacity = useRef(new Animated.Value(0.15)).current;
+  const macrosChartOpacity = useRef(new Animated.Value(0.15)).current;
   const AnimatedPath = useRef(Animated.createAnimatedComponent((Path as any))).current;
 
   // Scrubbing Interaction Logic
@@ -398,14 +436,36 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     if (data.length === 0) return [];
 
     return data.map((entry, index) => {
-      const x = padding + (index / (data.length - 1 || 1)) * innerWidth;
+      const x = paddingLeft + (index / (data.length - 1 || 1)) * innerWidth;
       // For Y, we don't strictly need it for the X-scrubbing, but it helps for positioning the tooltip bubble near the "data".
       // For Macros, we might just position it at the top or follow the Protein line?
       // Let's position it near the top of the graph (padding + 20) to avoid overlapping the busy lines.
       const y = padding + 20;
       return { x, y, data: entry, index };
     });
-  }, [caloriesData, graphData, activeTab, innerWidth, padding]);
+  }, [caloriesData, graphData, activeTab, innerWidth, paddingLeft]);
+
+  // Keep a ref to the latest scrubbingPoints so the PanResponder never reads stale data
+  const scrubbingPointsRef = useRef(scrubbingPoints);
+  scrubbingPointsRef.current = scrubbingPoints;
+
+  const handleTouch = (x: number) => {
+    const points = scrubbingPointsRef.current;
+    if (points.length === 0) return;
+
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    points.forEach((p, i) => {
+      const diff = Math.abs(x - p.x);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    });
+
+    setScrubbingIndex(closestIndex);
+  };
 
   const graphPanResponder = useRef(
     PanResponder.create({
@@ -428,23 +488,6 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     })
   ).current;
 
-  const handleTouch = (x: number) => {
-    if (scrubbingPoints.length === 0) return;
-
-    let closestIndex = 0;
-    let minDiff = Infinity;
-
-    scrubbingPoints.forEach((p, i) => {
-      const diff = Math.abs(x - p.x);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIndex = i;
-      }
-    });
-
-    setScrubbingIndex(closestIndex);
-  };
-
   useEffect(() => {
     Animated.spring(slideAnim, {
       toValue: 0,
@@ -456,8 +499,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   // Animate calories line when data changes
   useEffect(() => {
-    const path = generateCaloriesPath();
-    setCaloriesPath(path);
+    const result = generateCaloriesPath();
+    setCaloriesPath(result.path);
+    setCaloriesDrawLength(result.length);
 
     // Reset animation state - fade chart in while drawing line
     caloriesChartOpacity.setValue(0.15);
@@ -479,9 +523,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   // Animate macros lines when data changes
   useEffect(() => {
-    setProteinPath(generateSmoothPath(graphData.map(d => d.protein)));
-    setCarbsPath(generateSmoothPath(graphData.map(d => d.carbs)));
-    setFatPath(generateSmoothPath(graphData.map(d => d.fat)));
+    const protein = generateSmoothPath(graphData.map(d => d.protein));
+    const carbs = generateSmoothPath(graphData.map(d => d.carbs));
+    const fat = generateSmoothPath(graphData.map(d => d.fat));
+
+    setProteinPath(protein.path);
+    setCarbsPath(carbs.path);
+    setFatPath(fat.path);
+    // Use the longest path so all three lines animate fully
+    setMacrosDrawLength(Math.max(protein.length, carbs.length, fat.length));
 
     // Reset animation state - fade chart in while drawing lines
     macrosChartOpacity.setValue(0.15);
@@ -712,32 +762,34 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               </>
             ) : (
               <>
-                {/* Protein Hero */}
-                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#3B82F6' }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Protein</Text>
-                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
-                    {averageProtein !== null ? `${averageProtein.toFixed(0)}` : '--'}
-                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
-                  </Text>
-                </View>
-
-                {/* Carbs Hero */}
-                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#EAB308' }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Carbs</Text>
-                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
-                    {averageCarbs !== null ? `${averageCarbs.toFixed(0)}` : '--'}
-                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
-                  </Text>
-                </View>
-
-                {/* Fat Hero */}
-                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Fat</Text>
-                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
-                    {averageFat !== null ? `${averageFat.toFixed(0)}` : '--'}
-                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}>g</Text>
-                  </Text>
-                </View>
+                {[
+                  { label: 'PROTEIN', value: averageProtein, color: '#3B82F6' },
+                  { label: 'CARBS', value: averageCarbs, color: '#F59E0B' },
+                  { label: 'FAT', value: averageFat, color: '#8B5CF6' },
+                ].map((macro) => (
+                  <View
+                    key={macro.label}
+                    style={{
+                      flex: 1,
+                      backgroundColor: theme.colors.card,
+                      borderRadius: 14,
+                      padding: 14,
+                      borderWidth: 1,
+                      borderColor: theme.colors.border,
+                    }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                      <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: macro.color }} />
+                      <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textSecondary }}>
+                        {macro.label}
+                      </Text>
+                    </View>
+                    <Text style={{ fontSize: 26, fontWeight: '800', color: theme.colors.textPrimary, lineHeight: 30 }}>
+                      {macro.value !== null ? macro.value.toFixed(0) : '--'}
+                      <Text style={{ fontSize: 14, fontWeight: '500', color: theme.colors.textTertiary }}>g</Text>
+                    </Text>
+                  </View>
+                ))}
               </>
             )}
           </View>
@@ -862,7 +914,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         {/* Grid lines & Labels */}
                         {(() => {
                           const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const minCal = Math.max(0, Math.floor((minCalories - caloriesPadding) / 100) * 100);
                           const range = maxCal - minCal || 1;
 
                           return [0, 1, 2, 3, 4, 5].map((i) => {
@@ -873,7 +925,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             return (
                               <React.Fragment key={i}>
                                 <Line
-                                  x1={padding}
+                                  x1={paddingLeft}
                                   y1={y}
                                   x2={graphWidth - padding}
                                   y2={y}
@@ -882,7 +934,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   strokeDasharray="2,2"
                                 />
                                 <SvgText
-                                  x={padding - 6}
+                                  x={paddingLeft - 6}
                                   y={y + 3}
                                   fontSize={10}
                                   fill={theme.colors.textTertiary}
@@ -898,11 +950,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         {/* Target line */}
                         {hasTargetCalories && (() => {
                           const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const minCal = Math.max(0, Math.floor((minCalories - caloriesPadding) / 100) * 100);
                           const targetY = padding + innerHeight - ((targetCalories! - minCal) / (maxCal - minCal)) * innerHeight;
                           return (
                             <Line
-                              x1={padding}
+                              x1={paddingLeft}
                               y1={targetY}
                               x2={graphWidth - padding}
                               y2={targetY}
@@ -923,19 +975,19 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDasharray={`${caloriesDrawLength}, ${caloriesDrawLength}`}
                             strokeDashoffset={caloriesLineProgress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: [LINE_DRAW_LENGTH, 0],
+                              outputRange: [caloriesDrawLength, 0],
                             })}
                           />
                         ) : null}
 
                         {/* Data points (dots) - hollow style */}
                         {caloriesData.length < 20 && caloriesData.map((entry, index) => {
-                          const x = padding + (index / (caloriesData.length - 1 || 1)) * innerWidth;
+                          const x = paddingLeft + (index / (caloriesData.length - 1 || 1)) * innerWidth;
                           const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                          const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                          const minCal = Math.max(0, Math.floor((minCalories - caloriesPadding) / 100) * 100);
                           const normalizedCalories = (entry.calories - minCal) / (maxCal - minCal);
                           const y = padding + innerHeight - (normalizedCalories * innerHeight);
                           return (
@@ -956,7 +1008,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           (() => {
                             const pt = scrubbingPoints[scrubbingIndex];
                             const maxCal = Math.ceil((maxCalories + caloriesPadding) / 100) * 100;
-                            const minCal = Math.floor((minCalories - caloriesPadding) / 100) * 100;
+                            const minCal = Math.max(0, Math.floor((minCalories - caloriesPadding) / 100) * 100);
                             const normalizedCalories = (pt.data.calories - minCal) / (maxCal - minCal);
                             const y = padding + innerHeight - (normalizedCalories * innerHeight);
 
@@ -988,29 +1040,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   </View>
 
                   {/* Time Range Selector */}
-                  <View style={styles.timeRangeContainer}>
-                    {timeRanges.map((range) => (
-                      <TouchableOpacity
-                        key={range}
-                        style={[
-                          styles.timeRangeButton,
-                          timeRange === range && styles.timeRangeButtonActive,
-                        ]}
-                        onPress={() => handleTimeRangeChange(range)}
-                      >
-                        <Text
-                          style={[
-                            styles.timeRangeText,
-                            timeRange === range
-                              ? styles.timeRangeTextActive
-                              : { color: theme.colors.textSecondary },
-                          ]}
-                        >
-                          {range}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
+                  {renderTimeRangePills()}
 
                   {/* Date Range */}
                   <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
@@ -1026,25 +1056,20 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <View style={styles.historyHeaderSpacer} />
                       {/* Fixed Spacer issue if needed, but keeping basic structure */}
                       {caloriesHistory.map((entry) => (
-                        <View key={entry.date.toISOString()} style={styles.historyRow}>
-                          {/* Row content */}
+                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: theme.colors.border }]}>
                           <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
                             {format(entry.date, 'd MMM yyyy')}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary }]}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary, textAlign: 'right' }]}>
                             {`${entry.calories.toFixed(0)} Kcal`}
                           </Text>
-                          <View style={styles.historyActions}>
-                            {onRequestLogMealForDate && (
-                              <TouchableOpacity
-                                onPress={() => onRequestLogMealForDate(entry.date)}
-                                style={styles.historyEditButton}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              >
-                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
+                          <TouchableOpacity
+                            onPress={() => onRequestLogMealForDate?.(entry.date)}
+                            style={{ padding: 4, marginLeft: 6 }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                          </TouchableOpacity>
                         </View>
                       ))}
                     </View>
@@ -1093,11 +1118,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>P: {(scrubbingPoints[scrubbingIndex].data as any).protein.toFixed(0)}g</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EAB308' }} />
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' }} />
                             <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>C: {(scrubbingPoints[scrubbingIndex].data as any).carbs.toFixed(0)}g</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#EF4444' }} />
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6' }} />
                             <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>F: {(scrubbingPoints[scrubbingIndex].data as any).fat.toFixed(0)}g</Text>
                           </View>
                         </View>
@@ -1114,7 +1139,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           return (
                             <React.Fragment key={i}>
                               <Line
-                                x1={padding}
+                                x1={paddingLeft}
                                 y1={y}
                                 x2={graphWidth - padding}
                                 y2={y}
@@ -1123,7 +1148,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 strokeDasharray="2,2"
                               />
                               <SvgText
-                                x={padding - 6}
+                                x={paddingLeft - 6}
                                 y={y + 3}
                                 fontSize={10}
                                 fill={theme.colors.textTertiary}
@@ -1140,7 +1165,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           const targetProteinY = padding + innerHeight - (targetProtein / maxValue) * innerHeight;
                           return (
                             <Line
-                              x1={padding}
+                              x1={paddingLeft}
                               y1={targetProteinY}
                               x2={graphWidth - padding}
                               y2={targetProteinY}
@@ -1162,10 +1187,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDasharray={`${macrosDrawLength}, ${macrosDrawLength}`}
                             strokeDashoffset={macrosLineProgress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: [LINE_DRAW_LENGTH, 0],
+                              outputRange: [macrosDrawLength, 0],
                             })}
                           />
                         ) : null}
@@ -1173,14 +1198,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           <AnimatedPath
                             d={carbsPath}
                             fill="none"
-                            stroke="#EAB308"
+                            stroke="#F59E0B"
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDasharray={`${macrosDrawLength}, ${macrosDrawLength}`}
                             strokeDashoffset={macrosLineProgress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: [LINE_DRAW_LENGTH, 0],
+                              outputRange: [macrosDrawLength, 0],
                             })}
                           />
                         ) : null}
@@ -1188,14 +1213,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           <AnimatedPath
                             d={fatPath}
                             fill="none"
-                            stroke="#EF4444"
+                            stroke="#8B5CF6"
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDasharray={`${macrosDrawLength}, ${macrosDrawLength}`}
                             strokeDashoffset={macrosLineProgress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: [LINE_DRAW_LENGTH, 0],
+                              outputRange: [macrosDrawLength, 0],
                             })}
                           />
                         ) : null}
@@ -1220,8 +1245,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   strokeDasharray="4,4"
                                 />
                                 <Circle cx={pt.x} cy={proteinY} r={5} fill="#3B82F6" stroke={theme.colors.card} strokeWidth={2} />
-                                <Circle cx={pt.x} cy={carbsY} r={5} fill="#EAB308" stroke={theme.colors.card} strokeWidth={2} />
-                                <Circle cx={pt.x} cy={fatY} r={5} fill="#EF4444" stroke={theme.colors.card} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={carbsY} r={5} fill="#F59E0B" stroke={theme.colors.card} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={fatY} r={5} fill="#8B5CF6" stroke={theme.colors.card} strokeWidth={2} />
                               </>
                             );
                           })()
@@ -1231,36 +1256,114 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     </View>
                   </Animated.View>
 
-
-                  {/* Time Range Selector */}
-                  <View style={styles.timeRangeContainer}>
-                    {timeRanges.map((range) => (
-                      <TouchableOpacity
-                        key={range}
-                        style={[
-                          styles.timeRangeButton,
-                          timeRange === range && styles.timeRangeButtonActive,
-                        ]}
-                        onPress={() => handleTimeRangeChange(range)}
-                      >
-                        <Text
-                          style={[
-                            styles.timeRangeText,
-                            timeRange === range
-                              ? styles.timeRangeTextActive
-                              : { color: theme.colors.textSecondary },
-                          ]}
-                        >
-                          {range}
-                        </Text>
-                      </TouchableOpacity>
+                  {/* Macros Legend */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, paddingVertical: 8 }}>
+                    {[
+                      { label: 'Protein', color: '#3B82F6' },
+                      { label: 'Carbs', color: '#F59E0B' },
+                      { label: 'Fat', color: '#8B5CF6' },
+                    ].map((item) => (
+                      <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ width: 10, height: 3, borderRadius: 1.5, backgroundColor: item.color }} />
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{item.label}</Text>
+                      </View>
                     ))}
                   </View>
+
+                  {/* Time Range Selector */}
+                  {renderTimeRangePills()}
 
                   {/* Date Range */}
                   <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
                     {getDateRange()}
                   </Text>
+
+                  {/* Dynamic Macro Insight */}
+                  {(() => {
+                    const hasTargets = targetProtein !== undefined || targetCarbs !== undefined || targetFat !== undefined;
+
+                    if (!hasTargets) {
+                      return (
+                        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+                          <Feather name="target" size={18} color={theme.colors.primary} />
+                          <View style={{ flex: 1 }}>
+                            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                              Set macro goals to get personalized insights on your nutrition.
+                            </Text>
+                            <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.7} style={{ marginTop: 6 }}>
+                              <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>Set Goals</Text>
+                            </TouchableOpacity>
+                          </View>
+                        </View>
+                      );
+                    }
+
+                    // Compare each macro against its target
+                    const insights: { macro: string; color: string; pct: number; status: 'low' | 'high' | 'on_track' }[] = [];
+
+                    if (targetProtein !== undefined && averageProtein !== null) {
+                      const pct = ((averageProtein - targetProtein) / targetProtein) * 100;
+                      insights.push({ macro: 'Protein', color: '#3B82F6', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                    }
+                    if (targetCarbs !== undefined && averageCarbs !== null) {
+                      const pct = ((averageCarbs - targetCarbs) / targetCarbs) * 100;
+                      insights.push({ macro: 'Carbs', color: '#F59E0B', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                    }
+                    if (targetFat !== undefined && averageFat !== null) {
+                      const pct = ((averageFat - targetFat) / targetFat) * 100;
+                      insights.push({ macro: 'Fat', color: '#8B5CF6', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                    }
+
+                    const offTrack = insights.filter(i => i.status !== 'on_track');
+                    const allOnTrack = offTrack.length === 0 && insights.length > 0;
+
+                    let icon: string;
+                    let iconColor: string;
+                    let message: string;
+
+                    if (allOnTrack) {
+                      icon = 'check-circle';
+                      iconColor = '#10B981';
+                      message = "All macros are within target range. You're nailing your nutrition goals — keep it up!";
+                    } else if (offTrack.length > 0) {
+                      // Pick the most off-track macro
+                      const worst = offTrack.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0];
+                      iconColor = worst.color;
+
+                      if (worst.status === 'low') {
+                        icon = 'arrow-down-circle';
+                        const deficit = Math.abs(Math.round(worst.pct));
+                        if (worst.macro === 'Protein') {
+                          message = `Protein is ${deficit}% below target. Try adding eggs, Greek yogurt, or chicken to close the gap.`;
+                        } else if (worst.macro === 'Carbs') {
+                          message = `Carbs are ${deficit}% below target. Add whole grains, fruit, or oats to fuel your energy levels.`;
+                        } else {
+                          message = `Fat is ${deficit}% below target. Nuts, avocado, or olive oil are great healthy fat sources.`;
+                        }
+                      } else {
+                        icon = 'arrow-up-circle';
+                        const surplus = Math.round(worst.pct);
+                        if (worst.macro === 'Protein') {
+                          message = `Protein is ${surplus}% above target. Consider balancing portions with more vegetables and complex carbs.`;
+                        } else if (worst.macro === 'Carbs') {
+                          message = `Carbs are ${surplus}% over target. Try swapping refined carbs for vegetables or reducing portion sizes.`;
+                        } else {
+                          message = `Fat is ${surplus}% over target. Watch for hidden fats in sauces, fried food, and processed snacks.`;
+                        }
+                      }
+                    } else {
+                      return null;
+                    }
+
+                    return (
+                      <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+                        <Feather name={icon as any} size={18} color={iconColor} />
+                        <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                          {message}
+                        </Text>
+                      </View>
+                    );
+                  })()}
 
                   {/* Macros History Table */}
                   {macrosHistory.length > 0 && (
@@ -1269,58 +1372,47 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         History
                       </Text>
                       <View style={styles.historyHeaderRow}>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, flex: 1.5 }]}>
                           Date
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
                           Protein
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
                           Carbs
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
                           Fat
                         </Text>
-                        <View style={styles.historyHeaderSpacer} />
+                        <View style={{ width: 28 }} />
                       </View>
                       {macrosHistory.map((entry) => (
-                        <View key={entry.date.toISOString()} style={styles.historyRow}>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: theme.colors.border }]}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary, flex: 1.5 }]}>
                             {format(entry.date, 'd MMM yyyy')}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.primary }]}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.primary, textAlign: 'right' }]}>
                             {`${entry.protein.toFixed(0)}g`}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
                             {`${entry.carbs.toFixed(0)}g`}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textTertiary }]}>
+                          <Text style={[styles.historyCellText, { color: theme.colors.textTertiary, textAlign: 'right' }]}>
                             {`${entry.fat.toFixed(0)}g`}
                           </Text>
-                          <View style={styles.historyActions}>
-                            {onRequestLogMealForDate && (
-                              <TouchableOpacity
-                                onPress={() => onRequestLogMealForDate(entry.date)}
-                                style={styles.historyEditButton}
-                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                              >
-                                <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
+                          <TouchableOpacity
+                            onPress={() => onRequestLogMealForDate?.(entry.date)}
+                            style={{ padding: 4, marginLeft: 6 }}
+                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                          >
+                            <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                          </TouchableOpacity>
                         </View>
                       ))}
                     </View>
                   )}
 
 
-                  {/* Information Box */}
-                  <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-                    <Feather name="info" size={20} color={theme.colors.primary} />
-                    <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
-                      Your protein intake is below target. Consider adding more lean protein to your meals.
-                    </Text>
-                  </View>
                 </View>
               )}
 
@@ -1338,290 +1430,405 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </Text>
                     </View>
                   ) : (
-                    <View style={{ gap: 20 }}>
-                      {/* Radar Chart Card */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, paddingVertical: 24, alignItems: 'center' }]}>
-                        <View style={{ width: '100%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                          <View>
-                            <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
-                              Nutrition Balance
-                            </Text>
-                            <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                              Target vs. Actual
-                            </Text>
-                          </View>
+                    <View style={{ gap: 16 }}>
 
-                          {/* Time Range Badge/Selector */}
-                          <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4 }}>
-                            {(['1W', '1M', '6M', '1Y'] as TimeRange[]).map((range) => (
-                              <TouchableOpacity
-                                key={range}
-                                onPress={() => handleTimeRangeChange(range)}
-                                style={{
-                                  paddingHorizontal: 8,
-                                  paddingVertical: 4,
-                                  borderRadius: 8,
-                                  backgroundColor: timeRange === range ? theme.colors.card : 'transparent',
-                                  shadowColor: timeRange === range ? '#000' : 'transparent',
-                                  shadowOpacity: timeRange === range ? 0.05 : 0,
-                                  shadowRadius: 2,
-                                }}
-                              >
-                                <Text style={{
-                                  fontSize: 11,
-                                  fontWeight: '600',
-                                  color: timeRange === range ? theme.colors.textPrimary : theme.colors.textSecondary
-                                }}>
-                                  {range}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </View>
-                        </View>
+                      {/* ── Time Range Selector ── */}
+                      {renderTimeRangePills()}
 
-                        {renderRadarChart()}
-                      </View>
-
-                      {/* New Visual Consistency Scorecard */}
-                      <View style={{ flexDirection: 'row', gap: 12 }}>
-                        {/* Score Card */}
-                        <View style={{
-                          flex: 1,
-                          backgroundColor: theme.colors.card,
-                          borderRadius: 20,
-                          padding: 16,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                          borderWidth: 1,
-                          borderColor: theme.colors.border,
-                        }}>
-                          <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, marginBottom: 8, letterSpacing: 0.5 }}>
-                            CALORIES
-                          </Text>
-                          <View style={{ position: 'relative', alignItems: 'center', justifyContent: 'center', width: 80, height: 80 }}>
-                            <Svg height="80" width="80" viewBox="0 0 100 100">
-                              <Circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                stroke={theme.colors.input}
-                                strokeWidth="8"
-                                fill="transparent"
-                              />
-                              <Circle
-                                cx="50"
-                                cy="50"
-                                r="40"
-                                stroke={theme.colors.primary}
-                                strokeWidth="8"
-                                fill="transparent"
-                                strokeDasharray={`${2 * Math.PI * 40}`}
-                                strokeDashoffset={`${2 * Math.PI * 40 * (1 - Math.min(1, (radarData.find(d => d.label === 'Calories')?.value || 0)))}`}
-                                strokeLinecap="round"
-                                origin="50, 50"
-                                rotation="-90"
-                              />
-                            </Svg>
-                            <View style={{ position: 'absolute' }}>
-                              <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>
-                                {Math.round((radarData.find(d => d.label === 'Calories')?.value || 0) * 100)}%
-                              </Text>
+                      {/* ── AI Weekly Insight ── */}
+                      {(insightText || isGeneratingInsight) && (
+                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${theme.colors.primary}15`, alignItems: 'center', justifyContent: 'center' }}>
+                              <Feather name="cpu" size={14} color={theme.colors.primary} />
                             </View>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>AI Weekly Insight</Text>
                           </View>
+                          {isGeneratingInsight ? (
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <Feather name="loader" size={14} color={theme.colors.textSecondary} />
+                              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your nutrition data...</Text>
+                            </View>
+                          ) : (
+                            <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                              {insightText}
+                            </Text>
+                          )}
                         </View>
+                      )}
 
-                        {/* Status/Badge Card */}
-                        <View style={{
-                          flex: 1,
-                          backgroundColor: theme.colors.card,
-                          borderRadius: 20,
-                          padding: 16,
-                          justifyContent: 'center',
-                          borderWidth: 1,
-                          borderColor: theme.colors.border,
-                        }}>
-                          <View style={{ marginBottom: 12 }}>
-                            <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary, letterSpacing: 0.5 }}>RATING</Text>
-                          </View>
-                          <Text style={{ fontSize: 22, fontWeight: 'bold', color: theme.colors.textPrimary, marginBottom: 4 }}>
-                            {(() => {
-                              const val = (radarData.find(d => d.label === 'Calories')?.value || 0) * 100;
-                              if (val >= 90 && val <= 110) return 'Perfect';
-                              if (val >= 80 && val <= 120) return 'Good';
-                              return 'Off Track';
-                            })()}
-                          </Text>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, lineHeight: 16 }}>
-                            {(() => {
-                              const val = (radarData.find(d => d.label === 'Calories')?.value || 0) * 100;
-                              if (val >= 90 && val <= 110) return "You're hitting your calorie goals spot on!";
-                              if (val >= 80 && val <= 120) return "You're close to your calorie target. Keep it up.";
-                              return "Try to adjust your intake to meet your daily goals.";
-                            })()}
-                          </Text>
-                        </View>
-                      </View>
-
-
-
-
-                      {/* Meal Timing Analysis Card */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 24 }]}>
-                        <View style={{ marginBottom: 20 }}>
-                          <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
-                            Meal Timing
-                          </Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                            When are you eating?
-                          </Text>
-                        </View>
-
-                        {/* Chart Drawing */}
-                        {(() => {
-                          // 1. Process Data
-                          const buckets = {
-                            Morning: { cals: 0, count: 0 },
-                            Afternoon: { cals: 0, count: 0 },
-                            Evening: { cals: 0, count: 0 }
-                          };
-
-                          const now = new Date();
-                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
-                          const cutoff = subDays(now, rangeDays);
-
-                          let totalRangeCals = 0;
-                          let totalDaysWithData = new Set<string>();
-
-                          Object.values(mealsByDate).flat().forEach(meal => {
-                            const d = new Date(meal.timestamp);
-                            if (d < cutoff) return;
-
-                            totalDaysWithData.add(d.toISOString().split('T')[0]);
-
-                            const h = d.getHours();
-                            let bucket: keyof typeof buckets = 'Evening';
-                            if (h >= 4 && h < 12) bucket = 'Morning';
-                            else if (h >= 12 && h < 17) bucket = 'Afternoon';
-
-                            const mealCals = meal.foods.reduce((acc, f) => acc + (f.calories || 0), 0);
-                            buckets[bucket].cals += mealCals;
-                            buckets[bucket].count++;
-                            totalRangeCals += mealCals;
-                          });
-
-                          const daysCount = Math.max(1, totalDaysWithData.size);
-
-                          const periods = [
-                            { key: 'Morning', label: 'Morning', subLabel: '4AM - 12PM', icon: 'sunrise', color: '#F59E0B' },
-                            { key: 'Afternoon', label: 'Afternoon', subLabel: '12PM - 5PM', icon: 'sun', color: '#3B82F6' },
-                            { key: 'Evening', label: 'Evening', subLabel: '5PM - 4AM', icon: 'moon', color: '#8B5CF6' },
-                          ] as const;
-
-                          // Find max for bar scaling (relative to total helps visualize distribution better)
-                          // Actually, for distribution, % of Total is best.
-
-                          return (
-                            <View style={{ gap: 20 }}>
-                              {periods.map((p) => {
-                                const bucket = buckets[p.key];
-                                const percentage = totalRangeCals > 0 ? (bucket.cals / totalRangeCals) : 0;
-                                const avgCals = Math.round(bucket.cals / daysCount);
-
-                                return (
-                                  <View key={p.key}>
-                                    {/* Header Row */}
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                        <View style={{
-                                          width: 32, height: 32, borderRadius: 8,
-                                          backgroundColor: `${p.color}15`,
-                                          alignItems: 'center', justifyContent: 'center'
-                                        }}>
-                                          <Feather name={p.icon as any} size={16} color={p.color} />
-                                        </View>
-                                        <View>
-                                          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>
-                                            {p.label}
-                                          </Text>
-                                          <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
-                                            {p.subLabel}
-                                          </Text>
-                                        </View>
-                                      </View>
-
-                                      <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary }}>
-                                          {(percentage * 100).toFixed(0)}%
-                                        </Text>
-                                        <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
-                                          ~{avgCals} Kcal
-                                        </Text>
-                                      </View>
-                                    </View>
-
-                                    {/* Progress Bar */}
-                                    <View style={{
-                                      height: 8,
-                                      backgroundColor: theme.colors.input,
-                                      borderRadius: 4,
-                                      overflow: 'hidden'
-                                    }}>
-                                      <View style={{
-                                        width: `${percentage * 100}%`,
-                                        height: '100%',
-                                        backgroundColor: p.color,
-                                        borderRadius: 4
-                                      }} />
+                      {/* ── Macro Adherence Rings ── */}
+                      {(targetProtein || targetCarbs || targetFat) && (
+                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Goal Adherence</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average vs. target</Text>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
+                            {[
+                              { label: 'Protein', avg: averageProtein ?? 0, target: targetProtein, color: '#3B82F6' },
+                              { label: 'Carbs', avg: averageCarbs ?? 0, target: targetCarbs, color: '#F59E0B' },
+                              { label: 'Fat', avg: averageFat ?? 0, target: targetFat, color: '#8B5CF6' },
+                              ...(targetCalories ? [{ label: 'Calories', avg: averageCalories ?? 0, target: targetCalories, color: theme.colors.primary }] : []),
+                            ].filter(m => m.target).map((macro) => {
+                              const pct = Math.min(1, macro.avg / (macro.target! || 1));
+                              const circumference = 2 * Math.PI * 32;
+                              return (
+                                <View key={macro.label} style={{ alignItems: 'center' }}>
+                                  <View style={{ position: 'relative', width: 72, height: 72, alignItems: 'center', justifyContent: 'center' }}>
+                                    <Svg width={72} height={72} viewBox="0 0 80 80">
+                                      <Circle cx="40" cy="40" r="32" stroke={theme.colors.input} strokeWidth="6" fill="transparent" />
+                                      <Circle
+                                        cx="40" cy="40" r="32"
+                                        stroke={macro.color}
+                                        strokeWidth="6"
+                                        fill="transparent"
+                                        strokeDasharray={`${circumference}`}
+                                        strokeDashoffset={`${circumference * (1 - pct)}`}
+                                        strokeLinecap="round"
+                                        transform="rotate(-90, 40, 40)"
+                                      />
+                                    </Svg>
+                                    <View style={{ position: 'absolute' }}>
+                                      <Text style={{ fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, textAlign: 'center' }}>
+                                        {Math.round(pct * 100)}%
+                                      </Text>
                                     </View>
                                   </View>
-                                );
-                              })}
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 6 }}>{macro.label}</Text>
+                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>{Math.round(macro.avg)}/{macro.target}{macro.label === 'Calories' ? '' : 'g'}</Text>
+                                </View>
+                              );
+                            })}
+                          </View>
+                        </View>
+                      )}
 
-                              {/* Insight Box */}
-                              <View style={{
-                                marginTop: 8,
-                                padding: 12,
-                                backgroundColor: theme.colors.input,
-                                borderRadius: 12,
-                                borderLeftWidth: 4,
-                                borderLeftColor: theme.colors.primary
-                              }}>
-                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
-                                  <Text style={{ fontWeight: 'bold' }}>Quick Tip: </Text>
-                                  {(() => {
-                                    // Simple logic for tip
-                                    const mP = buckets.Morning.cals / (totalRangeCals || 1);
-                                    const eP = buckets.Evening.cals / (totalRangeCals || 1);
+                      {/* ── Calorie Trend Chart ── */}
+                      {graphData.length >= 2 && (
+                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                            <View>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Calorie Trend</Text>
+                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Daily intake over time</Text>
+                            </View>
+                            <View style={{ alignItems: 'flex-end' }}>
+                              <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{averageCalories ?? 0}</Text>
+                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>avg Kcal/day</Text>
+                            </View>
+                          </View>
+                          {(() => {
+                            const cW = graphWidth - 36; // card padding
+                            const cH = 140;
+                            const cPadL = 35;
+                            const cPadR = 10;
+                            const cPadY = 16;
+                            const iW = cW - cPadL - cPadR;
+                            const iH = cH - cPadY * 2;
+                            const vals = graphData.map(d => d.calories);
+                            const maxV = Math.max(...vals, targetCalories ?? 0, 100);
+                            const minV = 0;
+                            const range = maxV - minV || 1;
+                            const avg = averageCalories ?? 0;
 
-                                    if (totalRangeCals === 0) return "Log more meals to see your timing patterns.";
-                                    if (eP > 0.5) return "Heavy evening eating can impact sleep quality. Try moving some calories to lunch.";
-                                    if (mP < 0.15) return "Starting the day with a small breakfast can help stabilize energy levels.";
-                                    return "Your meal timing is well balanced across the day.";
-                                  })()}
-                                </Text>
+                            const pts = vals.map((v, i) => ({
+                              x: cPadL + (i / (vals.length - 1 || 1)) * iW,
+                              y: cPadY + iH - ((v - minV) / range) * iH,
+                            }));
+                            const avgY = cPadY + iH - ((avg - minV) / range) * iH;
+                            const targetY = targetCalories ? cPadY + iH - ((targetCalories - minV) / range) * iH : null;
+
+                            // Area fill path
+                            const linePath = pts.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
+                            const areaPath = `${linePath} L ${pts[pts.length - 1].x} ${cPadY + iH} L ${pts[0].x} ${cPadY + iH} Z`;
+
+                            return (
+                              <Svg width={cW} height={cH}>
+                                <Defs>
+                                  <LinearGradient id="calTrendGrad" x1="0" y1="0" x2="0" y2="1">
+                                    <Stop offset="0" stopColor={theme.colors.primary} stopOpacity="0.2" />
+                                    <Stop offset="1" stopColor={theme.colors.primary} stopOpacity="0" />
+                                  </LinearGradient>
+                                </Defs>
+                                {/* Grid lines */}
+                                {[0, 0.25, 0.5, 0.75, 1].map((r, i) => {
+                                  const y = cPadY + iH - r * iH;
+                                  const label = Math.round(minV + r * range);
+                                  return (
+                                    <React.Fragment key={i}>
+                                      <Line x1={cPadL} y1={y} x2={cW - cPadR} y2={y} stroke={theme.colors.border} strokeWidth={0.5} strokeDasharray="2,2" />
+                                      <SvgText x={cPadL - 4} y={y + 3} fontSize="9" fill={theme.colors.textTertiary} textAnchor="end">{label}</SvgText>
+                                    </React.Fragment>
+                                  );
+                                })}
+                                {/* Area fill */}
+                                <Path d={areaPath} fill="url(#calTrendGrad)" />
+                                {/* Line */}
+                                <Path d={linePath} fill="none" stroke={theme.colors.primary} strokeWidth={2} strokeLinejoin="round" />
+                                {/* Avg dashed line */}
+                                <Line x1={cPadL} y1={avgY} x2={cW - cPadR} y2={avgY} stroke={theme.colors.textSecondary} strokeWidth={1} strokeDasharray="4,3" opacity={0.6} />
+                                <SvgText x={cW - cPadR} y={avgY - 4} fontSize="9" fill={theme.colors.textSecondary} textAnchor="end">avg</SvgText>
+                                {/* Target line */}
+                                {targetY !== null && (
+                                  <>
+                                    <Line x1={cPadL} y1={targetY} x2={cW - cPadR} y2={targetY} stroke="#EF4444" strokeWidth={1} strokeDasharray="4,4" opacity={0.5} />
+                                    <SvgText x={cW - cPadR} y={targetY - 4} fontSize="9" fill="#EF4444" textAnchor="end">target</SvgText>
+                                  </>
+                                )}
+                                {/* Data dots */}
+                                {pts.length <= 14 && pts.map((p, i) => (
+                                  <Circle key={i} cx={p.x} cy={p.y} r={3} fill={theme.colors.card} stroke={theme.colors.primary} strokeWidth={1.5} />
+                                ))}
+                              </Svg>
+                            );
+                          })()}
+                        </View>
+                      )}
+
+                      {/* ── Macro Split Bar ── */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Macro Split</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average daily ratio</Text>
+                        {(() => {
+                          const p = averageProtein ?? 0;
+                          const c = averageCarbs ?? 0;
+                          const f = averageFat ?? 0;
+                          const totalG = p + c + f || 1;
+                          const pPct = (p / totalG) * 100;
+                          const cPct = (c / totalG) * 100;
+                          const fPct = (f / totalG) * 100;
+                          // Calorie-based ratio
+                          const pCal = p * 4;
+                          const cCal = c * 4;
+                          const fCal = f * 9;
+                          const totalCal = pCal + cCal + fCal || 1;
+                          const pCalPct = (pCal / totalCal) * 100;
+                          const cCalPct = (cCal / totalCal) * 100;
+                          const fCalPct = (fCal / totalCal) * 100;
+
+                          return (
+                            <View>
+                              {/* Stacked bar */}
+                              <View style={{ height: 28, flexDirection: 'row', borderRadius: 14, overflow: 'hidden', marginBottom: 12 }}>
+                                <View style={{ width: `${pCalPct}%`, backgroundColor: '#3B82F6' }} />
+                                <View style={{ width: `${cCalPct}%`, backgroundColor: '#F59E0B' }} />
+                                <View style={{ width: `${fCalPct}%`, backgroundColor: '#8B5CF6' }} />
+                              </View>
+                              {/* Labels */}
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                {[
+                                  { label: 'Protein', grams: p, pct: pCalPct, color: '#3B82F6' },
+                                  { label: 'Carbs', grams: c, pct: cCalPct, color: '#F59E0B' },
+                                  { label: 'Fat', grams: f, pct: fCalPct, color: '#8B5CF6' },
+                                ].map((m) => (
+                                  <View key={m.label} style={{ alignItems: 'center', flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
+                                      <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: m.color }} />
+                                      <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>{m.label}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>{Math.round(m.pct)}%</Text>
+                                    <Text style={{ fontSize: 11, color: theme.colors.textTertiary }}>{Math.round(m.grams)}g/day</Text>
+                                  </View>
+                                ))}
                               </View>
                             </View>
                           );
                         })()}
                       </View>
 
-                      {/* Sugar Load Analysis Card */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 24 }]}>
-                        <View style={{ marginBottom: 20 }}>
-                          <Text style={[styles.chartTitle, { color: theme.colors.textPrimary, textAlign: 'left', marginBottom: 4 }]}>
-                            Sugar Load
-                          </Text>
-                          <Text style={{ color: theme.colors.textSecondary, fontSize: 13 }}>
-                            Natural vs. Added Sugars (Daily Avg)
-                          </Text>
+                      {/* ── Radar Chart ── */}
+                      {radarData.length > 0 && (
+                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, alignItems: 'center' }]}>
+                          <View style={{ width: '100%', marginBottom: 8 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Nutrition Balance</Text>
+                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Target vs. actual performance</Text>
+                          </View>
+                          {renderRadarChart()}
                         </View>
+                      )}
 
+                      {/* ── Day-of-Week Activity ── */}
+                      {graphData.length >= 3 && (
+                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Weekly Pattern</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average calories by day of week</Text>
+                          {(() => {
+                            const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+                            const dayBuckets: Record<string, { total: number; count: number }> = {};
+                            dayNames.forEach(d => { dayBuckets[d] = { total: 0, count: 0 }; });
+
+                            graphData.forEach(entry => {
+                              const dayIdx = entry.date.getDay(); // 0=Sun
+                              const dayName = dayNames[dayIdx === 0 ? 6 : dayIdx - 1]; // Mon=0
+                              dayBuckets[dayName].total += entry.calories;
+                              dayBuckets[dayName].count++;
+                            });
+
+                            const dayAvgs = dayNames.map(d => ({
+                              day: d,
+                              avg: dayBuckets[d].count > 0 ? Math.round(dayBuckets[d].total / dayBuckets[d].count) : 0,
+                            }));
+                            const maxDayAvg = Math.max(...dayAvgs.map(d => d.avg), 1);
+
+                            const barChartW = graphWidth - 36;
+                            const barChartH = 120;
+                            const barGap = 6;
+                            const barW = (barChartW - barGap * 6) / 7;
+
+                            return (
+                              <View>
+                                <Svg width={barChartW} height={barChartH + 20}>
+                                  {dayAvgs.map((d, i) => {
+                                    const barH = (d.avg / maxDayAvg) * (barChartH - 16);
+                                    const x = i * (barW + barGap);
+                                    const y = barChartH - barH;
+                                    const isToday = dayNames[(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)] === d.day;
+                                    return (
+                                      <React.Fragment key={d.day}>
+                                        <Rect x={x} y={y} width={barW} height={Math.max(barH, 2)} rx={barW / 2} fill={isToday ? theme.colors.primary : `${theme.colors.primary}40`} />
+                                        {d.avg > 0 && (
+                                          <SvgText x={x + barW / 2} y={y - 4} fontSize="9" fill={theme.colors.textSecondary} textAnchor="middle" fontWeight="600">
+                                            {d.avg}
+                                          </SvgText>
+                                        )}
+                                        <SvgText x={x + barW / 2} y={barChartH + 14} fontSize="10" fill={isToday ? theme.colors.textPrimary : theme.colors.textSecondary} textAnchor="middle" fontWeight={isToday ? '700' : '500'}>
+                                          {d.day}
+                                        </SvgText>
+                                      </React.Fragment>
+                                    );
+                                  })}
+                                </Svg>
+                              </View>
+                            );
+                          })()}
+                        </View>
+                      )}
+
+                      {/* ── Meal Timing ── */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Meal Timing</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>When are you eating?</Text>
                         {(() => {
-                          // 1. Calculate Sugar Averages
+                          const buckets = { Morning: { cals: 0, count: 0 }, Afternoon: { cals: 0, count: 0 }, Evening: { cals: 0, count: 0 } };
+                          const now = new Date();
+                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const cutoff = subDays(now, rangeDays);
+                          let totalRangeCals = 0;
+                          let totalDaysWithData = new Set<string>();
+
+                          Object.values(mealsByDate).flat().forEach(meal => {
+                            const d = new Date(meal.timestamp);
+                            if (d < cutoff) return;
+                            totalDaysWithData.add(d.toISOString().split('T')[0]);
+                            const h = d.getHours();
+                            let bucket: keyof typeof buckets = 'Evening';
+                            if (h >= 4 && h < 12) bucket = 'Morning';
+                            else if (h >= 12 && h < 17) bucket = 'Afternoon';
+                            const mealCals = meal.foods.reduce((acc, f) => acc + (f.calories || 0), 0);
+                            buckets[bucket].cals += mealCals;
+                            buckets[bucket].count++;
+                            totalRangeCals += mealCals;
+                          });
+                          const daysCount = Math.max(1, totalDaysWithData.size);
+
+                          const periods = [
+                            { key: 'Morning' as const, label: 'Morning', sub: '4AM – 12PM', icon: 'sunrise' as const, color: '#F59E0B' },
+                            { key: 'Afternoon' as const, label: 'Afternoon', sub: '12PM – 5PM', icon: 'sun' as const, color: '#3B82F6' },
+                            { key: 'Evening' as const, label: 'Evening', sub: '5PM – 4AM', icon: 'moon' as const, color: '#8B5CF6' },
+                          ];
+
+                          return (
+                            <View style={{ gap: 16 }}>
+                              {periods.map((p) => {
+                                const bucket = buckets[p.key];
+                                const pct = totalRangeCals > 0 ? bucket.cals / totalRangeCals : 0;
+                                const avgCals = Math.round(bucket.cals / daysCount);
+                                return (
+                                  <View key={p.key}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                        <View style={{ width: 30, height: 30, borderRadius: 8, backgroundColor: `${p.color}15`, alignItems: 'center', justifyContent: 'center' }}>
+                                          <Feather name={p.icon} size={14} color={p.color} />
+                                        </View>
+                                        <View>
+                                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary }}>{p.label}</Text>
+                                          <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{p.sub}</Text>
+                                        </View>
+                                      </View>
+                                      <View style={{ alignItems: 'flex-end' }}>
+                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary }}>{(pct * 100).toFixed(0)}%</Text>
+                                        <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>~{avgCals} Kcal</Text>
+                                      </View>
+                                    </View>
+                                    <View style={{ height: 6, backgroundColor: theme.colors.input, borderRadius: 3, overflow: 'hidden' }}>
+                                      <View style={{ width: `${pct * 100}%`, height: '100%', backgroundColor: p.color, borderRadius: 3 }} />
+                                    </View>
+                                  </View>
+                                );
+                              })}
+                            </View>
+                          );
+                        })()}
+                      </View>
+
+                      {/* ── Top Foods ── */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Top Foods</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items</Text>
+                        {(() => {
+                          const now = new Date();
+                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const cutoff = subDays(now, rangeDays);
+
+                          const foodCounts: Record<string, { count: number; cals: number }> = {};
+                          Object.values(mealsByDate).flat().forEach(meal => {
+                            const d = new Date(meal.timestamp);
+                            if (d < cutoff) return;
+                            meal.foods.forEach(f => {
+                              const name = f.name?.toLowerCase().trim();
+                              if (!name) return;
+                              if (!foodCounts[name]) foodCounts[name] = { count: 0, cals: 0 };
+                              foodCounts[name].count++;
+                              foodCounts[name].cals += f.calories || 0;
+                            });
+                          });
+
+                          const sorted = Object.entries(foodCounts)
+                            .sort((a, b) => b[1].count - a[1].count)
+                            .slice(0, 5);
+                          const maxCount = sorted.length > 0 ? sorted[0][1].count : 1;
+
+                          if (sorted.length === 0) {
+                            return <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 12 }}>Log more meals to see your top foods.</Text>;
+                          }
+
+                          return (
+                            <View style={{ gap: 10 }}>
+                              {sorted.map(([name, data], i) => (
+                                <View key={name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                                  <Text style={{ width: 18, fontSize: 12, fontWeight: '700', color: theme.colors.textTertiary, textAlign: 'center' }}>{i + 1}</Text>
+                                  <View style={{ flex: 1 }}>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
+                                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, textTransform: 'capitalize' }}>{name}</Text>
+                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{data.count}x  ·  {Math.round(data.cals / data.count)} Kcal avg</Text>
+                                    </View>
+                                    <View style={{ height: 4, backgroundColor: theme.colors.input, borderRadius: 2, overflow: 'hidden' }}>
+                                      <View style={{ width: `${(data.count / maxCount) * 100}%`, height: '100%', backgroundColor: theme.colors.primary, borderRadius: 2 }} />
+                                    </View>
+                                  </View>
+                                </View>
+                              ))}
+                            </View>
+                          );
+                        })()}
+                      </View>
+
+                      {/* ── Sugar Load ── */}
+                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Sugar Load</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Natural vs. added sugars (daily avg)</Text>
+                        {(() => {
                           let totalSugar = 0;
                           let addedSugar = 0;
                           let daysWithData = new Set<string>();
-
                           const now = new Date();
                           const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
                           const cutoff = subDays(now, rangeDays);
@@ -1629,7 +1836,6 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           Object.values(mealsByDate).flat().forEach(meal => {
                             const d = new Date(meal.timestamp);
                             if (d < cutoff) return;
-
                             daysWithData.add(d.toISOString().split('T')[0]);
                             meal.foods.forEach(f => {
                               totalSugar += (f.sugar || 0);
@@ -1641,92 +1847,41 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           const avgTotal = Math.round(totalSugar / count);
                           const avgAdded = Math.round(addedSugar / count);
                           const avgNatural = Math.max(0, avgTotal - avgAdded);
-
-                          // Recommended limits (e.g. AHA says ~36g for men, ~25g for women. Let's pick 50g as a general upper bound context)
                           const dailyLimit = 50;
                           const maxBar = Math.max(avgTotal, dailyLimit * 1.2);
 
-                          const widthAdded = (avgAdded / maxBar) * 100;
-                          const widthNatural = (avgNatural / maxBar) * 100;
-                          const limitPos = (dailyLimit / maxBar) * 100;
-
                           return (
                             <View>
-                              {/* Legend / Stats Row */}
-                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-                                <View>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#FB7185' }} />
-                                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Added</Text>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-around', marginBottom: 16 }}>
+                                {[
+                                  { label: 'Added', val: avgAdded, color: '#FB7185' },
+                                  { label: 'Natural', val: avgNatural, color: '#4ADE80' },
+                                  { label: 'Total', val: avgTotal, color: theme.colors.textPrimary },
+                                ].map(s => (
+                                  <View key={s.label} style={{ alignItems: 'center' }}>
+                                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
+                                      {s.label !== 'Total' && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: s.color }} />}
+                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{s.label}</Text>
+                                    </View>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>{s.val}g</Text>
                                   </View>
-                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgAdded}g</Text>
-                                </View>
-
-                                <View style={{ height: '100%', width: 1, backgroundColor: theme.colors.border }} />
-
-                                <View>
-                                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 2 }}>
-                                    <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#4ADE80' }} />
-                                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Natural</Text>
-                                  </View>
-                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgNatural}g</Text>
-                                </View>
-
-                                <View style={{ height: '100%', width: 1, backgroundColor: theme.colors.border }} />
-
-                                <View>
-                                  <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>Total</Text>
-                                  <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>{avgTotal}g</Text>
-                                </View>
+                                ))}
                               </View>
-
-                              {/* The Bar Chart */}
-                              <View style={{ marginBottom: 8 }}>
-                                <View style={{ height: 24, width: '100%', backgroundColor: theme.colors.input, borderRadius: 12, flexDirection: 'row', overflow: 'hidden', position: 'relative' }}>
-                                  {/* Added Sugar Segment */}
-                                  <View style={{ width: `${widthAdded}%`, height: '100%', backgroundColor: '#FB7185' }} />
-                                  {/* Natural Sugar Segment */}
-                                  <View style={{ width: `${widthNatural}%`, height: '100%', backgroundColor: '#4ADE80' }} />
-
-                                  {/* Limit Line */}
-                                  <View style={{ position: 'absolute', left: `${limitPos}%`, top: 0, bottom: 0, width: 2, backgroundColor: theme.colors.textPrimary, zIndex: 10 }} />
-                                </View>
-                                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 4 }}>
-                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>0g</Text>
-                                  <Text style={{ fontSize: 10, color: theme.colors.textPrimary, fontWeight: '600', transform: [{ translateX: 10 }] }}>Limit ({dailyLimit}g)</Text>
-                                  <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{(maxBar).toFixed(0)}g+</Text>
-                                </View>
+                              <View style={{ height: 20, flexDirection: 'row', borderRadius: 10, overflow: 'hidden', backgroundColor: theme.colors.input, position: 'relative', marginBottom: 6 }}>
+                                <View style={{ width: `${(avgAdded / maxBar) * 100}%`, height: '100%', backgroundColor: '#FB7185' }} />
+                                <View style={{ width: `${(avgNatural / maxBar) * 100}%`, height: '100%', backgroundColor: '#4ADE80' }} />
+                                <View style={{ position: 'absolute', left: `${(dailyLimit / maxBar) * 100}%`, top: 0, bottom: 0, width: 2, backgroundColor: theme.colors.textPrimary }} />
                               </View>
-
-                              {/* AI Insight Box */}
-                              <View style={{
-                                marginTop: 16,
-                                padding: 12,
-                                backgroundColor: theme.colors.input,
-                                borderRadius: 12,
-                                borderLeftWidth: 4,
-                                borderLeftColor: avgAdded > dailyLimit ? '#FB7185' : '#4ADE80'
-                              }}>
-                                <View style={{ flexDirection: 'row', gap: 8 }}>
-                                  <Feather name="activity" size={16} color={avgAdded > dailyLimit ? '#FB7185' : '#4ADE80'} style={{ marginTop: 2 }} />
-                                  <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20, flex: 1 }}>
-                                    <Text style={{ fontWeight: 'bold' }}>Coach Insight: </Text>
-                                    {(() => {
-                                      if (avgTotal === 0) return "Log your food to see your sugar breakdown.";
-                                      if (avgAdded > dailyLimit) return `Your added sugar average (${avgAdded}g) is high. Watch out for sugary drinks and processed snacks.`;
-                                      if (avgAdded > 25) return "You're doing okay, but try swapping one sweet treat for fruit to lower added sugar.";
-                                      return "Great job keeping added consumption low! Natural sugars from fruit are fueling you well.";
-                                    })()}
-                                  </Text>
-                                </View>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                                <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>0g</Text>
+                                <Text style={{ fontSize: 10, color: theme.colors.textPrimary, fontWeight: '600' }}>Limit {dailyLimit}g</Text>
                               </View>
-
                             </View>
                           );
                         })()}
                       </View>
-                    </View>
 
+                    </View>
                   )}
                 </View>
               )}
@@ -1830,39 +1985,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  timeRangeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  timeRangeButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    minWidth: 40,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.4)',
-    backgroundColor: 'rgba(15, 23, 42, 0.02)',
-  },
-  timeRangeText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  timeRangeButtonActive: {
-    backgroundColor: 'transparent',
-    borderColor: '#000', // Will follow theme in inline styles if dynamic, but here static in stylesheet, best to rely on inline styles for dynamic colors or just fix this to use neutral if possible. Wait, Stylesheet is static.
-    // Actually the dynamic style is applied in render, but let's check.
-    // The render method uses: style={[styles.timeRangeButton, timeRange === range && styles.timeRangeButtonActive]}
-    // So I should remove the color from here or update it later. But wait, I can't access theme here.
-    // I should update the component render to use inline styles for active state or pass theme to styles (not possible easily).
-    // Better to use a standard color here if it matches most themes, or override in render.
-    // Given the previous code, I'll update the render method instead.
-  },
-  timeRangeTextActive: {
-    color: '#000',
-  },
   dateRange: {
     textAlign: 'center',
     fontSize: Typography.fontSize.sm,
@@ -1873,7 +1995,6 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 8,
-    borderColor: Colors.lightBorder,
   },
   historyTitle: {
     fontSize: Typography.fontSize.sm,
@@ -1902,7 +2023,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.lightBorder,
   },
   historyCellText: {
     flex: 1,
@@ -1954,7 +2074,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   emptyStateButtonText: {
-    color: Colors.white,
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
   },

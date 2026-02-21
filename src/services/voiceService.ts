@@ -128,28 +128,8 @@ class VoiceService {
       return await this.transcribeWithOpenAI(audioUri);
     } catch (error) {
       console.error('Transcription failed:', error);
-      try {
-        return await this.mockTranscription();
-      } catch (fallbackError) {
-        return 'Sorry, I could not transcribe your audio. Please try typing instead.';
-      }
+      return 'Sorry, I could not transcribe your audio. Please try typing instead.';
     }
-  }
-
-  private async mockTranscription(): Promise<string> {
-    // Mock delay to simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    // Return mock transcription
-    const mockResponses = [
-      "I had a chicken salad for lunch with some vegetables",
-      "I ate two eggs and toast for breakfast",
-      "Had a protein shake after my workout",
-      "I had pizza and soda for dinner",
-      "Ate an apple and some nuts as a snack"
-    ];
-
-    return mockResponses[Math.floor(Math.random() * mockResponses.length)];
   }
 
   async transcribeWithOpenAI(audioUri: string): Promise<string> {

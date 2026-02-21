@@ -1,6 +1,5 @@
 // OpenAI API service for food analysis
 import { ParsedFood } from '../utils/foodNutrition';
-import { ParsedExercise, parseExerciseInput } from '../utils/exerciseParser';
 import { invokeAI } from './aiProxyService';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateId } from '../utils/uuid';
@@ -53,103 +52,7 @@ async function setCachedFood(input: string, foods: ParsedFood[], summary?: strin
 }
 
 
-const FOOD_ANALYSIS_PROMPT = `
-You are an expert nutritionist and food analyst. Your job is to understand what the user ate and provide accurate nutritional information.
 
-Analyze the food input carefully:
-- Identify all food items mentioned
-- Consider cooking methods (grilled, fried, boiled, etc.)
-- Account for portion sizes and descriptors (large, small, cup, handful)
-- Include condiments and additions mentioned
-- Use the most accurate nutritional data from USDA or similar databases
-
-Return ONLY a valid JSON array with detailed nutritional information:
-`;
-
-const IMAGE_ANALYSIS_PROMPT = `
-You are an expert nutritionist and food analyst. Analyze the food image provided and estimate the nutritional information.
-
-Look at the image carefully and:
-- Identify all visible food items
-- Estimate portion sizes based on visual cues (plates, bowls, common serving sizes)
-- Consider cooking methods visible in the image (grilled, fried, boiled, etc.)
-- Account for visible condiments, sauces, and additions
-- Estimate weights based on typical serving sizes for the foods identified
-- Use accurate nutritional data from USDA or similar databases
-
-Return ONLY a valid JSON array with detailed nutritional information:
-
-Return format (JSON array only, no other text):
-[
-  {
-    "name": "Food name",
-    "quantity": number,
-    "unit": "description of quantity (e.g., 'medium banana', 'cup of rice')",
-    "weight_g": estimated_weight_in_grams,
-    "calories": total_calories_for_this_quantity,
-    "protein": total_protein_in_grams,
-    "carbs": total_carbs_in_grams,
-    "fat": total_fat_in_grams,
-    "fiber": total_fiber_in_grams_optional,
-    "sugar": total_sugar_in_grams_optional,
-    "sodium_mg": total_sodium_mg_optional,
-    "potassium_mg": total_potassium_mg_optional,
-    "saturated_fat": total_saturated_fat_g_optional,
-    "cholesterol_mg": total_cholesterol_mg_optional
-  }
-]
-
-If you cannot identify any food items, return an empty array: []
-
-Example input: "I had one large banana and two eggs"
-Example output: [
-  {
-    "name": "Large Banana",
-    "quantity": 1,
-    "unit": "large banana",
-    "weight_g": 136,
-    "calories": 121,
-    "protein": 1.5,
-    "carbs": 31.1,
-    "fat": 0.4
-  },
-  {
-    "name": "Eggs",
-    "quantity": 2,
-    "unit": "large eggs",
-    "weight_g": 100,
-    "calories": 310,
-    "protein": 26,
-    "carbs": 2.2,
-    "fat": 22
-  }
-]
-`;
-
-const EXERCISE_ANALYSIS_PROMPT = `
-You are a certified fitness coach. Analyze the user's text to identify any exercises or workouts they completed and estimate calories burned.
-
-For each exercise:
-- Identify the movement (e.g., Running, Walking, Cycling, Strength Training).
-- Estimate duration in minutes (convert hours if needed).
-- Classify intensity as "low", "moderate", or "high".
-- Estimate calories burned using reasonable MET values for the activity and intensity.
-
-If the text includes multiple exercises, include each as its own entry.
-
-Return ONLY a JSON array in the following shape:
-[
-  {
-    "name": "Running",
-    "duration_minutes": 30,
-    "intensity": "high",
-    "calories": 320,
-    "notes": "Sunset run with strides"
-  }
-]
-
-If you cannot identify any exercises, return an empty array [].
-`;
 
 const NUTRITION_ESTIMATION_PROMPT = `
 You are an expert food scientist. Given a food name, provide the standard nutritional values per 100g.
@@ -186,15 +89,6 @@ Required JSON structure:
   "standard_serving_weight_g": number
 }
 `;
-
-// New Types for Step 1 Parsing
-interface ParsedStructure {
-  name: string;
-  quantity: number;
-  unit: string;
-  preparation?: string;
-  estimated_weight_g: number; // We still ask AI for this to handle unit conversion for now
-}
 
 const AGENTIC_ANALYSIS_PROMPT = `
 You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutritionist. Your goal is to provide the most accurate nutritional tracking possible by "thinking" through the dish composition.
@@ -279,7 +173,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     const cached = await getCachedFood(foodInput);
     if (cached && cached.foods.length > 0) {
       if (__DEV__) console.log('Cache HIT for:', foodInput);
-      await new Promise(resolve => setTimeout(resolve, 1200)); // Brief delay so it feels "fetched"
+      await new Promise(resolve => setTimeout(resolve, 300)); // Brief delay so UI transition feels smooth
       const cachedFoods: ParsedFood[] = cached.foods.map(f => ({ ...f, id: generateId() }));
       return { foods: cachedFoods, summary: cached.summary };
     }
@@ -359,7 +253,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
 async function fetchNutritionFactors(foodName: string): Promise<NutritionLibraryItem | null> {
   try {
     const data = await invokeAI({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         { role: 'system', content: NUTRITION_ESTIMATION_PROMPT },
         { role: 'user', content: sanitizeForAI(foodName, 500) }
@@ -412,62 +306,10 @@ async function fetchNutritionFactors(foodName: string): Promise<NutritionLibrary
   }
 }
 
-export async function analyzeExerciseWithChatGPT(exerciseInput: string): Promise<ParsedExercise[]> {
-  try {
-    const data = await invokeAI({
-      model: 'gpt-4',
-      messages: [
-        { role: 'system', content: EXERCISE_ANALYSIS_PROMPT },
-        { role: 'user', content: sanitizeForAI(exerciseInput) },
-      ],
-      temperature: 0.3,
-      max_tokens: 1000,
-      call_type: 'exercise-analysis',
-    });
-    const content = data.choices[0]?.message?.content;
-    if (!content) {
-      throw new Error('No response from OpenAI');
-    }
-
-    const parsed = JSON.parse(content);
-    if (!Array.isArray(parsed)) {
-      throw new Error('Exercise response is not an array');
-    }
-
-    const exercises: ParsedExercise[] = parsed
-      .map((exercise: any) => ({
-        id: generateId(),
-        name: exercise.name || 'Exercise',
-        duration_minutes: Math.round(
-          Number(
-            exercise.duration_minutes ??
-            exercise.duration ??
-            exercise.minutes ??
-            exercise.time ??
-            0
-          ) || 0
-        ),
-        intensity: exercise.intensity || 'moderate',
-        calories: Math.round(
-          Number(exercise.calories ?? exercise.calories_burned ?? exercise.energy ?? 0) || 0
-        ),
-        notes: exercise.notes,
-      }))
-      .filter((exercise) => exercise.duration_minutes > 0 || exercise.calories > 0);
-
-    return exercises;
-  } catch (error) {
-    if (__DEV__) console.error('Error analyzing exercise with ChatGPT:', error);
-    return parseExerciseInput(exerciseInput);
-  }
-}
-
-// ... (existing code)
-
 export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
   try {
     const data = await invokeAI({
-      model: 'gpt-4',
+      model: 'gpt-4o-mini',
       messages: [
         {
           role: 'system',
@@ -492,23 +334,6 @@ export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
     if (__DEV__) console.error('Error generating insights:', error);
     return "Your weekly pattern shows solid consistency. Keep logging to unlock more detailed trends!";
   }
-}
-
-// Validation function to ensure the response format is correct
-function validateFoodResponse(foods: any[]): boolean {
-  // ...
-  if (!Array.isArray(foods)) return false;
-
-  return foods.every(food =>
-    typeof food.name === 'string' &&
-    typeof food.quantity === 'number' &&
-    typeof food.unit === 'string' &&
-    typeof food.weight_g === 'number' &&
-    typeof food.calories === 'number' &&
-    typeof food.protein === 'number' &&
-    typeof food.carbs === 'number' &&
-    typeof food.fat === 'number'
-  );
 }
 
 /**
@@ -556,6 +381,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
           ]
         }
       ],
+      temperature: 0.3,
       max_tokens: 300,
       call_type: 'food-image-vision',
     });

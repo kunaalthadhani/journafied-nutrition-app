@@ -9,7 +9,6 @@ import {
   ScrollView,
 } from 'react-native';
 import { Plus, Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
-import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { Spacing } from '../constants/spacing';
@@ -462,14 +461,11 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.white, // Always white clean background
-    borderRadius: 12, // Standard radius
+    borderRadius: 12,
     paddingHorizontal: 8,
     paddingVertical: 6,
     minHeight: 52,
     borderWidth: 1,
-    borderColor: Colors.zinc200, // Explicit zinc for predictability
-    // No shadow for shadcn look, commonly just border
   },
   leftControls: {
     flexDirection: 'row',
@@ -487,7 +483,7 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.zinc900,
+    // color set inline via theme
     paddingVertical: 0,
     paddingHorizontal: Spacing.sm,
   },
@@ -511,11 +507,10 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.normal,
   },
   textInputDisabled: {
-    color: Colors.zinc400,
     opacity: 0.6,
   },
   recordingButton: {
-    backgroundColor: Colors.error,
+    // backgroundColor set inline via theme
   },
   circleButton: {
     width: 36,
@@ -523,8 +518,6 @@ const styles = StyleSheet.create({
     borderRadius: 8, // Rounded square for buttons often in shadcn, or full circle. Let's stick to circle for action buttons.
     alignItems: 'center',
     justifyContent: 'center',
-    // borderWidth: 1,
-    // borderColor: Colors.lightBorder,
   },
   micButton: {
     padding: Spacing.xs,

@@ -16,8 +16,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
+import { Spacing } from '../constants/spacing';
 import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
@@ -41,7 +41,7 @@ interface WeightEntry {
   updatedAt?: string;
 }
 
-type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
+type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y';
 
 export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   onBack,
@@ -60,21 +60,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [insight, setInsight] = useState<string>('');
   const [insightGeneratedDate, setInsightGeneratedDate] = useState<string | null>(null);
   const [goalType, setGoalType] = useState<'lose' | 'maintain' | 'gain' | undefined>(undefined);
-  const [displayedInsight, setDisplayedInsight] = useState<string>(''); // typewriter text
-  const [graphAnimationDone, setGraphAnimationDone] = useState(false);
+  const [insightIcon, setInsightIcon] = useState<string>('info');
+  const [insightIconColor, setInsightIconColor] = useState<string>('');
+  const [showInfo, setShowInfo] = useState(false);
 
-  // Sample weight data - in a real app, this would come from storage/API
-  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
-    if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
-      return [{
-        id: generateId(),
-        date: new Date(),
-        weight: initialCurrentWeightKg,
-        updatedAt: new Date().toISOString(),
-      }];
-    }
-    return [];
-  });
+  // Start empty — load effect populates from storage
+  const [weightEntries, setWeightEntries] = useState<WeightEntry[]>([]);
+  const dataLoaded = useRef(false); // gate to prevent persist before load
+  const [isReady, setIsReady] = useState(false); // gate to prevent flash of empty state
 
   const hasEntries = weightEntries.length > 0;
 
@@ -98,17 +91,50 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     ? (isGainGoal ? weightChangeFromStart : -weightChangeFromStart) // For gain: show positive, for lose: show positive (drop)
     : null;
 
+  // Deduplicate entries by date — keep only the most recently updated per day
+  const deduplicateByDate = (entries: WeightEntry[]): WeightEntry[] => {
+    const byDay = new Map<string, WeightEntry>();
+    for (const entry of entries) {
+      const dayKey = format(entry.date, 'yyyy-MM-dd');
+      const existing = byDay.get(dayKey);
+      if (!existing) {
+        byDay.set(dayKey, entry);
+      } else {
+        // Keep the one with the latest updatedAt, or the latest date object
+        const existingTime = existing.updatedAt ? new Date(existing.updatedAt).getTime() : 0;
+        const entryTime = entry.updatedAt ? new Date(entry.updatedAt).getTime() : 0;
+        if (entryTime > existingTime) {
+          byDay.set(dayKey, entry);
+        }
+      }
+    }
+    return Array.from(byDay.values()).sort((a, b) => a.date.getTime() - b.date.getTime());
+  };
+
   // Load weight entries, insight, and goal on mount
   useEffect(() => {
     (async () => {
       const savedEntries = await dataStorage.loadWeightEntries();
+      let entries: WeightEntry[];
+
       if (savedEntries.length > 0) {
-        // Ensure sorted ASC (oldest first)
-        const sorted = [...savedEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
-        setWeightEntries(sorted);
+        entries = deduplicateByDate(
+          savedEntries.sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
+        );
       } else if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
-        setWeightEntries([{ date: new Date(), weight: initialCurrentWeightKg }]);
+        // Only seed an initial entry if storage is truly empty
+        entries = [{
+          id: generateId(),
+          date: new Date(),
+          weight: initialCurrentWeightKg,
+          updatedAt: new Date().toISOString(),
+        }];
+      } else {
+        entries = [];
       }
+
+      dataLoaded.current = true; // allow persist effect to run
+      setWeightEntries(entries);
 
       // Load goal type
       const savedGoals = await dataStorage.loadGoals();
@@ -130,14 +156,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       } catch (error) {
         // Ignore errors loading insight
       }
+
+      setIsReady(true);
     })();
   }, []);
 
-  // Removed automatic initial weight entry duplication logic
-  // to prevent ghost entries on re-open.
-
-  // Persist weight entries whenever they change
+  // Persist weight entries whenever they change — but only after initial load
   useEffect(() => {
+    if (!dataLoaded.current) return; // don't overwrite storage before load completes
     dataStorage.saveWeightEntries(weightEntries);
   }, [weightEntries]);
 
@@ -168,9 +194,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       case '1Y':
         startDate = subYears(now, 1);
         break;
-      case '2Y':
-        startDate = subYears(now, 2);
-        break;
       default:
         startDate = subYears(now, 1);
     }
@@ -192,19 +215,31 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const hasGraphData = graphData.length > 0;
 
   // Calculate graph dimensions and points
-  const graphWidth = 300;
+  const screenWidth = Dimensions.get('window').width;
+  const graphWidth = screenWidth - 32 - 36; // content paddingHorizontal (16*2) + graphCard padding (18*2)
   const graphHeight = 260;
-  const padding = 40;
-  const innerWidth = graphWidth - padding * 2;
-  const innerHeight = graphHeight - padding * 2;
-  const LINE_DRAW_LENGTH = 1000; // sufficiently large so the whole path can be revealed left-to-right
+  const graphPadding = 20;
+  const paddingLeft = 45; // extra room for Y-axis labels
+  const innerWidth = graphWidth - paddingLeft - graphPadding;
+  const innerHeight = graphHeight - graphPadding * 2;
+
+  const estimatePathLength = (points: { x: number; y: number }[]): number => {
+    if (points.length < 2) return 0;
+    let length = 0;
+    for (let i = 1; i < points.length; i++) {
+      const dx = points[i].x - points[i - 1].x;
+      const dy = points[i].y - points[i - 1].y;
+      length += Math.sqrt(dx * dx + dy * dy);
+    }
+    return Math.ceil(length * 1.5); // 1.5x for bezier overhead
+  };
 
   // Screen-level slide-up for smooth navigation
   const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
 
-  const handleClose = async () => {
-    // Explicitly save before closing to ensure HomeScreen sees latest data
-    await dataStorage.saveWeightEntries(weightEntries);
+  const handleClose = () => {
+    // Save in background — don't block the dismiss animation
+    dataStorage.saveWeightEntries(weightEntries);
 
     Animated.timing(slideAnim, {
       toValue: Dimensions.get('window').height,
@@ -231,7 +266,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           Animated.spring(slideAnim, {
             toValue: 0,
             useNativeDriver: true,
-            bounciness: 4,
+            damping: 20,
+            stiffness: 200,
           }).start();
         }
       },
@@ -241,7 +277,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const minWeight = hasGraphData ? Math.min(...graphData.map(d => d.weight)) : 0;
   const maxWeight = hasGraphData ? Math.max(...graphData.map(d => d.weight)) : 1;
 
-  // ... (rest of simple axis logic unchanged) ... //
   const { axisMinWeight, axisMaxWeight, axisWeightRange, yAxisTicks } = React.useMemo(() => {
     if (!hasGraphData) {
       const min = 0;
@@ -256,9 +291,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     }
 
     const rawRange = Math.max(maxWeight - minWeight, 0);
-    const padding = Math.max(rawRange * 0.1, 1);
-    let minAxis = Math.floor(minWeight - padding);
-    let maxAxis = Math.ceil(maxWeight + padding);
+    const axisPad = Math.max(rawRange * 0.1, 1);
+    let minAxis = Math.floor(minWeight - axisPad);
+    let maxAxis = Math.ceil(maxWeight + axisPad);
     if (minAxis === maxAxis) {
       // Ensure non‑zero span
       minAxis -= 1;
@@ -284,7 +319,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     };
   }, [hasGraphData, minWeight, maxWeight]);
 
-  // ... (rest of dateRange) ... //
   const dateRange = useMemo(() => {
     const dataToUse = filteredData.length > 0 ? filteredData : weightEntries;
     if (dataToUse.length === 0) return '';
@@ -303,21 +337,45 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const graphPoints = useMemo(() => {
     if (graphData.length === 0) return [];
     return graphData.map((entry, index) => {
-      const x = padding + (index / (graphData.length - 1 || 1)) * innerWidth;
+      const x = paddingLeft + (index / (graphData.length - 1 || 1)) * innerWidth;
       const normalizedWeight = (entry.weight - axisMinWeight) / axisWeightRange;
-      const y = padding + innerHeight - (normalizedWeight * innerHeight);
+      const y = graphPadding + innerHeight - (normalizedWeight * innerHeight);
       return { x, y, data: entry };
     });
   }, [graphData, axisMinWeight, axisWeightRange, innerWidth, innerHeight]);
 
   const [scrubbingIndex, setScrubbingIndex] = useState<number | null>(null);
 
+  // Keep a ref to graphPoints so PanResponder always reads fresh data
+  const graphPointsRef = useRef(graphPoints);
+  graphPointsRef.current = graphPoints;
+
+  const handleTouch = (x: number) => {
+    const points = graphPointsRef.current;
+    if (points.length === 0) return;
+
+    let closestIndex = 0;
+    let minDiff = Infinity;
+
+    points.forEach((p, i) => {
+      const diff = Math.abs(x - p.x);
+      if (diff < minDiff) {
+        minDiff = diff;
+        closestIndex = i;
+      }
+    });
+
+    setScrubbingIndex(closestIndex);
+  };
+
   const graphPanResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
-      onStartShouldSetPanResponderCapture: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponderCapture: () => true,
+      // Don't capture on start - let ScrollView handle initial vertical gestures
+      onStartShouldSetPanResponderCapture: () => false,
+      // Only claim move if gesture is more horizontal than vertical (scrubbing vs scrolling)
+      onMoveShouldSetPanResponder: (_, gs) => Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 5,
+      onMoveShouldSetPanResponderCapture: (_, gs) => Math.abs(gs.dx) > Math.abs(gs.dy) && Math.abs(gs.dx) > 5,
       onPanResponderGrant: (evt) => {
         handleTouch(evt.nativeEvent.locationX);
       },
@@ -333,30 +391,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     })
   ).current;
 
-  const handleTouch = (x: number) => {
-    if (graphPoints.length === 0) return;
-
-    // Find closest point by X coordinate
-    let closestIndex = 0;
-    let minDiff = Infinity;
-
-    // Optimize search if needed, but for <365 points linear scan is fine
-    graphPoints.forEach((p, i) => {
-      const diff = Math.abs(x - p.x);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIndex = i;
-      }
-    });
-
-    setScrubbingIndex(closestIndex);
-  };
-
   // NOTE: Keep all charts using smooth spline paths for visual consistency across the app.
-  const generateSmoothPath = () => {
-    if (graphPoints.length === 0) return '';
-    if (graphPoints.length === 1) return `M ${graphPoints[0].x} ${graphPoints[0].y}`;
-    if (graphPoints.length === 2) return `M ${graphPoints[0].x} ${graphPoints[0].y} L ${graphPoints[1].x} ${graphPoints[1].y}`;
+  const generateSmoothPath = (): { path: string; length: number } => {
+    if (graphPoints.length === 0) return { path: '', length: 0 };
+    if (graphPoints.length === 1) return { path: `M ${graphPoints[0].x} ${graphPoints[0].y}`, length: 0 };
+    if (graphPoints.length === 2) {
+      const path = `M ${graphPoints[0].x} ${graphPoints[0].y} L ${graphPoints[1].x} ${graphPoints[1].y}`;
+      return { path, length: estimatePathLength(graphPoints) };
+    }
 
     let path = `M ${graphPoints[0].x} ${graphPoints[0].y}`;
     for (let i = 0; i < graphPoints.length - 1; i++) {
@@ -377,14 +419,17 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
       path += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
     }
-    return path;
+    return { path, length: estimatePathLength(graphPoints) };
   };
 
-  // Tiny animation: fade the chart and draw the line from left to right when data changes
+  // Chart animation — skip on first load, only animate on time range change
   const [graphPath, setGraphPath] = useState<string>('');
+  const [drawLength, setDrawLength] = useState(0);
   const chartOpacity = useRef(new Animated.Value(1)).current;
   const lineProgress = useRef(new Animated.Value(1)).current;
   const AnimatedPath = useRef(Animated.createAnimatedComponent(Path as any)).current;
+  const hasAnimatedOnce = useRef(false);
+  const shouldAnimate = useRef(false); // only true when user changes time range
 
   useEffect(() => {
     Animated.spring(slideAnim, {
@@ -396,29 +441,42 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   }, []);
 
   useEffect(() => {
-    const newPath = generateSmoothPath();
+    const { path: newPath, length } = generateSmoothPath();
     setGraphPath(newPath);
+    setDrawLength(length);
 
-    // Reset animation state whenever graph data changes
+    if (!hasAnimatedOnce.current) {
+      // First load — show graph immediately, no animation
+      hasAnimatedOnce.current = true;
+      chartOpacity.setValue(1);
+      lineProgress.setValue(1);
+      return;
+    }
+
+    if (!shouldAnimate.current) {
+      // Data changed but not from a time range switch — show immediately
+      chartOpacity.setValue(1);
+      lineProgress.setValue(1);
+      return;
+    }
+
+    // Time range changed — animate
+    shouldAnimate.current = false;
     chartOpacity.setValue(0.15);
     lineProgress.setValue(0);
-    setGraphAnimationDone(false);
 
     Animated.parallel([
       Animated.timing(chartOpacity, {
         toValue: 1,
-        duration: 350,
+        duration: 250,
         useNativeDriver: true,
       }),
       Animated.timing(lineProgress, {
         toValue: 1,
-        duration: 1800,
-        useNativeDriver: false, // animating SVG strokeDashoffset
+        duration: 800,
+        useNativeDriver: false,
       }),
-    ]).start(() => {
-      // Mark graph animation as complete so we can start the typewriter insight
-      setGraphAnimationDone(true);
-    });
+    ]).start();
   }, [graphData]);
 
   const handleLogWeight = () => {
@@ -431,14 +489,30 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     // Convert from display unit to kg for storage
     const weightKg = convertWeightFromDisplay(weight, weightUnit);
 
-    const newEntry: WeightEntry = {
-      id: generateId(),
-      date: logDate,
-      weight: weightKg, // Store in kg
-      updatedAt: new Date().toISOString(),
-    };
+    const logDayKey = format(logDate, 'yyyy-MM-dd');
 
-    setWeightEntries([...weightEntries, newEntry].sort((a, b) => a.date.getTime() - b.date.getTime()));
+    // Check if an entry already exists for this day — replace it instead of duplicating
+    const existingIndex = weightEntries.findIndex(e => format(e.date, 'yyyy-MM-dd') === logDayKey);
+
+    let updated: WeightEntry[];
+    if (existingIndex >= 0) {
+      updated = [...weightEntries];
+      updated[existingIndex] = {
+        ...updated[existingIndex],
+        weight: weightKg,
+        updatedAt: new Date().toISOString(),
+      };
+    } else {
+      const newEntry: WeightEntry = {
+        id: generateId(),
+        date: logDate,
+        weight: weightKg,
+        updatedAt: new Date().toISOString(),
+      };
+      updated = [...weightEntries, newEntry].sort((a, b) => a.date.getTime() - b.date.getTime());
+    }
+
+    setWeightEntries(updated);
     // Track weight entry logged
     analyticsService.trackWeightEntryLogged(logDate);
     setLogWeight('');
@@ -517,6 +591,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   const handleTimeRangeChange = (range: TimeRange) => {
     analyticsService.trackTimeRangeFilterChange();
+    shouldAnimate.current = true; // trigger line-draw animation
     setTimeRange(range);
     // Reset insight when time range changes so it regenerates with new data
     setInsightGeneratedDate(null);
@@ -527,7 +602,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     });
   };
 
-  const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y', '2Y'];
+  const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y'];
 
   // Generate insights based on weight data - only once per day
   useEffect(() => {
@@ -563,62 +638,49 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       const weeklyChange = daysDiff > 0 ? (weightChange / daysDiff) * 7 : 0;
 
       let insightText = '';
+      let icon = 'info';
+      let iconColor = theme.colors.textSecondary;
 
       if (variability > 0.02) {
-        // High variability
+        icon = 'activity';
+        iconColor = theme.colors.warning;
         insightText = 'Your weight is fluctuating. Consider tracking hydration and sleep patterns to identify patterns.';
       } else if (weightChangeAbs < 0.5) {
-        // Stable weight
+        icon = 'check-circle';
+        iconColor = theme.colors.success;
         insightText = 'Your weight has been stable. Great consistency! Keep maintaining your current routine.';
       } else if (weightChange > 0.5) {
-        // Gaining weight (weekly rate removed from brackets per design)
+        icon = 'trending-up';
+        iconColor = isGainGoal ? theme.colors.success : theme.colors.error;
         insightText = `You've gained ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period.`;
       } else if (weightChange < -0.5) {
-        // Losing weight (weekly rate removed from brackets per design)
+        icon = 'trending-down';
+        iconColor = isGainGoal ? theme.colors.error : theme.colors.success;
         insightText = `You've lost ${convertWeightToDisplay(weightChangeAbs).toFixed(1)} ${getWeightUnitLabel()} over this period. Keep up the great progress!`;
       } else {
-        // Small change
+        icon = 'minus-circle';
+        iconColor = theme.colors.textSecondary;
         insightText = 'Your weight shows minimal change. Small fluctuations are normal and expected.';
       }
 
-      return insightText;
+      return { text: insightText, icon, iconColor };
     };
 
-    const insightText = generateInsight();
-    setInsight(insightText);
-    // Reset displayed text; it will be animated in after the graph finishes drawing
-    setDisplayedInsight('');
+    const result = generateInsight();
+    setInsight(result.text);
+    setInsightIcon(result.icon);
+    setInsightIconColor(result.iconColor);
     setInsightGeneratedDate(today);
 
     // Save insight to storage so it persists across app restarts
     AsyncStorage.setItem('@trackkal:weightInsight', JSON.stringify({
-      insight: insightText,
+      insight: result.text,
       date: today
     })).catch(() => {
       // Ignore storage errors
     });
   }, [hasGraphData, graphData, insightGeneratedDate, convertWeightToDisplay, getWeightUnitLabel]);
 
-  // Typewriter effect for the insight text that starts after the graph animation completes
-  useEffect(() => {
-    if (!graphAnimationDone || !insight) {
-      return;
-    }
-
-    let index = 0;
-    setDisplayedInsight('');
-    const interval = setInterval(() => {
-      index += 1;
-      setDisplayedInsight(insight.slice(0, index));
-      if (index >= insight.length) {
-        clearInterval(interval);
-      }
-    }, 20); // ~50 characters per second
-
-    return () => {
-      clearInterval(interval);
-    };
-  }, [graphAnimationDone, insight]);
 
 
   return (
@@ -640,7 +702,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Weight Tracker
           </Text>
-          <View style={styles.headerRight} />
+          <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerRight}>
+            <Feather name="info" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* Main scrollable content; moves above keyboard when editing rows */}
@@ -656,7 +720,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
             removeClippedSubviews={false}
             keyboardShouldPersistTaps="handled"
           >
-            {!hasEntries && (
+            {isReady && !hasEntries && (
               <View
                 style={[
                   styles.emptyStateContainer,
@@ -756,12 +820,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       <View
                         style={{
                           position: 'absolute',
-                          left: graphPoints[scrubbingIndex].x - 60, // Center approx
-                          top: graphPoints[scrubbingIndex].y - 70,
+                          left: Math.max(4, Math.min(graphWidth - 124, graphPoints[scrubbingIndex].x - 60)),
+                          top: Math.max(4, graphPoints[scrubbingIndex].y - 70),
                           width: 120,
                           alignItems: 'center',
                           zIndex: 10,
-                          pointerEvents: 'none', // Allow touch through
+                          pointerEvents: 'none',
                         }}
                       >
                         <View style={{
@@ -819,20 +883,20 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                             0,
                             Math.min(1, (value - axisMinWeight) / axisWeightRange)
                           );
-                          const y = padding + innerHeight - ratio * innerHeight;
+                          const y = graphPadding + innerHeight - ratio * innerHeight;
                           return (
                             <React.Fragment key={index}>
                               <Line
-                                x1={padding}
+                                x1={paddingLeft}
                                 y1={y}
-                                x2={graphWidth - padding}
+                                x2={graphWidth - graphPadding}
                                 y2={y}
                                 stroke={theme.colors.border}
                                 strokeWidth={0.5}
                                 strokeDasharray="2,2"
                               />
                               <SvgText
-                                x={padding - 6}
+                                x={paddingLeft - 6}
                                 y={y + 3}
                                 fontSize={10}
                                 fill={theme.colors.textTertiary}
@@ -853,10 +917,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
-                            strokeDasharray={`${LINE_DRAW_LENGTH}, ${LINE_DRAW_LENGTH}`}
+                            strokeDasharray={`${drawLength}, ${drawLength}`}
                             strokeDashoffset={lineProgress.interpolate({
                               inputRange: [0, 1],
-                              outputRange: [LINE_DRAW_LENGTH, 0],
+                              outputRange: [drawLength, 0],
                             })}
                           />
                         ) : null}
@@ -883,9 +947,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           <>
                             <Line
                               x1={graphPoints[scrubbingIndex].x}
-                              y1={padding}
+                              y1={graphPadding}
                               x2={graphPoints[scrubbingIndex].x}
-                              y2={graphHeight - padding}
+                              y2={graphHeight - graphPadding}
                               stroke={theme.colors.textSecondary}
                               strokeWidth={1}
                               strokeDasharray="4,4"
@@ -905,24 +969,22 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   </View>
 
                   {/* Time Range Selector */}
-                  <View style={styles.timeRangeContainer}>
+                  <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4, alignSelf: 'center', marginBottom: 8 }}>
                     {timeRanges.map((range) => (
                       <TouchableOpacity
                         key={range}
-                        style={[
-                          styles.timeRangeButton,
-                          timeRange === range && [styles.timeRangeButtonActive, { backgroundColor: theme.colors.primary }],
-                        ]}
                         onPress={() => handleTimeRangeChange(range)}
+                        style={{
+                          paddingHorizontal: 12,
+                          paddingVertical: 6,
+                          borderRadius: 8,
+                          backgroundColor: timeRange === range ? theme.colors.card : 'transparent',
+                          shadowColor: timeRange === range ? '#000' : 'transparent',
+                          shadowOpacity: timeRange === range ? 0.05 : 0,
+                          shadowRadius: 2,
+                        }}
                       >
-                        <Text
-                          style={[
-                            styles.timeRangeText,
-                            timeRange === range
-                              ? [styles.timeRangeTextActive, { color: theme.colors.primaryForeground }]
-                              : { color: theme.colors.textSecondary },
-                          ]}
-                        >
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: timeRange === range ? theme.colors.textPrimary : theme.colors.textSecondary }}>
                           {range}
                         </Text>
                       </TouchableOpacity>
@@ -934,15 +996,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     {dateRange}
                   </Text>
 
-                  {/* Insights below date range (typewriter after graph animation) */}
+                  {/* Insight below date range */}
                   {insight && (
                     <View style={[styles.insightBox, { backgroundColor: theme.colors.input }]}>
-                      <Feather name="info" size={16} color={theme.colors.textSecondary} />
-                      <View style={styles.insightTextContainer}>
-                        <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
-                          {displayedInsight || (graphAnimationDone ? insight : '')}
-                        </Text>
-                      </View>
+                      <Feather name={insightIcon as any} size={18} color={insightIconColor} />
+                      <Text style={[styles.insightText, { color: theme.colors.textSecondary }]}>
+                        {insight}
+                      </Text>
                     </View>
                   )}
 
@@ -964,7 +1024,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       {historyEntries.map((entry, index) => {
                         const isEditing = editingEntryIndex === index;
                         return (
-                          <View key={entry.id || index} style={styles.historyRow}>
+                          <View key={entry.id || index} style={[styles.historyRow, { borderTopColor: theme.colors.border }]}>
                             <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
                               {format(entry.date, 'd MMM yyyy')}
                             </Text>
@@ -1053,7 +1113,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
               setShowLogModal(true);
             }}
           >
-            <Text style={styles.logButtonText}>Log Weight</Text>
+            <Text style={[styles.logButtonText, { color: theme.colors.primaryForeground }]}>Log Weight</Text>
           </TouchableOpacity>
         </View>
 
@@ -1094,11 +1154,60 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   style={[styles.modalButton, { backgroundColor: theme.colors.primary }]}
                   onPress={handleLogWeight}
                 >
-                  <Text style={styles.modalButtonText}>Save</Text>
+                  <Text style={[styles.modalButtonText, { color: theme.colors.primaryForeground }]}>Save</Text>
                 </TouchableOpacity>
               </View>
             </KeyboardAvoidingView>
           </View>
+        </Modal>
+
+        {/* Info Modal */}
+        <Modal
+          visible={showInfo}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => setShowInfo(false)}
+        >
+          <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+            <View style={[styles.infoHeader, { borderBottomColor: theme.colors.border }]}>
+              <View style={styles.infoHeaderBtn} />
+              <Text style={[styles.infoHeaderTitle, { color: theme.colors.textPrimary }]}>About Weight Tracker</Text>
+              <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.infoHeaderBtn}>
+                <Feather name="x" size={22} color={theme.colors.textPrimary} />
+              </TouchableOpacity>
+            </View>
+            <ScrollView contentContainerStyle={styles.infoContent}>
+              <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Overview</Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                Weight Tracker helps you monitor your progress over time. At the top you will see your current weight, your target weight, and how much you have dropped or gained since you started tracking, based on your goal.
+              </Text>
+
+              <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Graph</Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                The chart plots your weight entries over time. You can scrub across it to see individual readings. Below the graph, use the timeline selector (1W, 1M, 3M, 6M, 1Y) to zoom in on a specific time period.
+              </Text>
+
+              <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Insight</Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                The insight section gives you an AI-generated summary of your weight trend, updated once per day. It looks at your recent entries and highlights whether you are progressing toward your goal, staying flat, or moving in the opposite direction.
+              </Text>
+
+              <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>History</Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                Below the insight you will find your full weight history. Each entry can be edited by tapping on it, which lets you correct a value if you entered it wrong. Tapping an entry will also take you to that day so you can review what you logged.
+              </Text>
+
+              <View style={[styles.infoDivider, { backgroundColor: theme.colors.border }]} />
+
+              <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>How it Works</Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                Weight can be tracked once per day. If you log more than once on the same day, only the most recent entry is kept. You can always go back and edit a previous entry if needed.
+              </Text>
+              <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                For the most accurate tracking, try to weigh yourself at the same time each day, ideally in the morning before eating. Day-to-day fluctuations are normal. Focus on the overall trend rather than individual readings.
+              </Text>
+            </ScrollView>
+          </SafeAreaView>
         </Modal>
       </Animated.View>
     </SafeAreaView>
@@ -1126,24 +1235,14 @@ const styles = StyleSheet.create({
   },
   headerRight: {
     width: 40,
-  },
-  legendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 8,
-    gap: 16,
-    paddingVertical: 8,
+    height: 40,
+    alignItems: 'center' as const,
+    justifyContent: 'center' as const,
   },
   heroCard: {
     padding: 16,
     borderRadius: 16,
     borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     alignItems: 'flex-start',
     justifyContent: 'center',
     flex: 1,
@@ -1159,38 +1258,11 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.bold,
   },
-  legendItem: {
-  },
-  legendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  legendText: {
-    fontSize: Typography.fontSize.xs,
-  },
   content: {
     flex: 1,
     paddingHorizontal: 16,
   },
 
-  tabContainer: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    padding: 4,
-    marginBottom: 24,
-  },
-  tab: {
-    flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
-    alignItems: 'center',
-  },
-  tabText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
-  },
   graphContainer: {
     marginBottom: 24,
   },
@@ -1199,43 +1271,10 @@ const styles = StyleSheet.create({
     padding: 18,
     marginBottom: 16,
     position: 'relative',
-    shadowColor: '#0F172A',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.12,
-    shadowRadius: 16,
-    elevation: 8,
   },
   graph: {
-    marginLeft: 40,
-    marginRight: 40,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  timeRangeContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
-  },
-  timeRangeButton: {
-    paddingHorizontal: 14,
-    paddingVertical: 7,
-    borderRadius: 16,
-    minWidth: 40,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: 'rgba(148, 163, 184, 0.4)',
-    backgroundColor: 'rgba(15, 23, 42, 0.02)',
-  },
-  timeRangeButtonActive: {
-    // Colors handled inline via theme
-  },
-  timeRangeText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  timeRangeTextActive: {
-    color: Colors.white,
   },
   dateRange: {
     textAlign: 'center',
@@ -1245,29 +1284,21 @@ const styles = StyleSheet.create({
   insightBox: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    padding: 12,
-    borderRadius: 8,
-    gap: 8,
+    padding: 16,
+    borderRadius: 12,
+    gap: 12,
     marginBottom: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 3,
-  },
-  insightTextContainer: {
-    flex: 1,
   },
   insightText: {
-    fontSize: Typography.fontSize.xs,
-    lineHeight: 16,
+    flex: 1,
+    fontSize: Typography.fontSize.sm,
+    lineHeight: 20,
   },
   historyContainer: {
     marginTop: 16,
     borderWidth: 1,
     borderRadius: 12,
     paddingVertical: 8,
-    borderColor: Colors.lightBorder,
   },
   historyTitle: {
     fontSize: Typography.fontSize.sm,
@@ -1296,7 +1327,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 6,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Colors.lightBorder,
   },
   historyCellText: {
     flex: 1,
@@ -1343,7 +1373,6 @@ const styles = StyleSheet.create({
     borderRadius: 24,
   },
   emptyStateButtonText: {
-    color: Colors.white,
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
   },
@@ -1357,7 +1386,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   logButtonText: {
-    color: Colors.white,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
@@ -1395,9 +1423,46 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   modalButtonText: {
-    color: Colors.white,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
+  },
+  // Info modal styles
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 56,
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
+  },
+  infoHeaderBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoHeaderTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    textAlign: 'center',
+  },
+  infoContent: {
+    padding: Spacing.lg,
+    paddingBottom: 60,
+  },
+  infoSectionTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: Spacing.sm,
+  },
+  infoBody: {
+    fontSize: Typography.fontSize.sm,
+    lineHeight: Typography.fontSize.sm * 1.6,
+    marginBottom: Spacing.md,
+  },
+  infoDivider: {
+    height: 1,
+    marginVertical: Spacing.lg,
   },
 });
 

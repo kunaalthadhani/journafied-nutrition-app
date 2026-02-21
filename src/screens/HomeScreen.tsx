@@ -46,8 +46,8 @@ import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSect
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
 import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
-import { analyzeFoodWithChatGPT, analyzeFoodFromImage, analyzeExerciseWithChatGPT } from '../services/openaiService';
-import { ParsedExercise, calculateExerciseCalories } from '../utils/exerciseParser';
+import { analyzeFoodWithChatGPT, analyzeFoodFromImage } from '../services/openaiService';
+import { ParsedExercise, calculateExerciseCalories, parseExerciseInput } from '../utils/exerciseParser';
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
@@ -1107,7 +1107,7 @@ export const HomeScreen: React.FC = () => {
       // If no foods were recognized, try interpreting as exercise
       let parsedExercises: ParsedExercise[] = [];
       try {
-        parsedExercises = await analyzeExerciseWithChatGPT(trimmed);
+        parsedExercises = parseExerciseInput(trimmed);
       } catch (apiError: any) {
         // Handle error similarly...
         throw apiError;
@@ -2296,8 +2296,8 @@ export const HomeScreen: React.FC = () => {
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
         <Modal
           visible={showWeightTracker}
-          animationType="slide"
-          presentationStyle="pageSheet"
+          animationType="none"
+          presentationStyle="fullScreen"
           onRequestClose={handleWeightTrackerBack}
         >
           <WeightTrackerScreen
@@ -2310,7 +2310,7 @@ export const HomeScreen: React.FC = () => {
 
         <Modal
           visible={showNutritionAnalysis}
-          animationType="slide"
+          animationType="none"
           presentationStyle="fullScreen"
           onRequestClose={handleNutritionAnalysisBack}
         >

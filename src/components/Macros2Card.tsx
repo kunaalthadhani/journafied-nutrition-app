@@ -21,6 +21,8 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
   dailyCalories = 1500
 }) => {
   const theme = useTheme();
+  const remainingVal = data.fat.current;
+  const remainingColor = remainingVal <= 0 ? '#EF4444' : remainingVal < dailyCalories * 0.2 ? '#F59E0B' : '#10B981';
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
       {/* Header with icon and title */}
@@ -29,7 +31,7 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
           <Feather
             name="pie-chart"
             size={18}
-            color={Colors.black}
+            color={theme.colors.textPrimary}
           />
         </View>
         <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Calories</Text>
@@ -66,7 +68,7 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
           <NumberTicker
             value={data.fat.current}
             duration={800}
-            style={[styles.fractionText, { color: theme.colors.textPrimary }]}
+            style={[styles.fractionText, { color: remainingColor }]}
           />
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>
             Remaining

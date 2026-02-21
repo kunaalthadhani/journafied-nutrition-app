@@ -80,7 +80,7 @@ export const groceryCoachService = {
 
             // 2. Call AI via proxy
             const data = await invokeAI({
-                model: 'gpt-4',
+                model: 'gpt-4o-mini',
                 messages: [
                     { role: 'system', content: GROCERY_COACH_SYSTEM_PROMPT },
                     { role: 'user', content: userPrompt }

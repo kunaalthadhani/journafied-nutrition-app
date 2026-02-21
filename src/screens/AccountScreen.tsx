@@ -100,10 +100,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const _initialPhone = parseStoredPhone(initialAccountInfo?.phoneNumber);
   const [phoneInput, setPhoneInput] = useState(_initialPhone.local);
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
   const [otpCode, setOtpCode] = useState('');
+  const [resendCountdown, setResendCountdown] = useState(0);
 
   const [selectedCountry, setSelectedCountry] = useState<Country>(_initialPhone.country);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -112,6 +114,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   // -- Forgot Password State --
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
   const [resetInput, setResetInput] = useState('');
+  const [resetLoading, setResetLoading] = useState(false);
 
   // -- Validation State --
   const [nameError, setNameError] = useState(false);
@@ -188,6 +191,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       authListener?.subscription.unsubscribe();
     };
   }, []);
+
+  // -- Resend countdown timer --
+  useEffect(() => {
+    if (resendCountdown <= 0) return;
+    const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
+    return () => clearTimeout(timer);
+  }, [resendCountdown]);
 
   // -- Helpers --
 
@@ -354,13 +364,16 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     }
 
     try {
-      setAuthMessage(null); // Clear previous
-      setForgotPasswordVisible(false); // Close modal
+      setResetLoading(true);
+      setAuthMessage(null);
 
       await authService.resetPasswordForEmail(resetInput.trim());
+      setForgotPasswordVisible(false);
       Alert.alert("Reset Link Sent", "Check your email for password reset instructions.");
     } catch (e: any) {
       Alert.alert("Error", e.message || "Failed to send reset link.");
+    } finally {
+      setResetLoading(false);
     }
   };
 
@@ -375,6 +388,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
       if (!password.trim() || password.length < 6) {
         setAuthMessage("Password must be at least 6 characters.");
+        hasError = true;
+      } else if (password !== confirmPassword) {
+        setAuthMessage("Passwords do not match.");
         hasError = true;
       }
 
@@ -400,6 +416,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         const { error } = await authService.sendSignupOtp(emailInput.trim());
         if (error) throw error;
         setOtpSent(true);
+        setResendCountdown(60);
         Alert.alert('Code Sent', `We sent a verification code to ${emailInput.trim()}.`);
       } catch (e: any) {
         setAuthMessage(e.message || 'Failed to send code.');
@@ -441,6 +458,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           };
 
           // Referrals + Premium Bonus (3 Days)
+          setReferralCodeError(null);
           if (referralCode.trim()) {
             const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput.trim());
             if (validation.valid) {
@@ -452,7 +470,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
               currentExpiry.setDate(currentExpiry.getDate() + 3);
 
               provisional.premiumUntil = currentExpiry.toISOString();
-              Alert.alert('Referral Bonus Unlocked! 🎉', '+3 Days Premium Access & 5 Free Entries');
+              Alert.alert('Referral Bonus Unlocked!', '+3 Days Premium Access & 5 Free Entries');
+            } else {
+              setReferralCodeError(validation.error || 'Invalid referral code. Your account was created without the bonus.');
             }
           }
 
@@ -536,13 +556,34 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           <View style={{ flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
             <TouchableOpacity
               style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signin' ? 2 : 0, borderBottomColor: theme.colors.primary }}
-              onPress={() => setAuthMode('signin')}
+              onPress={() => {
+                setAuthMode('signin');
+                setAuthMessage(null);
+                setPassword('');
+                setConfirmPassword('');
+                setOtpSent(false);
+                setOtpCode('');
+                setNameError(false);
+                setEmailError(false);
+                setPhoneError(false);
+                setTermsError(false);
+                setReferralCodeError(null);
+                setResendCountdown(0);
+              }}
             >
               <Text style={{ fontWeight: 'bold', color: authMode === 'signin' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signup' ? 2 : 0, borderBottomColor: theme.colors.primary }}
-              onPress={() => setAuthMode('signup')}
+              onPress={() => {
+                setAuthMode('signup');
+                setAuthMessage(null);
+                setPassword('');
+                setConfirmPassword('');
+                setOtpSent(false);
+                setOtpCode('');
+                setResendCountdown(0);
+              }}
             >
               <Text style={{ fontWeight: 'bold', color: authMode === 'signup' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Create Account</Text>
             </TouchableOpacity>
@@ -610,13 +651,36 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 keyboardType="number-pad"
                 maxLength={6}
               />
-              <TouchableOpacity onPress={() => { setOtpSent(false); setAuthMessage('Resend code or edit email.'); }} style={{ marginTop: 8 }}>
-                <Text style={{ color: theme.colors.primary, fontSize: 13, textAlign: 'center' }}>Wrong email? Edit details</Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
+                <TouchableOpacity onPress={() => { setOtpSent(false); setOtpCode(''); setAuthMessage(null); }}>
+                  <Text style={{ color: theme.colors.primary, fontSize: 13 }}>Wrong email? Edit details</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  disabled={resendCountdown > 0 || authStatus !== 'idle'}
+                  onPress={async () => {
+                    try {
+                      setAuthStatus('sending');
+                      setAuthMessage(null);
+                      const { error } = await authService.sendSignupOtp(emailInput.trim());
+                      if (error) throw error;
+                      setResendCountdown(60);
+                      setOtpCode('');
+                      Alert.alert('Code Resent', `A new code was sent to ${emailInput.trim()}.`);
+                    } catch (e: any) {
+                      setAuthMessage(e.message || 'Failed to resend code.');
+                    } finally {
+                      setAuthStatus('idle');
+                    }
+                  }}
+                >
+                  <Text style={{ color: resendCountdown > 0 ? theme.colors.textTertiary : theme.colors.primary, fontSize: 13, fontWeight: '500' }}>
+                    {resendCountdown > 0 ? `Resend (${resendCountdown}s)` : 'Resend Code'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </>
           ) : (
             <>
-              {/* Password Input (SignIn Only) */}
               {/* Password Input (Sign In & Sign Up) */}
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
               <TextInput
@@ -631,6 +695,28 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 onChangeText={setPassword}
                 secureTextEntry
               />
+
+              {/* Confirm Password (Sign Up Only) */}
+              {authMode === 'signup' && (
+                <>
+                  <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Confirm Password</Text>
+                  <TextInput
+                    style={[styles.input, {
+                      backgroundColor: theme.colors.input,
+                      color: theme.colors.textPrimary,
+                      borderColor: confirmPassword.length > 0 && password !== confirmPassword ? theme.colors.error : theme.colors.border
+                    }]}
+                    placeholder="••••••"
+                    placeholderTextColor={theme.colors.textTertiary}
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    secureTextEntry
+                  />
+                  {confirmPassword.length > 0 && password !== confirmPassword && (
+                    <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>Passwords do not match</Text>
+                  )}
+                </>
+              )}
             </>
           )}
 
@@ -713,8 +799,23 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             </>
           )}
 
-          {/* Action Button */}
-          {authMessage && <Text style={{ color: theme.colors.textPrimary, textAlign: 'center', marginVertical: 8 }}>{authMessage}</Text>}
+          {/* Auth Message */}
+          {authMessage && (
+            <View style={{
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              borderWidth: 1,
+              borderColor: 'rgba(239, 68, 68, 0.3)',
+              borderRadius: 8,
+              padding: 12,
+              marginTop: 12,
+              gap: 8,
+            }}>
+              <Feather name="alert-circle" size={16} color="#EF4444" />
+              <Text style={{ color: '#EF4444', fontSize: 13, flex: 1 }}>{authMessage}</Text>
+            </View>
+          )}
 
           <TouchableOpacity
             style={[styles.primaryButton, (authMode === 'signup' && !hasAcceptedTerms) && styles.primaryButtonDisabled]}
@@ -887,8 +988,55 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>Sign Out</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity style={{ alignSelf: 'center', padding: 10 }} onPress={handleClearData}>
-        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Danger Zone: Clear All Local Data</Text>
+      <TouchableOpacity
+        style={{
+          flexDirection: 'row',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 8,
+          borderWidth: 1,
+          borderColor: 'rgba(239, 68, 68, 0.3)',
+          backgroundColor: 'rgba(239, 68, 68, 0.05)',
+          borderRadius: 10,
+          paddingVertical: 14,
+          paddingHorizontal: 16,
+          marginTop: 12,
+        }}
+        onPress={() => {
+          Alert.alert(
+            'Delete Account',
+            'This will permanently delete your account and all associated data. This action cannot be undone.',
+            [
+              { text: 'Cancel', style: 'cancel' },
+              {
+                text: 'Delete My Account',
+                style: 'destructive',
+                onPress: async () => {
+                  try {
+                    await authService.deleteAccount();
+                    await AsyncStorage.clear();
+                    setAuthSession(null);
+                    setAccountInfo(null);
+                    setEntryCount(0);
+                    setGoals(null);
+                    setWeightSummary({ starting: null, current: null, goal: null, change: null });
+                    Alert.alert('Account Deleted', 'Your account has been permanently deleted.');
+                    onBack();
+                  } catch (e: any) {
+                    Alert.alert('Error', e.message || 'Failed to delete account. Please try again.');
+                  }
+                },
+              },
+            ]
+          );
+        }}
+      >
+        <Feather name="trash-2" size={16} color="#EF4444" />
+        <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '600' }}>Delete Account</Text>
+      </TouchableOpacity>
+
+      <TouchableOpacity style={{ alignSelf: 'center', padding: 10, marginTop: 4 }} onPress={handleClearData}>
+        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Clear All Local Data</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -1010,10 +1158,15 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
               />
 
               <TouchableOpacity
-                style={[styles.primaryButton, { marginTop: 16 }]}
+                style={[styles.primaryButton, { marginTop: 16 }, resetLoading && styles.primaryButtonDisabled]}
                 onPress={handleForgotPassword}
+                disabled={resetLoading}
               >
-                <Text style={styles.primaryButtonText}>Send Reset Code</Text>
+                {resetLoading ? (
+                  <ActivityIndicator color="white" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Send Reset Code</Text>
+                )}
               </TouchableOpacity>
             </View>
           </View>
