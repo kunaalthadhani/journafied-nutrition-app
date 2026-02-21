@@ -2,7 +2,7 @@
 import { AccountInfo } from '../services/dataStorage';
 
 // Hardcoded Admin IDs for testing
-const ADMIN_EMAILS = ['admin@journafied.com', 'hulexo@journafied.com', 'test@journafied.com']; // Add relevant emails
+const ADMIN_EMAILS = ['admin@trackkcal.com', 'hulexo@trackkcal.com', 'test@trackkcal.com']; // Add relevant emails
 const ADMIN_IDS = ['admin-user-id'];
 
 export const featureFlags = {
