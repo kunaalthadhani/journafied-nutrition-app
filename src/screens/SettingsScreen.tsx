@@ -145,7 +145,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   if (showNotifications) {
-    return <NotificationSettingsScreen onBack={() => setShowNotifications(false)} />;
+    return <NotificationSettingsScreen onBack={() => setShowNotifications(false)} isPremium={plan === 'premium'} />;
   }
 
   if (showIntegrations) {

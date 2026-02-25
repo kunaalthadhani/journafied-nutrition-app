@@ -70,6 +70,7 @@ import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
+import { smartReminderService } from '../services/smartReminderService';
 import { DetectedPattern } from '../services/dataStorage';
 
 export const HomeScreen: React.FC = () => {
@@ -467,12 +468,19 @@ export const HomeScreen: React.FC = () => {
     (response: Notifications.NotificationResponse) => {
       try {
         const data = response.notification.request.content.data || {};
+        const typedData = data as Record<string, unknown>;
         const broadcastId =
-          typeof (data as Record<string, unknown>).broadcastId === 'string'
-            ? (data as Record<string, unknown>).broadcastId
+          typeof typedData.broadcastId === 'string'
+            ? typedData.broadcastId
             : null;
         if (broadcastId) {
           notificationService.recordPushClick(broadcastId as string);
+        }
+
+        // Track smart reminder taps
+        if (typedData.type === 'smart_reminder' && typeof typedData.reminderId === 'string') {
+          smartReminderService.recordReminderOpened(typedData.reminderId as string)
+            .catch(err => console.error('Failed to record reminder open:', err));
         }
       } catch (error) {
         if (__DEV__) console.error('Error handling notification response:', error);
@@ -504,11 +512,12 @@ export const HomeScreen: React.FC = () => {
     const persistAndSync = async () => {
       await dataStorage.saveMeals(mealsByDate);
       // Refresh summaries from storage to catch updates made by dataStorage.saveMeals
-      // This is a bit inefficient (re-reading), but cleanest for now.
-      // Alternatively we could just locally update summariesByDate here, 
-      // but let's trust the storage layer
       const freshSummaries = await dataStorage.loadDailySummaries();
       setSummariesByDate(freshSummaries);
+
+      // Track smart reminder effectiveness (was a meal logged shortly after a reminder?)
+      smartReminderService.checkMealLoggedAfterReminder()
+        .catch(err => console.error('Reminder effectiveness check failed:', err));
     };
     persistAndSync();
   }, [mealsByDate]);
@@ -752,6 +761,10 @@ export const HomeScreen: React.FC = () => {
         }
       }
 
+      // Schedule smart reminders (non-blocking)
+      smartReminderService.scheduleAllReminders()
+        .catch(err => console.error('Smart reminder scheduling failed:', err));
+
     } catch (e) {
       console.error("Failed to load home screen data", e);
     }
@@ -820,6 +833,10 @@ export const HomeScreen: React.FC = () => {
         if (summaries) {
           setSummariesByDate(summaries);
         }
+
+        // Re-schedule smart reminders on foreground
+        smartReminderService.scheduleAllReminders()
+          .catch(err => console.error('Smart reminder scheduling failed:', err));
       }
     });
 

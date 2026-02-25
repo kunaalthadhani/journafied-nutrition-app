@@ -90,6 +90,10 @@ const STORAGE_KEYS = {
   USER_METRICS_SNAPSHOT: '@trackkal:userMetricsSnapshot',
   INSIGHTS: '@trackkal:insights',
   COACH_DISMISS_DATE: '@trackkal:coachDismissDate',
+  // Smart Reminders
+  SMART_REMINDER_CACHE: '@trackkal:smartReminderCache',
+  SMART_REMINDER_LOG: '@trackkal:smartReminderLog',
+  SMART_REMINDER_EFFECTIVENESS: '@trackkal:smartReminderEffectiveness',
 };
 
 // ... (rest of file)
@@ -169,6 +173,7 @@ export interface Preferences {
   dynamicAdjustmentThreshold: number; // 3, 4, or 5 (percentage)
   lastAdjustmentWeight?: number; // Weight at last adjustment (baseline)
   smartSuggestEnabled?: boolean; // New feature toggle
+  smartReminderPreferences?: SmartReminderPreferences;
 }
 
 export interface AdjustmentRecord {
@@ -260,6 +265,50 @@ export interface DailySummary {
   totalFat: number;
   entryCount: number;
   updatedAt: string;
+}
+
+// ---- Smart Reminder Types ----
+
+export interface SmartReminderPreferences {
+  enabled: boolean;
+  smartRemindersEnabled: boolean; // premium: use pattern-based timing
+  mealSlots: {
+    breakfast: boolean;
+    lunch: boolean;
+    dinner: boolean;
+  };
+  endOfDaySummary: boolean;
+  quietHoursStart: number; // e.g. 22 (10 PM)
+  quietHoursEnd: number;   // e.g. 7 (7 AM)
+}
+
+export interface MealTimingPattern {
+  mealSlot: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  averageHour: number;      // 0-23
+  averageMinute: number;    // 0-59
+  stdDevMinutes: number;    // confidence measure
+  sampleSize: number;
+}
+
+export interface ReminderPatternCache {
+  computedAt: string;
+  mealTimings: MealTimingPattern[];
+  averageDailyProtein: number;
+  averageDailyCalories: number;
+  averageDailyCarbs: number;
+  averageDailyFat: number;
+  typicalMealCount: number;
+}
+
+export interface ScheduledReminder {
+  id: string;
+  type: 'meal_timing' | 'macro_pacing' | 'generic_meal' | 'end_of_day';
+  mealSlot?: 'breakfast' | 'lunch' | 'dinner' | 'snack';
+  scheduledFor: string; // ISO timestamp
+  title: string;
+  body: string;
+  isPremium: boolean;
+  createdAt: string;
 }
 
 export interface AnalyticsFeedback {

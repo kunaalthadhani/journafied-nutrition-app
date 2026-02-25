@@ -56,6 +56,11 @@ export interface AnalyticsData {
   savedPromptsSaved: number;
   savedPromptsReused: number;
 
+  // Smart reminders
+  smartRemindersScheduled: number;
+  smartRemindersOpened: number;
+  smartRemindersEffective: number;
+
   // Referral tracking
   referralCodesGenerated: number;
   referralCodesShared: number;
@@ -110,6 +115,9 @@ const defaultAnalytics: AnalyticsData = {
   totalWeightEntries: 0,
   savedPromptsSaved: 0,
   savedPromptsReused: 0,
+  smartRemindersScheduled: 0,
+  smartRemindersOpened: 0,
+  smartRemindersEffective: 0,
   referralCodesGenerated: 0,
   referralCodesShared: 0,
   referralCodesSharedByMethod: { share: 0, copy: 0, link: 0 },
@@ -411,6 +419,25 @@ class AnalyticsService {
     const firstOpen = new Date(this.analytics.firstOpenTimestamp);
     const now = new Date();
     return Math.floor((now.getTime() - firstOpen.getTime()) / (1000 * 60 * 60 * 24));
+  }
+
+  // Smart reminders
+  async trackSmartReminderScheduled(count: number = 1): Promise<void> {
+    await this.initialize();
+    this.analytics.smartRemindersScheduled += count;
+    await this.save();
+  }
+
+  async trackSmartReminderOpened(): Promise<void> {
+    await this.initialize();
+    this.analytics.smartRemindersOpened++;
+    await this.save();
+  }
+
+  async trackSmartReminderEffective(): Promise<void> {
+    await this.initialize();
+    this.analytics.smartRemindersEffective++;
+    await this.save();
   }
 
   // Referral tracking

@@ -7,15 +7,25 @@ import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { TimePickerModal } from '../components/TimePickerModal';
-import { dataStorage, Preferences } from '../services/dataStorage';
+import { dataStorage, Preferences, SmartReminderPreferences } from '../services/dataStorage';
 
 interface NotificationSettingsScreenProps {
     onBack: () => void;
+    isPremium?: boolean;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'dinner';
 
-export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack }) => {
+const DEFAULT_SMART_PREFS: SmartReminderPreferences = {
+    enabled: true,
+    smartRemindersEnabled: true,
+    mealSlots: { breakfast: true, lunch: true, dinner: true },
+    endOfDaySummary: true,
+    quietHoursStart: 22,
+    quietHoursEnd: 7,
+};
+
+export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, isPremium = false }) => {
     const theme = useTheme();
     const [loading, setLoading] = useState(true);
     const [preferences, setPreferences] = useState<Preferences | null>(null);
@@ -93,6 +103,16 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         const displayHour = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
         const displayMinute = minute.toString().padStart(2, '0');
         return `${displayHour}:${displayMinute} ${period}`;
+    };
+
+    // ---- Smart Reminder Handlers ----
+
+    const smartPrefs = preferences?.smartReminderPreferences ?? DEFAULT_SMART_PREFS;
+
+    const updateSmartPrefs = (updates: Partial<SmartReminderPreferences>) => {
+        if (!preferences) return;
+        const newSmartPrefs = { ...smartPrefs, ...updates };
+        savePreferences({ ...preferences, smartReminderPreferences: newSmartPrefs });
     };
 
     if (loading || !preferences) {
@@ -196,6 +216,68 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                             }
                             showChevron={mealReminders.dinner.enabled}
                         />
+                    </SettingSection>
+                )}
+
+                {/* Smart Reminders */}
+                {preferences.notificationsEnabled && (
+                    <SettingSection title="Smart Reminders">
+                        <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+                            {isPremium
+                                ? 'Smart reminders learn when you typically eat and nudge you at the right time with nutrition context.'
+                                : 'Get timely reminders to log your meals. Upgrade to Premium for personalized timing based on your habits.'}
+                        </Text>
+
+                        <SettingItem
+                            icon="zap"
+                            title="Smart Reminders"
+                            subtitle={smartPrefs.enabled ? 'On' : 'Off'}
+                            rightElement={
+                                <Switch
+                                    value={smartPrefs.enabled}
+                                    onValueChange={(val) => updateSmartPrefs({ enabled: val })}
+                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                    thumbColor={Colors.white}
+                                />
+                            }
+                            showChevron={false}
+                        />
+
+                        {smartPrefs.enabled && (
+                            <>
+                                {isPremium && (
+                                    <SettingItem
+                                        icon="cpu"
+                                        title="Pattern-Based Timing"
+                                        subtitle="Use your eating patterns to time reminders"
+                                        rightElement={
+                                            <Switch
+                                                value={smartPrefs.smartRemindersEnabled}
+                                                onValueChange={(val) => updateSmartPrefs({ smartRemindersEnabled: val })}
+                                                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                thumbColor={Colors.white}
+                                            />
+                                        }
+                                        showChevron={false}
+                                    />
+                                )}
+
+                                <SettingItem
+                                    icon="bar-chart-2"
+                                    title="End-of-Day Summary"
+                                    subtitle="Get a daily nutrition wrap-up at 8:30 PM"
+                                    rightElement={
+                                        <Switch
+                                            value={smartPrefs.endOfDaySummary}
+                                            onValueChange={(val) => updateSmartPrefs({ endOfDaySummary: val })}
+                                            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                            thumbColor={Colors.white}
+                                        />
+                                    }
+                                    showChevron={false}
+                                />
+                            </>
+                        )}
                     </SettingSection>
                 )}
 
