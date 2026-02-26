@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
+import { format, subDays, addDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, startOfDay, isSameDay } from 'date-fns';
 import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -126,36 +126,53 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   // Filter data based on time range
   const getFilteredData = () => {
-    const now = new Date();
-    let startDate: Date;
+    const now = startOfDay(new Date());
+    let rangeStart: Date;
 
     switch (timeRange) {
       case '1D':
-        startDate = subDays(now, 1);
+        rangeStart = subDays(now, 1);
         break;
       case '1W':
-        startDate = subDays(now, 7);
+        rangeStart = subDays(now, 6);
         break;
       case '1M':
-        startDate = subMonths(now, 1);
+        rangeStart = subMonths(now, 1);
         break;
       case '3M':
-        startDate = subMonths(now, 3);
+        rangeStart = subMonths(now, 3);
         break;
       case '6M':
-        startDate = subMonths(now, 6);
+        rangeStart = subMonths(now, 6);
         break;
       case '1Y':
-        startDate = subYears(now, 1);
+        rangeStart = subYears(now, 1);
         break;
       case '2Y':
-        startDate = subYears(now, 2);
+        rangeStart = subYears(now, 2);
         break;
       default:
-        startDate = subDays(now, 7);
+        rangeStart = subDays(now, 6);
     }
 
-    return nutritionData.filter(entry => entry.date >= startDate);
+    // Build a lookup from existing data by date key
+    const dataByDate = new Map<string, DailyNutrition>();
+    for (const entry of nutritionData) {
+      const key = format(entry.date, 'yyyy-MM-dd');
+      dataByDate.set(key, entry);
+    }
+
+    // Fill every day in the range so the graph scales correctly
+    const filled: DailyNutrition[] = [];
+    let cursor = startOfDay(rangeStart);
+    while (cursor <= now) {
+      const key = format(cursor, 'yyyy-MM-dd');
+      const existing = dataByDate.get(key);
+      filled.push(existing ?? { date: new Date(cursor), calories: 0, protein: 0, fat: 0, carbs: 0 });
+      cursor = addDays(cursor, 1);
+    }
+
+    return filled;
   };
 
   const graphData = useMemo(() => getFilteredData(), [nutritionData, timeRange]);
@@ -165,25 +182,29 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const targetCarbs = targetCarbsProp && targetCarbsProp > 0 ? targetCarbsProp : undefined;
   const targetFat = targetFatProp && targetFatProp > 0 ? targetFatProp : undefined;
 
-  // Check if there's any logged meal data
-  const hasLoggedMeals = graphData.length > 0;
+  // Only count days that actually have logged data (not zero-filled days)
+  const daysWithData = useMemo(() =>
+    graphData.filter(d => d.calories > 0 || d.protein > 0 || d.carbs > 0 || d.fat > 0),
+    [graphData]
+  );
+  const hasLoggedMeals = daysWithData.length > 0;
 
-  // Calculate averages
+  // Calculate averages (only from days with actual data)
   const averageProtein = hasLoggedMeals
-    ? graphData.reduce((sum, entry) => sum + entry.protein, 0) / graphData.length
+    ? daysWithData.reduce((sum, entry) => sum + entry.protein, 0) / daysWithData.length
     : null;
   const averageCarbs = hasLoggedMeals
-    ? graphData.reduce((sum, entry) => sum + entry.carbs, 0) / graphData.length
+    ? daysWithData.reduce((sum, entry) => sum + entry.carbs, 0) / daysWithData.length
     : null;
   const averageFat = hasLoggedMeals
-    ? graphData.reduce((sum, entry) => sum + entry.fat, 0) / graphData.length
+    ? daysWithData.reduce((sum, entry) => sum + entry.fat, 0) / daysWithData.length
     : null;
 
   const averageCalories = hasLoggedMeals
     ? Math.round(
-      graphData.reduce((sum, entry) => {
+      daysWithData.reduce((sum, entry) => {
         return sum + entry.calories;
-      }, 0) / graphData.length
+      }, 0) / daysWithData.length
     )
     : null;
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
@@ -250,7 +271,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     if (timeRange === '1D') return format(date, 'ha'); // "9AM"
     if (timeRange === '1W') return format(date, 'EEE'); // "Mon"
     if (timeRange === '1M') return format(date, 'd MMM'); // "5 Feb"
-    return format(date, 'MMM yy'); // "Feb 26"
+    if (timeRange === '3M' || timeRange === '6M') return format(date, 'd MMM'); // "5 Feb"
+    return format(date, 'MMM yyyy'); // "Feb 2026"
   };
 
   // Estimate SVG path length from points (bezier curves are ~1.5x longer than straight-line segments)
@@ -887,29 +909,31 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           )}
 
           {/* Dynamic Hero Summary */}
-          <View style={{ flexDirection: 'row', gap: 12, paddingHorizontal: 16, marginBottom: 24, marginTop: 8 }}>
+          <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 24, marginTop: 8 }}>
             {activeTab === 'Calories' ? (
               <>
                 {/* Average Calories Hero */}
                 <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Average</Text>
-                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>AVERAGE</Text>
+                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
                     {averageCalories !== null ? `${averageCalories}` : '--'}
-                    <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
                   </Text>
+                  <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
                 </View>
 
                 {/* Target Calories Hero */}
                 <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>Target</Text>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>TARGET</Text>
                   {hasTargetCalories ? (
-                    <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
-                      {`${targetCalories}`}
-                      <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
-                    </Text>
+                    <>
+                      <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+                        {`${targetCalories}`}
+                      </Text>
+                      <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
+                    </>
                   ) : (
                     <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.7}>
-                      <Text style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4 }}>Set Goal</Text>
+                      <Text style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4, fontSize: 14 }}>Set Goal</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -920,14 +944,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   const isDeficit = diff < 0;
                   const isOnTrack = Math.abs(diff) <= 50;
                   const color = isOnTrack ? '#10B981' : isDeficit ? '#3B82F6' : '#EF4444';
-                  const label = isOnTrack ? 'On Track' : isDeficit ? 'Deficit' : 'Surplus';
+                  const label = isOnTrack ? 'ON TRACK' : isDeficit ? 'DEFICIT' : 'SURPLUS';
                   return (
                     <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
                       <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
-                      <Text style={[styles.heroValue, { color }]}>
-                        {isOnTrack ? '' : isDeficit ? '' : '+'}{diff}
-                        <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
+                      <Text style={[styles.heroValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
+                        {isOnTrack ? '0' : isDeficit ? `${diff}` : `+${diff}`}
                       </Text>
+                      <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
                     </View>
                   );
                 })()}
@@ -941,25 +965,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 ].map((macro) => (
                   <View
                     key={macro.label}
-                    style={{
-                      flex: 1,
-                      backgroundColor: theme.colors.card,
-                      borderRadius: 14,
-                      padding: 14,
-                      borderWidth: 1,
-                      borderColor: theme.colors.border,
-                    }}
+                    style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
                   >
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
                       <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: macro.color }} />
-                      <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.8, color: theme.colors.textSecondary }}>
+                      <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>
                         {macro.label}
                       </Text>
                     </View>
-                    <Text style={{ fontSize: 26, fontWeight: '800', color: theme.colors.textPrimary, lineHeight: 30 }}>
+                    <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
                       {macro.value !== null ? macro.value.toFixed(0) : '--'}
-                      <Text style={{ fontSize: 14, fontWeight: '500', color: theme.colors.textTertiary }}>g</Text>
                     </Text>
+                    <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>g</Text>
                   </View>
                 ))}
               </>
@@ -2061,9 +2078,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <View key={name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
                                   <Text style={{ width: 18, fontSize: 12, fontWeight: '700', color: theme.colors.textTertiary, textAlign: 'center' }}>{i + 1}</Text>
                                   <View style={{ flex: 1 }}>
-                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 }}>
-                                      <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, textTransform: 'capitalize' }}>{name}</Text>
-                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{data.count}x  ·  {Math.round(data.cals / data.count)} Kcal avg</Text>
+                                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
+                                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, textTransform: 'capitalize', flex: 1, flexShrink: 1 }}>{name}</Text>
+                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary, flexShrink: 0 }}>{data.count}x · {Math.round(data.cals / data.count)} Kcal avg</Text>
                                     </View>
                                     <View style={{ height: 4, backgroundColor: theme.colors.input, borderRadius: 2, overflow: 'hidden' }}>
                                       <View style={{ width: `${(data.count / maxCount) * 100}%`, height: '100%', backgroundColor: theme.colors.primary, borderRadius: 2 }} />
@@ -2333,27 +2350,35 @@ const styles = StyleSheet.create({
     fontWeight: Typography.fontWeight.semiBold,
   },
   heroCard: {
-    padding: 16,
-    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 14,
+    borderRadius: 14,
     borderWidth: 1,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.05,
     shadowRadius: 8,
     elevation: 2,
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
+    minHeight: 88,
   },
   heroLabel: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.medium,
+    fontSize: 11,
+    fontWeight: Typography.fontWeight.semiBold,
     marginBottom: 4,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    letterSpacing: 0.8,
   },
   heroValue: {
-    fontSize: Typography.fontSize.xl,
+    fontSize: 26,
     fontWeight: Typography.fontWeight.bold,
+    lineHeight: 32,
+    minHeight: 32,
+  },
+  heroUnit: {
+    fontSize: 12,
+    fontWeight: Typography.fontWeight.medium,
+    marginTop: 2,
   },
 });
