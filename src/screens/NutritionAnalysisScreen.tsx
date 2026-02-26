@@ -16,6 +16,7 @@ import { useTheme } from '../constants/theme';
 import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, isSameDay } from 'date-fns';
 import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
 import { DailySummary } from '../services/dataStorage';
@@ -34,7 +35,7 @@ interface NutritionAnalysisScreenProps {
   isPremium?: boolean;
 }
 
-type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
+type TimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
 type TabType = 'Calories' | 'Macros' | 'Insights';
 
 interface DailyNutrition {
@@ -129,6 +130,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     let startDate: Date;
 
     switch (timeRange) {
+      case '1D':
+        startDate = subDays(now, 1);
+        break;
       case '1W':
         startDate = subDays(now, 7);
         break;
@@ -185,14 +189,70 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
   const hasTargetCalories = targetCalories !== undefined;
 
+  // Week-over-week comparison (last 7 days vs previous 7 days)
+  const weekOverWeek = useMemo(() => {
+    const now = new Date();
+    const thisWeekStart = subDays(now, 7);
+    const lastWeekStart = subDays(now, 14);
+
+    const thisWeek = nutritionData.filter(d => d.date >= thisWeekStart);
+    const lastWeek = nutritionData.filter(d => d.date >= lastWeekStart && d.date < thisWeekStart);
+
+    if (thisWeek.length === 0 || lastWeek.length === 0) return null;
+
+    const avg = (arr: DailyNutrition[], key: keyof Omit<DailyNutrition, 'date'>) =>
+      arr.reduce((s, d) => s + d[key], 0) / arr.length;
+
+    const thisCalories = avg(thisWeek, 'calories');
+    const lastCalories = avg(lastWeek, 'calories');
+    const thisProtein = avg(thisWeek, 'protein');
+    const lastProtein = avg(lastWeek, 'protein');
+    const thisCarbs = avg(thisWeek, 'carbs');
+    const lastCarbs = avg(lastWeek, 'carbs');
+    const thisFat = avg(thisWeek, 'fat');
+    const lastFat = avg(lastWeek, 'fat');
+
+    const pctChange = (curr: number, prev: number) =>
+      prev > 0 ? Math.round(((curr - prev) / prev) * 100) : 0;
+
+    return {
+      calories: pctChange(thisCalories, lastCalories),
+      protein: pctChange(thisProtein, lastProtein),
+      carbs: pctChange(thisCarbs, lastCarbs),
+      fat: pctChange(thisFat, lastFat),
+    };
+  }, [nutritionData]);
+
   // Calculate graph dimensions
   const screenWidth = Dimensions.get('window').width;
   const graphWidth = screenWidth - 32 - 36; // content paddingHorizontal (16*2) + graphCard padding (18*2)
-  const graphHeight = 260;
+  const graphHeight = 280;
   const padding = 20;
+  const paddingBottom = 36; // extra room for x-axis date labels
   const paddingLeft = 45; // extra room for Y-axis labels
   const innerWidth = graphWidth - paddingLeft - padding;
-  const innerHeight = graphHeight - padding * 2;
+  const innerHeight = graphHeight - padding - paddingBottom;
+  // Pick evenly spaced indices for x-axis date labels (max ~5 labels to avoid crowding)
+  const getXAxisLabelIndices = (count: number, maxLabels = 5): number[] => {
+    if (count <= 1) return count === 1 ? [0] : [];
+    if (count <= maxLabels) return Array.from({ length: count }, (_, i) => i);
+    const indices: number[] = [0];
+    const step = (count - 1) / (maxLabels - 1);
+    for (let i = 1; i < maxLabels - 1; i++) {
+      indices.push(Math.round(step * i));
+    }
+    indices.push(count - 1);
+    return indices;
+  };
+
+  // Format date label based on time range
+  const formatXLabel = (date: Date): string => {
+    if (timeRange === '1D') return format(date, 'ha'); // "9AM"
+    if (timeRange === '1W') return format(date, 'EEE'); // "Mon"
+    if (timeRange === '1M') return format(date, 'd MMM'); // "5 Feb"
+    return format(date, 'MMM yy'); // "Feb 26"
+  };
+
   // Estimate SVG path length from points (bezier curves are ~1.5x longer than straight-line segments)
   const estimatePathLength = (points: { x: number; y: number }[]): number => {
     if (points.length < 2) return 0;
@@ -351,7 +411,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     setTimeRange(range);
   };
 
-  const timeRanges: TimeRange[] = ['1W', '1M', '3M', '6M', '1Y'];
+  const timeRanges: TimeRange[] = ['1D', '1W', '1M', '3M', '6M', '1Y'];
 
   // Pill-style time range selector used across all tabs
   const renderTimeRangePills = () => (
@@ -519,7 +579,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         useNativeDriver: false, // animating SVG strokeDashoffset
       }),
     ]).start();
-  }, [JSON.stringify(caloriesData), maxCalories, minCalories, caloriesPadding]);
+  }, [JSON.stringify(caloriesData), maxCalories, minCalories, caloriesPadding, timeRange]);
 
   // Animate macros lines when data changes
   useEffect(() => {
@@ -549,37 +609,131 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         useNativeDriver: false,
       }),
     ]).start();
-  }, [JSON.stringify(graphData), maxValue]);
+  }, [JSON.stringify(graphData), maxValue, timeRange]);
 
-  // Insights State
+  // Insights State — cached per Monday week-key
+  const INSIGHT_CACHE_KEY = '@trackkal:weeklyInsightCache';
   const [insightText, setInsightText] = useState<string | null>(null);
+  const [insightIsNew, setInsightIsNew] = useState(false);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const insightRequestInFlight = useRef(false);
 
-  useEffect(() => {
-    if (activeTab === 'Insights' && isPremium && !insightText && !insightRequestInFlight.current && graphData.length > 0) {
-      insightRequestInFlight.current = true;
-      setIsGeneratingInsight(true);
-      // Prepare summary for AI
-      const weeklySummary = {
-        averageCalories,
-        averageProtein,
-        averageCarbs,
-        averageFat,
-        totalDaysLogged: graphData.length,
-        calorieTrend: graphData.map(d => d.calories).slice(-7), // Last 7 entries
-      };
+  // Get the Monday of the current week as cache key (e.g., "2026-02-23")
+  const getWeekKey = () => format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
 
-      generateWeeklyInsights(weeklySummary)
-        .then(text => {
-          setInsightText(text);
-        })
-        .catch(err => console.error(err))
-        .finally(() => {
-          setIsGeneratingInsight(false);
-          insightRequestInFlight.current = false;
+  useEffect(() => {
+    if (activeTab !== 'Insights' || !isPremium || insightRequestInFlight.current || graphData.length === 0) return;
+    if (insightText) return; // Already loaded this session
+
+    insightRequestInFlight.current = true;
+
+    const loadOrGenerate = async () => {
+      const weekKey = getWeekKey();
+
+      // Check cache first
+      try {
+        const cached = await AsyncStorage.getItem(INSIGHT_CACHE_KEY);
+        if (cached) {
+          const parsed = JSON.parse(cached);
+          if (parsed.weekKey === weekKey && parsed.text) {
+            setInsightText(parsed.text);
+            setInsightIsNew(false);
+            insightRequestInFlight.current = false;
+            return;
+          }
+        }
+      } catch {
+        // Cache miss, continue to generate
+      }
+
+      // Generate new insight
+      setIsGeneratingInsight(true);
+      try {
+        // Day-of-week breakdown
+        const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+        const dayBuckets: Record<string, { cals: number[]; protein: number[] }> = {};
+        dayNames.forEach(d => { dayBuckets[d] = { cals: [], protein: [] }; });
+        graphData.slice(-14).forEach(entry => {
+          const day = dayNames[entry.date.getDay()];
+          dayBuckets[day].cals.push(Math.round(entry.calories));
+          dayBuckets[day].protein.push(Math.round(entry.protein));
         });
-    }
+        const dayOfWeekAvg: Record<string, { avgCal: number; avgProtein: number }> = {};
+        Object.entries(dayBuckets).forEach(([day, data]) => {
+          if (data.cals.length > 0) {
+            dayOfWeekAvg[day] = {
+              avgCal: Math.round(data.cals.reduce((a, b) => a + b, 0) / data.cals.length),
+              avgProtein: Math.round(data.protein.reduce((a, b) => a + b, 0) / data.protein.length),
+            };
+          }
+        });
+
+        // Meal timing from raw meals
+        const timingBuckets = { morning: 0, afternoon: 0, evening: 0 };
+        const last7 = graphData.slice(-7).map(d => format(d.date, 'yyyy-MM-dd'));
+        Object.entries(mealsByDate).forEach(([dateKey, meals]) => {
+          if (!last7.includes(dateKey)) return;
+          meals.forEach(meal => {
+            const h = new Date(meal.timestamp).getHours();
+            if (h >= 4 && h < 12) timingBuckets.morning++;
+            else if (h >= 12 && h < 17) timingBuckets.afternoon++;
+            else timingBuckets.evening++;
+          });
+        });
+
+        // Top 5 foods
+        const foodCounts: Record<string, number> = {};
+        Object.values(mealsByDate).flat().forEach(meal => {
+          if (!last7.includes(format(new Date(meal.timestamp), 'yyyy-MM-dd'))) return;
+          meal.foods.forEach(f => {
+            const name = f.name?.toLowerCase().trim();
+            if (name) foodCounts[name] = (foodCounts[name] || 0) + 1;
+          });
+        });
+        const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => `${name} (${count}x)`);
+
+        // Daily breakdown for last 7 days
+        const dailyBreakdown = graphData.slice(-7).map(d => ({
+          day: format(d.date, 'EEE'),
+          cal: Math.round(d.calories),
+          protein: Math.round(d.protein),
+          carbs: Math.round(d.carbs),
+          fat: Math.round(d.fat),
+        }));
+
+        const weeklySummary = {
+          averageCalories,
+          averageProtein: averageProtein !== null ? Math.round(averageProtein) : null,
+          averageCarbs: averageCarbs !== null ? Math.round(averageCarbs) : null,
+          averageFat: averageFat !== null ? Math.round(averageFat) : null,
+          targets: {
+            calories: targetCalories ?? null,
+            proteinG: targetProtein ?? null,
+            carbsG: targetCarbs ?? null,
+            fatG: targetFat ?? null,
+          },
+          totalDaysLogged: graphData.length,
+          dailyBreakdown,
+          dayOfWeekAvg,
+          mealTimingDistribution: timingBuckets,
+          topFoods,
+        };
+
+        const text = await generateWeeklyInsights(weeklySummary);
+        setInsightText(text);
+        setInsightIsNew(true);
+
+        // Cache with week key
+        await AsyncStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ weekKey, text, generatedAt: new Date().toISOString() }));
+      } catch (err) {
+        console.error(err);
+      } finally {
+        setIsGeneratingInsight(false);
+        insightRequestInFlight.current = false;
+      }
+    };
+
+    loadOrGenerate();
   }, [activeTab, isPremium, graphData]);
 
   // Radar Chart Data Calculation
@@ -759,6 +913,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     </TouchableOpacity>
                   )}
                 </View>
+
+                {/* Deficit / Surplus Hero */}
+                {hasTargetCalories && averageCalories !== null && (() => {
+                  const diff = averageCalories - targetCalories!;
+                  const isDeficit = diff < 0;
+                  const isOnTrack = Math.abs(diff) <= 50;
+                  const color = isOnTrack ? '#10B981' : isDeficit ? '#3B82F6' : '#EF4444';
+                  const label = isOnTrack ? 'On Track' : isDeficit ? 'Deficit' : 'Surplus';
+                  return (
+                    <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                      <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+                      <Text style={[styles.heroValue, { color }]}>
+                        {isOnTrack ? '' : isDeficit ? '' : '+'}{diff}
+                        <Text style={{ fontSize: 14, fontWeight: 'normal', color: theme.colors.textTertiary }}> Kcal</Text>
+                      </Text>
+                    </View>
+                  );
+                })()}
               </>
             ) : (
               <>
@@ -1003,6 +1175,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           );
                         })}
 
+                        {/* X-axis date labels */}
+                        {getXAxisLabelIndices(caloriesData.length).map((idx) => {
+                          const x = paddingLeft + (idx / (caloriesData.length - 1 || 1)) * innerWidth;
+                          return (
+                            <SvgText
+                              key={`xlbl-${idx}`}
+                              x={x}
+                              y={graphHeight - 8}
+                              fontSize="10"
+                              fill={theme.colors.textTertiary}
+                              textAnchor="middle"
+                            >
+                              {formatXLabel(caloriesData[idx].date)}
+                            </SvgText>
+                          );
+                        })}
+
                         {/* Active Scrubber */}
                         {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
                           (() => {
@@ -1018,7 +1207,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   x1={pt.x}
                                   y1={padding}
                                   x2={pt.x}
-                                  y2={graphHeight - padding}
+                                  y2={padding + innerHeight}
                                   stroke={theme.colors.textSecondary}
                                   strokeWidth={1}
                                   strokeDasharray="4,4"
@@ -1046,6 +1235,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
                     {getDateRange()}
                   </Text>
+
+                  {/* Week-over-Week Comparison */}
+                  {weekOverWeek && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 }}>
+                      <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
+                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs last week:</Text>
+                      {(() => {
+                        const val = weekOverWeek.calories;
+                        const color = val === 0 ? theme.colors.textSecondary : val > 0 ? '#EF4444' : '#10B981';
+                        const sign = val > 0 ? '+' : '';
+                        return (
+                          <View style={{ backgroundColor: `${color}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 13, fontWeight: '700', color }}>{sign}{val}% cal</Text>
+                          </View>
+                        );
+                      })()}
+                    </View>
+                  )}
 
                   {/* Calories History Table */}
                   {caloriesHistory.length > 0 && (
@@ -1225,6 +1432,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           />
                         ) : null}
 
+                        {/* X-axis date labels */}
+                        {getXAxisLabelIndices(graphData.length).map((idx) => {
+                          const x = paddingLeft + (idx / (graphData.length - 1 || 1)) * innerWidth;
+                          return (
+                            <SvgText
+                              key={`xlbl-${idx}`}
+                              x={x}
+                              y={graphHeight - 8}
+                              fontSize="10"
+                              fill={theme.colors.textTertiary}
+                              textAnchor="middle"
+                            >
+                              {formatXLabel(graphData[idx].date)}
+                            </SvgText>
+                          );
+                        })}
+
                         {/* Active Scrubber */}
                         {scrubbingIndex !== null && scrubbingPoints[scrubbingIndex] && (
                           (() => {
@@ -1239,7 +1463,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   x1={pt.x}
                                   y1={padding}
                                   x2={pt.x}
-                                  y2={graphHeight - padding}
+                                  y2={padding + innerHeight}
                                   stroke={theme.colors.textSecondary}
                                   strokeWidth={1}
                                   strokeDasharray="4,4"
@@ -1277,6 +1501,27 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
                     {getDateRange()}
                   </Text>
+
+                  {/* Week-over-Week Macro Comparison */}
+                  {weekOverWeek && (
+                    <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, flexWrap: 'wrap' }}>
+                      <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
+                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs last week:</Text>
+                      {([
+                        { label: 'P', val: weekOverWeek.protein, color: '#3B82F6' },
+                        { label: 'C', val: weekOverWeek.carbs, color: '#F59E0B' },
+                        { label: 'F', val: weekOverWeek.fat, color: '#8B5CF6' },
+                      ] as const).map((m) => {
+                        const chipColor = m.val === 0 ? theme.colors.textSecondary : m.val > 0 ? m.color : '#10B981';
+                        const sign = m.val > 0 ? '+' : '';
+                        return (
+                          <View key={m.label} style={{ backgroundColor: `${chipColor}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
+                            <Text style={{ fontSize: 12, fontWeight: '700', color: chipColor }}>{sign}{m.val}% {m.label}</Text>
+                          </View>
+                        );
+                      })}
+                    </View>
+                  )}
 
                   {/* Dynamic Macro Insight */}
                   {(() => {
@@ -1443,6 +1688,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               <Feather name="cpu" size={14} color={theme.colors.primary} />
                             </View>
                             <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>AI Weekly Insight</Text>
+                            {insightIsNew && !isGeneratingInsight && (
+                              <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                                <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>NEW</Text>
+                              </View>
+                            )}
+                            {!isGeneratingInsight && (
+                              <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginLeft: 'auto' }}>
+                                Refreshes every Monday
+                              </Text>
+                            )}
                           </View>
                           {isGeneratingInsight ? (
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -1709,7 +1964,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         {(() => {
                           const buckets = { Morning: { cals: 0, count: 0 }, Afternoon: { cals: 0, count: 0 }, Evening: { cals: 0, count: 0 } };
                           const now = new Date();
-                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
                           const cutoff = subDays(now, rangeDays);
                           let totalRangeCals = 0;
                           let totalDaysWithData = new Set<string>();
@@ -1775,7 +2030,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items</Text>
                         {(() => {
                           const now = new Date();
-                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
                           const cutoff = subDays(now, rangeDays);
 
                           const foodCounts: Record<string, { count: number; cals: number }> = {};
@@ -1830,7 +2085,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           let addedSugar = 0;
                           let daysWithData = new Set<string>();
                           const now = new Date();
-                          const rangeDays = timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
+                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
                           const cutoff = subDays(now, rangeDays);
 
                           Object.values(mealsByDate).flat().forEach(meal => {

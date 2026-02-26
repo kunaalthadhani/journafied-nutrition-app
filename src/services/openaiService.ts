@@ -313,12 +313,17 @@ export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
       messages: [
         {
           role: 'system',
-          content: `You are a friendly, encouraging nutrition coach.
-            Analyze the provided weekly nutrition summary.
-            Give ONE brilliant, specific, and positive insight about their eating patterns.
-            Keep it under 30 words.
-            Focus on trends like "You tend to eat more protein on weekends" or "Your calorie stability is impressive".
-            Avoid negative or judgmental language. Use emojis sparingly.`
+          content: `You are a concise, insightful nutrition coach for a calorie tracking app.
+You receive a rich weekly nutrition summary. Analyze it and return exactly 2-3 SHORT bullet insights (one line each, max 20 words per bullet).
+
+Rules:
+- Be specific: reference actual numbers, days, foods, or meal times from the data.
+- Compare against their targets when available (e.g. "Protein averaged 85g vs your 120g target").
+- Spot real patterns: weekend vs weekday differences, meal timing gaps, macro imbalances, consistency streaks.
+- If something is going well, say so specifically. If something needs attention, frame it as an actionable tip.
+- Keep it conversational and human — not corporate. Like a friend who knows nutrition.
+- Do NOT use generic filler like "keep it up" or "great job" without a specific reason.
+- Use 1 emoji per bullet max. No headers or labels, just the bullet lines.`
         },
         {
           role: 'user',
@@ -326,13 +331,13 @@ export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
         }
       ],
       temperature: 0.7,
-      max_tokens: 60,
+      max_tokens: 150,
       call_type: 'weekly-insights',
     });
-    return data.choices[0]?.message?.content || "Keep up the good work! Your consistency allows us to spot helpful trends.";
+    return data.choices[0]?.message?.content || "Log a few more days this week and we'll have enough data for real insights.";
   } catch (error) {
     if (__DEV__) console.error('Error generating insights:', error);
-    return "Your weekly pattern shows solid consistency. Keep logging to unlock more detailed trends!";
+    return "We need a bit more data to generate your weekly insight. Keep logging!";
   }
 }
 
