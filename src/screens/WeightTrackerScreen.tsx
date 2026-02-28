@@ -590,7 +590,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   };
 
   const handleTimeRangeChange = (range: TimeRange) => {
-    analyticsService.trackTimeRangeFilterChange();
     shouldAnimate.current = true; // trigger line-draw animation
     setTimeRange(range);
     // Reset insight when time range changes so it regenerates with new data

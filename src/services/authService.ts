@@ -46,13 +46,30 @@ export const authService = {
     });
   },
 
-  async sendSignupOtp(email: string) {
+  async sendSignupOtp(email: string, password?: string) {
     ensureClient();
     const normalizedEmail = email.trim().toLowerCase();
+
+    // Create user WITH password first so signInWithPassword works later
+    if (password) {
+      const { error: signUpError } = await supabase!.auth.signUp({
+        email: normalizedEmail,
+        password,
+      });
+      // Ignore "already registered" — user may retry signup
+      if (signUpError) {
+        const msg = signUpError.message.toLowerCase();
+        if (!msg.includes('already') && !msg.includes('registered') && !msg.includes('exists')) {
+          throw signUpError;
+        }
+      }
+    }
+
+    // Send OTP code for email verification
     return supabase!.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser: true,
+        shouldCreateUser: !password, // only auto-create if no password signup above
         emailRedirectTo: undefined,
       },
     });
@@ -95,7 +112,7 @@ export const authService = {
   async signIn(email: string, password: string) {
     ensureClient();
     return supabase!.auth.signInWithPassword({
-      email,
+      email: email.trim().toLowerCase(),
       password,
     });
   },

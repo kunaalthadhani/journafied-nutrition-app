@@ -429,7 +429,6 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   };
 
   const handleTimeRangeChange = (range: TimeRange) => {
-    analyticsService.trackTimeRangeFilterChange();
     setTimeRange(range);
   };
 

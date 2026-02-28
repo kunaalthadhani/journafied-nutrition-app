@@ -413,7 +413,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       try {
         setAuthStatus('sending');
         setAuthMessage(null);
-        const { error } = await authService.sendSignupOtp(emailInput.trim());
+        const { error } = await authService.sendSignupOtp(emailInput.trim(), password);
         if (error) throw error;
         setOtpSent(true);
         setResendCountdown(60);
@@ -439,9 +439,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         if (error) throw error;
 
         if (data.session) {
-          // Update Password for future logins
+          // Update Password for future logins (backup — password should already be set via signUp)
           if (password.trim()) {
-            await authService.updatePassword(password.trim());
+            try {
+              await authService.updatePassword(password.trim());
+            } catch (pwErr) {
+              console.warn('updatePassword failed (password was set during signUp):', pwErr);
+            }
           }
 
           const cleanPhone = phoneInput.replace(/\D/g, '');
@@ -590,13 +594,15 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           </View>
 
           <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
-            {authMode === 'signup'
+            {authMode === 'signup' && otpSent
+              ? `Enter the 6-digit code we sent to ${emailInput.trim()}`
+              : authMode === 'signup'
               ? "Enter your details to sync your progress and get free entry bonuses."
               : "Welcome back! Sign in to access your data."}
           </Text>
 
-          {/* Name Input (SignUp Only) */}
-          {authMode === 'signup' && (
+          {/* Name Input (SignUp Only, hidden during OTP) */}
+          {authMode === 'signup' && !otpSent && (
             <>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
               <TextInput
@@ -610,25 +616,33 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 value={name}
                 onChangeText={setName}
                 autoCapitalize="words"
+                textContentType="name"
+                autoComplete="name"
               />
             </>
           )}
 
-          {/* Email Input */}
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
-          <TextInput
-            style={[styles.input, {
-              backgroundColor: theme.colors.input,
-              color: theme.colors.textPrimary,
-              borderColor: emailError ? theme.colors.error : theme.colors.border
-            }]}
-            placeholder="john@example.com"
-            placeholderTextColor={theme.colors.textTertiary}
-            value={emailInput}
-            onChangeText={setEmailInput}
-            keyboardType="email-address"
-            autoCapitalize="none"
-          />
+          {/* Email Input (hidden during OTP) */}
+          {!(authMode === 'signup' && otpSent) && (
+            <>
+              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+              <TextInput
+                style={[styles.input, {
+                  backgroundColor: theme.colors.input,
+                  color: theme.colors.textPrimary,
+                  borderColor: emailError ? theme.colors.error : theme.colors.border
+                }]}
+                placeholder="john@example.com"
+                placeholderTextColor={theme.colors.textTertiary}
+                value={emailInput}
+                onChangeText={setEmailInput}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                textContentType="emailAddress"
+                autoComplete="email"
+              />
+            </>
+          )}
 
           {/* OTP Input (Signup Only - Phase 2) */}
           {authMode === 'signup' && otpSent ? (
@@ -694,6 +708,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 value={password}
                 onChangeText={setPassword}
                 secureTextEntry
+                textContentType={authMode === 'signup' ? 'newPassword' : 'password'}
+                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
               />
 
               {/* Confirm Password (Sign Up Only) */}
@@ -711,6 +727,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                     value={confirmPassword}
                     onChangeText={setConfirmPassword}
                     secureTextEntry
+                    textContentType="newPassword"
+                    autoComplete="new-password"
                   />
                   {confirmPassword.length > 0 && password !== confirmPassword && (
                     <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>Passwords do not match</Text>
@@ -726,8 +744,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             </TouchableOpacity>
           )}
 
-          {/* Additional SignUp Fields */}
-          {authMode === 'signup' && (
+          {/* Additional SignUp Fields (hidden during OTP) */}
+          {authMode === 'signup' && !otpSent && (
             <>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Phone Number</Text>
               <View style={{ flexDirection: 'row', gap: 10 }}>
@@ -762,13 +780,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                   placeholderTextColor={theme.colors.textTertiary}
                   value={phoneInput}
                   onChangeText={(text) => {
-                    // Start stripping lead 0 immediately for UX? 
-                    // Or just let them type and strip validly. 
-                    // User said "50... not 050". If they type 0, we can ignore it?
-                    if (text.length === 1 && text === '0') return; // Prevent leading 0 if starting
+                    if (text.length === 1 && text === '0') return;
                     setPhoneInput(text);
                   }}
                   keyboardType="phone-pad"
+                  textContentType="telephoneNumber"
+                  autoComplete="tel"
                 />
               </View>
 

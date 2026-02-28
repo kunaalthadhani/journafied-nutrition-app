@@ -333,7 +333,6 @@ export const HomeScreen: React.FC = () => {
 
   const handleSettings = async () => {
     setShowSettings(true);
-    analyticsService.trackSettingsOpen();
     // Reload referral data to ensure it's up to date
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
@@ -377,7 +376,6 @@ export const HomeScreen: React.FC = () => {
 
   const handleAccount = (mode?: 'signin' | 'signup') => {
     if (mode) setAccountInitialMode(mode);
-    analyticsService.trackAccountScreenOpen();
     setMenuVisible(false);
     setShowSettings(false);
     setShowAccount(true);
@@ -411,7 +409,6 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAbout = () => {
-    analyticsService.trackAboutScreenOpen();
     setShowAbout(true);
   };
 
@@ -495,6 +492,7 @@ export const HomeScreen: React.FC = () => {
     setSavedGoals(goals);
     setGoalsSet(true);
     await dataStorage.saveGoals(goals);
+    analyticsService.trackOnboardingGoalSet();
   };
 
   const handleCalendarPress = () => {
@@ -502,7 +500,6 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleDateSelect = (date: Date) => {
-    analyticsService.trackDateSelectorChange();
     setSelectedDate(date);
     if (__DEV__) console.log('Date selected:', format(date, 'yyyy-MM-dd'));
   };
@@ -607,6 +604,7 @@ export const HomeScreen: React.FC = () => {
       // Initialize analytics
       await analyticsService.initialize();
       await analyticsService.trackAppOpen();
+      analyticsService.trackOnboardingStarted();
 
       // Load entry count
       const stored = await AsyncStorage.getItem(ENTRY_COUNT_KEY);
@@ -726,6 +724,15 @@ export const HomeScreen: React.FC = () => {
       // ACCOUNT / REFERRAL info
       const accountInfo = await dataStorage.loadAccountInfo();
       setAccountInfo(accountInfo || null);
+
+      // Identify user in Mixpanel
+      if (accountInfo?.supabaseUserId || accountInfo?.email) {
+        analyticsService.identifyUser(
+          accountInfo.supabaseUserId || accountInfo.email!,
+          { name: accountInfo.name, email: accountInfo.email, plan: isPremium ? 'premium' : 'free' }
+        );
+      }
+
       if (accountInfo?.email) {
         let code = await dataStorage.getReferralCode(accountInfo.email);
         if (!code) {
@@ -2032,7 +2039,7 @@ export const HomeScreen: React.FC = () => {
         {/* Fixed Top Navigation */}
         <TopNavigationBar
           selectedDate={formattedDate}
-          userName={accountInfo?.name || "there"}
+          userName={accountInfo?.name?.split(' ')[0] || "there"}
           onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
           onWeightTrackerPress={handleWeightTracker}

@@ -353,5 +353,61 @@ create index if not exists idx_analytics_events_user_id on analytics_events(user
 create index if not exists idx_analytics_events_name on analytics_events(event_name);
 create index if not exists idx_analytics_events_timestamp on analytics_events(timestamp);
 
+-- Nutrition Library (cached nutrition data per food name)
+create table if not exists nutrition_library (
+  id uuid primary key default uuid_generate_v4(),
+  name text unique not null,
+  calories_per_100g numeric,
+  protein_per_100g numeric,
+  carbs_per_100g numeric,
+  fat_per_100g numeric,
+  fiber_per_100g numeric,
+  sugar_per_100g numeric,
+  serving_size_g numeric,
+  source text, -- 'ai' | 'usda' | 'manual'
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
 
+create index if not exists idx_nutrition_library_name on nutrition_library (name);
+
+drop trigger if exists trg_nutrition_library_updated on nutrition_library;
+create trigger trg_nutrition_library_updated
+before update on nutrition_library
+for each row execute function set_updated_at();
+
+-- Daily User Metrics (one row per user per day — engagement tracking)
+create table if not exists daily_user_metrics (
+  id uuid primary key default uuid_generate_v4(),
+  user_id uuid references app_users(id) on delete cascade,
+  metric_date date not null,
+  meals_logged integer default 0,
+  exercise_logged boolean default false,
+  calories_logged numeric default 0,
+  push_received boolean default false,
+  push_clicked boolean default false,
+  streak_active boolean default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (user_id, metric_date)
+);
+
+create index if not exists idx_daily_user_metrics_user_date on daily_user_metrics (user_id, metric_date);
+
+drop trigger if exists trg_daily_user_metrics_updated on daily_user_metrics;
+create trigger trg_daily_user_metrics_updated
+before update on daily_user_metrics
+for each row execute function set_updated_at();
+
+-- Waitlist (landing page signups)
+create table if not exists waitlist (
+  id uuid primary key default uuid_generate_v4(),
+  email text unique not null,
+  name text,
+  source text default 'landing_page', -- where they signed up from
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_waitlist_email on waitlist (email);
+create index if not exists idx_waitlist_created_at on waitlist (created_at);
 
