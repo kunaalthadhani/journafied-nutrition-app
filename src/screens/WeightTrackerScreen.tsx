@@ -84,11 +84,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       ? currentWeight - startingWeight // Positive = gained, Negative = lost
       : null;
 
-  // Determine label and value based on goal type
+  // Determine label and value based on actual weight change direction
   const isGainGoal = goalType === 'gain';
-  const changeLabel = isGainGoal ? 'Gain' : 'Drop';
+  const changeLabel = weightChangeFromStart !== null
+    ? (weightChangeFromStart > 0 ? 'Gain' : weightChangeFromStart < 0 ? 'Drop' : 'Change')
+    : isGainGoal ? 'Gain' : 'Drop';
   const changeValue = weightChangeFromStart !== null
-    ? (isGainGoal ? weightChangeFromStart : -weightChangeFromStart) // For gain: show positive, for lose: show positive (drop)
+    ? weightChangeFromStart // Keep raw value (positive = gained, negative = lost)
     : null;
 
   // Deduplicate entries by date — keep only the most recently updated per day
@@ -768,10 +770,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>{changeLabel}</Text>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
                   {changeValue !== null && changeValue > 0.05 && (
-                    <Feather name={isGainGoal ? "trending-up" : "trending-down"} size={16} color={isGainGoal ? theme.colors.success : theme.colors.error} />
+                    <Feather name="trending-up" size={16} color={isGainGoal ? theme.colors.success : theme.colors.error} />
                   )}
                   {changeValue !== null && changeValue < -0.05 && (
-                    <Feather name={isGainGoal ? "trending-down" : "trending-up"} size={16} color={isGainGoal ? theme.colors.error : theme.colors.success} />
+                    <Feather name="trending-down" size={16} color={isGainGoal ? theme.colors.error : theme.colors.success} />
                   )}
                   <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]}>
                     {changeValue !== null

@@ -2249,7 +2249,7 @@ export const HomeScreen: React.FC = () => {
               isAnalyzingFood ? "Analyzing your entry..." :
                 isRecording ? "Recording..." :
                   isTranscribing ? "Transcribing..." :
-                    "What did you eat or exercise?"
+                    "Describe your meal"
             }
           />
         </KeyboardAvoidingView>

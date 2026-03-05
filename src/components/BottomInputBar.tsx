@@ -41,7 +41,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onSubmit,
   onPlusPress,
   onMicPress,
-  placeholder = "What did you eat or exercise?",
+  placeholder = "Describe your meal",
   isLoading = false,
   isRecording = false,
   transcribedText = '',
@@ -209,7 +209,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           >
             {showCustomPlaceholder && (
               <View style={styles.placeholderContainer} pointerEvents="none">
-                <Text style={[styles.customPlaceholder, { color: theme.colors.textTertiary }]}>
+                <Text style={[styles.customPlaceholder, { color: '#B0B0B0' }]}>
                   {placeholder}
                 </Text>
               </View>
@@ -224,7 +224,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
               ]}
               placeholder={showCustomPlaceholder ? '' : placeholder}
-              placeholderTextColor={theme.colors.textTertiary}
+              placeholderTextColor="#B0B0B0"
               value={currentText}
               onChangeText={handleTextChange}
               onSubmitEditing={handleSubmit}

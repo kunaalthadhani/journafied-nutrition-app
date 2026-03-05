@@ -45,15 +45,15 @@ export interface Theme {
 const lightTheme: Theme = {
 	mode: 'light',
 	colors: {
-		background: '#FFFFFF', // Clean white
-		card: '#FFFFFF',
-		input: '#FFFFFF',      // Inputs often white with border in shadcn
+		background: '#F5F5F5', // Light gray
+		card: '#F5F5F5',       // Match background
+		input: '#F5F5F5',      // Match background
 		border: '#E4E4E7',     // zinc-200
 		lightBorder: '#F4F4F5', // zinc-100
 		ring: '#18181B',       // zinc-900
-		textPrimary: '#09090B', // zinc-950
-		textSecondary: '#71717A', // zinc-500
-		textTertiary: '#A1A1AA', // zinc-400
+		textPrimary: '#333333', // dark gray
+		textSecondary: '#333333', // dark gray
+		textTertiary: '#333333', // dark gray
 		accentBg: '#F4F4F5',   // zinc-100 (hover state/secondary)
 		accent: '#18181B',     // zinc-900 (primary action)
 		shadow: 'rgba(0, 0, 0, 0.04)',

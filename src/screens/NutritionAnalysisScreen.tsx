@@ -8,6 +8,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -62,6 +63,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
+  const [showInfo, setShowInfo] = useState(false);
   const handleSetGoalPress = () => {
     if (onRequestSetGoals) {
       onRequestSetGoals();
@@ -867,7 +869,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
             Nutrition Analysis
           </Text>
-          <View style={styles.headerRight} />
+          <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerRight}>
+            <Feather name="info" size={20} color={theme.colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         <ScrollView
@@ -2161,6 +2165,52 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
         </ScrollView>
       </Animated.View>
+
+      {/* Info Modal */}
+      <Modal
+        visible={showInfo}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setShowInfo(false)}
+      >
+        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+          <View style={[styles.infoHeader, { borderBottomColor: theme.colors.border }]}>
+            <View style={styles.infoHeaderBtn} />
+            <Text style={[styles.infoHeaderTitle, { color: theme.colors.textPrimary }]}>About Nutrition Analysis</Text>
+            <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.infoHeaderBtn}>
+              <Feather name="x" size={22} color={theme.colors.textPrimary} />
+            </TouchableOpacity>
+          </View>
+          <ScrollView contentContainerStyle={styles.infoContent}>
+            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Overview</Text>
+            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+              Nutrition Analysis gives you a visual breakdown of your daily eating. It tracks calories and macronutrients (protein, carbs, fat) over time so you can spot trends and stay on track with your goals.
+            </Text>
+
+            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Calories Tab</Text>
+            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+              The bar chart shows your daily calorie intake. The dashed line represents your calorie target. Days where you went over your target will show in a different colour. Use the time range selector (1D, 1W, 1M, etc.) to zoom in or out.
+            </Text>
+
+            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Macros Tab</Text>
+            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+              The Macros tab breaks down your protein, carbs, and fat intake. It shows how each macro contributes to your daily nutrition and whether you are hitting your targets. This is useful for making sure you are getting enough protein or managing your carb intake.
+            </Text>
+
+            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Insights Tab</Text>
+            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+              The Insights tab provides an AI-generated summary of your eating patterns. It highlights your top foods, average intake, and suggestions for improvement. Insights are refreshed periodically based on your logged meals.
+            </Text>
+
+            <View style={[styles.infoDivider, { backgroundColor: theme.colors.border }]} />
+
+            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Tips</Text>
+            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+              For the most accurate analysis, log everything you eat throughout the day. Even small snacks and drinks count toward your daily totals. The more consistently you log, the more useful the trends and insights become.
+            </Text>
+          </ScrollView>
+        </SafeAreaView>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -2379,5 +2429,42 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: Typography.fontWeight.medium,
     marginTop: 2,
+  },
+  infoHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    height: 56,
+    borderBottomWidth: 1,
+    paddingHorizontal: 8,
+  },
+  infoHeaderBtn: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  infoHeaderTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    textAlign: 'center',
+  },
+  infoContent: {
+    padding: 24,
+    paddingBottom: 60,
+  },
+  infoSectionTitle: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    marginBottom: 8,
+  },
+  infoBody: {
+    fontSize: Typography.fontSize.sm,
+    lineHeight: Typography.fontSize.sm * 1.6,
+    marginBottom: 16,
+  },
+  infoDivider: {
+    height: 1,
+    marginVertical: 24,
   },
 });
