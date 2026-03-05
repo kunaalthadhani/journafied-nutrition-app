@@ -57,50 +57,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const [isUserTyping, setIsUserTyping] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-  const heightUpdateTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const [inputHeight, setInputHeight] = React.useState(0);
   const inputRef = React.useRef<TextInput>(null);
 
-  // FIXED: Memoize calculated values to prevent recalculation loops
-  const calculatedInputHeight = React.useMemo(
-    () => Math.min(150, Math.max(28, inputHeight)),
-    [inputHeight]
-  );
-
-  // FIXED: Always use local text state - transcribedText only syncs when text is empty
-  // This ensures user typing is always shown immediately
   const currentText = text;
   const hasText = currentText.trim().length > 0;
   const shouldShowChips = !hasText && quickPrompts.length > 0;
-  // FIXED: Use native placeholder on Android to prevent glitching
   const showCustomPlaceholder = Platform.OS === 'ios' && !isFocused && !hasText;
-
-  const singleLineThreshold = 40;
-  const isMultiLine = calculatedInputHeight > singleLineThreshold;
-
-  // FIXED: Use completely fixed values for single-line to prevent any recalculation
-  const baseSingleLineHeight = 28; // Fixed base height for single line
-  const fixedSingleLinePadding = Math.max(0, (baseSingleLineHeight - Typography.fontSize.md * 1.2) / 2);
-
-  // FIXED: Calculate padding based on actual state, but use fixed value for placeholder
-  const singleLinePadding = isMultiLine ? 0 : fixedSingleLinePadding;
-
-  // FIXED: Placeholder uses completely fixed values that never change
-  const placeholderTop = fixedSingleLinePadding;
-  const placeholderLineHeight = baseSingleLineHeight - fixedSingleLinePadding * 2;
-  const estimateHeightForText = React.useCallback((value: string) => {
-    const trimmed = value?.trim() || '';
-    if (!trimmed.length) return 0;
-    const approxCharsPerLine = 36;
-    const lineHeight = Typography.fontSize.md * 1.4;
-    const lineCount = trimmed.split('\n').reduce((count, line) => {
-      const segments = Math.max(1, Math.ceil(line.length / approxCharsPerLine));
-      return count + segments;
-    }, 0);
-    return Math.min(150, Math.max(28, lineCount * lineHeight + 12));
-  }, []);
 
   const handleSubmit = () => {
     if (currentText.trim() && onSubmit && !isLoading && !isRecording && !isTranscribing) {
@@ -121,43 +85,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
 
   const handleTextChange = (newText: string) => {
     setText(newText);
-    setIsUserTyping(true); // Mark that user is actively typing
-
-    // FIXED: Debounce height calculation to prevent rapid updates
-    if (heightUpdateTimeoutRef.current) {
-      clearTimeout(heightUpdateTimeoutRef.current);
-    }
-
-    const newHeight = newText.length === 0 ? 0 : estimateHeightForText(newText);
-
-    // FIXED: On Android, don't update height when empty to prevent style recalculation glitches
-    if (newText.length === 0) {
-      // Only update height on iOS when empty, Android keeps stable height
-      if (Platform.OS === 'ios') {
-        setInputHeight(0);
-      }
-      // On Android, don't update to prevent placeholder glitching
-    } else if (Math.abs(newHeight - inputHeight) > 5) {
-      // Use same threshold as onContentSizeChange for consistency
-      setInputHeight(newHeight);
-    } else {
-      // For small changes, debounce the update
-      heightUpdateTimeoutRef.current = setTimeout(() => {
-        if (Math.abs(newHeight - inputHeight) > 1) {
-          setInputHeight(newHeight);
-        }
-        heightUpdateTimeoutRef.current = null;
-      }, 150);
-    }
+    setIsUserTyping(true);
 
     if (newText.length > 0) {
       onUserTyping?.();
     }
-    // Clear transcribed text when user starts typing
     if (transcribedText && onTranscribedTextChange) {
       onTranscribedTextChange('');
     }
-    // Reset typing timeout - if user stops typing for 1 second, allow transcribed text
     if (typingTimeoutRef.current) {
       clearTimeout(typingTimeoutRef.current);
     }
@@ -169,28 +104,16 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
 
   // Sync transcribedText to local state when it changes (only if text is empty)
   useEffect(() => {
-    // Only sync transcribedText if local text is completely empty
     if (text.length === 0 && transcribedText && transcribedText.trim().length > 0) {
       setText(transcribedText);
-      // FIXED: Debounce height update for transcribed text to prevent jumps
-      const newHeight = estimateHeightForText(transcribedText);
-      if (Math.abs(newHeight - inputHeight) > 2) {
-        setInputHeight(newHeight);
-      }
-    } else if (text.length === 0 && transcribedText && transcribedText.length === 0 && inputHeight > 0) {
-      // Reset height if both are empty
-      setInputHeight(0);
     }
-  }, [transcribedText, estimateHeightForText, inputHeight, text.length]);
+  }, [transcribedText, text.length]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
     return () => {
       if (typingTimeoutRef.current) {
         clearTimeout(typingTimeoutRef.current);
-      }
-      if (heightUpdateTimeoutRef.current) {
-        clearTimeout(heightUpdateTimeoutRef.current);
       }
     };
   }, []);
@@ -297,23 +220,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 styles.textInput,
                 {
                   color: theme.colors.textPrimary,
-                  // FIXED: Use fixed height on Android when empty to prevent placeholder glitching
-                  height: Platform.OS === 'android' && !hasText
-                    ? baseSingleLineHeight  // Fixed height when empty on Android
-                    : (calculatedInputHeight || baseSingleLineHeight),
-                  lineHeight: !isMultiLine
-                    ? (Platform.OS === 'android' && !hasText
-                      ? baseSingleLineHeight - fixedSingleLinePadding * 2  // Fixed lineHeight on Android when empty
-                      : calculatedInputHeight - singleLinePadding * 2)
-                    : undefined,
-                  textAlignVertical: isMultiLine ? 'top' : 'center',
-                  // FIXED: Use fixed padding on Android when empty to prevent glitching
-                  paddingTop: Platform.OS === 'android' && !hasText
-                    ? fixedSingleLinePadding
-                    : singleLinePadding,
-                  paddingBottom: Platform.OS === 'android' && !hasText
-                    ? fixedSingleLinePadding
-                    : singleLinePadding,
                 },
                 (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
               ]}
@@ -324,42 +230,21 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               onSubmitEditing={handleSubmit}
               returnKeyType="default"
               multiline={true}
-              scrollEnabled={false}
+              scrollEnabled={true}
               blurOnSubmit={false}
               onFocus={() => {
                 setIsFocused(true);
-                // Keep user typing state when focused
                 if (text.length > 0) {
                   setIsUserTyping(true);
                 }
               }}
               onBlur={() => {
                 setIsFocused(false);
-                // Reset typing state after a short delay to allow transcribed text
                 setTimeout(() => {
                   setIsUserTyping(false);
                 }, 200);
               }}
-              onContentSizeChange={(e) => {
-                const newHeight = e.nativeEvent.contentSize.height;
-                // FIXED: Only update if height change is significant (>5px) to prevent glitching
-                // Also debounce to prevent rapid-fire updates
-                if (heightUpdateTimeoutRef.current) {
-                  clearTimeout(heightUpdateTimeoutRef.current);
-                }
-                if (Math.abs(newHeight - inputHeight) > 5) {
-                  setInputHeight(newHeight);
-                } else {
-                  // Debounce small changes
-                  heightUpdateTimeoutRef.current = setTimeout(() => {
-                    if (Math.abs(newHeight - inputHeight) > 1) {
-                      setInputHeight(newHeight);
-                    }
-                    heightUpdateTimeoutRef.current = null;
-                  }, 150);
-                }
-              }}
-              maxLength={200}
+              maxLength={500}
               editable={!isLoading && !isRecording && !isTranscribing}
               keyboardType="default"
               textContentType="none"
@@ -369,7 +254,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               showSoftInputOnFocus={true}
               focusable={true}
               onPressIn={() => {
-                // FIXED: Ensure focus on Android when TextInput is pressed directly
                 if (Platform.OS === 'android' && inputRef.current && !isLoading && !isRecording && !isTranscribing) {
                   inputRef.current.focus();
                 }
@@ -460,10 +344,10 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-end',
     borderRadius: 12,
     paddingHorizontal: 8,
-    paddingVertical: 6,
+    paddingVertical: 8,
     minHeight: 52,
     borderWidth: 1,
   },
@@ -483,9 +367,11 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    // color set inline via theme
-    paddingVertical: 0,
+    paddingVertical: 8,
     paddingHorizontal: Spacing.sm,
+    minHeight: 36,
+    maxHeight: 120,
+    textAlignVertical: 'center',
   },
   inputFieldWrapper: {
     flex: 1,
