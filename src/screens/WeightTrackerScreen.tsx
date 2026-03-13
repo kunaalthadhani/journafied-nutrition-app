@@ -651,6 +651,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       useNativeDriver: true,
       damping: 20,
       stiffness: 90,
+      overshootClamping: true,
     }).start();
   }, []);
 
