@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 
-import { Menu, TrendingUp, BarChart3, Calendar } from 'lucide-react-native';
+import { Menu, TrendingUp, BarChart3, Calendar, Flame, Snowflake } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 
@@ -12,8 +12,9 @@ interface TopNavigationBarProps {
   onCalendarPress?: () => void;
   onWeightTrackerPress?: () => void;
   onNutritionAnalysisPress?: () => void;
+  onStreakPress?: () => void;
   userName?: string;
-  // selectedDate is no longer needed for display in header, but kept in props if needed elsewhere or legacy, 
+  // selectedDate is no longer needed for display in header, but kept in props if needed elsewhere or legacy,
   // though we will remove it from display logic.
   selectedDate?: string;
   streak?: number;
@@ -25,6 +26,7 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onCalendarPress,
   onWeightTrackerPress,
   onNutritionAnalysisPress,
+  onStreakPress,
   userName = "Guest",
   streak = 0,
   frozen = false,
@@ -49,30 +51,18 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
             <Text style={[styles.greetingText, { color: theme.colors.textPrimary }]}>
               Hi {userName},
             </Text>
-            {streak > 0 && (() => {
-              const g = frozen ? '14,165,233' : '249,115,22';
-              return (
-                <View style={styles.streakGlow}>
-                  <View style={[styles.glowRing, styles.glow7, { backgroundColor: `rgba(${g},0.02)` }]} />
-                  <View style={[styles.glowRing, styles.glow6, { backgroundColor: `rgba(${g},0.03)` }]} />
-                  <View style={[styles.glowRing, styles.glow5, { backgroundColor: `rgba(${g},0.04)` }]} />
-                  <View style={[styles.glowRing, styles.glow4, { backgroundColor: `rgba(${g},0.06)` }]} />
-                  <View style={[styles.glowRing, styles.glow3, { backgroundColor: `rgba(${g},0.08)` }]} />
-                  <View style={[styles.glowRing, styles.glow2, { backgroundColor: `rgba(${g},0.10)` }]} />
-                  <View style={[styles.glowRing, styles.glow1, { backgroundColor: `rgba(${g},0.13)` }]} />
-                  <View style={[
-                    styles.streakContainer,
-                    frozen
-                      ? styles.streakFrozen
-                      : styles.streakActive,
-                  ]}>
-                    <Text style={[styles.streakText, frozen ? styles.streakTextFrozen : styles.streakTextActive]}>
-                      {frozen ? '❄️' : '🔥'} x{streak}
-                    </Text>
-                  </View>
+            {streak > 0 && (
+              <TouchableOpacity onPress={onStreakPress} activeOpacity={0.7} style={{ marginLeft: 8 }}>
+                <View style={[
+                  styles.streakContainer,
+                  frozen ? styles.streakFrozen : styles.streakActive,
+                ]}>
+                  <Text style={[styles.streakText, frozen ? styles.streakTextFrozen : styles.streakTextActive]}>
+                    {frozen ? '❄️' : '🔥'} x{streak}
+                  </Text>
                 </View>
-              );
-            })()}
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 
