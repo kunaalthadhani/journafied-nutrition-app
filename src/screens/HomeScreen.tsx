@@ -62,6 +62,7 @@ import Constants from 'expo-constants';
 import { Platform, AppState } from 'react-native';
 import { generateId } from '../utils/uuid';
 import { calculateStreak } from '../utils/streakUtils';
+import { StreakWidgetCard } from '../components/StreakWidgetCard';
 import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
@@ -158,6 +159,7 @@ export const HomeScreen: React.FC = () => {
   // Streak Freeze State
   const [streakFreeze, setStreakFreeze] = useState<StreakFreezeData | null>(null);
   const [justFrozeToday, setJustFrozeToday] = useState(false);
+  const [showStreakWidget, setShowStreakWidget] = useState(false);
 
   // Advanced Analytics
   const [showAdvancedAnalytics, setShowAdvancedAnalytics] = useState(false);
@@ -284,6 +286,10 @@ export const HomeScreen: React.FC = () => {
   };
   const handleMenuPress = () => {
     setMenuVisible(true);
+  };
+
+  const handleStreakPress = () => {
+    setShowStreakWidget(true);
   };
 
   const handleSetGoals = () => {
@@ -2044,6 +2050,7 @@ export const HomeScreen: React.FC = () => {
           onCalendarPress={handleCalendarPress}
           onWeightTrackerPress={handleWeightTracker}
           onNutritionAnalysisPress={handleNutritionAnalysis}
+          onStreakPress={handleStreakPress}
           streak={currentStreak}
           frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday} // Pass frozen state to TopBar
         />
@@ -2098,6 +2105,8 @@ export const HomeScreen: React.FC = () => {
           dailyCalories={dailyCalories}
           onScrollEnable={setScrollEnabled}
         />
+
+        {/* Streak Widget Modal is rendered at the bottom with other modals */}
 
         {/* Main content + input bar move together with the keyboard */}
         <KeyboardAvoidingView
@@ -2331,6 +2340,7 @@ export const HomeScreen: React.FC = () => {
             initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
             targetWeightKg={savedGoals.targetWeightKg ?? undefined}
             onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
+            isPremium={isPremium}
           />
         </Modal>
 
@@ -2386,6 +2396,18 @@ export const HomeScreen: React.FC = () => {
           mealsByDate={mealsByDate}
           dailyCalorieTarget={dailyCalories}
           adjustments={adjustmentHistory}
+        />
+
+        {/* Streak Widget Modal — slides from top like calendar */}
+        <StreakWidgetCard
+          visible={showStreakWidget}
+          onClose={() => setShowStreakWidget(false)}
+          streak={currentStreak}
+          frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday}
+          caloriesConsumed={currentNutrition.totalCalories}
+          caloriesTarget={effectiveDailyCalories}
+          summariesByDate={summariesByDate}
+          frozenDates={streakFreeze?.usedOnDates || []}
         />
 
         <SmartAdjustmentModal
