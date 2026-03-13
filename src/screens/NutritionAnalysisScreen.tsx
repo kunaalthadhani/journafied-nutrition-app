@@ -577,6 +577,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       useNativeDriver: true,
       damping: 20,
       stiffness: 90,
+      overshootClamping: true,
     }).start();
   }, []);
 
