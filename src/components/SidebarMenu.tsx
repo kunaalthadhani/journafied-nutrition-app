@@ -116,23 +116,17 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
   const [secretTapCount, setSecretTapCount] = useState(0);
   const secretTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const [modalVisible, setModalVisible] = useState(false);
+  const isClosing = useRef(false);
 
-  // Initialize slideAnim with a default value, then update when dimensions are available
   const slideAnim = useRef(new Animated.Value(-SCREEN_WIDTH * 0.75 || -300)).current;
   const overlayAnim = useRef(new Animated.Value(0)).current;
-
-  // Update slide anim initial value when dimensions change
-  useEffect(() => {
-    const sidebarWidth = SCREEN_WIDTH * 0.75;
-    if (!visible) {
-      slideAnim.setValue(-sidebarWidth);
-    }
-  }, [SCREEN_WIDTH, visible]);
 
   useEffect(() => {
     const sidebarWidth = SCREEN_WIDTH * 0.75;
     if (visible) {
-      // Slide in smoothly
+      isClosing.current = false;
+      setModalVisible(true);
       Animated.parallel([
         Animated.spring(slideAnim, {
           toValue: 0,
@@ -146,13 +140,13 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
           useNativeDriver: true,
         }),
       ]).start();
-    } else {
-      // Slide out smoothly
+    } else if (modalVisible && !isClosing.current) {
+      // Slide out, then hide the Modal
+      isClosing.current = true;
       Animated.parallel([
-        Animated.spring(slideAnim, {
+        Animated.timing(slideAnim, {
           toValue: -sidebarWidth,
-          tension: 50,
-          friction: 8,
+          duration: 250,
           useNativeDriver: true,
         }),
         Animated.timing(overlayAnim, {
@@ -160,7 +154,10 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
           duration: 250,
           useNativeDriver: true,
         }),
-      ]).start();
+      ]).start(() => {
+        setModalVisible(false);
+        isClosing.current = false;
+      });
     }
   }, [visible, SCREEN_WIDTH]);
 
@@ -244,7 +241,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
   return (
     <Modal
-      visible={visible}
+      visible={modalVisible}
       transparent
       animationType="none"
       onRequestClose={onClose}
