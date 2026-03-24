@@ -101,6 +101,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [phoneInput, setPhoneInput] = useState(_initialPhone.local);
   const [password, setPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
@@ -369,9 +371,12 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
       await authService.resetPasswordForEmail(resetInput.trim());
       setForgotPasswordVisible(false);
-      Alert.alert("Reset Link Sent", "Check your email for password reset instructions.");
+      Alert.alert(
+        "Reset Link Sent",
+        "Check your email (including spam) for password reset instructions. Note: it may take a few minutes to arrive.",
+      );
     } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to send reset link.");
+      Alert.alert("Error", e.message || "Failed to send reset link. Please try again in a few minutes.");
     } finally {
       setResetLoading(false);
     }
@@ -381,115 +386,48 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     let hasError = false;
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
-    if (!otpSent) {
-      // Phase 1: Validation
-      if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
-      if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
+    if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
+    if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
 
-      if (!password.trim() || password.length < 6) {
-        setAuthMessage("Password must be at least 6 characters.");
-        hasError = true;
-      } else if (password !== confirmPassword) {
-        setAuthMessage("Passwords do not match.");
-        hasError = true;
+    if (!password.trim() || password.length < 6) {
+      setAuthMessage("Password must be at least 6 characters.");
+      hasError = true;
+    }
+
+    if (hasError) return;
+
+    try {
+      setAuthStatus('verifying');
+      setAuthMessage(null);
+
+      const { data, error } = await authService.signUp(emailInput.trim().toLowerCase(), password);
+      if (error) throw error;
+
+      if (data.session) {
+        // Signed in immediately (email confirmation disabled in Supabase)
+        const existingInfo = await dataStorage.loadAccountInfo();
+        const provisional: AccountInfo = {
+          ...(existingInfo || {}),
+          name: name.trim(),
+          email: emailInput.trim().toLowerCase(),
+          supabaseUserId: data.session.user.id,
+        };
+
+        await dataStorage.saveAccountInfo(provisional);
+        await syncAccountInfoFromSession(data.session);
+        await loadLocalData();
+      } else if (data.user && !data.session) {
+        // Email confirmation is enabled in Supabase — user created but needs to confirm
+        Alert.alert(
+          'Check your email',
+          `We sent a confirmation link to ${emailInput.trim()}. Tap it to activate your account, then sign in.`,
+        );
+        setAuthMode('signin');
       }
-
-      // Phone Validation
-      const cleanPhone = phoneInput.replace(/\D/g, '');
-      const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
-
-      if (!finalPhoneBody || finalPhoneBody.length < 5) {
-        setPhoneError(true);
-        hasError = true;
-      } else {
-        setPhoneError(false);
-      }
-
-      if (!hasAcceptedTerms) { setTermsError(true); hasError = true; } else setTermsError(false);
-
-      if (hasError) return;
-
-      // Send OTP
-      try {
-        setAuthStatus('sending');
-        setAuthMessage(null);
-        const { error } = await authService.sendSignupOtp(emailInput.trim(), password);
-        if (error) throw error;
-        setOtpSent(true);
-        setResendCountdown(60);
-        Alert.alert('Code Sent', `We sent a verification code to ${emailInput.trim()}.`);
-      } catch (e: any) {
-        setAuthMessage(e.message || 'Failed to send code.');
-      } finally {
-        setAuthStatus('idle');
-      }
-
-    } else {
-      // Phase 2: Verify & Create
-      if (!otpCode.trim() || otpCode.length < 6) {
-        setAuthMessage('Please enter the 6-digit code.');
-        return;
-      }
-
-      try {
-        setAuthStatus('verifying');
-        setAuthMessage(null);
-
-        const { data, error } = await authService.verifyOtp(emailInput.trim(), otpCode.trim());
-        if (error) throw error;
-
-        if (data.session) {
-          // Update Password for future logins (backup — password should already be set via signUp)
-          if (password.trim()) {
-            try {
-              await authService.updatePassword(password.trim());
-            } catch (pwErr) {
-              console.warn('updatePassword failed (password was set during signUp):', pwErr);
-            }
-          }
-
-          const cleanPhone = phoneInput.replace(/\D/g, '');
-          const finalPhoneBody = cleanPhone.startsWith('0') ? cleanPhone.substring(1) : cleanPhone;
-          const fullPhoneNumber = `${selectedCountry.dial_code}${finalPhoneBody}`;
-
-          const existingInfo = await dataStorage.loadAccountInfo();
-          const provisional: AccountInfo = {
-            ...(existingInfo || {}),
-            name: name.trim(),
-            email: emailInput.trim(),
-            phoneNumber: fullPhoneNumber,
-            supabaseUserId: data.session.user.id,
-          };
-
-          // Referrals + Premium Bonus (3 Days)
-          setReferralCodeError(null);
-          if (referralCode.trim()) {
-            const validation = await referralService.validateReferralCodeForRedemption(referralCode.trim(), emailInput.trim());
-            if (validation.valid) {
-              await referralService.createReferralRedemption(validation.referralCode!, emailInput.trim(), name.trim());
-
-              // Grant 3 Days Premium
-              let currentExpiry = provisional.premiumUntil ? new Date(provisional.premiumUntil) : new Date();
-              if (currentExpiry < new Date()) currentExpiry = new Date(); // If expired, start from now
-              currentExpiry.setDate(currentExpiry.getDate() + 3);
-
-              provisional.premiumUntil = currentExpiry.toISOString();
-              Alert.alert('Referral Bonus Unlocked!', '+3 Days Premium Access & 5 Free Entries');
-            } else {
-              setReferralCodeError(validation.error || 'Invalid referral code. Your account was created without the bonus.');
-            }
-          }
-
-          await dataStorage.saveAccountInfo(provisional);
-          await syncAccountInfoFromSession(data.session);
-
-          await loadLocalData();
-        }
-      } catch (e: any) {
-        setAuthMessage(e.message || 'Verification failed.');
-      } finally {
-        setAuthStatus('idle');
-      }
+    } catch (e: any) {
+      setAuthMessage(e.message || 'Sign up failed.');
+    } finally {
+      setAuthStatus('idle');
     }
   };
 
@@ -518,18 +456,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         style: 'destructive',
         onPress: async () => {
           await authService.signOut();
-          // Clear data manually since clearAllData doesn't exist
-          await dataStorage.saveAccountInfo({});
-          await dataStorage.saveMeals({});
-          await dataStorage.saveGoals({
-            calories: 1500, proteinPercentage: 30, carbsPercentage: 45, fatPercentage: 25,
-            proteinGrams: 113, carbsGrams: 169, fatGrams: 42,
-            currentWeightKg: null, targetWeightKg: null
-          });
-          await dataStorage.saveWeightEntries([]);
-          await dataStorage.saveEntryCount(0);
-          await dataStorage.saveUserPlan('free');
-
           await AsyncStorage.clear();
           // Reset state
           setAuthSession(null);
@@ -564,18 +490,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 setAuthMode('signin');
                 setAuthMessage(null);
                 setPassword('');
-                setConfirmPassword('');
-                setOtpSent(false);
-                setOtpCode('');
                 setNameError(false);
                 setEmailError(false);
-                setPhoneError(false);
-                setTermsError(false);
-                setReferralCodeError(null);
-                setResendCountdown(0);
               }}
             >
-              <Text style={{ fontWeight: 'bold', color: authMode === 'signin' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Sign In</Text>
+              <Text style={{ fontWeight: '600', fontSize: 15, color: authMode === 'signin' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Sign In</Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signup' ? 2 : 0, borderBottomColor: theme.colors.primary }}
@@ -583,26 +502,20 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 setAuthMode('signup');
                 setAuthMessage(null);
                 setPassword('');
-                setConfirmPassword('');
-                setOtpSent(false);
-                setOtpCode('');
-                setResendCountdown(0);
               }}
             >
               <Text style={{ fontWeight: 'bold', color: authMode === 'signup' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Create Account</Text>
             </TouchableOpacity>
           </View>
 
-          <Text style={[styles.helperText, { color: theme.colors.textSecondary, marginBottom: 20 }]}>
-            {authMode === 'signup' && otpSent
-              ? `Enter the 6-digit code we sent to ${emailInput.trim()}`
-              : authMode === 'signup'
-              ? "Enter your details to sync your progress and get free entry bonuses."
+          <Text style={{ color: theme.colors.textSecondary, fontSize: 14, marginBottom: 20, lineHeight: 20 }}>
+            {authMode === 'signup'
+              ? "Create an account to back up your data and sync across devices."
               : "Welcome back! Sign in to access your data."}
           </Text>
 
-          {/* Name Input (SignUp Only, hidden during OTP) */}
-          {authMode === 'signup' && !otpSent && (
+          {/* Name Input (SignUp Only) */}
+          {authMode === 'signup' && (
             <>
               <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
               <TextInput
@@ -611,10 +524,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                   color: theme.colors.textPrimary,
                   borderColor: nameError ? theme.colors.error : theme.colors.border
                 }]}
-                placeholder="John Doe"
-                placeholderTextColor={theme.colors.textTertiary}
+                placeholder="Your name"
+                placeholderTextColor={'#A1A1AA'}
                 value={name}
-                onChangeText={setName}
+                onChangeText={(t) => { setName(t); setNameError(false); }}
                 autoCapitalize="words"
                 textContentType="name"
                 autoComplete="name"
@@ -622,198 +535,55 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             </>
           )}
 
-          {/* Email Input (hidden during OTP) */}
-          {!(authMode === 'signup' && otpSent) && (
-            <>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: emailError ? theme.colors.error : theme.colors.border
-                }]}
-                placeholder="john@example.com"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={emailInput}
-                onChangeText={setEmailInput}
-                keyboardType="email-address"
-                autoCapitalize="none"
-                textContentType="emailAddress"
-                autoComplete="email"
-              />
-            </>
-          )}
+          {/* Email Input */}
+          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+          <TextInput
+            style={[styles.input, {
+              backgroundColor: theme.colors.input,
+              color: theme.colors.textPrimary,
+              borderColor: emailError ? theme.colors.error : theme.colors.border
+            }]}
+            placeholder="you@example.com"
+            placeholderTextColor={'#A1A1AA'}
+            value={emailInput}
+            onChangeText={(t) => { setEmailInput(t); setEmailError(false); }}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            textContentType="emailAddress"
+            autoComplete="email"
+          />
 
-          {/* OTP Input (Signup Only - Phase 2) */}
-          {authMode === 'signup' && otpSent ? (
-            <>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Verification Code</Text>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.primary,
-                  textAlign: 'center',
-                  letterSpacing: 8,
-                  fontSize: 24,
-                  fontWeight: 'bold'
-                }]}
-                placeholder="000000"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={otpCode}
-                onChangeText={setOtpCode}
-                keyboardType="number-pad"
-                maxLength={6}
-              />
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 10 }}>
-                <TouchableOpacity onPress={() => { setOtpSent(false); setOtpCode(''); setAuthMessage(null); }}>
-                  <Text style={{ color: theme.colors.primary, fontSize: 13 }}>Wrong email? Edit details</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  disabled={resendCountdown > 0 || authStatus !== 'idle'}
-                  onPress={async () => {
-                    try {
-                      setAuthStatus('sending');
-                      setAuthMessage(null);
-                      const { error } = await authService.sendSignupOtp(emailInput.trim());
-                      if (error) throw error;
-                      setResendCountdown(60);
-                      setOtpCode('');
-                      Alert.alert('Code Resent', `A new code was sent to ${emailInput.trim()}.`);
-                    } catch (e: any) {
-                      setAuthMessage(e.message || 'Failed to resend code.');
-                    } finally {
-                      setAuthStatus('idle');
-                    }
-                  }}
-                >
-                  <Text style={{ color: resendCountdown > 0 ? theme.colors.textTertiary : theme.colors.primary, fontSize: 13, fontWeight: '500' }}>
-                    {resendCountdown > 0 ? `Resend (${resendCountdown}s)` : 'Resend Code'}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <>
-              {/* Password Input (Sign In & Sign Up) */}
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.border
-                }]}
-                placeholder="••••••"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={password}
-                onChangeText={setPassword}
-                secureTextEntry
-                textContentType={authMode === 'signup' ? 'newPassword' : 'password'}
-                autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
-              />
-
-              {/* Confirm Password (Sign Up Only) */}
-              {authMode === 'signup' && (
-                <>
-                  <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Confirm Password</Text>
-                  <TextInput
-                    style={[styles.input, {
-                      backgroundColor: theme.colors.input,
-                      color: theme.colors.textPrimary,
-                      borderColor: confirmPassword.length > 0 && password !== confirmPassword ? theme.colors.error : theme.colors.border
-                    }]}
-                    placeholder="••••••"
-                    placeholderTextColor={theme.colors.textTertiary}
-                    value={confirmPassword}
-                    onChangeText={setConfirmPassword}
-                    secureTextEntry
-                    textContentType="newPassword"
-                    autoComplete="new-password"
-                  />
-                  {confirmPassword.length > 0 && password !== confirmPassword && (
-                    <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>Passwords do not match</Text>
-                  )}
-                </>
-              )}
-            </>
-          )}
+          {/* Password Input */}
+          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              style={[styles.input, {
+                backgroundColor: theme.colors.input,
+                color: theme.colors.textPrimary,
+                borderColor: theme.colors.border,
+                paddingRight: 44,
+              }]}
+              placeholder="Min. 6 characters"
+              placeholderTextColor={'#A1A1AA'}
+              value={password}
+              onChangeText={setPassword}
+              secureTextEntry={!showPassword}
+              textContentType={authMode === 'signup' ? 'newPassword' : 'password'}
+              autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
+            />
+            <TouchableOpacity
+              onPress={() => setShowPassword(!showPassword)}
+              style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Feather name={showPassword ? 'eye' : 'eye-off'} size={18} color={theme.colors.textTertiary} />
+            </TouchableOpacity>
+          </View>
 
           {authMode === 'signin' && (
-            <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 8 }}>
+            <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 8, marginBottom: 4, paddingVertical: 4 }}>
               <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '500' }}>Forgot password?</Text>
             </TouchableOpacity>
-          )}
-
-          {/* Additional SignUp Fields (hidden during OTP) */}
-          {authMode === 'signup' && !otpSent && (
-            <>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Phone Number</Text>
-              <View style={{ flexDirection: 'row', gap: 10 }}>
-                {/* Country Picker Trigger */}
-                <TouchableOpacity
-                  style={{
-                    height: 50,
-                    backgroundColor: theme.colors.input,
-                    borderWidth: 1,
-                    borderColor: theme.colors.border,
-                    borderRadius: 8,
-                    paddingHorizontal: 12,
-                    justifyContent: 'center',
-                    alignItems: 'center',
-                    minWidth: 80
-                  }}
-                  onPress={() => setShowCountryPicker(true)}
-                >
-                  <Text style={{ color: theme.colors.textPrimary, fontWeight: 'bold' }}>{selectedCountry.dial_code}</Text>
-                  <Text style={{ color: theme.colors.textSecondary, fontSize: 10 }}>{selectedCountry.code}</Text>
-                </TouchableOpacity>
-
-                {/* Phone Input */}
-                <TextInput
-                  style={[styles.input, {
-                    flex: 1,
-                    backgroundColor: theme.colors.input,
-                    color: theme.colors.textPrimary,
-                    borderColor: phoneError ? theme.colors.error : theme.colors.border
-                  }]}
-                  placeholder={selectedCountry.placeholder}
-                  placeholderTextColor={theme.colors.textTertiary}
-                  value={phoneInput}
-                  onChangeText={(text) => {
-                    if (text.length === 1 && text === '0') return;
-                    setPhoneInput(text);
-                  }}
-                  keyboardType="phone-pad"
-                  textContentType="telephoneNumber"
-                  autoComplete="tel"
-                />
-              </View>
-
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Referral Code (Optional)</Text>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: referralCodeError ? theme.colors.error : theme.colors.border
-                }]}
-                placeholder="FRIEND123"
-                placeholderTextColor={theme.colors.textTertiary}
-                value={referralCode}
-                onChangeText={setReferralCode}
-                autoCapitalize="characters"
-              />
-              {referralCodeError && <Text style={{ color: theme.colors.error, fontSize: 12, marginTop: 4 }}>{referralCodeError}</Text>}
-
-              {/* Terms Checkbox */}
-              <TouchableOpacity style={styles.termsRow} onPress={() => setHasAcceptedTerms(!hasAcceptedTerms)}>
-                <View style={[styles.checkbox, { borderColor: termsError ? theme.colors.error : theme.colors.border }]}>
-                  {hasAcceptedTerms && <View style={styles.checkboxInner} />}
-                </View>
-                <Text style={[styles.helperText, { flex: 1, color: theme.colors.textSecondary }]}>
-                  I agree to the Terms & Conditions
-                </Text>
-              </TouchableOpacity>
-            </>
           )}
 
           {/* Auth Message */}
@@ -821,10 +591,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             <View style={{
               flexDirection: 'row',
               alignItems: 'center',
-              backgroundColor: 'rgba(239, 68, 68, 0.1)',
+              backgroundColor: 'rgba(239, 68, 68, 0.08)',
               borderWidth: 1,
-              borderColor: 'rgba(239, 68, 68, 0.3)',
-              borderRadius: 8,
+              borderColor: 'rgba(239, 68, 68, 0.2)',
+              borderRadius: 10,
               padding: 12,
               marginTop: 12,
               gap: 8,
@@ -835,19 +605,74 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           )}
 
           <TouchableOpacity
-            style={[styles.primaryButton, (authMode === 'signup' && !hasAcceptedTerms) && styles.primaryButtonDisabled]}
-            disabled={(authMode === 'signup' && !hasAcceptedTerms) || authStatus !== 'idle'}
+            style={[styles.primaryButton, { marginTop: 16 }]}
+            disabled={authStatus !== 'idle'}
             onPress={authMode === 'signup' ? handleSignUp : handleSignIn}
           >
             {authStatus !== 'idle' ? (
               <ActivityIndicator color="white" />
             ) : (
               <Text style={styles.primaryButtonText}>
-                {authMode === 'signup'
-                  ? (otpSent ? 'Verify & Create Account' : 'Send Verification Code')
-                  : 'Sign In'}
+                {authMode === 'signup' ? 'Create Account' : 'Sign In'}
               </Text>
             )}
+          </TouchableOpacity>
+
+          {/* Disabled OAuth placeholders */}
+          <View style={{ marginTop: 16, gap: 10 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.border }} />
+              <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>or</Text>
+              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.border }} />
+            </View>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, opacity: 0.4 }}
+              disabled
+            >
+              <Text style={{ fontSize: 18 }}>G</Text>
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Continue with Google</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, opacity: 0.4 }}
+              disabled
+            >
+              <Feather name="smartphone" size={16} color={theme.colors.textSecondary} />
+              <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Continue with Apple</Text>
+            </TouchableOpacity>
+            <Text style={{ color: theme.colors.textTertiary, fontSize: 11, textAlign: 'center', marginTop: 2 }}>Google & Apple sign-in coming soon</Text>
+          </View>
+
+          {/* Reset All Data */}
+          <TouchableOpacity
+            onPress={() => {
+              Alert.alert(
+                'Reset All Data',
+                'This will clear all local data (meals, weight, goals, account info) and sign you out. This cannot be undone.',
+                [
+                  { text: 'Cancel', style: 'cancel' },
+                  {
+                    text: 'Reset Everything',
+                    style: 'destructive',
+                    onPress: async () => {
+                      try {
+                        await authService.signOut();
+                      } catch (_) {}
+                      await AsyncStorage.clear();
+                      setAuthSession(null);
+                      setAccountInfo(null);
+                      setEmailInput('');
+                      setPassword('');
+                      setName('');
+                      setAuthMessage(null);
+                      Alert.alert('Done', 'All data has been cleared.');
+                    },
+                  },
+                ],
+              );
+            }}
+            style={{ alignSelf: 'center', marginTop: 24, paddingVertical: 8 }}
+          >
+            <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Reset all app data</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -934,70 +759,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           <Feather name="chevron-right" size={20} color={theme.colors.textTertiary} />
         </TouchableOpacity>
       )}
-
-      {/* Smart Dynamic Adjustments (Placement: After Advanced Analytics) */}
-      <View style={[styles.summaryCard, { marginTop: 16 }]}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={[styles.cardTitle, { color: theme.colors.textPrimary, marginBottom: 0 }]}>Smart Dynamic Adjustments</Text>
-            {plan === 'premium' ? (
-              <View style={{ backgroundColor: theme.colors.primary, paddingHorizontal: 6, paddingVertical: 2, borderRadius: 4 }}>
-                <Text style={{ color: 'white', fontSize: 10, fontWeight: 'bold' }}>PRO</Text>
-              </View>
-            ) : (
-              <Feather name="lock" size={14} color={theme.colors.textTertiary} />
-            )}
-          </View>
-          <Switch
-            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-            thumbColor={'white'}
-            ios_backgroundColor={theme.colors.border}
-            onValueChange={toggleDynamicAdjustment}
-            value={dynamicEnabled}
-            disabled={plan !== 'premium'}
-          />
-        </View>
-
-        <Text style={{ color: theme.colors.textSecondary, fontSize: 13, marginBottom: 12 }}>
-          Automatically adapts your nutrition plan as your body changes to prevent plateaus.
-        </Text>
-
-        {dynamicEnabled && (
-          <View style={{ marginBottom: 12 }}>
-            <Text style={{ color: theme.colors.textPrimary, fontSize: 12, fontWeight: '600', marginBottom: 8 }}>Adjustment Threshold:</Text>
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {[3, 4, 5].map((val) => (
-                <TouchableOpacity
-                  key={val}
-                  onPress={() => updateDynamicThreshold(val)}
-                  style={{
-                    flex: 1,
-                    paddingVertical: 6,
-                    alignItems: 'center',
-                    borderRadius: 6,
-                    backgroundColor: dynamicThreshold === val ? 'rgba(59, 130, 246, 0.1)' : theme.colors.background,
-                    borderWidth: 1,
-                    borderColor: dynamicThreshold === val ? theme.colors.primary : theme.colors.border,
-                  }}
-                >
-                  <Text style={{
-                    fontSize: 12,
-                    fontWeight: '600',
-                    color: dynamicThreshold === val ? theme.colors.primary : theme.colors.textSecondary
-                  }}>{val}%</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 11, marginTop: 4 }}>
-              We'll suggest a Plan Update when your weight changes by {dynamicThreshold}%.
-            </Text>
-          </View>
-        )}
-
-        <TouchableOpacity onPress={() => setShowDynamicHelp(true)} style={{ alignSelf: 'flex-start' }}>
-          <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '500' }}>How it works</Text>
-        </TouchableOpacity>
-      </View>
 
       {/* Actions */}
       <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>
@@ -1190,43 +951,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         </KeyboardAvoidingView>
       </Modal>
 
-      <Modal
-        visible={showDynamicHelp}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDynamicHelp(false)}
-      >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-          <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 400 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 20, fontWeight: 'bold', color: theme.colors.textPrimary }}>Why Dynamic Adjustments?</Text>
-              <TouchableOpacity onPress={() => setShowDynamicHelp(false)}>
-                <Feather name="x" size={24} color={theme.colors.textTertiary} />
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: 16, borderRadius: 12, marginBottom: 16 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.primary, textAlign: 'center' }}>
-                📉 Smaller Body = Lower Energy Needs
-              </Text>
-            </View>
-
-            <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
-              When you lose weight, your body requires fewer calories to maintain itself.
-            </Text>
-            <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 20 }}>
-              If you keep eating the same amount, your weight loss will eventually stop (a "plateau"). To prevent this, we automatically suggest small updates to your plan when you make significant progress.
-            </Text>
-
-            <TouchableOpacity
-              onPress={() => setShowDynamicHelp(false)}
-              style={{ backgroundColor: theme.colors.primary, paddingVertical: 12, borderRadius: 10, alignItems: 'center' }}
-            >
-              <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>Got it</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
     </SafeAreaView >
   );
 };

@@ -46,6 +46,7 @@ interface GoalData {
   goal?: 'lose' | 'maintain' | 'gain';
   activityRate?: number;
   name?: string;
+  dob?: string;
   trackingGoal?: string;
   activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }
@@ -132,6 +133,8 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         heightCm: result.heightCm, heightFeet: result.heightFeet, heightInches: result.heightInches,
         goal: result.goal, activityRate: result.activityRate,
         activityLevel: result.activityLevel,
+        name: result.name,
+        dob: result.dob,
       };
       onSave(goalData);
       onBack();
