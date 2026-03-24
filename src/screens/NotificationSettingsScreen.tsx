@@ -12,6 +12,7 @@ import { dataStorage, Preferences, SmartReminderPreferences } from '../services/
 interface NotificationSettingsScreenProps {
     onBack: () => void;
     isPremium?: boolean;
+    initialPreferences?: any;
 }
 
 type MealType = 'breakfast' | 'lunch' | 'dinner';
@@ -25,16 +26,27 @@ const DEFAULT_SMART_PREFS: SmartReminderPreferences = {
     quietHoursEnd: 7,
 };
 
-export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, isPremium = false }) => {
+export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, isPremium = false, initialPreferences }) => {
     const theme = useTheme();
-    const [loading, setLoading] = useState(true);
-    const [preferences, setPreferences] = useState<Preferences | null>(null);
+    const [loading, setLoading] = useState(!initialPreferences);
+    const [preferences, setPreferences] = useState<Preferences | null>(initialPreferences ? {
+        weightUnit: 'kg',
+        notificationsEnabled: true,
+        mealReminders: {
+            breakfast: { enabled: true, hour: 8, minute: 0 },
+            lunch: { enabled: true, hour: 12, minute: 30 },
+            dinner: { enabled: true, hour: 18, minute: 0 }
+        },
+        dynamicAdjustmentEnabled: false,
+        dynamicAdjustmentThreshold: 5,
+        ...initialPreferences,
+    } : null);
 
     const [timePickerVisible, setTimePickerVisible] = useState(false);
     const [selectedMealType, setSelectedMealType] = useState<MealType | null>(null);
 
     useEffect(() => {
-        loadPreferences();
+        if (!initialPreferences) loadPreferences();
     }, []);
 
     const loadPreferences = async () => {

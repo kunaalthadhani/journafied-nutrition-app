@@ -10,8 +10,8 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Food Analysis Cache ───────────────────────────────────────
 // Caches AI results in AsyncStorage so repeat meals return instantly.
+// Cache never expires — user-edited macros are persisted permanently.
 const FOOD_CACHE_PREFIX = '@food_cache:';
-const FOOD_CACHE_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
 interface CachedFoodResult {
   foods: Omit<ParsedFood, 'id'>[];
@@ -28,12 +28,7 @@ async function getCachedFood(input: string): Promise<CachedFoodResult | null> {
     const key = FOOD_CACHE_PREFIX + normalizeFoodInput(input);
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return null;
-    const cached: CachedFoodResult = JSON.parse(raw);
-    if (Date.now() - cached.cachedAt > FOOD_CACHE_MAX_AGE_MS) {
-      AsyncStorage.removeItem(key);
-      return null;
-    }
-    return cached;
+    return JSON.parse(raw);
   } catch {
     return null;
   }
@@ -49,6 +44,14 @@ async function setCachedFood(input: string, foods: ParsedFood[], summary?: strin
   } catch {
     // Cache write failure is non-critical
   }
+}
+
+/**
+ * Update the food cache for a meal prompt after the user edits macros.
+ * Next time the same prompt is logged, the user-corrected values are used.
+ */
+export async function updateFoodCache(prompt: string, foods: ParsedFood[], summary?: string): Promise<void> {
+  await setCachedFood(prompt, foods, summary);
 }
 
 

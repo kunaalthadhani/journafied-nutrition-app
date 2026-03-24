@@ -45,8 +45,9 @@ import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountI
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
+import { AccountWallModal } from '../components/AccountWallModal';
 import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
-import { analyzeFoodWithChatGPT, analyzeFoodFromImage } from '../services/openaiService';
+import { analyzeFoodWithChatGPT, analyzeFoodFromImage, updateFoodCache } from '../services/openaiService';
 import { ParsedExercise, calculateExerciseCalories, parseExerciseInput } from '../utils/exerciseParser';
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
@@ -95,6 +96,7 @@ export const HomeScreen: React.FC = () => {
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [showAccountWall, setShowAccountWall] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -368,6 +370,7 @@ export const HomeScreen: React.FC = () => {
   };
   const handleSubscriptionBack = () => {
     setShowSubscription(false);
+    setShowSettings(true);
   };
   const handleSubscribe = async (plan: 'annual' | 'monthly') => {
     setUserPlan('premium');
@@ -388,7 +391,7 @@ export const HomeScreen: React.FC = () => {
   };
   const handleAccountBack = async () => {
     setShowAccount(false);
-    setShowSettings(true); // Go back to settings
+    if (!showAccountWall) setShowSettings(true); // Go back to settings (unless coming from wall)
     // Reload account data to sync state after potential logout
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
@@ -498,6 +501,13 @@ export const HomeScreen: React.FC = () => {
     setSavedGoals(goals);
     setGoalsSet(true);
     await dataStorage.saveGoals(goals);
+    // Save name to AccountInfo so greeting shows it
+    if (goals.name) {
+      const existing = await dataStorage.loadAccountInfo();
+      const updated = { ...existing, name: goals.name };
+      await dataStorage.saveAccountInfo(updated);
+      setAccountInfo(updated);
+    }
     analyticsService.trackOnboardingGoalSet();
   };
 
@@ -749,7 +759,6 @@ export const HomeScreen: React.FC = () => {
         const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
         setTotalEarnedEntries(earned);
       } else {
-        setEntryCount(0);
         setReferralCode(null);
         setTotalEarnedEntries(0);
       }
@@ -782,6 +791,13 @@ export const HomeScreen: React.FC = () => {
       console.error("Failed to load home screen data", e);
     }
   };
+
+  // Show account wall on app open if 5+ logs and no account
+  useEffect(() => {
+    if (goalsSet && entryCount >= 5 && !accountInfo?.email) {
+      setTimeout(() => setShowAccountWall(true), 1500);
+    }
+  }, [goalsSet]);
 
   useEffect(() => {
     const checkWalkthrough = async () => {
@@ -978,6 +994,10 @@ export const HomeScreen: React.FC = () => {
     try {
       await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(next));
       await dataStorage.saveEntryCount(next);
+      // Show account wall after 5 logs if user has no account
+      if (next >= 5 && !accountInfo?.email) {
+        setTimeout(() => setShowAccountWall(true), 800);
+      }
     } catch (error) {
       if (__DEV__) console.error('Error saving entry count:', error);
       // Try to restore previous count on error
@@ -986,12 +1006,8 @@ export const HomeScreen: React.FC = () => {
   };
 
   const canAddEntry = () => {
-    if (isPremium) return true;
-
-    // Check daily limit (3 meals per day)
-    const dateKey = getDateKey(new Date()); // Use current date for new entries
-    const todayMeals = mealsByDate[dateKey] || [];
-    return todayMeals.length < 3;
+    // TODO: Re-enable daily limit (3 meals/day for free users) before launch
+    return true;
   };
 
   const handleInputSubmit = async (text: string) => {
@@ -1025,7 +1041,7 @@ export const HomeScreen: React.FC = () => {
     const pendingMeal: Meal = {
       id: pendingId,
       prompt: trimmed,
-      summary: "Parsing...",
+      summary: "Crunching the meal...",
       foods: [], // Empty initially
       timestamp: createdAt,
       updatedAt: new Date().toISOString(),
@@ -1910,15 +1926,48 @@ export const HomeScreen: React.FC = () => {
           onBack={handleSettingsBack}
           plan={userPlan}
           onOpenSubscription={handleOpenSubscription}
-
           onLogin={handleAccount}
-
           onDowngradeToFree={handleDowngradeToFree}
           onGrocerySuggestions={handleGrocerySuggestions}
           onHowItWorks={() => {
             setShowSettings(false);
             setWalkthroughHideOffer(false);
             setShowWalkthrough(true);
+          }}
+          renderAccountScreen={(onBack) => (
+            <AccountScreen
+              onBack={onBack}
+              onRequestSync={handleSyncAccount}
+              initialAccountInfo={accountInfo}
+              initialEntryCount={entryCount}
+              initialPlan={userPlan}
+              initialGoals={savedGoals}
+              initialReferralCode={referralCode}
+              initialTotalEarnedEntries={totalEarnedEntries}
+              initialStreakFreeze={streakFreeze}
+              initialFrozenDates={streakFreeze?.usedOnDates}
+              onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
+            />
+          )}
+          onAccountClose={async () => {
+            try {
+              const info = await dataStorage.loadAccountInfo();
+              setAccountInfo(info || null);
+              if (!info?.email) {
+                setEntryCount(0);
+                setReferralCode(null);
+                setTotalEarnedEntries(0);
+                const count = await dataStorage.loadEntryCount();
+                setEntryCount(count);
+              } else {
+                const code = await dataStorage.getReferralCode(info.email);
+                setReferralCode(code?.code || null);
+                const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
+                setTotalEarnedEntries(earned);
+              }
+            } catch (e) {
+              if (__DEV__) console.error('Error reloading account data:', e);
+            }
           }}
         />
       </Modal>
@@ -1948,6 +1997,21 @@ export const HomeScreen: React.FC = () => {
       <Modal visible={showSubscription} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSubscriptionBack}>
         <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
       </Modal>
+    );
+  }
+
+  // Account Wall — mandatory sign-up after 5 food logs
+  if (showAccountWall) {
+    return (
+      <AccountWallModal
+        visible={showAccountWall}
+        logCount={entryCount}
+        onDismiss={() => setShowAccountWall(false)}
+        onContinueWithEmail={() => {
+          setShowAccountWall(false);
+          setShowAccount(true);
+        }}
+      />
     );
   }
 
@@ -2168,13 +2232,14 @@ export const HomeScreen: React.FC = () => {
               onDeleteMeal={handleDeleteMeal}
               onUpdateFood={async (mealId, updatedFood) => {
                 const currentMeals = mealsByDate[currentDateKey] || [];
-                const updatedMeals = currentMeals.map(meal => {
-                  if (meal.id !== mealId) return meal;
-                  const updatedFoods = meal.foods.map(food =>
+                const meal = currentMeals.find(m => m.id === mealId);
+                const updatedMeals = currentMeals.map(m => {
+                  if (m.id !== mealId) return m;
+                  const updatedFoods = m.foods.map(food =>
                     food.id === updatedFood.id ? updatedFood : food
                   );
                   return {
-                    ...meal,
+                    ...m,
                     foods: updatedFoods,
                     updatedAt: new Date().toISOString(),
                   };
@@ -2186,6 +2251,12 @@ export const HomeScreen: React.FC = () => {
                 }));
 
                 await dataStorage.saveDailyLog(currentDateKey, updatedMeals);
+
+                // Update food cache so future logs of the same prompt use user-corrected values
+                if (meal?.prompt) {
+                  const finalFoods = updatedMeals.find(m => m.id === mealId)?.foods || [];
+                  updateFoodCache(meal.prompt, finalFoods, meal.summary);
+                }
               }}
             />
 
@@ -2331,7 +2402,7 @@ export const HomeScreen: React.FC = () => {
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
         <Modal
           visible={showWeightTracker}
-          animationType="none"
+          animationType="slide"
           presentationStyle="fullScreen"
           onRequestClose={handleWeightTrackerBack}
         >
@@ -2346,7 +2417,7 @@ export const HomeScreen: React.FC = () => {
 
         <Modal
           visible={showNutritionAnalysis}
-          animationType="none"
+          animationType="slide"
           presentationStyle="fullScreen"
           onRequestClose={handleNutritionAnalysisBack}
         >

@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, InteractionManager, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
@@ -49,6 +49,48 @@ const AnimatedBookmarkButton = ({ isSaved, onPress, theme }: { isSaved: boolean,
       </Animated.View>
     </TouchableOpacity>
   );
+};
+
+const PARSING_MESSAGES = [
+  'Crunching the numbers on those calories...',
+  'Doing some nutritional wizardry...',
+  'Consulting the macro oracle...',
+  'Deconstructing your deliciousness...',
+  'Counting every last crumb...',
+  'Summoning the calorie spirits...',
+  'Running flavor diagnostics...',
+  'Interrogating your ingredients...',
+  'Calibrating the nutrition-o-meter...',
+  'Teaching AI what you just ate...',
+  'Reverse-engineering your plate...',
+  'Weighing the vibes of your meal...',
+  'Translating food into numbers...',
+  'Performing snack analysis...',
+  'Inspecting every morsel...',
+];
+
+const getParsingMessage = () => PARSING_MESSAGES[Math.floor(Math.random() * PARSING_MESSAGES.length)];
+
+const LOADING_TITLES = [
+  'Crunching the meal...',
+  'Analyzing your plate...',
+  'Decoding the flavors...',
+  'Breaking it down...',
+  'Reading the ingredients...',
+  'Doing the math...',
+  'Sniffing out macros...',
+  'Weighing your food...',
+];
+
+const RotatingTitle: React.FC<{ style: any }> = ({ style }) => {
+  const [idx, setIdx] = useState(() => Math.floor(Math.random() * LOADING_TITLES.length));
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setIdx(prev => (prev + 1) % LOADING_TITLES.length);
+    }, 2000);
+    return () => clearInterval(timer);
+  }, []);
+  return <Text style={style} numberOfLines={2}>{LOADING_TITLES[idx]}</Text>;
 };
 
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
@@ -143,12 +185,16 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                       resizeMode="cover"
                     />
                     <View style={styles.imageHeaderText}>
-                      <Text
-                        style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
-                        numberOfLines={2}
-                      >
-                        {meal.summary || meal.prompt || "Food from image"}
-                      </Text>
+                      {meal.isLoading ? (
+                        <RotatingTitle style={[styles.promptText, { color: theme.colors.textSecondary, fontStyle: 'italic' }]} />
+                      ) : (
+                        <Text
+                          style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
+                          numberOfLines={2}
+                        >
+                          {meal.summary || meal.prompt || "Food from image"}
+                        </Text>
+                      )}
                     </View>
                   </View>
                 ) : (
@@ -177,9 +223,13 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                       </View>
                     ) : (
                       <View style={styles.promptDisplay}>
-                        <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
-                          {meal.summary || meal.prompt}
-                        </Text>
+                        {meal.isLoading ? (
+                          <RotatingTitle style={[styles.promptText, { color: theme.colors.textSecondary, fontStyle: 'italic' }]} />
+                        ) : (
+                          <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
+                            {meal.summary || meal.prompt}
+                          </Text>
+                        )}
                         <View style={styles.promptActions}>
                           {onToggleSavePrompt && (
                             <AnimatedBookmarkButton
@@ -222,7 +272,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <ActivityIndicator size="small" color={theme.colors.primary} />
                     <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontStyle: 'italic' }}>
-                      AI is parsing your meal...
+                      {getParsingMessage()}
                     </Text>
                   </View>
                 </View>
@@ -233,7 +283,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                       key={`${food.id}-${idx}`}
                       style={[
                         styles.foodItem,
-                        idx < meal.foods.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                        { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
                       ]}
                       onPress={() => handleFoodPress(meal.id, food)}
                     >
@@ -243,15 +293,32 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                           <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
                         </Text>
                         <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
-                          {food.calories} kcal ·{' '}
-                          <Text style={{ color: '#3B82F6' }}>P:{food.protein}</Text>{' '}
-                          <Text style={{ color: '#F59E0B' }}>C:{food.carbs}</Text>{' '}
-                          <Text style={{ color: '#8B5CF6' }}>F:{food.fat}</Text>
+                          {Math.round(food.calories)} kcal ·{' '}
+                          <Text style={{ color: '#3B82F6' }}>P:{Math.round(food.protein)}</Text>{' '}
+                          <Text style={{ color: '#F59E0B' }}>C:{Math.round(food.carbs)}</Text>{' '}
+                          <Text style={{ color: '#8B5CF6' }}>F:{Math.round(food.fat)}</Text>
                         </Text>
                       </View>
                       <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
                     </TouchableOpacity>
                   ))}
+                  {/* Meal totals */}
+                  {meal.foods.length > 0 && (() => {
+                    const totCal = Math.round(meal.foods.reduce((s, f) => s + (f.calories || 0), 0));
+                    const totP = Math.round(meal.foods.reduce((s, f) => s + (f.protein || 0), 0));
+                    const totC = Math.round(meal.foods.reduce((s, f) => s + (f.carbs || 0), 0));
+                    const totF = Math.round(meal.foods.reduce((s, f) => s + (f.fat || 0), 0));
+                    return (
+                      <View style={[styles.mealTotalRow, { backgroundColor: theme.colors.secondaryBg }]}>
+                        <Text style={[styles.mealTotalCal, { color: theme.colors.textPrimary }]}>{totCal} kcal</Text>
+                        <Text style={[styles.mealTotalMacros, { color: theme.colors.textSecondary }]}>
+                          <Text style={{ color: '#3B82F6' }}>P:{totP}</Text>{' '}
+                          <Text style={{ color: '#F59E0B' }}>C:{totC}</Text>{' '}
+                          <Text style={{ color: '#8B5CF6' }}>F:{totF}</Text>
+                        </Text>
+                      </View>
+                    );
+                  })()}
                 </View>
               )}
             </View>
@@ -578,6 +645,23 @@ const styles = StyleSheet.create({
   },
   foodMacros: {
     fontSize: Typography.fontSize.xs,
+  },
+  mealTotalRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderBottomLeftRadius: 12,
+    borderBottomRightRadius: 12,
+  },
+  mealTotalCal: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: '700' as const,
+  },
+  mealTotalMacros: {
+    fontSize: Typography.fontSize.xs,
+    fontWeight: '600' as const,
   },
   modalOverlay: {
     flex: 1,

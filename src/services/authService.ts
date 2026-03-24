@@ -16,60 +16,28 @@ export const authService = {
     ensureClient();
     const normalizedEmail = email.trim().toLowerCase();
 
-    // 1. Try to create the user first (if they don't exist).
-    // We don't rely on this to send any email; we just want a user record.
-    try {
-      await supabase!.auth.signUp({
-        email: normalizedEmail,
-        // Dummy password to satisfy Supabase; UX remains passwordless.
-        password: 'TEMP_PASSWORD_DO_NOT_USE_123!',
-        options: {
-          emailRedirectTo: undefined,
-        },
-      });
-    } catch (error: any) {
-      const msg = error?.message?.toString().toLowerCase() ?? '';
-      // Ignore "already registered" / "user already exists" errors.
-      if (!msg.includes('already') && !msg.includes('registered')) {
-        throw error;
-      }
-    }
-
-    // 2. Now send a CODE-ONLY OTP email.
-    // shouldCreateUser: false => always send token, no magic link flow.
+    // Single OTP email — creates user if needed, avoids double-email rate limit issue.
     return supabase!.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser: false,
+        shouldCreateUser: true,
         emailRedirectTo: undefined,
       },
     });
   },
 
-  async sendSignupOtp(email: string, password?: string) {
+  async sendSignupOtp(email: string, _password?: string) {
     ensureClient();
     const normalizedEmail = email.trim().toLowerCase();
 
-    // Create user WITH password first so signInWithPassword works later
-    if (password) {
-      const { error: signUpError } = await supabase!.auth.signUp({
-        email: normalizedEmail,
-        password,
-      });
-      // Ignore "already registered" — user may retry signup
-      if (signUpError) {
-        const msg = signUpError.message.toLowerCase();
-        if (!msg.includes('already') && !msg.includes('registered') && !msg.includes('exists')) {
-          throw signUpError;
-        }
-      }
-    }
-
-    // Send OTP code for email verification
+    // Send a single OTP email. shouldCreateUser: true creates the user if
+    // they don't exist yet. Password is set later via updatePassword() after
+    // the OTP is verified. This avoids the double-email problem (signUp sends
+    // its own confirmation email, burning through the rate limit).
     return supabase!.auth.signInWithOtp({
       email: normalizedEmail,
       options: {
-        shouldCreateUser: !password, // only auto-create if no password signup above
+        shouldCreateUser: true,
         emailRedirectTo: undefined,
       },
     });

@@ -8,9 +8,12 @@ import {
   Switch,
   Alert,
   Modal,
+  Animated,
+  Dimensions,
+  PanResponder,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Feather } from '@expo/vector-icons';
+import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
@@ -27,38 +30,103 @@ interface SettingsScreenProps {
   onBack: () => void;
   plan?: 'free' | 'premium';
   onOpenSubscription?: () => void;
-
   onLogin?: () => void;
   onIntegrations?: () => void;
   onDowngradeToFree?: () => void;
   onGrocerySuggestions?: () => void;
   onHowItWorks?: () => void;
+  renderAccountScreen?: (onBack: () => void) => React.ReactNode;
+  onAccountClose?: () => void;
 }
-
-// Module-level variable to persist unlock across re-renders
-let isGroceryUnlocked = false;
 
 export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onBack,
   plan = 'free',
   onOpenSubscription,
-
   onLogin,
   onIntegrations,
   onDowngradeToFree,
   onGrocerySuggestions,
   onHowItWorks,
+  renderAccountScreen,
+  onAccountClose,
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
-  const [showUnitSelector, setShowUnitSelector] = useState(false);
-  const [showNotifications, setShowNotifications] = useState(false);
-  const [showIntegrations, setShowIntegrations] = useState(false);
 
-  // Feature Flags & Easter Egg
-  const [grocerySuggestionsEnabled, setGrocerySuggestionsEnabled] = useState(false);
+  // Slide-up panel state
+  type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic';
+  const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
+  const activeSlideUpRef = useRef<SlideUpType | null>(null);
+
+  // Feature flags & settings
   const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
-  const secretTaps = useRef(0);
+  const [dynamicEnabled, setDynamicEnabled] = useState(false);
+  const [dynamicThreshold, setDynamicThreshold] = useState<number>(5);
+  const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
+  const [loadedPreferences, setLoadedPreferences] = useState<any>(null);
+
+  // Shared slide-up animation
+  const SCREEN_HEIGHT = Dimensions.get('window').height;
+  const slideUpAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const openSlideUp = (type: SlideUpType) => {
+    if (type === 'dynamic' && plan !== 'premium') {
+      onOpenSubscription?.();
+      return;
+    }
+    if (type === 'account' && !renderAccountScreen) {
+      onLogin?.();
+      return;
+    }
+    activeSlideUpRef.current = type;
+    setActiveSlideUp(type);
+    slideUpAnim.setValue(SCREEN_HEIGHT);
+    Animated.spring(slideUpAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 90,
+      overshootClamping: true,
+    }).start();
+  };
+
+  const closeSlideUp = () => {
+    const closingType = activeSlideUpRef.current;
+    Animated.timing(slideUpAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setActiveSlideUp(null);
+      activeSlideUpRef.current = null;
+      if (closingType === 'account') {
+        onAccountClose?.();
+      }
+    });
+  };
+
+  const slideUpPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) slideUpAnim.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 100 || gs.vy > 0.5) {
+          closeSlideUp();
+        } else {
+          Animated.spring(slideUpAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 20,
+            stiffness: 200,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   useEffect(() => {
     checkFeatureFlags();
@@ -66,33 +134,36 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const checkFeatureFlags = async () => {
     try {
-      const accountInfo = await dataStorage.loadAccountInfo();
-      // Enable if admin OR if unlocked via easter egg
-      const enabled = featureFlags.grocerySuggestions.isEnabled(accountInfo) || isGroceryUnlocked;
-      setGrocerySuggestionsEnabled(enabled);
-
       const prefs = await dataStorage.loadPreferences();
+      setLoadedPreferences(prefs);
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+      setDynamicEnabled(prefs?.dynamicAdjustmentEnabled === true);
+      setDynamicThreshold(prefs?.dynamicAdjustmentThreshold || 5);
+
+      const entries = await dataStorage.loadWeightEntries();
+      if (entries && entries.length > 0) {
+        const sorted = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setCurrentWeightKg(sorted[0].weight);
+      }
     } catch (e) {
       console.error("Error checking feature flags", e);
     }
   };
 
-  const handleGroceryTap = () => {
-    if (grocerySuggestionsEnabled) {
-      onGrocerySuggestions?.();
-    } else {
-      secretTaps.current += 1;
-      if (secretTaps.current >= 5) {
-        isGroceryUnlocked = true;
-        setGrocerySuggestionsEnabled(true);
-        Alert.alert("🥕 Beta Feature Unlocked", "You've enabled Grocery Suggestions for this session!");
-        setTimeout(() => {
-          onGrocerySuggestions?.();
-        }, 500);
-        secretTaps.current = 0;
-      }
-    }
+  const toggleDynamicAdjustment = async (newValue: boolean) => {
+    if (plan !== 'premium') return;
+    setDynamicEnabled(newValue);
+    const currentPrefs = await dataStorage.loadPreferences() || {};
+    // @ts-ignore
+    await dataStorage.savePreferences({ ...currentPrefs, dynamicAdjustmentEnabled: newValue, dynamicAdjustmentThreshold: dynamicThreshold });
+  };
+
+  const updateDynamicThreshold = async (val: number) => {
+    if (plan !== 'premium') return;
+    setDynamicThreshold(val);
+    const currentPrefs = await dataStorage.loadPreferences() || {};
+    // @ts-ignore
+    await dataStorage.savePreferences({ ...currentPrefs, dynamicAdjustmentEnabled: dynamicEnabled, dynamicAdjustmentThreshold: val });
   };
 
   const handleClearCache = () => {
@@ -144,15 +215,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     Alert.alert('About TrackKcal', 'Version 1.0.0\n\nA nutrition and fitness tracking app to help you achieve your health goals.', [{ text: 'OK' }]);
   };
 
-  if (showNotifications) {
-    return <NotificationSettingsScreen onBack={() => setShowNotifications(false)} isPremium={plan === 'premium'} />;
-  }
-
-  if (showIntegrations) {
-    return <IntegrationsScreen onBack={() => setShowIntegrations(false)} />;
-  }
-
-
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
@@ -178,7 +240,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             icon="user"
             title="My Account"
             subtitle="Manage your profile and login"
-            onPress={onLogin}
+            onPress={() => openSlideUp('account')}
           />
 
           <View style={[styles.subscriptionRow, { borderBottomColor: theme.colors.border }]}>
@@ -220,19 +282,19 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             icon="bell"
             title="Notifications"
             subtitle="Meal reminders & updates"
-            onPress={() => setShowNotifications(true)}
+            onPress={() => openSlideUp('notifications')}
           />
           <SettingItem
             icon="activity"
             title="Connections"
             subtitle="Apple Health, Google Fit"
-            onPress={() => setShowIntegrations(true)}
+            onPress={() => openSlideUp('connections')}
           />
           <SettingItem
             icon="sliders"
             title="Weight Unit"
             subtitle={weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lbs)'}
-            onPress={() => setShowUnitSelector(true)}
+            onPress={() => openSlideUp('weightUnit')}
           />
           <SettingItem
             icon="zap"
@@ -256,9 +318,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SettingItem
             icon="shopping-cart"
             title="Grocery Suggestions"
-            subtitle={grocerySuggestionsEnabled ? "AI-Powered Lists" : "Hidden"}
-            onPress={handleGroceryTap}
+            subtitle="AI-Powered Lists"
+            onPress={() => onGrocerySuggestions?.()}
           />
+          {plan === 'premium' ? (
+            <SettingItem
+              icon="trending-up"
+              title="Dynamic Adjustments"
+              subtitle={dynamicEnabled ? `On · ${dynamicThreshold}% threshold` : 'Auto-adjust your plan as your body changes'}
+              onPress={() => openSlideUp('dynamic')}
+            />
+          ) : (
+            <View style={{ opacity: 0.5 }}>
+              <SettingItem
+                icon="trending-up"
+                title="Dynamic Adjustments"
+                subtitle="Auto-adjust your plan as your body changes"
+                onPress={() => openSlideUp('dynamic')}
+                rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
+                showChevron={false}
+              />
+            </View>
+          )}
         </SettingSection>
 
         {/* Support & Legal */}
@@ -303,38 +384,225 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       </ScrollView>
 
-      {/* Unit Selector Modal */}
+      {/* ── Unified Slide-Up Modal ── */}
       <Modal
-        visible={showUnitSelector}
-        transparent
-        animationType="fade"
-        onRequestClose={() => setShowUnitSelector(false)}
+        visible={activeSlideUp !== null}
+        transparent={true}
+        animationType="none"
+        onRequestClose={closeSlideUp}
       >
-        <View style={styles.modalOverlay}>
-          <View style={[styles.unitModalContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <View style={[styles.unitModalHeader, { borderBottomColor: theme.colors.border }]}>
-              <Text style={[styles.unitModalTitle, { color: theme.colors.textPrimary }]}>Select Weight Unit</Text>
-              <TouchableOpacity onPress={() => setShowUnitSelector(false)}>
-                <Feather name="x" size={24} color={theme.colors.textSecondary} />
-              </TouchableOpacity>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          {/* Tappable backdrop (5% gap) */}
+          <TouchableOpacity style={{ height: SCREEN_HEIGHT * 0.05 }} activeOpacity={1} onPress={closeSlideUp} />
+
+          <Animated.View
+            style={{
+              height: SCREEN_HEIGHT * 0.95,
+              backgroundColor: theme.colors.background,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+              transform: [{ translateY: slideUpAnim }],
+            }}
+          >
+            {/* Drag handle */}
+            <View
+              style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}
+              {...slideUpPanResponder.panHandlers}
+            >
+              <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: theme.colors.border }} />
             </View>
-            <View style={styles.unitOptions}>
-              <TouchableOpacity
-                style={[styles.unitOption, weightUnit === 'kg' && { backgroundColor: theme.colors.primary }, { borderColor: theme.colors.border }]}
-                onPress={async () => { await setWeightUnit('kg'); setShowUnitSelector(false); }}
-              >
-                <Text style={[styles.unitOptionText, { color: weightUnit === 'kg' ? Colors.white : theme.colors.textPrimary }]}>Kilograms (kg)</Text>
-                {weightUnit === 'kg' && <Feather name="check" size={20} color={Colors.white} />}
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.unitOption, weightUnit === 'lbs' && { backgroundColor: theme.colors.primary }, { borderColor: theme.colors.border }]}
-                onPress={async () => { await setWeightUnit('lbs'); setShowUnitSelector(false); }}
-              >
-                <Text style={[styles.unitOptionText, { color: weightUnit === 'lbs' ? Colors.white : theme.colors.textPrimary }]}>Pounds (lbs)</Text>
-                {weightUnit === 'lbs' && <Feather name="check" size={20} color={Colors.white} />}
-              </TouchableOpacity>
-            </View>
-          </View>
+
+            {/* ── Account ── */}
+            {activeSlideUp === 'account' && renderAccountScreen?.(closeSlideUp)}
+
+            {/* ── Notifications ── */}
+            {activeSlideUp === 'notifications' && (
+              <NotificationSettingsScreen
+                onBack={closeSlideUp}
+                isPremium={plan === 'premium'}
+                initialPreferences={loadedPreferences}
+              />
+            )}
+
+            {/* ── Connections ── */}
+            {activeSlideUp === 'connections' && (
+              <IntegrationsScreen onBack={closeSlideUp} />
+            )}
+
+            {/* ── Weight Unit ── */}
+            {activeSlideUp === 'weightUnit' && (
+              <View style={{ flex: 1 }}>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Weight Unit</Text>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <View style={{ padding: 24, gap: 12 }}>
+                  <TouchableOpacity
+                    style={[styles.unitOption, weightUnit === 'kg' && { backgroundColor: theme.colors.primary }, { borderColor: theme.colors.border }]}
+                    onPress={async () => { await setWeightUnit('kg'); closeSlideUp(); }}
+                  >
+                    <Text style={[styles.unitOptionText, { color: weightUnit === 'kg' ? Colors.white : theme.colors.textPrimary }]}>Kilograms (kg)</Text>
+                    {weightUnit === 'kg' && <Feather name="check" size={20} color={Colors.white} />}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.unitOption, weightUnit === 'lbs' && { backgroundColor: theme.colors.primary }, { borderColor: theme.colors.border }]}
+                    onPress={async () => { await setWeightUnit('lbs'); closeSlideUp(); }}
+                  >
+                    <Text style={[styles.unitOptionText, { color: weightUnit === 'lbs' ? Colors.white : theme.colors.textPrimary }]}>Pounds (lbs)</Text>
+                    {weightUnit === 'lbs' && <Feather name="check" size={20} color={Colors.white} />}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+
+            {/* ── Dynamic Adjustments ── */}
+            {activeSlideUp === 'dynamic' && (
+              <>
+                {/* Header — down arrow left, title center */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Dynamic Adjustments</Text>
+                      <View style={{ backgroundColor: '#18181B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                        <MaterialCommunityIcons name="crown" size={14} color="#EAB308" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                  {/* Toggle */}
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    backgroundColor: theme.colors.card, borderRadius: 14, padding: 16, marginBottom: 24,
+                    borderWidth: 1, borderColor: theme.colors.border,
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary }}>
+                      {dynamicEnabled ? 'Enabled' : 'Disabled'}
+                    </Text>
+                    <Switch
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor={'white'}
+                      ios_backgroundColor={theme.colors.border}
+                      onValueChange={toggleDynamicAdjustment}
+                      value={dynamicEnabled}
+                    />
+                  </View>
+
+                  {/* Threshold (visible when enabled) */}
+                  {dynamicEnabled && (
+                    <View style={{ marginBottom: 24 }}>
+                      <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600', marginBottom: 12 }}>Adjustment Threshold</Text>
+                      <View style={{ flexDirection: 'row', gap: 10 }}>
+                        {[3, 4, 5].map((val) => {
+                          const isActive = dynamicThreshold === val;
+                          const absAmount = currentWeightKg ? (currentWeightKg * val / 100) : null;
+                          const displayAmount = absAmount
+                            ? weightUnit === 'lbs'
+                              ? `${(absAmount * 2.20462).toFixed(1)} lbs`
+                              : `${absAmount.toFixed(1)} kg`
+                            : null;
+                          return (
+                            <TouchableOpacity
+                              key={val}
+                              onPress={() => updateDynamicThreshold(val)}
+                              style={{
+                                flex: 1,
+                                paddingVertical: 12,
+                                alignItems: 'center',
+                                borderRadius: 12,
+                                backgroundColor: isActive ? theme.colors.card : theme.colors.background,
+                                borderWidth: 1.5,
+                                borderColor: isActive ? theme.colors.textPrimary : theme.colors.border,
+                              }}
+                            >
+                              <Text style={{
+                                fontSize: 18,
+                                fontWeight: '700',
+                                color: isActive ? theme.colors.textPrimary : theme.colors.textTertiary,
+                              }}>{val}%</Text>
+                              {displayAmount && (
+                                <Text style={{
+                                  fontSize: 11,
+                                  color: isActive ? theme.colors.textSecondary : theme.colors.textTertiary,
+                                  marginTop: 2,
+                                }}>{displayAmount}</Text>
+                              )}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                      <Text style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: 10 }}>
+                        We'll suggest a plan update when your weight changes by {dynamicThreshold}%
+                        {currentWeightKg ? ` (about ${weightUnit === 'lbs' ? `${(currentWeightKg * dynamicThreshold / 100 * 2.20462).toFixed(1)} lbs` : `${(currentWeightKg * dynamicThreshold / 100).toFixed(1)} kg`})` : ''}.
+                      </Text>
+                    </View>
+                  )}
+
+                  {/* Divider */}
+                  <View style={{ height: 1, backgroundColor: theme.colors.border, marginBottom: 24 }} />
+
+                  {/* How it works */}
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+                    As you lose weight, your body needs fewer calories to maintain itself. If your calorie plan stays the same, your progress will eventually slow down and stop. That's called a plateau.
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                    Dynamic Adjustments keeps an eye on your weight trend and automatically suggests small updates to your nutrition plan when you hit your chosen threshold, so your progress keeps moving.
+                  </Text>
+
+                  {/* Example */}
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>Example</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 16 }}>
+                    Say you weigh 100 kg and your daily calorie target is 2,000 kcal. As you lose weight, your body burns fewer calories at rest, so that same 2,000 kcal plan gradually becomes less effective.
+                  </Text>
+
+                  {/* 3% row */}
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>3% threshold</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Triggers at 97 kg. Your target might adjust from 2,000 to ~1,940 kcal. Smaller, more frequent updates.
+                    </Text>
+                  </View>
+
+                  {/* 4% row */}
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>4% threshold</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Triggers at 96 kg. Your target might adjust from 2,000 to ~1,900 kcal. A balanced middle ground.
+                    </Text>
+                  </View>
+
+                  {/* 5% row */}
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>5% threshold</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Triggers at 95 kg. Your target might adjust from 2,000 to ~1,800 kcal. Fewer but bigger updates.
+                    </Text>
+                  </View>
+
+                  <Text style={{ fontSize: 13, color: theme.colors.textTertiary, lineHeight: 20 }}>
+                    The lower the threshold, the more often you'll get suggestions. Pick what feels right for you.
+                  </Text>
+                </ScrollView>
+              </>
+            )}
+          </Animated.View>
         </View>
       </Modal>
 
@@ -385,36 +653,6 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     padding: 16,
     borderBottomWidth: 1,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  unitModalContainer: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
-    borderWidth: 1,
-    overflow: 'hidden',
-  },
-  unitModalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
-  },
-  unitModalTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  unitOptions: {
-    padding: 16,
-    gap: 12,
   },
   unitOption: {
     flexDirection: 'row',

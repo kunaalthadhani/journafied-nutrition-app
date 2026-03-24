@@ -117,6 +117,7 @@ export interface ExtendedGoalData {
   goal?: 'lose' | 'maintain' | 'gain';
   activityRate?: number;
   name?: string;
+  dob?: string;
   trackingGoal?: string;
   activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
 }

@@ -12,8 +12,11 @@ import {
   Dimensions,
   LayoutAnimation,
   UIManager,
+  FlatList,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
 } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -29,6 +32,7 @@ const { width: SCREEN_WIDTH } = Dimensions.get('window');
 export interface CalorieCalculationResult {
   calories: number;
   name?: string;
+  dob?: string;
   trackingGoal?: string;
   currentWeightKg?: number;
   targetWeightKg?: number;
@@ -55,17 +59,17 @@ type Goal = 'lose' | 'maintain' | 'gain';
 type Gender = 'male' | 'female' | 'prefer_not_to_say';
 type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
-type StepId = 'goal' | 'sex' | 'age_height' | 'weight' | 'pace' | 'activity';
+type StepId = 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity';
 
 const STEP_ACCENT: Record<StepId, string> = {
-  goal: '#3B82F6', sex: '#8B5CF6', age_height: '#10B981',
-  weight: '#F59E0B', pace: '#EC4899', activity: '#06B6D4',
+  name: '#3B82F6', goal: '#3B82F6', sex: '#8B5CF6', dob: '#10B981',
+  height: '#10B981', weight: '#F59E0B', pace: '#EC4899', activity: '#06B6D4',
 };
 
 const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
 
 const buildSteps = (goal: Goal | null): StepId[] => {
-  const s: StepId[] = ['goal', 'sex', 'age_height', 'weight'];
+  const s: StepId[] = ['name', 'goal', 'sex', 'dob', 'height', 'weight'];
   if (goal !== 'maintain') s.push('pace');
   s.push('activity');
   return s;
@@ -73,21 +77,153 @@ const buildSteps = (goal: Goal | null): StepId[] => {
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
+// ── Scroll Picker ───────────────────────────────────────────────────
+const PICKER_ITEM_HEIGHT = 48;
+const PICKER_VISIBLE_ITEMS = 5;
+const PICKER_HEIGHT = PICKER_ITEM_HEIGHT * PICKER_VISIBLE_ITEMS;
+
+interface ScrollPickerProps {
+  items: { label: string; value: number | string }[];
+  selectedValue: number | string;
+  onValueChange: (value: number | string) => void;
+  width?: number;
+  accent?: string;
+}
+
+const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onValueChange, width = 80, accent = '#3B82F6' }) => {
+  const theme = useTheme();
+  const flatListRef = useRef<FlatList>(null);
+  const isScrollingRef = useRef(false);
+  const selectedIdx = items.findIndex(i => i.value === selectedValue);
+
+  useEffect(() => {
+    if (selectedIdx >= 0 && flatListRef.current && !isScrollingRef.current) {
+      setTimeout(() => {
+        flatListRef.current?.scrollToOffset({ offset: selectedIdx * PICKER_ITEM_HEIGHT, animated: false });
+      }, 50);
+    }
+  }, [selectedIdx]);
+
+  const scrollToItem = useCallback((idx: number) => {
+    const clamped = Math.max(0, Math.min(idx, items.length - 1));
+    isScrollingRef.current = true;
+    flatListRef.current?.scrollToOffset({ offset: clamped * PICKER_ITEM_HEIGHT, animated: true });
+    if (items[clamped]) onValueChange(items[clamped].value);
+    setTimeout(() => { isScrollingRef.current = false; }, 350);
+  }, [items, onValueChange]);
+
+  const handleScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const y = e.nativeEvent.contentOffset.y;
+    const idx = Math.round(y / PICKER_ITEM_HEIGHT);
+    const clamped = Math.max(0, Math.min(idx, items.length - 1));
+    if (items[clamped] && items[clamped].value !== selectedValue) {
+      onValueChange(items[clamped].value);
+    }
+    isScrollingRef.current = false;
+  }, [items, selectedValue, onValueChange]);
+
+  const handleScrollBegin = useCallback(() => {
+    isScrollingRef.current = true;
+  }, []);
+
+  const paddingItems = Math.floor(PICKER_VISIBLE_ITEMS / 2);
+
+  return (
+    <View style={[pSt.container, { width, height: PICKER_HEIGHT }]}>
+      <View style={[pSt.highlight, { top: PICKER_ITEM_HEIGHT * paddingItems, borderColor: accent + '40', backgroundColor: accent + '08' }]} />
+      <FlatList
+        ref={flatListRef}
+        data={items}
+        keyExtractor={(item, i) => `${item.value}-${i}`}
+        showsVerticalScrollIndicator={false}
+        snapToInterval={PICKER_ITEM_HEIGHT}
+        decelerationRate="fast"
+        onScrollBeginDrag={handleScrollBegin}
+        onMomentumScrollEnd={handleScrollEnd}
+        contentContainerStyle={{ paddingVertical: PICKER_ITEM_HEIGHT * paddingItems }}
+        getItemLayout={(_, index) => ({ length: PICKER_ITEM_HEIGHT, offset: PICKER_ITEM_HEIGHT * index, index })}
+        renderItem={({ item, index }) => {
+          const isSelected = item.value === selectedValue;
+          return (
+            <TouchableOpacity activeOpacity={0.7} onPress={() => scrollToItem(index)} style={[pSt.item, { height: PICKER_ITEM_HEIGHT }]}>
+              <Text style={[pSt.itemText, {
+                color: isSelected ? theme.colors.textPrimary : theme.colors.textTertiary,
+                fontWeight: isSelected ? '700' : '400',
+                fontSize: isSelected ? 22 : 16,
+              }]}>{item.label}</Text>
+            </TouchableOpacity>
+          );
+        }}
+      />
+    </View>
+  );
+};
+
+const pSt = StyleSheet.create({
+  container: { overflow: 'hidden' },
+  highlight: { position: 'absolute', left: 0, right: 0, height: PICKER_ITEM_HEIGHT, borderRadius: 12, borderWidth: 1.5, zIndex: 1, pointerEvents: 'none' },
+  item: { alignItems: 'center', justifyContent: 'center' },
+  itemText: { textAlign: 'center' },
+});
+
+// ── Helpers for DOB picker ──────────────────────────────────────────
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const MONTH_ITEMS = MONTHS.map((m, i) => ({ label: m.slice(0, 3), value: i + 1 }));
+const DAY_ITEMS = Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1), value: i + 1 }));
+const currentYear = new Date().getFullYear();
+const YEAR_ITEMS = Array.from({ length: 80 }, (_, i) => {
+  const y = currentYear - 14 - i;
+  return { label: String(y), value: y };
+});
+
+// ── Helpers for Height picker ───────────────────────────────────────
+const CM_ITEMS = Array.from({ length: 121 }, (_, i) => {
+  const v = 120 + i;
+  return { label: String(v), value: v };
+});
+const FT_ITEMS = Array.from({ length: 5 }, (_, i) => {
+  const v = 3 + i;
+  return { label: `${v}'`, value: v };
+});
+const IN_ITEMS = Array.from({ length: 12 }, (_, i) => ({
+  label: `${i}"`, value: i,
+}));
+
+const ageFromDob = (month: number, day: number, year: number): number => {
+  const today = new Date();
+  let a = today.getFullYear() - year;
+  const m = today.getMonth() + 1;
+  if (m < month || (m === month && today.getDate() < day)) a--;
+  return a;
+};
+
 // ── Component ───────────────────────────────────────────────────────
 export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
   onBack, onCalculated, initialData,
 }) => {
   const theme = useTheme();
+  const insets = useSafeAreaInsets();
   const { weightUnit: preferredWeightUnit } = usePreferences();
 
   // ── Form state ──────────────────────────────────────────────────
+  const [userName, setUserName] = useState(initialData?.name || '');
   const [goal, setGoal] = useState<Goal | null>(initialData?.goal || null);
   const [gender, setGender] = useState<Gender | null>(initialData?.gender || null);
-  const [age, setAge] = useState(initialData?.age ? String(initialData.age) : '');
+
+  // DOB state
+  const initDob = initialData?.dob ? new Date(initialData.dob) : null;
+  const [dobMonth, setDobMonth] = useState(initDob ? initDob.getMonth() + 1 : 1);
+  const [dobDay, setDobDay] = useState(initDob ? initDob.getDate() : 1);
+  const [dobYear, setDobYear] = useState(initDob ? initDob.getFullYear() : 2000);
+
+  // Keep age derived from DOB
+  const age = String(ageFromDob(dobMonth, dobDay, dobYear));
+
   const [heightUnit, setHeightUnit] = useState<HeightUnit>(initialData?.heightFeet ? 'ft' : 'cm');
-  const [heightCm, setHeightCm] = useState(initialData?.heightCm ? String(initialData.heightCm) : '');
-  const [heightFeetInput, setHeightFeetInput] = useState(initialData?.heightFeet ? String(initialData.heightFeet) : '');
-  const [heightInchesInput, setHeightInchesInput] = useState(initialData?.heightInches ? String(initialData.heightInches) : '');
+  const [heightCmVal, setHeightCmVal] = useState(initialData?.heightCm ? Math.round(initialData.heightCm) : 170);
+  const [heightFtVal, setHeightFtVal] = useState(initialData?.heightFeet || 5);
+  const [heightInVal, setHeightInVal] = useState(initialData?.heightInches != null ? initialData.heightInches : 8);
+
   const [weightUnit, setWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
   const [weight, setWeight] = useState(initialData?.currentWeightKg ? String(initialData.currentWeightKg) : '');
   const [targetWeightUnit, setTargetWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
@@ -145,24 +281,44 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     return d.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
   };
 
-  const calcCalories = (actOverride?: string): number => {
-    if (!weight || !age) return 1500;
+  interface CalcBreakdown {
+    bmr: number;
+    multiplier: number;
+    multiplierLabel: string;
+    tdee: number;
+    adjustment: number;
+    adjustmentLabel: string;
+    floor: number;
+    final: number;
+  }
+
+  const calcCaloriesDetailed = (actOverride?: string): CalcBreakdown => {
     const g = gender === 'prefer_not_to_say' ? 'male' : gender;
-    if (!g) return 1500;
+    const fallback: CalcBreakdown = { bmr: 0, multiplier: 1.4, multiplierLabel: 'Moderate', tdee: 0, adjustment: 0, adjustmentLabel: '', floor: 1500, final: 1500 };
+    if (!weight || !g) return fallback;
     let hCm = 170;
-    if (heightUnit === 'cm') hCm = parseFloat(heightCm) || 170;
-    else hCm = ((parseFloat(heightFeetInput) || 5) * 12 + (parseFloat(heightInchesInput) || 6)) * 2.54;
+    if (heightUnit === 'cm') hCm = heightCmVal || 170;
+    else hCm = (heightFtVal * 12 + heightInVal) * 2.54;
     const wKg = toKg(weight, weightUnit);
     const a = parseInt(age) || 25;
     const bmr = g === 'male' ? 88.362 + 13.397 * wKg + 4.799 * hCm - 5.677 * a : 447.593 + 9.247 * wKg + 3.098 * hCm - 4.330 * a;
     const act = actOverride || activityLevel;
-    let m = 1.4;
-    if (act === 'sedentary') m = 1.2; else if (act === 'light') m = 1.375; else if (act === 'moderate') m = 1.55; else if (act === 'very') m = 1.725;
+    let m = 1.4; let mLabel = 'Moderate';
+    if (act === 'sedentary') { m = 1.2; mLabel = 'Sedentary'; }
+    else if (act === 'light') { m = 1.375; mLabel = 'Lightly active'; }
+    else if (act === 'moderate') { m = 1.55; mLabel = 'Moderately active'; }
+    else if (act === 'very') { m = 1.725; mLabel = 'Very active'; }
+    const tdee = bmr * m;
     const rate = goal === 'maintain' ? 0 : (selectedRate || 0);
-    let adj = 0;
-    if (goal === 'lose') adj = -(rate * 1100); else if (goal === 'gain') adj = rate * 1100;
-    return Math.max(Math.round(bmr * m + adj), g === 'female' ? 1200 : 1500);
+    let adj = 0; let adjLabel = '';
+    if (goal === 'lose') { adj = -(rate * 1100); adjLabel = `−${Math.round(rate * 1100)} deficit`; }
+    else if (goal === 'gain') { adj = rate * 1100; adjLabel = `+${Math.round(rate * 1100)} surplus`; }
+    const floor = g === 'female' ? 1200 : 1500;
+    const final = Math.max(Math.round(tdee + adj), floor);
+    return { bmr: Math.round(bmr), multiplier: m, multiplierLabel: mLabel, tdee: Math.round(tdee), adjustment: Math.round(adj), adjustmentLabel: adjLabel, floor, final };
   };
+
+  const calcCalories = (actOverride?: string): number => calcCaloriesDetailed(actOverride).final;
 
   const getRateOptions = () => {
     const loss = goal === 'lose';
@@ -193,8 +349,21 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   }, [slideAnim, fadeAnim, scaleAnim]);
 
   const goNext = useCallback(() => {
+    // Validate weight vs target weight on Next
+    if (steps[currentIdx] === 'weight' && targetWeight.trim() !== '') {
+      const w = parseFloat(weight) || 0;
+      const t = parseFloat(targetWeight) || 0;
+      if (goal === 'lose' && t >= w) {
+        setWeightError('Target should be less than current weight');
+        return;
+      }
+      if (goal === 'gain' && t <= w) {
+        setWeightError('Target should be more than current weight');
+        return;
+      }
+    }
     if (currentIdx < steps.length - 1) slide('fwd', () => setCurrentIdx(i => i + 1));
-  }, [currentIdx, steps.length, slide]);
+  }, [currentIdx, steps, weight, targetWeight, goal, slide]);
 
   const goPrev = useCallback(() => {
     if (showResult) slide('back', () => setShowResult(false));
@@ -203,25 +372,33 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
   const autoAdv = useCallback(() => { setTimeout(() => goNext(), 280); }, [goNext]);
 
+  const calcRef = useRef(calcCaloriesDetailed);
+  calcRef.current = calcCaloriesDetailed;
+  const [breakdown, setBreakdown] = useState<CalcBreakdown | null>(null);
+
   const showResultScreen = useCallback((actOverride?: string) => {
-    const cal = calcCalories(actOverride);
-    setCalculatedCalories(cal);
+    const bd = calcRef.current(actOverride);
+    setCalculatedCalories(bd.final);
+    setBreakdown(bd);
     slide('fwd', () => setShowResult(true));
   }, [slide]);
 
   // ── Save ────────────────────────────────────────────────────────
   const handleSave = () => {
     if (!calculatedCalories) return;
-    if (totalPct < 99 || totalPct > 101) return; // guard
-    let hCmVal: number | undefined, hFt: number | undefined, hIn: number | undefined;
-    if (heightUnit === 'cm') { hCmVal = heightCm ? parseFloat(heightCm) : undefined; }
-    else { const ft = parseFloat(heightFeetInput) || 0; const inc = parseFloat(heightInchesInput) || 0; hCmVal = (ft * 12 + inc) * 2.54; hFt = ft || undefined; hIn = inc || undefined; }
+    if (totalPct < 99 || totalPct > 101) return;
+    let hCmFinal: number | undefined, hFt: number | undefined, hIn: number | undefined;
+    if (heightUnit === 'cm') { hCmFinal = heightCmVal; }
+    else { hCmFinal = (heightFtVal * 12 + heightInVal) * 2.54; hFt = heightFtVal || undefined; hIn = heightInVal; }
+    const dobStr = `${dobYear}-${String(dobMonth).padStart(2, '0')}-${String(dobDay).padStart(2, '0')}`;
     onCalculated({
       calories: calculatedCalories,
+      name: userName.trim() || undefined,
+      dob: dobStr,
       currentWeightKg: weight ? toKg(weight, weightUnit) : undefined,
       targetWeightKg: targetWeight ? toKg(targetWeight, targetWeightUnit) : undefined,
-      age: age ? parseInt(age) : undefined, gender: gender || undefined,
-      heightCm: hCmVal, heightFeet: hFt, heightInches: hIn,
+      age: parseInt(age) || undefined, gender: gender || undefined,
+      heightCm: hCmFinal, heightFeet: hFt, heightInches: hIn,
       goal: goal || undefined,
       activityRate: selectedRate !== null ? selectedRate : undefined,
       activityLevel: activityLevel as CalorieCalculationResult['activityLevel'],
@@ -233,12 +410,11 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // ── Disabled check ──────────────────────────────────────────────
   const isDisabled = (): boolean => {
     switch (currentStepId) {
+      case 'name': return userName.trim() === '';
       case 'goal': return !goal;
       case 'sex': return !gender;
-      case 'age_height': {
-        const hasH = heightUnit === 'cm' ? heightCm.trim() !== '' : (heightFeetInput.trim() !== '' && heightInchesInput.trim() !== '');
-        return age.trim() === '' || !hasH;
-      }
+      case 'dob': return false; // always has a value
+      case 'height': return false; // always has a value
       case 'weight': return weight.trim() === '';
       case 'pace': return selectedRate === null;
       case 'activity': return !activityLevel;
@@ -280,6 +456,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     const cG = macroGrams(cal, carbsPct, 4);
     const fG = macroGrams(cal, fatPct, 9);
 
+    const firstName = userName.trim().split(' ')[0];
     const chips: { label: string; value: string; icon: string }[] = [
       { label: 'Goal', value: goalLabel, icon: 'target' },
       { label: 'Activity', value: activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Lightly active' : activityLevel === 'moderate' ? 'Moderately active' : 'Very active', icon: 'activity' },
@@ -295,8 +472,10 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
     return (
       <View style={st.resultWrap}>
-        {/* Goal headline */}
-        <Text style={[st.resultGoal, { color: theme.colors.textPrimary }]}>{goalLabel}</Text>
+        {/* Personalized headline */}
+        <Text style={[st.resultGoal, { color: theme.colors.textPrimary }]}>
+          {firstName ? `Here's your plan, ${firstName}` : goalLabel}
+        </Text>
         <Text style={[st.resultGoalSub, { color: theme.colors.textSecondary }]}>{goalSub}</Text>
 
         {/* Calorie card with count-up */}
@@ -307,6 +486,31 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             <Text style={[st.calUnit, { color: theme.colors.textPrimary }]}>kcal</Text>
           </View>
         </View>
+
+        {/* How we got this number */}
+        {breakdown && (
+          <View style={[st.breakdownCard, { backgroundColor: theme.colors.secondaryBg }]}>
+            <Text style={[st.breakdownTitle, { color: theme.colors.textSecondary }]}>HOW WE CALCULATED THIS</Text>
+            <View style={st.breakdownRow}>
+              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Basal Metabolic Rate (BMR)</Text>
+              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>{breakdown.bmr} kcal</Text>
+            </View>
+            <View style={st.breakdownRow}>
+              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Activity ({breakdown.multiplierLabel})</Text>
+              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>× {breakdown.multiplier}</Text>
+            </View>
+            <View style={[st.breakdownRow, { borderBottomWidth: 0 }]}>
+              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Maintenance (TDEE)</Text>
+              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>{breakdown.tdee} kcal</Text>
+            </View>
+            {breakdown.adjustment !== 0 && (
+              <View style={[st.breakdownRow, { borderBottomWidth: 0 }]}>
+                <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>{goal === 'lose' ? 'Deficit' : 'Surplus'}</Text>
+                <Text style={[st.breakdownValue, { color: goal === 'lose' ? theme.colors.error : '#10B981' }]}>{breakdown.adjustmentLabel}</Text>
+              </View>
+            )}
+          </View>
+        )}
 
         {/* Summary chips */}
         <View style={st.chipGrid}>
@@ -390,6 +594,27 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   // ── Step renderers ──────────────────────────────────────────────
+  const renderName = () => (
+    <View style={st.step}>
+      <Text style={[st.title, { color: theme.colors.textPrimary }]}>What should we call you?</Text>
+      <Text style={[st.sub, { color: theme.colors.textSecondary }]}>Your first name is enough</Text>
+      <View style={st.field}>
+        <TextInput
+          style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: userName ? STEP_ACCENT.name : theme.colors.border }]}
+          value={userName}
+          onChangeText={setUserName}
+          placeholder="Your name"
+          placeholderTextColor={'#A1A1AA'}
+          autoFocus
+          autoCapitalize="words"
+          maxLength={30}
+          returnKeyType="next"
+          onSubmitEditing={() => { if (userName.trim()) goNext(); }}
+        />
+      </View>
+    </View>
+  );
+
   const renderGoal = () => (
     <View style={st.step}>
       <Text style={[st.title, { color: theme.colors.textPrimary }]}>What's your goal?</Text>
@@ -439,83 +664,81 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     );
   };
 
-  const renderAgeHeight = () => (
-    <View style={st.step}>
-      <Text style={[st.title, { color: theme.colors.textPrimary }]}>About you</Text>
-      <Text style={[st.sub, { color: theme.colors.textSecondary }]}>Age and height for accurate calculations</Text>
-      <View style={st.field}>
-        <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>AGE</Text>
-        <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: age ? STEP_ACCENT.age_height : theme.colors.border }]}
-          value={age} onChangeText={setAge} placeholder="25" placeholderTextColor={theme.colors.textTertiary}
-          keyboardType="numeric" maxLength={3} autoFocus />
+  const renderDob = () => {
+    const computedAge = ageFromDob(dobMonth, dobDay, dobYear);
+    const accent = STEP_ACCENT.dob;
+    return (
+      <View style={st.step}>
+        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Date of birth</Text>
+        <Text style={[st.sub, { color: theme.colors.textSecondary }]}>We'll calculate your age automatically</Text>
+        <View style={st.pickerRow}>
+          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => setDobMonth(v as number)} width={90} accent={accent} />
+          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => setDobDay(v as number)} width={60} accent={accent} />
+          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => setDobYear(v as number)} width={80} accent={accent} />
+        </View>
       </View>
-      <View style={st.field}>
-        <View style={st.fieldRow}>
-          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>HEIGHT</Text>
-          <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg }]}>
-            {(['cm', 'ft'] as const).map(u => (
-              <TouchableOpacity key={u} style={[st.togBtn, heightUnit === u && { backgroundColor: theme.colors.card }]} onPress={() => setHeightUnit(u)}>
-                <Text style={[st.togTxt, { color: heightUnit === u ? theme.colors.textPrimary : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+    );
+  };
+
+  const renderHeight = () => {
+    const accent = STEP_ACCENT.height;
+    return (
+      <View style={st.step}>
+        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your height</Text>
+        <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
+          {(['cm', 'ft'] as const).map(u => (
+            <TouchableOpacity key={u} style={[st.togBtn, heightUnit === u && { backgroundColor: accent + '15', borderWidth: 1.5, borderColor: accent }]} onPress={() => setHeightUnit(u)}>
+              <Text style={[st.togTxt, { color: heightUnit === u ? accent : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
         {heightUnit === 'cm' ? (
-          <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: heightCm ? STEP_ACCENT.age_height : theme.colors.border }]}
-            value={heightCm} onChangeText={setHeightCm} placeholder="170" placeholderTextColor={theme.colors.textTertiary} keyboardType="numeric" maxLength={3} />
+          <View style={st.pickerRow}>
+            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => setHeightCmVal(v as number)} width={100} accent={accent} />
+            <Text style={[st.pickerUnit, { color: theme.colors.textSecondary }]}>cm</Text>
+          </View>
         ) : (
-          <View style={st.dual}>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: heightFeetInput ? STEP_ACCENT.age_height : theme.colors.border }]}
-                value={heightFeetInput} onChangeText={setHeightFeetInput} placeholder="5" placeholderTextColor={theme.colors.textTertiary} keyboardType="numeric" maxLength={1} />
-              <Text style={[st.unitLbl, { color: theme.colors.textSecondary }]}>ft</Text>
-            </View>
-            <View style={{ flex: 1, alignItems: 'center' }}>
-              <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: heightInchesInput ? STEP_ACCENT.age_height : theme.colors.border }]}
-                value={heightInchesInput} onChangeText={setHeightInchesInput} placeholder="8" placeholderTextColor={theme.colors.textTertiary} keyboardType="numeric" maxLength={2} />
-              <Text style={[st.unitLbl, { color: theme.colors.textSecondary }]}>in</Text>
-            </View>
+          <View style={st.pickerRow}>
+            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => setHeightFtVal(v as number)} width={80} accent={accent} />
+            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => setHeightInVal(v as number)} width={80} accent={accent} />
           </View>
         )}
       </View>
-    </View>
-  );
+    );
+  };
 
-  const renderWeight = () => (
-    <View style={st.step}>
-      <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your weight</Text>
-      <View style={st.field}>
-        <View style={st.fieldRow}>
-          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>CURRENT WEIGHT</Text>
-          <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg }]}>
-            {(['kg', 'lbs'] as const).map(u => (
-              <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: theme.colors.card }]} onPress={() => setWeightUnit(u)}>
-                <Text style={[st.togTxt, { color: weightUnit === u ? theme.colors.textPrimary : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+  const [weightError, setWeightError] = useState('');
+
+  const renderWeight = () => {
+    return (
+      <View style={st.step}>
+        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your weight</Text>
+        {/* Unit toggle */}
+        <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
+          {(['kg', 'lbs'] as const).map(u => (
+            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeightUnit(u); setTargetWeightUnit(u); }}>
+              <Text style={[st.togTxt, { color: weightUnit === u ? STEP_ACCENT.weight : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
+            </TouchableOpacity>
+          ))}
         </View>
-        <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: weight ? STEP_ACCENT.weight : theme.colors.border }]}
-          value={weight} onChangeText={setWeight} placeholder={weightUnit === 'kg' ? '70' : '150'}
-          placeholderTextColor={theme.colors.textTertiary} keyboardType="numeric" maxLength={5} autoFocus />
-      </View>
-      <View style={st.field}>
-        <View style={st.fieldRow}>
-          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>TARGET WEIGHT<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
-          <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg }]}>
-            {(['kg', 'lbs'] as const).map(u => (
-              <TouchableOpacity key={u} style={[st.togBtn, targetWeightUnit === u && { backgroundColor: theme.colors.card }]} onPress={() => setTargetWeightUnit(u)}>
-                <Text style={[st.togTxt, { color: targetWeightUnit === u ? theme.colors.textPrimary : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
+        <View style={st.field}>
+          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>CURRENT WEIGHT ({weightUnit.toUpperCase()})</Text>
+          <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: weight ? STEP_ACCENT.weight : theme.colors.border }]}
+            value={weight} onChangeText={(v) => { setWeight(v); setWeightError(''); }} placeholder={weightUnit === 'kg' ? '70' : '150'}
+            placeholderTextColor={'#A1A1AA'} keyboardType="numeric" maxLength={5} autoFocus />
         </View>
-        <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: targetWeight ? STEP_ACCENT.weight : theme.colors.border }]}
-          value={targetWeight} onChangeText={setTargetWeight} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
-          placeholderTextColor={theme.colors.textTertiary} keyboardType="numeric" maxLength={5} />
+        <View style={st.field}>
+          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
+          <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: targetWeight ? STEP_ACCENT.weight : theme.colors.border }]}
+            value={targetWeight} onChangeText={(v) => { setTargetWeight(v); setWeightError(''); }} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
+            placeholderTextColor={'#A1A1AA'} keyboardType="numeric" maxLength={5} />
+        </View>
+        {weightError !== '' && (
+          <Text style={[st.weightWarning, { color: theme.colors.error }]}>{weightError}</Text>
+        )}
       </View>
-    </View>
-  );
+    );
+  };
 
   const renderPace = () => {
     const accent = STEP_ACCENT.pace;
@@ -569,22 +792,24 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const renderCurrentStep = () => {
     if (showResult) return renderResult();
     switch (currentStepId) {
+      case 'name': return renderName();
       case 'goal': return renderGoal(); case 'sex': return renderSex();
-      case 'age_height': return renderAgeHeight(); case 'weight': return renderWeight();
+      case 'dob': return renderDob(); case 'height': return renderHeight();
+      case 'weight': return renderWeight();
       case 'pace': return renderPace(); case 'activity': return renderActivity();
       default: return null;
     }
   };
 
   const isAutoStep = currentStepId === 'goal' || currentStepId === 'sex' || currentStepId === 'pace' || currentStepId === 'activity';
-  const isInputStep = !showResult && (currentStepId === 'age_height' || currentStepId === 'weight');
+  const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight');
   const showFooter = !showResult && !isAutoStep;
   const nextLabel = currentStepId === 'weight' && weight.trim() !== '' && targetWeight.trim() === '' ? 'Skip' : 'Next';
   const stepAccent = currentStepId ? STEP_ACCENT[currentStepId] : theme.colors.primary;
 
   return (
-    <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : 'height'}>
+    <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top']}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
         <View style={[st.header, { borderBottomColor: theme.colors.border }]}>
           <TouchableOpacity onPress={showResult ? goPrev : (currentIdx > 0 ? goPrev : onBack)} style={st.backBtn}>
             <Feather name={showResult || currentIdx > 0 ? 'arrow-left' : 'x'} size={24} color={theme.colors.textPrimary} />
@@ -595,7 +820,10 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
         <ScrollView
           style={{ flex: 1 }}
-          contentContainerStyle={isInputStep ? st.scrollInput : showResult ? st.scrollResult : st.scrollCentered}
+          contentContainerStyle={[
+            isInputStep ? st.scrollInput : showResult ? st.scrollResult : st.scrollCentered,
+            !showFooter && { paddingBottom: (isInputStep ? 16 : 24) + insets.bottom },
+          ]}
           showsVerticalScrollIndicator={false}
           keyboardShouldPersistTaps="handled"
         >
@@ -605,7 +833,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         </ScrollView>
 
         {showFooter && (
-          <View style={[st.footer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
+          <View style={[st.footer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border, paddingBottom: 16 + insets.bottom }]}>
             {currentIdx > 0 && (
               <TouchableOpacity style={[st.navBtn, st.prevBtn, { borderColor: theme.colors.border }]} onPress={goPrev} activeOpacity={0.7}>
                 <Text style={[st.navTxt, { color: theme.colors.textSecondary }]}>Previous</Text>
@@ -663,6 +891,22 @@ const st = StyleSheet.create({
   toggle: { flexDirection: 'row', padding: 3, borderRadius: 10 },
   togBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
   togTxt: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold },
+
+  // Weight warning
+  weightWarning: { fontSize: Typography.fontSize.sm, textAlign: 'center', marginTop: -12, marginBottom: 8 },
+
+  // Picker
+  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 },
+  pickerUnit: { fontSize: 18, fontWeight: '600', marginLeft: 4 },
+  ageBadge: { marginTop: 20, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
+  ageBadgeText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
+
+  // Breakdown
+  breakdownCard: { width: '100%', borderRadius: 14, padding: 16, marginBottom: 20 },
+  breakdownTitle: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12 },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
+  breakdownLabel: { fontSize: Typography.fontSize.sm },
+  breakdownValue: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semiBold },
 
   // Result
   resultWrap: { width: '100%', alignItems: 'center' },
