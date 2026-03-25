@@ -1,5 +1,5 @@
-import React, { useMemo, useState, useEffect, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, InteractionManager, ActivityIndicator } from 'react-native';
+import React, { useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, ActivityIndicator, Dimensions, PanResponder } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
 import { Colors } from '../constants/colors';
@@ -10,12 +10,7 @@ import { useTheme } from '../constants/theme';
 import { MealEntry } from '../services/dataStorage';
 import { SavedPrompt } from '../services/dataStorage';
 
-export interface Meal extends MealEntry { } // Backwards compatibility if needed, or replace usages.
-
-// Actually, let's just use MealEntry to be clean, merging with local interface if it had extra props?
-// Local Meal has: id, prompt, foods, timestamp, imageUri?, updatedAt?
-// dataStorage MealEntry has: id, prompt, foods, timestamp, imageUri?, updatedAt?, userId?, date?
-// They are compatible. Let's alias it for now to avoid refactoring entire file.
+export interface Meal extends MealEntry { }
 
 interface FoodLogSectionProps {
   meals: Meal[];
@@ -78,13 +73,11 @@ const LOADING_TITLES = [
   'Breaking it down...',
   'Reading the ingredients...',
   'Doing the math...',
-  'Sniffing out macros...',
-  'Weighing your food...',
 ];
 
 const RotatingTitle: React.FC<{ style: any }> = ({ style }) => {
   const [idx, setIdx] = useState(() => Math.floor(Math.random() * LOADING_TITLES.length));
-  useEffect(() => {
+  React.useEffect(() => {
     const timer = setInterval(() => {
       setIdx(prev => (prev + 1) % LOADING_TITLES.length);
     }, 2000);
@@ -92,6 +85,11 @@ const RotatingTitle: React.FC<{ style: any }> = ({ style }) => {
   }, []);
   return <Text style={style} numberOfLines={2}>{LOADING_TITLES[idx]}</Text>;
 };
+
+const SCREEN_HEIGHT = Dimensions.get('window').height;
+
+// Macro colors from design system
+const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
 
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   meals,
@@ -109,7 +107,57 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
-  const [showDetailedStats, setShowDetailedStats] = useState(false);
+  const [modalVisible, setModalVisible] = useState(false);
+
+  // Slide-up animation
+  const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
+
+  const openFoodModal = () => {
+    setModalVisible(true);
+    slideAnim.setValue(SCREEN_HEIGHT);
+    Animated.spring(slideAnim, {
+      toValue: 0,
+      useNativeDriver: true,
+      damping: 20,
+      stiffness: 90,
+      overshootClamping: true,
+    }).start();
+  };
+
+  const closeFoodModal = () => {
+    Animated.timing(slideAnim, {
+      toValue: SCREEN_HEIGHT,
+      duration: 300,
+      useNativeDriver: true,
+    }).start(() => {
+      setModalVisible(false);
+      setSelectedFood(null);
+      setBaseFood(null);
+      setSelectedMealId(null);
+    });
+  };
+
+  const foodPanResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (_, gs) => gs.dy > 5,
+      onPanResponderMove: (_, gs) => {
+        if (gs.dy > 0) slideAnim.setValue(gs.dy);
+      },
+      onPanResponderRelease: (_, gs) => {
+        if (gs.dy > 100 || gs.vy > 0.5) {
+          closeFoodModal();
+        } else {
+          Animated.spring(slideAnim, {
+            toValue: 0,
+            useNativeDriver: true,
+            damping: 20,
+            stiffness: 200,
+          }).start();
+        }
+      },
+    })
+  ).current;
 
   const savedPromptLookup = useMemo(() => {
     const map = new Map<string, string>();
@@ -121,20 +169,13 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
 
   const handleFoodPress = (mealId: string, food: ParsedFood) => {
     setSelectedFood({ ...food });
-    setBaseFood({ ...food }); // Snapshot for scaling
+    setBaseFood({ ...food });
     setSelectedMealId(mealId);
-    setShowDetailedStats(false);
-
-    // Delay rendering detailed stats until after modal animation/interaction
-    InteractionManager.runAfterInteractions(() => {
-      setShowDetailedStats(true);
-    });
+    openFoodModal();
   };
 
   const handleCloseModal = () => {
-    setSelectedFood(null);
-    setBaseFood(null);
-    setSelectedMealId(null);
+    closeFoodModal();
   };
 
   const handleStartEditPrompt = (meal: Meal) => {
@@ -164,6 +205,12 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
     setEditingMealId(null);
     setEditedPrompt('');
   };
+
+  // Macro bar percentages
+  const macroTotal = selectedFood ? (selectedFood.protein || 0) * 4 + (selectedFood.carbs || 0) * 4 + (selectedFood.fat || 0) * 9 : 0;
+  const proteinPct = macroTotal > 0 ? ((selectedFood?.protein || 0) * 4 / macroTotal) * 100 : 33;
+  const carbsPct = macroTotal > 0 ? ((selectedFood?.carbs || 0) * 4 / macroTotal) * 100 : 34;
+  const fatPct = macroTotal > 0 ? ((selectedFood?.fat || 0) * 9 / macroTotal) * 100 : 33;
 
   if (meals.length === 0) {
     return null;
@@ -202,72 +249,63 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     {editingMealId === meal.id ? (
                       <View style={styles.editContainer}>
                         <TextInput
+                          style={[styles.promptInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
                           value={editedPrompt}
                           onChangeText={setEditedPrompt}
-                          style={[
-                            styles.promptInput,
-                            {
-                              color: theme.colors.textPrimary,
-                              borderColor: theme.colors.border,
-                              backgroundColor: theme.colors.input,
-                            },
-                          ]}
                           autoFocus
-                          returnKeyType="send"
-                          blurOnSubmit
                           onSubmitEditing={handleSavePrompt}
+                          returnKeyType="done"
                         />
+                        <TouchableOpacity onPress={handleSavePrompt} style={styles.iconButton}>
+                          <Feather name="check" size={16} color={theme.colors.primary} />
+                        </TouchableOpacity>
                         <TouchableOpacity onPress={handleCancelEditPrompt} style={styles.iconButton}>
-                          <Feather name="x" size={14} color={theme.colors.textSecondary} />
+                          <Feather name="x" size={16} color={theme.colors.textTertiary} />
                         </TouchableOpacity>
                       </View>
                     ) : (
                       <View style={styles.promptDisplay}>
-                        {meal.isLoading ? (
-                          <RotatingTitle style={[styles.promptText, { color: theme.colors.textSecondary, fontStyle: 'italic' }]} />
-                        ) : (
-                          <Text style={[styles.promptText, { color: theme.colors.textPrimary }]}>
-                            {meal.summary || meal.prompt}
-                          </Text>
+                        <Text
+                          style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
+                          numberOfLines={2}
+                        >
+                          {meal.isLoading ? '' : (meal.summary || meal.prompt)}
+                        </Text>
+                        {!meal.isLoading && (
+                          <View style={styles.promptActions}>
+                            {onToggleSavePrompt && (
+                              <AnimatedBookmarkButton
+                                isSaved={savedPromptLookup.has((meal.prompt || '').trim().toLowerCase())}
+                                onPress={() => onToggleSavePrompt(meal)}
+                                theme={theme}
+                              />
+                            )}
+                            {onEditMealPrompt && (
+                              <TouchableOpacity onPress={() => handleStartEditPrompt(meal)} style={styles.iconButton}>
+                                <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
+                              </TouchableOpacity>
+                            )}
+                          </View>
                         )}
-                        <View style={styles.promptActions}>
-                          {onToggleSavePrompt && (
-                            <AnimatedBookmarkButton
-                              isSaved={savedPromptLookup.has(meal.prompt.trim().toLowerCase())}
-                              onPress={() => onToggleSavePrompt(meal)}
-                              theme={theme}
-                            />
-                          )}
-                          {onEditMealPrompt && (
-                            <TouchableOpacity onPress={() => handleStartEditPrompt(meal)} style={styles.iconButton}>
-                              <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
-                            </TouchableOpacity>
-                          )}
-                        </View>
                       </View>
                     )}
                   </View>
                 )}
-                {onDeleteMeal && (
+                {onDeleteMeal && !meal.isLoading && (
                   <TouchableOpacity
-                    style={styles.deleteMealButton}
                     onPress={() => onDeleteMeal(meal.id)}
+                    style={styles.deleteMealButton}
                   >
-                    <Feather name="trash-2" size={14} color={theme.colors.error} />
+                    <Feather name="trash-2" size={14} color={theme.colors.textTertiary} />
                   </TouchableOpacity>
                 )}
               </View>
 
-              {/* Food List or Loading State */}
+              {/* Foods */}
               {meal.isLoading ? (
-                <View style={{ padding: 16, gap: 12 }}>
-                  {/* Skeleton Item 1 */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, opacity: 0.6 }}>
-                    <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: theme.colors.border }} />
-                    <View style={{ gap: 6, flex: 1 }}>
-                      <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: theme.colors.border }} />
-                      <View style={{ width: '40%', height: 10, borderRadius: 5, backgroundColor: theme.colors.border }} />
-                    </View>
+                <View style={{ padding: 16, gap: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                    <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: theme.colors.border, opacity: 0.5 }} />
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                     <ActivityIndicator size="small" color={theme.colors.primary} />
@@ -294,9 +332,9 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                         </Text>
                         <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
                           {Math.round(food.calories)} kcal ·{' '}
-                          <Text style={{ color: '#3B82F6' }}>P:{Math.round(food.protein)}</Text>{' '}
-                          <Text style={{ color: '#F59E0B' }}>C:{Math.round(food.carbs)}</Text>{' '}
-                          <Text style={{ color: '#8B5CF6' }}>F:{Math.round(food.fat)}</Text>
+                          <Text style={{ color: MACRO_COLORS.protein }}>P:{Math.round(food.protein)}</Text>{' '}
+                          <Text style={{ color: MACRO_COLORS.carbs }}>C:{Math.round(food.carbs)}</Text>{' '}
+                          <Text style={{ color: MACRO_COLORS.fat }}>F:{Math.round(food.fat)}</Text>
                         </Text>
                       </View>
                       <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
@@ -312,9 +350,9 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                       <View style={[styles.mealTotalRow, { backgroundColor: theme.colors.secondaryBg }]}>
                         <Text style={[styles.mealTotalCal, { color: theme.colors.textPrimary }]}>{totCal} kcal</Text>
                         <Text style={[styles.mealTotalMacros, { color: theme.colors.textSecondary }]}>
-                          <Text style={{ color: '#3B82F6' }}>P:{totP}</Text>{' '}
-                          <Text style={{ color: '#F59E0B' }}>C:{totC}</Text>{' '}
-                          <Text style={{ color: '#8B5CF6' }}>F:{totF}</Text>
+                          <Text style={{ color: MACRO_COLORS.protein }}>P:{totP}</Text>{' '}
+                          <Text style={{ color: MACRO_COLORS.carbs }}>C:{totC}</Text>{' '}
+                          <Text style={{ color: MACRO_COLORS.fat }}>F:{totF}</Text>
                         </Text>
                       </View>
                     );
@@ -326,223 +364,251 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
         })}
       </View>
 
-      {/* Food Analysis Modal */}
+      {/* ── Food Detail Slide-Up Modal ── */}
       <Modal
-        visible={selectedFood !== null}
+        visible={modalVisible}
         transparent={true}
-        animationType="fade"
+        animationType="none"
         onRequestClose={handleCloseModal}
       >
-        <TouchableOpacity
-          style={styles.modalOverlay}
-          activeOpacity={1}
-          onPress={handleCloseModal}
-        >
-          <TouchableWithoutFeedback onPress={(e) => e.stopPropagation()}>
-            <View style={[styles.modalContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, maxHeight: '85%' }]}>
-              {selectedFood && (
-                <>
-                  <View style={styles.modalHeader}>
-                    <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
-                      {selectedFood.name}
-                    </Text>
-                    <TouchableOpacity
-                      onPress={handleCloseModal}
-                      style={styles.closeButton}
-                    >
-                      <Feather name="x" size={20} color={theme.colors.textPrimary} />
-                    </TouchableOpacity>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+          {/* Tappable backdrop */}
+          <TouchableOpacity style={{ height: SCREEN_HEIGHT * 0.05 }} activeOpacity={1} onPress={handleCloseModal} />
+
+          <Animated.View
+            style={{
+              height: SCREEN_HEIGHT * 0.95,
+              backgroundColor: theme.colors.background,
+              borderTopLeftRadius: 20,
+              borderTopRightRadius: 20,
+              overflow: 'hidden',
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            {/* Drag handle */}
+            <View
+              style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}
+              {...foodPanResponder.panHandlers}
+            >
+              <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: theme.colors.border }} />
+            </View>
+
+            {selectedFood && (
+              <>
+                {/* Header */}
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingBottom: 12 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary }}>{selectedFood.name}</Text>
+                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginTop: 2 }}>{selectedFood.weight_g}g serving</Text>
+                  </View>
+                  <TouchableOpacity onPress={handleCloseModal} style={{ padding: 4 }}>
+                    <Feather name="x" size={22} color={theme.colors.textTertiary} />
+                  </TouchableOpacity>
+                </View>
+
+                <ScrollView
+                  style={{ flex: 1 }}
+                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
+                  {/* Calorie hero */}
+                  <View style={{ alignItems: 'center', paddingVertical: 20 }}>
+                    <Text style={{ fontSize: 48, fontWeight: '800', color: theme.colors.textPrimary }}>{Math.round(selectedFood.calories)}</Text>
+                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginTop: -2 }}>calories</Text>
                   </View>
 
-                  <ScrollView showsVerticalScrollIndicator={false}>
-                    <View style={styles.modalNutrition}>
-                      <Text style={[styles.nutritionLabel, { color: theme.colors.textSecondary }]}>
-                        Edit nutrition
-                      </Text>
-                      <View style={styles.nutritionGrid}>
-                        <View style={styles.nutritionItem}>
-                          <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>Calories</Text>
-                          <TextInput
-                            style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
-                            keyboardType="numeric"
-                            value={String(selectedFood.calories)}
-                            onChangeText={(text) => {
-                              const newCalories = Number(text) || 0;
-                              const oldCalories = baseFood?.calories || 1; // avoid div by 0
-                              const ratio = newCalories / oldCalories;
+                  {/* Macro bar */}
+                  <View style={{ height: 8, borderRadius: 4, flexDirection: 'row', overflow: 'hidden', marginBottom: 16 }}>
+                    <View style={{ width: `${proteinPct}%`, backgroundColor: MACRO_COLORS.protein }} />
+                    <View style={{ width: `${carbsPct}%`, backgroundColor: MACRO_COLORS.carbs }} />
+                    <View style={{ width: `${fatPct}%`, backgroundColor: MACRO_COLORS.fat }} />
+                  </View>
 
-                              setSelectedFood({
-                                ...selectedFood,
-                                calories: newCalories,
-                                protein: parseFloat(((baseFood?.protein || 0) * ratio).toFixed(1)),
-                                carbs: parseFloat(((baseFood?.carbs || 0) * ratio).toFixed(1)),
-                                fat: parseFloat(((baseFood?.fat || 0) * ratio).toFixed(1)),
-                                dietary_fiber: baseFood?.dietary_fiber ? parseFloat((baseFood.dietary_fiber * ratio).toFixed(1)) : undefined,
-                                sugar: baseFood?.sugar ? parseFloat((baseFood.sugar * ratio).toFixed(1)) : undefined,
-                                saturated_fat: baseFood?.saturated_fat ? parseFloat((baseFood.saturated_fat * ratio).toFixed(1)) : undefined,
-                                sodium_mg: baseFood?.sodium_mg ? Math.round(baseFood.sodium_mg * ratio) : undefined,
-                                potassium_mg: baseFood?.potassium_mg ? Math.round(baseFood.potassium_mg * ratio) : undefined,
-                                cholesterol_mg: baseFood?.cholesterol_mg ? Math.round(baseFood.cholesterol_mg * ratio) : undefined,
-                              });
+                  {/* Macro pills */}
+                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
+                    {[
+                      { label: 'Protein', value: selectedFood.protein, color: MACRO_COLORS.protein },
+                      { label: 'Carbs', value: selectedFood.carbs, color: MACRO_COLORS.carbs },
+                      { label: 'Fat', value: selectedFood.fat, color: MACRO_COLORS.fat },
+                    ].map((m) => (
+                      <View key={m.label} style={{
+                        flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12,
+                        backgroundColor: m.color + '10',
+                      }}>
+                        <Text style={{ fontSize: 20, fontWeight: '700', color: m.color }}>{Math.round(m.value)}g</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>{m.label}</Text>
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Edit Macros */}
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 12 }}>Edit Macros</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+                    {/* Calories */}
+                    <View style={{ width: '47%' }}>
+                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Calories</Text>
+                      <TextInput
+                        style={{
+                          borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10,
+                          paddingVertical: 10, paddingHorizontal: 12, fontSize: 16,
+                          color: theme.colors.textPrimary, backgroundColor: theme.colors.card,
+                        }}
+                        keyboardType="numeric"
+                        value={String(Math.round(selectedFood.calories))}
+                        onChangeText={(text) => {
+                          const newCalories = Number(text) || 0;
+                          const oldCalories = baseFood?.calories || 1;
+                          const ratio = newCalories / oldCalories;
+                          setSelectedFood({
+                            ...selectedFood,
+                            calories: newCalories,
+                            protein: parseFloat(((baseFood?.protein || 0) * ratio).toFixed(1)),
+                            carbs: parseFloat(((baseFood?.carbs || 0) * ratio).toFixed(1)),
+                            fat: parseFloat(((baseFood?.fat || 0) * ratio).toFixed(1)),
+                            dietary_fiber: baseFood?.dietary_fiber ? parseFloat((baseFood.dietary_fiber * ratio).toFixed(1)) : undefined,
+                            sugar: baseFood?.sugar ? parseFloat((baseFood.sugar * ratio).toFixed(1)) : undefined,
+                            saturated_fat: baseFood?.saturated_fat ? parseFloat((baseFood.saturated_fat * ratio).toFixed(1)) : undefined,
+                            sodium_mg: baseFood?.sodium_mg ? Math.round(baseFood.sodium_mg * ratio) : undefined,
+                            potassium_mg: baseFood?.potassium_mg ? Math.round(baseFood.potassium_mg * ratio) : undefined,
+                            cholesterol_mg: baseFood?.cholesterol_mg ? Math.round(baseFood.cholesterol_mg * ratio) : undefined,
+                          });
+                        }}
+                      />
+                    </View>
+                    {/* Protein, Carbs, Fat */}
+                    {[
+                      { label: 'Protein', key: 'protein' as keyof ParsedFood, color: MACRO_COLORS.protein },
+                      { label: 'Carbs', key: 'carbs' as keyof ParsedFood, color: MACRO_COLORS.carbs },
+                      { label: 'Fat', key: 'fat' as keyof ParsedFood, color: MACRO_COLORS.fat },
+                    ].map((item) => (
+                      <View key={item.label} style={{ width: '47%' }}>
+                        <Text style={{ fontSize: 12, color: item.color, marginBottom: 4 }}>{item.label} (g)</Text>
+                        <TextInput
+                          style={{
+                            borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10,
+                            paddingVertical: 10, paddingHorizontal: 12, fontSize: 16,
+                            color: theme.colors.textPrimary, backgroundColor: theme.colors.card,
+                          }}
+                          keyboardType="numeric"
+                          value={String(selectedFood[item.key] ?? '')}
+                          onChangeText={(text) => {
+                            const newVal = Number(text) || 0;
+                            const updatedFood = { ...selectedFood, [item.key]: newVal };
+                            const p = Number(item.key === 'protein' ? newVal : updatedFood.protein || 0);
+                            const c = Number(item.key === 'carbs' ? newVal : updatedFood.carbs || 0);
+                            const f = Number(item.key === 'fat' ? newVal : updatedFood.fat || 0);
+                            updatedFood.calories = Math.round(p * 4 + c * 4 + f * 9);
+                            setSelectedFood(updatedFood);
+                          }}
+                        />
+                      </View>
+                    ))}
+                  </View>
+
+                  {/* Nutrition Facts */}
+                  <View style={{ borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>Nutrition Facts</Text>
+
+                    {[
+                      { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
+                      { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
+                      { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
+                      { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
+                      { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
+                      { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
+                      { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
+                      { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
+                      { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
+                      { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
+                      { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
+                      { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
+                      { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
+                      { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
+                      { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
+                      { label: 'Iron', key: 'iron_mg', unit: 'mg' },
+                      { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
+                      { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
+                      { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
+                      { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
+                      { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
+                      { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
+                      { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
+                    ].map((item) => (
+                      <View key={item.key} style={{
+                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                        paddingVertical: 8, paddingLeft: (item.indent || 0) * 16,
+                        borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth,
+                        borderBottomColor: theme.colors.border,
+                      }}>
+                        <Text style={{
+                          fontSize: 13, flex: 1,
+                          color: theme.colors.textSecondary,
+                          fontWeight: item.isHeader ? '600' : '400',
+                        }}>
+                          {item.indent ? `${item.label}` : item.label}
+                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', width: 100, justifyContent: 'flex-end' }}>
+                          <TextInput
+                            style={{ fontSize: 13, textAlign: 'right', padding: 0, minWidth: 40, marginRight: 4, color: theme.colors.textPrimary }}
+                            keyboardType="numeric"
+                            placeholder="-"
+                            placeholderTextColor={theme.colors.textTertiary}
+                            value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
+                            onChangeText={(text) => {
+                              const val = text === '' ? undefined : Number(text);
+                              const updated = { ...selectedFood, [item.key]: val };
+                              if (['protein', 'carbs', 'fat'].includes(item.key)) {
+                                const p = Number(updated.protein || 0);
+                                const c = Number(updated.carbs || 0);
+                                const f = Number(updated.fat || 0);
+                                updated.calories = Math.round(p * 4 + c * 4 + f * 9);
+                              }
+                              setSelectedFood(updated);
                             }}
                           />
+                          <Text style={{ fontSize: 11, color: theme.colors.textTertiary, width: 28, textAlign: 'right' }}>{item.unit}</Text>
                         </View>
-                        {['Protein', 'Carbs', 'Fat'].map((label) => {
-                          const key = label.toLowerCase() as keyof ParsedFood;
-                          return (
-                            <View key={label} style={styles.nutritionItem}>
-                              <Text style={[styles.nutritionUnit, { color: theme.colors.textTertiary }]}>{label}</Text>
-                              <TextInput
-                                style={[styles.nutritionValueInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
-                                keyboardType="numeric"
-                                value={String(selectedFood[key] ?? '')}
-                                onChangeText={(text) => {
-                                  const newVal = Number(text) || 0;
-                                  const updatedFood = { ...selectedFood, [key]: newVal };
-                                  // Auto-update calories if macro changes (Bidirectional convenience)
-                                  const p = Number(key === 'protein' ? newVal : updatedFood.protein || 0);
-                                  const c = Number(key === 'carbs' ? newVal : updatedFood.carbs || 0);
-                                  const f = Number(key === 'fat' ? newVal : updatedFood.fat || 0);
-                                  updatedFood.calories = Math.round(p * 4 + c * 4 + f * 9);
-                                  setSelectedFood(updatedFood);
-                                }}
-                              />
-                            </View>
-                          );
-                        })}
                       </View>
+                    ))}
+                  </View>
+                </ScrollView>
 
-
-                      {/* Detailed Nutrition Facts Label - Render only after interaction */}
-                      {showDetailedStats ? (
-                        <View style={[styles.nutritionFactsContainer, { borderColor: theme.colors.border }]}>
-                          <Text style={[styles.nutritionFactsTitle, { color: theme.colors.textPrimary }]}>Nutrition Facts</Text>
-                          <View style={styles.divider} />
-
-                          {[
-                            { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
-                            { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
-                            { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
-                            { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
-                            { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
-                            { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
-
-                            { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
-
-                            { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
-                            { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
-                            { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
-                            { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
-                            { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
-
-                            { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
-                            { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
-
-                            { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
-                            { label: 'Iron', key: 'iron_mg', unit: 'mg' },
-                            { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
-
-                            { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
-                            { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
-                            { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
-                            { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
-                            { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
-                            { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
-                          ].map((item) => {
-                            // We show headers too if they aren't the main 3 managed above (though carbs/fat/protein are above).
-                            // User requested specific structure. The structure implies listing them. 
-                            // If key is present in main editor, editing here should update main editor too.
-                            // Since 'carbs', 'protein', 'fat' are `isHeader`, we can show them as read-only or editable?
-                            // User said "Nutrition Facts ... -Total Carbohydrates ...". It's standard to list them.
-
-                            return (
-                              <View key={item.key} style={[
-                                styles.factRow,
-                                {
-                                  paddingLeft: (item.indent || 0) * 16,
-                                  borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth // Only lines for top level? Or all? Standard is all usually.
-                                  // Let's keep all lines for clarity or mimic label.
-                                }
-                              ]}>
-                                <Text style={[
-                                  styles.factLabel,
-                                  {
-                                    color: theme.colors.textSecondary,
-                                    fontWeight: item.isHeader ? 'bold' : 'normal'
-                                  }
-                                ]}>
-                                  {item.indent ? `- ${item.label}` : item.label}
-                                </Text>
-                                <View style={styles.factInputContainer}>
-                                  <TextInput
-                                    style={[styles.factInput, { color: theme.colors.textPrimary }]}
-                                    keyboardType="numeric"
-                                    placeholder="-"
-                                    placeholderTextColor={theme.colors.textTertiary}
-                                    value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
-                                    onChangeText={(text) => {
-                                      const val = text === '' ? undefined : Number(text);
-                                      const updated = { ...selectedFood, [item.key]: val };
-
-                                      // Recalculate calories if main macros change here
-                                      if (['protein', 'carbs', 'fat'].includes(item.key)) {
-                                        const p = Number(updated.protein || 0);
-                                        const c = Number(updated.carbs || 0);
-                                        const f = Number(updated.fat || 0);
-                                        updated.calories = Math.round(p * 4 + c * 4 + f * 9);
-                                      }
-
-                                      setSelectedFood(updated);
-                                    }}
-                                  />
-                                  <Text style={[styles.factUnit, { color: theme.colors.textTertiary }]}>{item.unit}</Text>
-                                </View>
-                              </View>
-                            );
-                          })}
-                        </View>
-                      ) : (
-                        <View style={{ height: 100, alignItems: 'center', justifyContent: 'center' }}>
-                          <Text style={{ color: theme.colors.textTertiary }}>Loading details...</Text>
-                        </View>
-                      )}
-                    </View>
-                  </ScrollView>
-
-                  {
-                    onUpdateFood && selectedMealId && (
-                      <View style={[styles.modalActions, { marginTop: 16, borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }]}>
-                        <TouchableOpacity
-                          style={[styles.modalButtonSecondary, { borderColor: theme.colors.border }]}
-                          onPress={handleCloseModal}
-                        >
-                          <Text style={[styles.modalButtonSecondaryText, { color: theme.colors.textSecondary }]}>Cancel</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          style={[styles.modalButtonPrimary, { backgroundColor: theme.colors.primary }]}
-                          onPress={() => {
-                            if (selectedFood && onUpdateFood && selectedMealId) {
-                              const p = Number(selectedFood.protein || 0);
-                              const c = Number(selectedFood.carbs || 0);
-                              const f = Number(selectedFood.fat || 0);
-                              onUpdateFood(selectedMealId, {
-                                ...selectedFood,
-                                calories: Math.max(0, Math.round(p * 4 + c * 4 + f * 9)),
-                              });
-                            }
-                            handleCloseModal();
-                          }}
-                        >
-                          <Text style={[styles.modalButtonPrimaryText, { color: theme.colors.primaryForeground }]}>Save</Text>
-                        </TouchableOpacity>
-                      </View>
-                    )
-                  }
-                </>
-              )}
-            </View>
-          </TouchableWithoutFeedback>
-        </TouchableOpacity>
+                {/* Save / Cancel */}
+                {onUpdateFood && selectedMealId && (
+                  <View style={{
+                    flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 16,
+                    borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.background,
+                  }}>
+                    <TouchableOpacity
+                      style={{ flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' }}
+                      onPress={handleCloseModal}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary }}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.colors.primary, alignItems: 'center' }}
+                      onPress={() => {
+                        if (selectedFood && onUpdateFood && selectedMealId) {
+                          const p = Number(selectedFood.protein || 0);
+                          const c = Number(selectedFood.carbs || 0);
+                          const f = Number(selectedFood.fat || 0);
+                          onUpdateFood(selectedMealId, {
+                            ...selectedFood,
+                            calories: Math.max(0, Math.round(p * 4 + c * 4 + f * 9)),
+                          });
+                        }
+                        handleCloseModal();
+                      }}
+                    >
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.primaryForeground }}>Save</Text>
+                    </TouchableOpacity>
+                  </View>
+                )}
+              </>
+            )}
+          </Animated.View>
+        </View>
       </Modal>
     </>
   );
@@ -564,7 +630,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.02)', // slight tint for header
+    backgroundColor: 'rgba(0,0,0,0.02)',
     borderBottomWidth: 1,
   },
   imageHeader: {
@@ -663,141 +729,4 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.xs,
     fontWeight: '600' as const,
   },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.4)',
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: Spacing.lg,
-  },
-  modalContent: {
-    width: '100%',
-    maxWidth: 400,
-    borderRadius: 16,
-    borderWidth: 1,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 5,
-  },
-  modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  modalTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
-    flex: 1,
-  },
-  closeButton: {
-    padding: 4,
-  },
-  modalNutrition: {
-    marginBottom: 24,
-  },
-  nutritionLabel: {
-    fontSize: Typography.fontSize.sm,
-    marginBottom: 12,
-  },
-  nutritionGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  nutritionItem: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  nutritionValue: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.bold,
-    marginTop: 4,
-  },
-  nutritionValueInput: {
-    width: '100%',
-    borderWidth: 1,
-    borderRadius: 6,
-    paddingVertical: 6,
-    paddingHorizontal: 4,
-    textAlign: 'center',
-    fontSize: Typography.fontSize.md,
-    marginTop: 4,
-  },
-  nutritionUnit: {
-    fontSize: Typography.fontSize.xs,
-  },
-  modalActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 12,
-  },
-  modalButtonSecondary: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  modalButtonSecondaryText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  modalButtonPrimary: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 6,
-  },
-  modalButtonPrimaryText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.bold,
-  },
-  nutritionFactsContainer: {
-    marginTop: 16,
-    borderTopWidth: 1,
-    paddingTop: 16,
-  },
-  nutritionFactsTitle: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.bold,
-    marginBottom: 8,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: '#e0e0e0', // Light gray divider, usually handled by border color in view but distinct here
-    marginVertical: 4,
-  },
-  factRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 8,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: 'rgba(0,0,0,0.05)',
-  },
-  factLabel: {
-    fontSize: Typography.fontSize.sm,
-    flex: 1,
-  },
-  factInputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: 100,
-    justifyContent: 'flex-end',
-  },
-  factInput: {
-    fontSize: Typography.fontSize.sm,
-    textAlign: 'right',
-    padding: 0,
-    minWidth: 40,
-    marginRight: 4,
-  },
-  factUnit: {
-    fontSize: Typography.fontSize.xs,
-    width: 30,
-    textAlign: 'right',
-  },
 });
-
