@@ -61,6 +61,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   // Feature flags & settings
   const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
+  const [groceryUnlocked, setGroceryUnlocked] = useState(false);
+  const [groceryProgress, setGroceryProgress] = useState({ loggedDays: 0, uniqueFoods: 0 });
   const [dynamicEnabled, setDynamicEnabled] = useState(false);
   const [dynamicThreshold, setDynamicThreshold] = useState<number>(5);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
@@ -144,6 +146,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (entries && entries.length > 0) {
         const sorted = [...entries].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
         setCurrentWeightKg(sorted[0].weight);
+      }
+
+      // Grocery unlock check
+      const unlocked = await dataStorage.isGroceryUnlocked();
+      setGroceryUnlocked(unlocked);
+      if (!unlocked) {
+        const progress = await dataStorage.checkGroceryUnlockEligibility();
+        setGroceryProgress({ loggedDays: progress.loggedDays, uniqueFoods: progress.uniqueFoods });
       }
     } catch (e) {
       console.error("Error checking feature flags", e);
@@ -315,7 +325,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               />
             </View>
           )}
-          {plan === 'premium' ? (
+          {plan === 'premium' && groceryUnlocked ? (
             <SettingItem
               icon="shopping-cart"
               title="Grocery Suggestions"
@@ -323,6 +333,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               onPress={() => openSlideUp('grocery')}
               onLongPress={() => onGrocerySuggestions?.()}
             />
+          ) : plan === 'premium' && !groceryUnlocked ? (
+            <View style={{ opacity: 0.7 }}>
+              <SettingItem
+                icon="shopping-cart"
+                title="Grocery Suggestions"
+                subtitle={`${groceryProgress.loggedDays}/5 days · ${groceryProgress.uniqueFoods}/7 foods to unlock`}
+                onPress={() => {}}
+                rightElement={
+                  <View style={{ backgroundColor: theme.colors.primary + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.primary }}>{Math.round(((Math.min(groceryProgress.loggedDays, 5) + Math.min(groceryProgress.uniqueFoods, 7)) / 12) * 100)}%</Text>
+                  </View>
+                }
+                showChevron={false}
+              />
+            </View>
           ) : (
             <View style={{ opacity: 0.5 }}>
               <SettingItem

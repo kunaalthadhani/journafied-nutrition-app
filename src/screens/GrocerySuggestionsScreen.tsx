@@ -1,6 +1,6 @@
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Share } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator, Alert, Dimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import * as Print from 'expo-print';
@@ -13,8 +13,24 @@ import { groceryCoachService, GroceryCoachExplanation } from '../services/grocer
 
 interface GrocerySuggestionsScreenProps {
     onBack: () => void;
-    userMetrics?: any; // Just for types, unused
+    userMetrics?: any;
 }
+
+const CATEGORY_ICONS: Record<string, string> = {
+    protein: 'target',
+    fiber: 'feather',
+    carbs: 'zap',
+    fats: 'droplet',
+    micronutrients: 'sun',
+};
+
+const CATEGORY_LABELS: Record<string, string> = {
+    protein: 'Protein',
+    fiber: 'Fiber & Greens',
+    carbs: 'Carbs & Energy',
+    fats: 'Healthy Fats',
+    micronutrients: 'Vitamins & Minerals',
+};
 
 export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> = ({ onBack }) => {
     const theme = useTheme();
@@ -24,10 +40,31 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
     const [error, setError] = useState<string | null>(null);
     const [durationWeeks, setDurationWeeks] = useState(1);
     const [isExporting, setIsExporting] = useState(false);
+    const [checkedItems, setCheckedItems] = useState<Set<string>>(new Set());
 
     useEffect(() => {
         loadData();
     }, []);
+
+    const toggleItem = (name: string) => {
+        setCheckedItems(prev => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+        });
+    };
+
+    const getCategoryColor = (cat: string) => {
+        switch (cat) {
+            case 'protein': return '#6366F1';
+            case 'fiber': return '#10B981';
+            case 'carbs': return '#F59E0B';
+            case 'fats': return '#EC4899';
+            case 'micronutrients': return '#8B5CF6';
+            default: return theme.colors.textSecondary;
+        }
+    };
 
     const handleExportPDF = async () => {
         if (!groceryData) return;
@@ -35,7 +72,6 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
         try {
             setIsExporting(true);
 
-            // Group items and generate HTML
             const grouped: Record<string, GroceryItem[]> = {};
             groceryData.items.forEach(item => {
                 if (!grouped[item.category]) grouped[item.category] = [];
@@ -45,140 +81,136 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
             const categories = Object.keys(grouped).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
 
             const itemsHtml = categories.map(cat => {
+                const color = getCategoryColor(cat);
+                const label = CATEGORY_LABELS[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
                 const catItems = grouped[cat].map(item => {
                     const qty = (item.baseQuantity || 1) * durationWeeks;
                     const unit = item.unit || '';
                     const m = item.macros || { p: 0, c: 0, f: 0, kcal: 0 };
-                    const p = Math.round(m.p * durationWeeks);
-                    const c = Math.round(m.c * durationWeeks);
-                    const f = Math.round(m.f * durationWeeks);
+                    const kcal = Math.round(m.kcal * durationWeeks);
+                    const isChecked = checkedItems.has(item.name);
+                    const reasonText = explanation?.itemExplanations[item.name] || '';
 
                     return `
-                    <div class="item-row">
-                        <div class="item-main">
-                            <span class="item-name">${item.name}</span>
-                            <span class="item-qty">${qty} ${unit}</span>
+                    <div class="item ${isChecked ? 'checked' : ''}">
+                        <div class="item-check">${isChecked ? '&#10003;' : ''}</div>
+                        <div class="item-body">
+                            <div class="item-top">
+                                <span class="item-name">${item.name}</span>
+                                <span class="item-qty">${qty} ${unit}</span>
+                            </div>
+                            <div class="item-bottom">
+                                <span class="item-kcal">${kcal} kcal</span>
+                                <span class="item-macros">P ${Math.round(m.p * durationWeeks)}g &middot; C ${Math.round(m.c * durationWeeks)}g &middot; F ${Math.round(m.f * durationWeeks)}g</span>
+                            </div>
+                            ${reasonText ? `<div class="item-reason">${reasonText}</div>` : ''}
                         </div>
-                        <div class="item-meta">
-                            <span class="item-macros">P:${p} F:${f} C:${c}</span>
-                        </div>
-                        <div class="item-reason">
-                            ${explanation?.itemExplanations[item.name] || item.reason.replace('_', ' ')}
-                        </div>
-                    </div>
-                    `;
+                    </div>`;
                 }).join('');
 
-                const catColor = getCategoryColor(cat, theme);
                 return `
-                    <div class="category-section">
-                        <div class="category-header">
-                            <span class="category-dot" style="background-color: ${catColor}"></span>
-                            <span class="category-title" style="color: ${theme.colors.textPrimary}">${cat.charAt(0).toUpperCase() + cat.slice(1)}</span>
-                        </div>
-                        <div class="card">
-                            ${catItems}
-                        </div>
+                <div class="category">
+                    <div class="cat-header">
+                        <div class="cat-dot" style="background:${color}"></div>
+                        <span class="cat-label">${label}</span>
+                        <span class="cat-count">${grouped[cat].length} items</span>
                     </div>
-                `;
+                    ${catItems}
+                </div>`;
             }).join('');
 
-            // Summary HTML
             const sum = groceryData.summary;
             let summaryHtml = '';
             if (sum) {
                 const totalK = Math.round(sum.weeklyTotal.kcal * durationWeeks);
-                const loss = (sum.projectedWeightLossKg * durationWeeks).toFixed(2);
+                const loss = (sum.projectedWeightLossKg * durationWeeks).toFixed(1);
+                const p = Math.round(sum.weeklyTotal.p * durationWeeks);
+                const c = Math.round(sum.weeklyTotal.c * durationWeeks);
+                const f = Math.round(sum.weeklyTotal.f * durationWeeks);
 
                 summaryHtml = `
-                    <div class="summary-card card">
-                        <div class="summary-header">Weekly Plan Impact</div>
-                        <div class="summary-grid">
-                            <div class="stat-box">
-                                <div class="stat-label">Total Calories</div>
-                                <div class="stat-value" style="color: ${theme.colors.primary}">${totalK}</div>
-                            </div>
-                            <div class="stat-box">
-                                <div class="stat-label">Proj. Weight Change</div>
-                                <div class="stat-value" style="color: ${Number(loss) >= 0 ? '#22c55e' : '#eab308'}">
-                                    ${Number(loss) > 0 ? '-' : ''}${Math.abs(Number(loss))} kg
-                                </div>
-                            </div>
+                <div class="summary">
+                    <div class="summary-title">Plan Impact</div>
+                    <div class="summary-stats">
+                        <div class="stat">
+                            <div class="stat-val" style="color:#6366F1">${totalK}</div>
+                            <div class="stat-label">Total kcal</div>
                         </div>
-                        <div class="macro-row">
-                            <span>Protein: ${Math.round(sum.weeklyTotal.p * durationWeeks)}g</span>
-                            <span>Carbs: ${Math.round(sum.weeklyTotal.c * durationWeeks)}g</span>
-                            <span>Fats: ${Math.round(sum.weeklyTotal.f * durationWeeks)}g</span>
+                        <div class="stat-divider"></div>
+                        <div class="stat">
+                            <div class="stat-val" style="color:${Number(loss) > 0 ? '#10B981' : '#F59E0B'}">${Number(loss) > 0 ? '-' : ''}${Math.abs(Number(loss))} kg</div>
+                            <div class="stat-label">Expected change</div>
                         </div>
-                        ${sum.replacedJunkCalories > 200 ? `
-                        <div class="alert-box">
-                            <strong>Note:</strong> Replaced approx ${Math.round(sum.replacedJunkCalories * durationWeeks)} kcal of processed food with healthy staples.
-                        </div>` : ''}
                     </div>
-                `;
+                    <div class="macro-bar">
+                        <div class="macro-pill" style="background:#6366F120;color:#6366F1">Protein ${p}g</div>
+                        <div class="macro-pill" style="background:#F59E0B20;color:#F59E0B">Carbs ${c}g</div>
+                        <div class="macro-pill" style="background:#EC489920;color:#EC4899">Fat ${f}g</div>
+                    </div>
+                    ${sum.replacedJunkCalories > 200 ? `
+                    <div class="swap-note">Swapped ~${Math.round(sum.replacedJunkCalories * durationWeeks)} kcal of processed food for whole food alternatives</div>` : ''}
+                </div>`;
             }
 
-            const html = `
-                <!DOCTYPE html>
-                <html>
-                <head>
-                    <meta charset="utf-8">
-                    <style>
-                        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-                        body { font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif; padding: 40px; color: ${theme.colors.textPrimary}; background: #fff; max-width: 800px; margin: 0 auto; }
-                        h1 { font-size: 24px; font-weight: 700; margin: 0 0 4px 0; }
-                        .header { margin-bottom: 30px; border-bottom: 1px solid ${theme.colors.border}; padding-bottom: 20px; }
-                        .subtitle { font-size: 14px; color: ${theme.colors.textSecondary}; }
-                        .card { background: #fff; border: 1px solid ${theme.colors.border}; border-radius: 12px; overflow: hidden; margin-bottom: 20px; }
-                        .coach-card { background: ${theme.colors.card}; border: 1px solid ${theme.colors.primary}40; border-radius: 12px; padding: 16px; margin-bottom: 24px; }
-                        .coach-title { font-weight: 600; color: ${theme.colors.primary}; margin-bottom: 8px; font-size: 14px; }
-                        .coach-text { font-size: 14px; line-height: 1.5; }
-                        .category-section { margin-bottom: 24px; }
-                        .category-header { display: flex; align-items: center; margin-bottom: 12px; }
-                        .category-dot { width: 8px; height: 8px; border-radius: 50%; margin-right: 8px; }
-                        .category-title { font-weight: 600; font-size: 15px; }
-                        .item-row { padding: 12px 16px; border-bottom: 1px solid ${theme.colors.border}; }
-                        .item-row:last-child { border-bottom: none; }
-                        .item-main { display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; }
-                        .item-name { font-weight: 600; font-size: 15px; }
-                        .item-qty { font-size: 14px; color: ${theme.colors.textSecondary}; }
-                        .item-meta { margin-bottom: 6px; }
-                        .item-macros { font-size: 11px; color: ${theme.colors.textSecondary}; font-family: monospace; background: ${theme.colors.background}; padding: 2px 6px; border-radius: 4px; }
-                        .item-reason { font-size: 13px; color: ${theme.colors.textTertiary}; font-style: italic; }
-                        .summary-card { padding: 20px; background: ${theme.colors.card}; }
-                        .summary-header { font-weight: 600; margin-bottom: 16px; font-size: 16px; }
-                        .summary-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-bottom: 16px; }
-                        .stat-label { font-size: 12px; color: ${theme.colors.textSecondary}; margin-bottom: 4px; }
-                        .stat-value { font-size: 20px; font-weight: 700; }
-                        .macro-row { display: flex; justify-content: space-between; padding-top: 16px; border-top: 1px solid ${theme.colors.border}; font-size: 13px; }
-                        .alert-box { margin-top: 16px; padding: 12px; background: #fef2f2; color: #ef4444; font-size: 12px; border-radius: 8px; }
-                        .footer { margin-top: 40px; text-align: center; font-size: 11px; color: ${theme.colors.textTertiary}; }
-                    </style>
-                </head>
-                <body>
-                    <div class="header">
-                        <h1 style="color: ${theme.colors.textPrimary}">Grocery Plan</h1>
-                        <div class="subtitle">Focus: ${groceryData.primaryFocus} • Duration: ${durationWeeks} Week${durationWeeks > 1 ? 's' : ''}</div>
-                    </div>
-                    
-                    ${explanation?.summary ? `
-                    <div class="coach-card">
-                        <div class="coach-title">Coach Insight</div>
-                        <div class="coach-text">${explanation.summary}</div>
-                    </div>` : ''}
-                    
-                    <div class="list">
-                        ${itemsHtml}
-                    </div>
-                    
-                    ${summaryHtml}
-
-                    <div class="footer">
-                        Generated by TrackKcal App
-                    </div>
-                </body>
-                </html>
-            `;
+            const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, 'Helvetica Neue', sans-serif; padding: 48px 40px; color: #1a1a1a; background: #fff; max-width: 700px; margin: 0 auto; }
+    .header { margin-bottom: 32px; }
+    .header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
+    .header .meta { font-size: 13px; color: #888; margin-top: 6px; }
+    .coach { background: #F8F7FF; border-left: 3px solid #6366F1; padding: 16px 20px; border-radius: 0 12px 12px 0; margin-bottom: 32px; }
+    .coach-label { font-size: 11px; font-weight: 700; color: #6366F1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
+    .coach-text { font-size: 14px; line-height: 1.6; color: #333; }
+    .category { margin-bottom: 28px; }
+    .cat-header { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
+    .cat-dot { width: 10px; height: 10px; border-radius: 5px; }
+    .cat-label { font-size: 15px; font-weight: 700; }
+    .cat-count { font-size: 12px; color: #999; margin-left: auto; }
+    .item { display: flex; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid #f0f0f0; gap: 12px; }
+    .item:last-child { border-bottom: none; }
+    .item.checked .item-name { text-decoration: line-through; color: #bbb; }
+    .item-check { width: 20px; height: 20px; border: 2px solid #ddd; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #10B981; flex-shrink: 0; margin-top: 2px; }
+    .item.checked .item-check { background: #10B981; border-color: #10B981; color: #fff; }
+    .item-body { flex: 1; }
+    .item-top { display: flex; justify-content: space-between; align-items: baseline; }
+    .item-name { font-size: 15px; font-weight: 600; }
+    .item-qty { font-size: 13px; color: #666; font-weight: 500; }
+    .item-bottom { display: flex; gap: 12px; margin-top: 4px; }
+    .item-kcal { font-size: 12px; font-weight: 600; color: #6366F1; }
+    .item-macros { font-size: 11px; color: #999; }
+    .item-reason { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.4; }
+    .summary { background: #FAFAFA; border: 1px solid #eee; border-radius: 16px; padding: 24px; margin-top: 12px; margin-bottom: 32px; }
+    .summary-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
+    .summary-stats { display: flex; align-items: center; justify-content: center; gap: 32px; margin-bottom: 16px; }
+    .stat { text-align: center; }
+    .stat-val { font-size: 28px; font-weight: 800; }
+    .stat-label { font-size: 11px; color: #999; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
+    .stat-divider { width: 1px; height: 40px; background: #eee; }
+    .macro-bar { display: flex; gap: 8px; justify-content: center; }
+    .macro-pill { font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 20px; }
+    .swap-note { margin-top: 16px; font-size: 12px; color: #10B981; text-align: center; font-weight: 500; }
+    .footer { text-align: center; font-size: 10px; color: #ccc; margin-top: 40px; padding-top: 20px; border-top: 1px solid #f0f0f0; }
+</style>
+</head>
+<body>
+    <div class="header">
+        <h1>Your Grocery List</h1>
+        <div class="meta">${durationWeeks} week${durationWeeks > 1 ? 's' : ''} &middot; ${groceryData.items.length} items &middot; ${groceryData.primaryFocus}</div>
+    </div>
+    ${explanation?.summary ? `
+    <div class="coach">
+        <div class="coach-label">AI Insight</div>
+        <div class="coach-text">${explanation.summary}</div>
+    </div>` : ''}
+    ${itemsHtml}
+    ${summaryHtml}
+    <div class="footer">Generated by TrackKcal</div>
+</body>
+</html>`;
 
             const { uri } = await Print.printToFileAsync({ html });
             await Sharing.shareAsync(uri, { UTI: '.pdf', mimeType: 'application/pdf' });
@@ -196,10 +228,7 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
             setLoading(true);
             setError(null);
 
-            // 1. Gather Dependencies
             let snapshot = await dataStorage.getUserMetricsSnapshot();
-
-            // Fallback: Generate snapshot if it doesn't exist yet (e.g. new user or first run)
             if (!snapshot) {
                 console.log("No snapshot found, generating fresh...");
                 snapshot = await dataStorage.generateUserMetricsSnapshot();
@@ -213,12 +242,9 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                 return;
             }
 
-            // 2. Generate Deterministic List
             const result = generateGrocerySuggestions(snapshot, insights, null);
             setGroceryData(result);
 
-            // 3. Generate AI Explanation
-            // Prepare context
             const context = {
                 userGoal: snapshot.userGoals.goalType,
                 targetCalories: snapshot.userGoals.calories,
@@ -243,120 +269,164 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
     const renderGroupedItems = () => {
         if (!groceryData) return null;
 
-        // Group by category
         const grouped: Record<string, GroceryItem[]> = {};
         groceryData.items.forEach(item => {
             if (!grouped[item.category]) grouped[item.category] = [];
             grouped[item.category].push(item);
         });
 
-        // Sort categories by priority
         const priority = ['protein', 'fiber', 'micronutrients', 'fats', 'carbs'];
-        const categories = Object.keys(grouped).sort((a, b) => {
-            return priority.indexOf(a) - priority.indexOf(b);
-        });
+        const categories = Object.keys(grouped).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
 
-        return categories.map(category => (
-            <View key={category} style={styles.sectionContainer}>
-                <View style={styles.categoryHeaderRow}>
-                    <View style={[styles.categoryDot, { backgroundColor: getCategoryColor(category, theme) }]} />
-                    <Text style={[styles.categoryTitle, { color: theme.colors.textPrimary }]}>
-                        {category.charAt(0).toUpperCase() + category.slice(1)}
-                    </Text>
-                </View>
+        return categories.map(category => {
+            const color = getCategoryColor(category);
+            const icon = CATEGORY_ICONS[category] || 'box';
+            const label = CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1);
+            const items = grouped[category];
 
-                <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                    {grouped[category].map((item, index) => {
-                        // Display Macros
-                        const m = item.macros || { p: 0, c: 0, f: 0 };
-                        const p = Math.round(m.p * durationWeeks);
-                        const c = Math.round(m.c * durationWeeks);
-                        const f = Math.round(m.f * durationWeeks);
+            return (
+                <View key={category} style={{ marginBottom: 24 }}>
+                    {/* Category Header */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12, paddingHorizontal: 4 }}>
+                        <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name={icon as any} size={16} color={color} />
+                        </View>
+                        <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginLeft: 10, flex: 1 }}>{label}</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>{items.length} items</Text>
+                    </View>
 
-                        return (
-                            <View key={index} style={[
-                                styles.itemRow,
-                                index < grouped[category].length - 1 && { borderBottomColor: theme.colors.border, borderBottomWidth: 1 }
-                            ]}>
-                                <View style={styles.itemHeader}>
-                                    <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1 }}>
-                                        <Text style={[styles.itemName, { color: theme.colors.textPrimary }]}>{item.name}</Text>
-                                        {item.reason === 'user_favorite' && (
-                                            <Feather name="star" size={12} color={theme.colors.warning} style={{ marginLeft: 6 }} />
+                    {/* Items */}
+                    <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' }}>
+                        {items.map((item, index) => {
+                            const m = item.macros || { p: 0, c: 0, f: 0, kcal: 0 };
+                            const qty = (item.baseQuantity || 1) * durationWeeks;
+                            const kcal = Math.round(m.kcal * durationWeeks);
+                            const isChecked = checkedItems.has(item.name);
+                            const reasonText = explanation?.itemExplanations[item.name];
+
+                            return (
+                                <TouchableOpacity
+                                    key={index}
+                                    activeOpacity={0.6}
+                                    onPress={() => toggleItem(item.name)}
+                                    style={{
+                                        flexDirection: 'row',
+                                        alignItems: 'flex-start',
+                                        padding: 14,
+                                        paddingLeft: 16,
+                                        borderBottomWidth: index < items.length - 1 ? 1 : 0,
+                                        borderBottomColor: theme.colors.border,
+                                    }}
+                                >
+                                    {/* Checkbox */}
+                                    <View style={{
+                                        width: 22,
+                                        height: 22,
+                                        borderRadius: 7,
+                                        borderWidth: 2,
+                                        borderColor: isChecked ? '#10B981' : theme.colors.border,
+                                        backgroundColor: isChecked ? '#10B981' : 'transparent',
+                                        alignItems: 'center',
+                                        justifyContent: 'center',
+                                        marginRight: 12,
+                                        marginTop: 1,
+                                    }}>
+                                        {isChecked && <Feather name="check" size={13} color="#fff" />}
+                                    </View>
+
+                                    {/* Content */}
+                                    <View style={{ flex: 1 }}>
+                                        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' }}>
+                                            <Text style={{
+                                                fontSize: 15,
+                                                fontWeight: '600',
+                                                color: isChecked ? theme.colors.textTertiary : theme.colors.textPrimary,
+                                                textDecorationLine: isChecked ? 'line-through' : 'none',
+                                                flex: 1,
+                                            }}>
+                                                {item.name}
+                                                {item.reason === 'user_favorite' && ' \u2605'}
+                                            </Text>
+                                            <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textSecondary, marginLeft: 8 }}>
+                                                {qty} {item.unit || ''}
+                                            </Text>
+                                        </View>
+
+                                        {/* Macro pills */}
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 6, gap: 6 }}>
+                                            <View style={{ backgroundColor: color + '12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                                                <Text style={{ fontSize: 11, fontWeight: '600', color }}>{kcal} kcal</Text>
+                                            </View>
+                                            <Text style={{ fontSize: 11, color: theme.colors.textTertiary }}>
+                                                P {Math.round(m.p * durationWeeks)}g · C {Math.round(m.c * durationWeeks)}g · F {Math.round(m.f * durationWeeks)}g
+                                            </Text>
+                                        </View>
+
+                                        {reasonText && (
+                                            <Text style={{ fontSize: 12, color: theme.colors.textTertiary, marginTop: 5, lineHeight: 17 }}>
+                                                {reasonText}
+                                            </Text>
                                         )}
                                     </View>
-                                    <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={[styles.quantityText, { color: theme.colors.textSecondary }]}>
-                                            {(item.baseQuantity || 1) * durationWeeks} {item.unit || ''}
-                                        </Text>
-                                        <Text style={{ fontSize: 10, color: theme.colors.textSecondary, fontFamily: Typography.fontFamily.medium }}>
-                                            P:{p} F:{f} C:{c}
-                                        </Text>
-                                    </View>
-                                </View>
-                                {explanation?.itemExplanations[item.name] && (
-                                    <Text style={[styles.aiReason, { color: theme.colors.textSecondary }]}>
-                                        "{explanation.itemExplanations[item.name]}"
-                                    </Text>
-                                )}
-                            </View>
-                        );
-                    })}
+                                </TouchableOpacity>
+                            );
+                        })}
+                    </View>
                 </View>
-            </View>
-        ));
+            );
+        });
     };
 
-    const renderSummaryFooter = () => {
+    const renderSummary = () => {
         if (!groceryData?.summary) return null;
         const s = groceryData.summary;
         const totalK = Math.round(s.weeklyTotal.kcal * durationWeeks);
-        const loss = (s.projectedWeightLossKg * durationWeeks).toFixed(2);
+        const loss = (s.projectedWeightLossKg * durationWeeks).toFixed(1);
+        const p = Math.round(s.weeklyTotal.p * durationWeeks);
+        const c = Math.round(s.weeklyTotal.c * durationWeeks);
+        const f = Math.round(s.weeklyTotal.f * durationWeeks);
 
         return (
-            <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, marginTop: 20, marginBottom: 40 }]}>
-                <View style={{ padding: 16 }}>
-                    <Text style={[styles.categoryTitle, { color: theme.colors.textPrimary, marginBottom: 12 }]}>Weekly Plan Impact</Text>
+            <View style={{ backgroundColor: theme.colors.card, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, padding: 20, marginBottom: 24 }}>
+                <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 20 }}>Plan Impact</Text>
 
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 16 }}>
-                        <View>
-                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Total Calories</Text>
-                            <Text style={{ fontSize: 18, color: theme.colors.primary, fontWeight: 'bold' }}>{totalK}</Text>
-                        </View>
-                        <View>
-                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Exp. Weight Change</Text>
-                            <Text style={{ fontSize: 18, color: Number(loss) > 0 ? theme.colors.success : theme.colors.warning, fontWeight: 'bold' }}>
-                                {Number(loss) > 0 ? '-' : ''}{Math.abs(Number(loss))} kg
-                            </Text>
-                        </View>
+                {/* Big stats */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginBottom: 20 }}>
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                        <Text style={{ fontSize: 32, fontWeight: '800', color: '#6366F1' }}>{totalK}</Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>Total kcal</Text>
                     </View>
-
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 8, borderTopWidth: 1, borderTopColor: theme.colors.border }}>
-                        <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>Protein: {Math.round(s.weeklyTotal.p * durationWeeks)}g</Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>Carbs: {Math.round(s.weeklyTotal.c * durationWeeks)}g</Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>Fats: {Math.round(s.weeklyTotal.f * durationWeeks)}g</Text>
+                    <View style={{ width: 1, height: 44, backgroundColor: theme.colors.border }} />
+                    <View style={{ alignItems: 'center', flex: 1 }}>
+                        <Text style={{ fontSize: 32, fontWeight: '800', color: Number(loss) > 0 ? '#10B981' : '#F59E0B' }}>
+                            {Number(loss) > 0 ? '-' : ''}{Math.abs(Number(loss))}
+                        </Text>
+                        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 2, textTransform: 'uppercase', letterSpacing: 0.3 }}>kg expected</Text>
                     </View>
-
-                    {s.replacedJunkCalories > 200 && (
-                        <View style={{ marginTop: 12, padding: 8, backgroundColor: theme.colors.error + '20', borderRadius: 6 }}>
-                            <Text style={{ fontSize: 11, color: theme.colors.error }}>
-                                <Feather name="alert-circle" size={10} /> Replaced {Math.round(s.replacedJunkCalories * durationWeeks)}kcal of processed food with healthy staples.
-                            </Text>
-                        </View>
-                    )}
                 </View>
+
+                {/* Macro pills */}
+                <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 8 }}>
+                    <View style={{ backgroundColor: '#6366F115', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#6366F1' }}>Protein {p}g</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#F59E0B15', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#F59E0B' }}>Carbs {c}g</Text>
+                    </View>
+                    <View style={{ backgroundColor: '#EC489915', paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20 }}>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: '#EC4899' }}>Fat {f}g</Text>
+                    </View>
+                </View>
+
+                {s.replacedJunkCalories > 200 && (
+                    <View style={{ marginTop: 16, backgroundColor: '#10B98110', borderRadius: 12, padding: 12, alignItems: 'center' }}>
+                        <Text style={{ fontSize: 12, fontWeight: '500', color: '#10B981', textAlign: 'center', lineHeight: 18 }}>
+                            Swapped ~{Math.round(s.replacedJunkCalories * durationWeeks)} kcal of processed food for whole food alternatives
+                        </Text>
+                    </View>
+                )}
             </View>
         );
-    };
-
-    const getCategoryColor = (cat: string, theme: any) => {
-        switch (cat) {
-            case 'protein': return theme.colors.primary;
-            case 'fiber': return theme.colors.success;
-            case 'carbs': return theme.colors.warning;
-            case 'fats': return '#EAB308';
-            default: return theme.colors.textSecondary;
-        }
     };
 
     if (loading) {
@@ -364,14 +434,14 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
             <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                        <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                        <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery Suggestions</Text>
+                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery List</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <View style={styles.center}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                    <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Analyzing your nutrition...</Text>
+                    <ActivityIndicator size="large" color="#6366F1" />
+                    <Text style={{ color: theme.colors.textSecondary, marginTop: 16, fontSize: 15 }}>Building your list...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -382,88 +452,130 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
             <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                        <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                        <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery Suggestions</Text>
+                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery List</Text>
                     <View style={{ width: 40 }} />
                 </View>
                 <View style={styles.center}>
-                    <Feather name="alert-circle" size={48} color={theme.colors.error} />
-                    <Text style={[styles.errorText, { color: theme.colors.textPrimary }]}>{error}</Text>
-                    <TouchableOpacity style={[styles.retryButton, { backgroundColor: theme.colors.primary }]} onPress={loadData}>
-                        <Text style={styles.retryText}>Retry</Text>
+                    <View style={{ width: 64, height: 64, borderRadius: 32, backgroundColor: theme.colors.error + '15', alignItems: 'center', justifyContent: 'center', marginBottom: 16 }}>
+                        <Feather name="alert-circle" size={28} color={theme.colors.error} />
+                    </View>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 6 }}>Something went wrong</Text>
+                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 24 }}>{error}</Text>
+                    <TouchableOpacity style={{ backgroundColor: '#6366F1', paddingHorizontal: 28, paddingVertical: 12, borderRadius: 12 }} onPress={loadData}>
+                        <Text style={{ color: '#fff', fontWeight: '600', fontSize: 15 }}>Try Again</Text>
                     </TouchableOpacity>
                 </View>
             </SafeAreaView>
         );
     }
 
+    const checkedCount = checkedItems.size;
+    const totalItems = groceryData?.items.length || 0;
+
     return (
         <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery Suggestions</Text>
-                <View style={{ width: 40 }}>
-                    <TouchableOpacity onPress={handleExportPDF} disabled={isExporting}>
-                        {isExporting ? (
-                            <ActivityIndicator size="small" color={theme.colors.primary} />
-                        ) : (
-                            <Feather name="upload" size={24} color={theme.colors.primary} />
-                        )}
-                    </TouchableOpacity>
+                <View style={{ alignItems: 'center' }}>
+                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery List</Text>
+                    {checkedCount > 0 && (
+                        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 1 }}>
+                            {checkedCount}/{totalItems} items checked
+                        </Text>
+                    )}
                 </View>
+                <TouchableOpacity onPress={handleExportPDF} disabled={isExporting} style={{ width: 40, alignItems: 'center' }}>
+                    {isExporting ? (
+                        <ActivityIndicator size="small" color="#6366F1" />
+                    ) : (
+                        <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#6366F110', alignItems: 'center', justifyContent: 'center' }}>
+                            <Feather name="share" size={18} color="#6366F1" />
+                        </View>
+                    )}
+                </TouchableOpacity>
             </View>
 
-            <ScrollView style={styles.content} contentContainerStyle={{ paddingBottom: 40 }}>
+            <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
 
-                {/* Duration Selector */}
-                <View style={styles.durationSelector}>
-                    <TouchableOpacity
-                        style={[styles.durationOption, durationWeeks === 1 && { backgroundColor: theme.colors.primary }]}
-                        onPress={() => setDurationWeeks(1)}
-                    >
-                        <Text style={[styles.durationText, durationWeeks === 1 && { color: 'white' }]}>1 Week</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                        style={[styles.durationOption, durationWeeks === 2 && { backgroundColor: theme.colors.primary }]}
-                        onPress={() => setDurationWeeks(2)}
-                    >
-                        <Text style={[styles.durationText, durationWeeks === 2 && { color: 'white' }]}>2 Weeks</Text>
-                    </TouchableOpacity>
+                {/* Duration Toggle */}
+                <View style={{
+                    flexDirection: 'row',
+                    backgroundColor: theme.colors.card,
+                    borderRadius: 14,
+                    padding: 4,
+                    marginBottom: 20,
+                    borderWidth: 1,
+                    borderColor: theme.colors.border,
+                }}>
+                    {[1, 2].map(w => (
+                        <TouchableOpacity
+                            key={w}
+                            onPress={() => setDurationWeeks(w)}
+                            style={{
+                                flex: 1,
+                                paddingVertical: 10,
+                                alignItems: 'center',
+                                borderRadius: 11,
+                                backgroundColor: durationWeeks === w ? theme.colors.textPrimary : 'transparent',
+                            }}
+                        >
+                            <Text style={{
+                                fontSize: 14,
+                                fontWeight: '700',
+                                color: durationWeeks === w ? theme.colors.background : theme.colors.textTertiary,
+                            }}>
+                                {w} Week{w > 1 ? 's' : ''}
+                            </Text>
+                        </TouchableOpacity>
+                    ))}
                 </View>
 
-                {/* AI Insight Header */}
+                {/* AI Coach Insight */}
                 {explanation && (
-                    <View style={[styles.insightCard, { backgroundColor: theme.colors.primary + '10' }]}>
-                        <View style={styles.insightHeaderRow}>
-                            <Feather name="zap" size={16} color={theme.colors.primary} />
-                            <Text style={[styles.insightTitle, { color: theme.colors.primary }]}>{explanation.title}</Text>
-                        </View>
-                        <Text style={[styles.insightSummary, { color: theme.colors.textPrimary }]}>
+                    <View style={{
+                        backgroundColor: '#6366F108',
+                        borderLeftWidth: 3,
+                        borderLeftColor: '#6366F1',
+                        borderRadius: 0,
+                        borderTopRightRadius: 14,
+                        borderBottomRightRadius: 14,
+                        padding: 16,
+                        marginBottom: 24,
+                    }}>
+                        <Text style={{ fontSize: 11, fontWeight: '700', color: '#6366F1', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 6 }}>AI Insight</Text>
+                        <Text style={{ fontSize: 14, color: theme.colors.textPrimary, lineHeight: 21 }}>
                             {explanation.summary}
                         </Text>
                     </View>
                 )}
 
-                {/* Primary Focus Banner (Deterministic fallback if AI fails, or supplementary) */}
                 {!explanation && groceryData && (
-                    <View style={[styles.insightCard, { backgroundColor: theme.colors.card }]}>
-                        <Text style={[styles.insightTitle, { color: theme.colors.primary }]}>{groceryData.primaryFocus}</Text>
+                    <View style={{
+                        backgroundColor: theme.colors.card,
+                        borderRadius: 14,
+                        padding: 16,
+                        marginBottom: 24,
+                        borderWidth: 1,
+                        borderColor: theme.colors.border,
+                    }}>
+                        <Text style={{ fontSize: 15, fontWeight: '600', color: '#6366F1' }}>{groceryData.primaryFocus}</Text>
                     </View>
                 )}
 
-                {/* List */}
+                {/* Grocery Items */}
                 {renderGroupedItems()}
 
-                {/* Summary Footer */}
-                {renderSummaryFooter()}
+                {/* Summary */}
+                {renderSummary()}
 
                 {/* Disclaimer */}
-                <Text style={[styles.disclaimer, { color: theme.colors.textTertiary }]}>
-                    These suggestions are generated based on your nutrition data and are for informational purposes only.
+                <Text style={{ textAlign: 'center', fontSize: 11, color: theme.colors.textTertiary, marginTop: 8, lineHeight: 16 }}>
+                    Suggestions are based on your nutrition data and are for informational purposes only.
                 </Text>
 
             </ScrollView>
@@ -480,135 +592,21 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         justifyContent: 'space-between',
         paddingHorizontal: 16,
-        paddingVertical: 16,
+        paddingVertical: 14,
         borderBottomWidth: 1,
     },
     backButton: {
         padding: 8,
+        width: 40,
     },
     headerTitle: {
-        fontSize: Typography.fontSize.xl,
-        fontWeight: Typography.fontWeight.semiBold,
-    },
-    content: {
-        flex: 1,
-        paddingHorizontal: 16,
-        paddingTop: 16,
+        fontSize: 17,
+        fontWeight: '700',
     },
     center: {
         flex: 1,
         justifyContent: 'center',
         alignItems: 'center',
-        padding: 20
+        padding: 24,
     },
-    loadingText: {
-        marginTop: 12,
-        fontSize: Typography.fontSize.md,
-    },
-    errorText: {
-        marginTop: 12,
-        fontSize: Typography.fontSize.md,
-        textAlign: 'center',
-        marginBottom: 20
-    },
-    retryButton: {
-        paddingHorizontal: 20,
-        paddingVertical: 10,
-        borderRadius: 8
-    },
-    retryText: {
-        color: '#fff',
-        fontWeight: '600'
-    },
-    insightCard: {
-        padding: 16,
-        borderRadius: 12,
-        marginBottom: 24,
-    },
-    insightHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        gap: 8,
-        marginBottom: 8
-    },
-    insightTitle: {
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.bold,
-    },
-    insightSummary: {
-        fontSize: Typography.fontSize.md,
-        lineHeight: 22
-    },
-    sectionContainer: {
-        marginBottom: 20
-    },
-    categoryHeaderRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 8,
-        gap: 8
-    },
-    categoryDot: {
-        width: 8,
-        height: 8,
-        borderRadius: 4
-    },
-    categoryTitle: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semiBold,
-        textTransform: 'uppercase',
-        letterSpacing: 0.5
-    },
-    card: {
-        borderRadius: 12,
-        borderWidth: 1,
-        overflow: 'hidden'
-    },
-    itemRow: {
-        padding: 12,
-    },
-    itemHeader: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        marginBottom: 4
-    },
-    itemName: {
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.medium
-    },
-    aiReason: {
-        fontSize: Typography.fontSize.xs,
-        fontStyle: 'italic',
-        lineHeight: 18
-    },
-    disclaimer: {
-        textAlign: 'center',
-        fontSize: Typography.fontSize.xs,
-        marginTop: 20,
-        fontStyle: 'italic'
-    },
-    durationSelector: {
-        flexDirection: 'row',
-        backgroundColor: '#f0f0f0',
-        borderRadius: 8,
-        padding: 4,
-        marginBottom: 20,
-        alignSelf: 'center'
-    },
-    durationOption: {
-        paddingVertical: 6,
-        paddingHorizontal: 16,
-        borderRadius: 6,
-        minWidth: 80,
-        alignItems: 'center'
-    },
-    durationText: {
-        fontSize: 14,
-        fontWeight: '600',
-        color: '#666'
-    },
-    quantityText: {
-        fontSize: 14,
-        fontWeight: '500'
-    }
 });

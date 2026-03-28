@@ -94,6 +94,8 @@ const STORAGE_KEYS = {
   SMART_REMINDER_CACHE: '@trackkal:smartReminderCache',
   SMART_REMINDER_LOG: '@trackkal:smartReminderLog',
   SMART_REMINDER_EFFECTIVENESS: '@trackkal:smartReminderEffectiveness',
+  GROCERY_UNLOCKED: '@trackkal:groceryUnlocked',
+  GROCERY_UNLOCK_SEEN: '@trackkal:groceryUnlockSeen',
 };
 
 // ... (rest of file)
@@ -3131,6 +3133,57 @@ export const dataStorage = {
       actions: plan.actions.map(a => a.id === actionId ? { ...a, completed: true } : a)
     };
     await this.saveWeeklyActionPlan(updated);
+  },
+
+  // --- Grocery Unlock ---
+
+  async checkGroceryUnlockEligibility(): Promise<{ eligible: boolean; loggedDays: number; uniqueFoods: number }> {
+    try {
+      const summaries = await this.loadDailySummaries();
+      const loggedDays = Object.values(summaries).filter(s => s.entryCount > 0).length;
+
+      // Count unique food names across all logged days
+      const allFoodNames = new Set<string>();
+      const dateKeys = Object.keys(summaries).filter(k => summaries[k].entryCount > 0);
+      for (const dateKey of dateKeys) {
+        try {
+          const meals = await this.getDailyLog(dateKey);
+          if (meals) {
+            meals.forEach(meal => {
+              meal.foods?.forEach(food => {
+                if (food.name) allFoodNames.add(food.name.toLowerCase().trim());
+              });
+            });
+          }
+        } catch { }
+      }
+
+      return {
+        eligible: loggedDays >= 5 && allFoodNames.size >= 7,
+        loggedDays,
+        uniqueFoods: allFoodNames.size,
+      };
+    } catch {
+      return { eligible: false, loggedDays: 0, uniqueFoods: 0 };
+    }
+  },
+
+  async isGroceryUnlocked(): Promise<boolean> {
+    const val = await AsyncStorage.getItem(STORAGE_KEYS.GROCERY_UNLOCKED);
+    return val === 'true';
+  },
+
+  async setGroceryUnlocked(): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.GROCERY_UNLOCKED, 'true');
+  },
+
+  async isGroceryUnlockSeen(): Promise<boolean> {
+    const val = await AsyncStorage.getItem(STORAGE_KEYS.GROCERY_UNLOCK_SEEN);
+    return val === 'true';
+  },
+
+  async setGroceryUnlockSeen(): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.GROCERY_UNLOCK_SEEN, 'true');
   },
 };
 

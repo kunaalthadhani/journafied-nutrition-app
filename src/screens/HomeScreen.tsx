@@ -147,6 +147,7 @@ export const HomeScreen: React.FC = () => {
 
 
   const [showGrocerySuggestions, setShowGrocerySuggestions] = useState(false);
+  const [showGroceryUnlockCard, setShowGroceryUnlockCard] = useState(false);
   const [showChatCoach, setShowChatCoach] = useState(false);
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughHideOffer, setWalkthroughHideOffer] = useState(false);
@@ -524,6 +525,20 @@ export const HomeScreen: React.FC = () => {
       // Track smart reminder effectiveness (was a meal logged shortly after a reminder?)
       smartReminderService.checkMealLoggedAfterReminder()
         .catch(err => console.error('Reminder effectiveness check failed:', err));
+
+      // Check grocery unlock after each meal save
+      if (isPremium) {
+        dataStorage.isGroceryUnlocked().then(async (unlocked) => {
+          if (!unlocked) {
+            const { eligible } = await dataStorage.checkGroceryUnlockEligibility();
+            if (eligible) {
+              await dataStorage.setGroceryUnlocked();
+              const seen = await dataStorage.isGroceryUnlockSeen();
+              if (!seen) setShowGroceryUnlockCard(true);
+            }
+          }
+        }).catch(() => {});
+      }
     };
     persistAndSync();
   }, [mealsByDate]);
@@ -774,6 +789,20 @@ export const HomeScreen: React.FC = () => {
             setDetectedPatterns(fresh);
           }).catch(err => console.error('Pattern detection failed:', err));
         }
+      }
+
+      // Check grocery unlock (non-blocking)
+      if (isPremium) {
+        dataStorage.isGroceryUnlocked().then(async (unlocked) => {
+          if (!unlocked) {
+            const { eligible } = await dataStorage.checkGroceryUnlockEligibility();
+            if (eligible) {
+              await dataStorage.setGroceryUnlocked();
+              const seen = await dataStorage.isGroceryUnlockSeen();
+              if (!seen) setShowGroceryUnlockCard(true);
+            }
+          }
+        }).catch(() => {});
       }
 
       // Schedule smart reminders (non-blocking)
@@ -2194,6 +2223,55 @@ export const HomeScreen: React.FC = () => {
                 />
               </View>
             ))}
+
+            {/* Grocery Unlock Card */}
+            {showGroceryUnlockCard && (
+              <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
+                <View style={{
+                  backgroundColor: theme.colors.card,
+                  borderRadius: 16,
+                  borderWidth: 1,
+                  borderColor: '#6366F130',
+                  padding: 20,
+                  overflow: 'hidden',
+                }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+                    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather name="shopping-cart" size={18} color="#6366F1" />
+                    </View>
+                    <View style={{ marginLeft: 12, flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary }}>Your Grocery List is ready</Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 }}>Built from the foods you actually eat</Text>
+                    </View>
+                    <TouchableOpacity
+                      onPress={async () => {
+                        setShowGroceryUnlockCard(false);
+                        await dataStorage.setGroceryUnlockSeen();
+                      }}
+                      hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                    >
+                      <Feather name="x" size={18} color={theme.colors.textTertiary} />
+                    </TouchableOpacity>
+                  </View>
+                  <TouchableOpacity
+                    onPress={async () => {
+                      setShowGroceryUnlockCard(false);
+                      await dataStorage.setGroceryUnlockSeen();
+                      setShowGrocerySuggestions(true);
+                    }}
+                    style={{
+                      backgroundColor: '#6366F1',
+                      borderRadius: 12,
+                      paddingVertical: 12,
+                      alignItems: 'center',
+                      marginTop: 4,
+                    }}
+                  >
+                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>View Grocery List</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
 
             {/* Food Log Section */}
             {showFirstLogMessage && (

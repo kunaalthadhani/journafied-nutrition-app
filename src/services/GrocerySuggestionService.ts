@@ -224,29 +224,7 @@ export const generateGrocerySuggestions = (
             });
         });
 
-        // B. Fill with Defaults
-        const targetCount = (category === 'protein' || category === 'fiber' || category === 'carbs') ? 2 : 1;
-        const currentCount = userFavorites.length;
-
-        if (currentCount < targetCount) {
-            const defaultsList = DEFAULT_FOODS[category];
-            const day = new Date().getDate();
-            const offset = day % defaultsList.length;
-
-            for (let i = 0; i < (targetCount - currentCount); i++) {
-                const name = defaultsList[(offset + i) % defaultsList.length];
-                const stats = getEstimatedStats(name, category);
-                currentListKcal += stats.kcal;
-                potentialItems.push({
-                    name: name,
-                    category: category,
-                    reason: 'suggested_optimization',
-                    baseQuantity: stats.q,
-                    unit: stats.u,
-                    macros: { p: stats.p, c: stats.c, f: stats.f, kcal: stats.kcal }
-                });
-            }
-        }
+        // Only use foods the user has actually logged — no defaults
     });
 
     // 6. Caloric Scaling (The "Junk Food Replacement" Logic)
