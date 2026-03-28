@@ -63,7 +63,6 @@ interface AccountScreenProps {
   onRequestSync: () => Promise<void>;
   initialStreakFreeze?: StreakFreezeData | null;
   initialFrozenDates?: string[];
-  onOpenAdvancedAnalytics?: () => void;
   initialMode?: 'signin' | 'signup';
 }
 
@@ -79,7 +78,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   onRequestSync,
   initialStreakFreeze,
   initialFrozenDates,
-  onOpenAdvancedAnalytics,
   initialMode = 'signin',
 }) => {
   const theme = useTheme();
@@ -707,58 +705,41 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Account Stats</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Log Streak</Text>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Total Entries</Text>
             <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{entryCount}</Text>
           </View>
           <View style={styles.statItem}>
             <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Referrals</Text>
             <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{referralDetails.totalReferrals}</Text>
           </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Current Weight</Text>
+            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+              {weightSummary.current !== null ? `${Math.round(convertWeightToDisplay(weightSummary.current) * 10) / 10} ${getWeightUnitLabel()}` : '—'}
+            </Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Goal Weight</Text>
+            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+              {weightSummary.goal !== null ? `${Math.round(convertWeightToDisplay(weightSummary.goal) * 10) / 10} ${getWeightUnitLabel()}` : '—'}
+            </Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Weight Change</Text>
+            <Text style={[styles.statValue, { color: weightSummary.change !== null && weightSummary.change > 0 ? '#22C55E' : theme.colors.textPrimary }]}>
+              {weightSummary.change !== null ? `${weightSummary.change > 0 ? '-' : '+'}${Math.abs(Math.round(convertWeightToDisplay(weightSummary.change) * 10) / 10)} ${getWeightUnitLabel()}` : '—'}
+            </Text>
+          </View>
+          <View style={styles.statItem}>
+            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Daily Calorie Goal</Text>
+            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+              {goals?.calories ? `${goals.calories} kcal` : '—'}
+            </Text>
+          </View>
         </View>
 
-        {/* Premium: Streak Freeze Status */}
-        {plan === 'premium' && streakFreeze && (
-          <View style={{ marginTop: 12, padding: 12, borderRadius: 10, backgroundColor: 'rgba(59, 130, 246, 0.1)', flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-            <View>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>Recovery Days</Text>
-              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>Automatic protection for missed days.</Text>
-            </View>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
-              {[1, 2].map((i) => (
-                <Text key={i} style={{ fontSize: 18, opacity: i <= streakFreeze.freezesAvailable ? 1 : 0.3 }}>
-                  ❄️
-                </Text>
-              ))}
-            </View>
-          </View>
-        )}
       </View>
 
-      {/* Advanced Analytics Menu Item */}
-      {onOpenAdvancedAnalytics && (
-        <TouchableOpacity
-          style={[styles.summaryCard, {
-            backgroundColor: 'rgba(139, 92, 246, 0.05)',
-            borderColor: 'rgba(139, 92, 246, 0.3)',
-            flexDirection: 'row',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            marginTop: 16
-          }]}
-          onPress={onOpenAdvancedAnalytics}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-            <View style={{ backgroundColor: 'rgba(139, 92, 246, 0.1)', padding: 8, borderRadius: 8 }}>
-              <Feather name="bar-chart-2" size={24} color="#8B5CF6" />
-            </View>
-            <View>
-              <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>Advanced Analytics</Text>
-              <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>View trends, heatmaps & insights</Text>
-            </View>
-          </View>
-          <Feather name="chevron-right" size={20} color={theme.colors.textTertiary} />
-        </TouchableOpacity>
-      )}
 
       {/* Actions */}
       <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>
@@ -1117,11 +1098,12 @@ const styles = StyleSheet.create({
   },
   statsGrid: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     marginTop: 16,
     gap: 12,
   },
   statItem: {
-    flex: 1,
+    width: '47%',
     padding: 12,
     borderRadius: 10,
     backgroundColor: 'rgba(20, 184, 166, 0.04)',

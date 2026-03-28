@@ -14,10 +14,10 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
-import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth, parseISO } from 'date-fns';
+import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth, parseISO, startOfDay } from 'date-fns';
 import { Meal } from './FoodLogSection';
 import { calculateTotalNutrition } from '../utils/foodNutrition';
-import { AdjustmentRecord } from '../services/dataStorage';
+import { AdjustmentRecord, DailySummary } from '../services/dataStorage';
 
 interface CalendarModalProps {
   visible: boolean;
@@ -27,6 +27,7 @@ interface CalendarModalProps {
   mealsByDate: Record<string, Meal[]>;
   dailyCalorieTarget: number;
   adjustments?: AdjustmentRecord[];
+  summariesByDate?: Record<string, DailySummary>;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -39,6 +40,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   mealsByDate,
   dailyCalorieTarget,
   adjustments,
+  summariesByDate = {},
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
@@ -46,17 +48,29 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
   const [currentMonth, setCurrentMonth] = useState(new Date());
 
-  // Calculate calories for a specific date
+  // Calculate calories for a specific date (use summaries for historical, mealsByDate for current)
   const getDateCalories = (date: Date): number => {
     const dateKey = format(date, 'yyyy-MM-dd');
+    const summary = summariesByDate[dateKey];
+    if (summary && summary.entryCount > 0) return summary.totalCalories;
     const meals = mealsByDate[dateKey] || [];
     const allFoods = meals.flatMap(meal => meal.foods);
     const nutrition = calculateTotalNutrition(allFoods);
     return nutrition.totalCalories;
   };
 
+  // Check if a date has any log entries
+  const hasLogForDate = (date: Date): boolean => {
+    const dateKey = format(date, 'yyyy-MM-dd');
+    const summary = summariesByDate[dateKey];
+    if (summary && summary.entryCount > 0) return true;
+    const meals = mealsByDate[dateKey] || [];
+    return meals.some(m => m.foods.length > 0);
+  };
+
   // Determine date status: 'exceeded' | 'within' | 'no-data'
   const getDateStatus = (date: Date): 'exceeded' | 'within' | 'no-data' => {
+    if (!hasLogForDate(date)) return 'no-data';
     const calories = getDateCalories(date);
     if (calories === 0) return 'no-data';
     if (!dailyCalorieTarget || dailyCalorieTarget <= 0) {
@@ -87,7 +101,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
     }
 
     return days;
-  }, [currentMonth, mealsByDate, dailyCalorieTarget]);
+  }, [currentMonth, mealsByDate, dailyCalorieTarget, summariesByDate]);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
   const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
@@ -180,10 +194,13 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                 const backgroundColor = isSelected ? theme.colors.textPrimary : 'transparent';
 
                 // Simple Indicator: Colored Underline Bar
+                const isPast = startOfDay(dayData.date) < startOfDay(new Date());
+                const isMissed = isPast && dayData.status === 'no-data';
                 let indicatorColor = 'transparent';
                 if (isCurrentMonth && !isSelected) {
-                  if (dayData.status === 'within') indicatorColor = '#10B981'; // Emerald
-                  else if (dayData.status === 'exceeded') indicatorColor = '#EF4444'; // Red
+                  if (dayData.status === 'within') indicatorColor = '#10B981'; // Emerald - logged
+                  else if (dayData.status === 'exceeded') indicatorColor = '#EF4444'; // Red - exceeded
+                  else if (isMissed) indicatorColor = '#EF4444'; // Red - missed day
                 }
 
                 return (

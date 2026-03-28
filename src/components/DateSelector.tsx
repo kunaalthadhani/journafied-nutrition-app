@@ -1,19 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
-import { format, isSameDay, subDays } from 'date-fns';
+import { format, isSameDay, subDays, startOfDay } from 'date-fns';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
 import { DayData } from '../types';
+import { DailySummary } from '../services/dataStorage';
 
 interface DateSelectorProps {
   onDateSelect?: (date: Date) => void;
   selectedDate?: Date;
+  summariesByDate?: Record<string, DailySummary>;
 }
 
 export const DateSelector: React.FC<DateSelectorProps> = ({
   onDateSelect,
-  selectedDate = new Date()
+  selectedDate = new Date(),
+  summariesByDate = {},
 }) => {
   const theme = useTheme();
   const flatListRef = useRef<ScrollView | null>(null);
@@ -61,9 +64,15 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
       >
         {dateList.map((dateData, index) => {
           const isActive = isSameDay(dateData.date, selectedDate);
+          const dateKey = format(dateData.date, 'yyyy-MM-dd');
+          const summary = summariesByDate[dateKey];
+          const hasLog = summary && summary.entryCount > 0;
+          const isToday = isSameDay(dateData.date, today);
+          const isPast = startOfDay(dateData.date) < startOfDay(today);
+          const isMissed = isPast && !hasLog;
           return (
             <TouchableOpacity
-              key={`${format(dateData.date, 'yyyy-MM-dd')}-${index}`}
+              key={`${dateKey}-${index}`}
               style={[
                 styles.dayBlock,
               ]}
@@ -89,6 +98,14 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
                   {dateData.dayNumber}
                 </Text>
               </View>
+              {/* Log status bar */}
+              <View style={{
+                width: 18,
+                height: 3,
+                borderRadius: 1.5,
+                marginTop: 3,
+                backgroundColor: hasLog ? '#10B981' : (isMissed ? '#EF4444' : 'transparent'),
+              }} />
             </TouchableOpacity>
           )
         })}
@@ -111,7 +128,7 @@ const styles = StyleSheet.create({
   },
   dayBlock: {
     width: 48,
-    height: 60,
+    height: 68,
     alignItems: 'center',
     justifyContent: 'center',
     marginHorizontal: 2,

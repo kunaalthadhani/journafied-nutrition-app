@@ -32,7 +32,6 @@ import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
 import { SettingsScreen } from './SettingsScreen';
 import { SubscriptionScreen } from './SubscriptionScreen';
 import { AccountScreen } from './AccountScreen';
-import AdvancedAnalyticsScreen from './AdvancedAnalyticsScreen';
 import { AboutScreen } from './AboutScreen';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
@@ -163,10 +162,6 @@ export const HomeScreen: React.FC = () => {
   const [justFrozeToday, setJustFrozeToday] = useState(false);
   const [showStreakWidget, setShowStreakWidget] = useState(false);
 
-  // Advanced Analytics
-  const [showAdvancedAnalytics, setShowAdvancedAnalytics] = useState(false);
-  const handleOpenAdvancedAnalytics = () => setShowAdvancedAnalytics(true);
-  const handleAdvancedAnalyticsBack = () => setShowAdvancedAnalytics(false);
 
   // Smart Adjustment
   const [adjustmentAvailable, setAdjustmentAvailable] = useState<AdjustmentRecord | null>(null);
@@ -1946,7 +1941,6 @@ export const HomeScreen: React.FC = () => {
               initialTotalEarnedEntries={totalEarnedEntries}
               initialStreakFreeze={streakFreeze}
               initialFrozenDates={streakFreeze?.usedOnDates}
-              onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
             />
           )}
           onAccountClose={async () => {
@@ -2036,22 +2030,8 @@ export const HomeScreen: React.FC = () => {
 
           initialStreakFreeze={streakFreeze}
           initialFrozenDates={streakFreeze?.usedOnDates}
-          onOpenAdvancedAnalytics={handleOpenAdvancedAnalytics}
           initialMode={accountInitialMode}
         />
-        <Modal
-          visible={showAdvancedAnalytics}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={handleAdvancedAnalyticsBack}
-        >
-          <AdvancedAnalyticsScreen
-            onBack={handleAdvancedAnalyticsBack}
-            userPlan={userPlan}
-            summariesByDate={summariesByDate}
-            userGoals={savedGoals}
-          />
-        </Modal>
       </Modal>
     );
   }
@@ -2160,6 +2140,7 @@ export const HomeScreen: React.FC = () => {
         <DateSelector
           selectedDate={selectedDate}
           onDateSelect={handleDateSelect}
+          summariesByDate={summariesByDate}
         />
 
         {/* Stat Cards */}
@@ -2437,20 +2418,6 @@ export const HomeScreen: React.FC = () => {
         </Modal>
 
         <Modal
-          visible={showAdvancedAnalytics}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={handleAdvancedAnalyticsBack}
-        >
-          <AdvancedAnalyticsScreen
-            onBack={handleAdvancedAnalyticsBack}
-            userPlan={isPremium ? 'premium' : 'free'}
-            summariesByDate={summariesByDate}
-            userGoals={savedGoals}
-          />
-        </Modal>
-
-        <Modal
           visible={showChatCoach}
           animationType="slide"
           presentationStyle="pageSheet"
@@ -2467,6 +2434,7 @@ export const HomeScreen: React.FC = () => {
           mealsByDate={mealsByDate}
           dailyCalorieTarget={dailyCalories}
           adjustments={adjustmentHistory}
+          summariesByDate={summariesByDate}
         />
 
         {/* Streak Widget Modal — slides from top like calendar */}

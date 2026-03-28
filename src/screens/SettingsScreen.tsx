@@ -296,31 +296,57 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             subtitle={weightUnit === 'kg' ? 'Kilograms (kg)' : 'Pounds (lbs)'}
             onPress={() => openSlideUp('weightUnit')}
           />
-          <SettingItem
-            icon="zap"
-            title="Smart Suggest"
-            subtitle="Show next meal suggestions on Home"
-            rightElement={
-              <Switch
-                value={smartSuggestEnabled}
-                onValueChange={async (val) => {
-                  setSmartSuggestEnabled(val);
-                  const current = await dataStorage.loadPreferences() || {};
-                  // @ts-ignore
-                  await dataStorage.savePreferences({ ...current, smartSuggestEnabled: val });
-                }}
-                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                thumbColor={Colors.white}
+          {plan === 'premium' ? (
+            <SettingItem
+              icon="zap"
+              title="Smart Suggest"
+              subtitle="Show next meal suggestions on Home"
+              rightElement={
+                <Switch
+                  value={smartSuggestEnabled}
+                  onValueChange={async (val) => {
+                    setSmartSuggestEnabled(val);
+                    const current = await dataStorage.loadPreferences() || {};
+                    // @ts-ignore
+                    await dataStorage.savePreferences({ ...current, smartSuggestEnabled: val });
+                  }}
+                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                  thumbColor={Colors.white}
+                />
+              }
+              showChevron={false}
+            />
+          ) : (
+            <View style={{ opacity: 0.5 }}>
+              <SettingItem
+                icon="zap"
+                title="Smart Suggest"
+                subtitle="Show next meal suggestions on Home"
+                onPress={() => onOpenSubscription?.()}
+                rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
+                showChevron={false}
               />
-            }
-            showChevron={false}
-          />
-          <SettingItem
-            icon="shopping-cart"
-            title="Grocery Suggestions"
-            subtitle="AI-Powered Lists"
-            onPress={() => onGrocerySuggestions?.()}
-          />
+            </View>
+          )}
+          {plan === 'premium' ? (
+            <SettingItem
+              icon="shopping-cart"
+              title="Grocery Suggestions"
+              subtitle="AI-Powered Lists"
+              onPress={() => onGrocerySuggestions?.()}
+            />
+          ) : (
+            <View style={{ opacity: 0.5 }}>
+              <SettingItem
+                icon="shopping-cart"
+                title="Grocery Suggestions"
+                subtitle="AI-Powered Lists"
+                onPress={() => onOpenSubscription?.()}
+                rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
+                showChevron={false}
+              />
+            </View>
+          )}
           {plan === 'premium' ? (
             <SettingItem
               icon="trending-up"
@@ -334,7 +360,55 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 icon="trending-up"
                 title="Dynamic Adjustments"
                 subtitle="Auto-adjust your plan as your body changes"
-                onPress={() => openSlideUp('dynamic')}
+                onPress={() => onOpenSubscription?.()}
+                rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
+                showChevron={false}
+              />
+            </View>
+          )}
+          {plan === 'premium' ? (
+            <SettingItem
+              icon="eye"
+              title="Pattern Detection"
+              subtitle="Spot trends in your eating habits"
+              showChevron={false}
+              rightElement={
+                <View style={{ backgroundColor: theme.colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>Active</Text>
+                </View>
+              }
+            />
+          ) : (
+            <View style={{ opacity: 0.5 }}>
+              <SettingItem
+                icon="eye"
+                title="Pattern Detection"
+                subtitle="Spot trends in your eating habits"
+                onPress={() => onOpenSubscription?.()}
+                rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
+                showChevron={false}
+              />
+            </View>
+          )}
+          {plan === 'premium' ? (
+            <SettingItem
+              icon="bar-chart-2"
+              title="Weekly AI Overview"
+              subtitle="Personalized nutrition insights every week"
+              showChevron={false}
+              rightElement={
+                <View style={{ backgroundColor: theme.colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+                  <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>Active</Text>
+                </View>
+              }
+            />
+          ) : (
+            <View style={{ opacity: 0.5 }}>
+              <SettingItem
+                icon="bar-chart-2"
+                title="Weekly AI Overview"
+                subtitle="Personalized nutrition insights every week"
+                onPress={() => onOpenSubscription?.()}
                 rightElement={<MaterialCommunityIcons name="shield-lock-outline" size={16} color={theme.colors.textTertiary} />}
                 showChevron={false}
               />
