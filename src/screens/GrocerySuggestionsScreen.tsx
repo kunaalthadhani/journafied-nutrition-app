@@ -81,76 +81,24 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
             const categories = Object.keys(grouped).sort((a, b) => priority.indexOf(a) - priority.indexOf(b));
 
             const itemsHtml = categories.map(cat => {
-                const color = getCategoryColor(cat);
                 const label = CATEGORY_LABELS[cat] || cat.charAt(0).toUpperCase() + cat.slice(1);
                 const catItems = grouped[cat].map(item => {
                     const qty = (item.baseQuantity || 1) * durationWeeks;
                     const unit = item.unit || '';
-                    const m = item.macros || { p: 0, c: 0, f: 0, kcal: 0 };
-                    const kcal = Math.round(m.kcal * durationWeeks);
-                    const isChecked = checkedItems.has(item.name);
-                    const reasonText = explanation?.itemExplanations[item.name] || '';
 
                     return `
-                    <div class="item ${isChecked ? 'checked' : ''}">
-                        <div class="item-check">${isChecked ? '&#10003;' : ''}</div>
-                        <div class="item-body">
-                            <div class="item-top">
-                                <span class="item-name">${item.name}</span>
-                                <span class="item-qty">${qty} ${unit}</span>
-                            </div>
-                            <div class="item-bottom">
-                                <span class="item-kcal">${kcal} kcal</span>
-                                <span class="item-macros">P ${Math.round(m.p * durationWeeks)}g &middot; C ${Math.round(m.c * durationWeeks)}g &middot; F ${Math.round(m.f * durationWeeks)}g</span>
-                            </div>
-                            ${reasonText ? `<div class="item-reason">${reasonText}</div>` : ''}
-                        </div>
-                    </div>`;
+                    <tr>
+                        <td class="name">${item.name}</td>
+                        <td class="qty">${qty} ${unit}</td>
+                    </tr>`;
                 }).join('');
 
                 return `
                 <div class="category">
-                    <div class="cat-header">
-                        <div class="cat-dot" style="background:${color}"></div>
-                        <span class="cat-label">${label}</span>
-                        <span class="cat-count">${grouped[cat].length} items</span>
-                    </div>
-                    ${catItems}
+                    <div class="cat-label">${label}</div>
+                    <table>${catItems}</table>
                 </div>`;
             }).join('');
-
-            const sum = groceryData.summary;
-            let summaryHtml = '';
-            if (sum) {
-                const totalK = Math.round(sum.weeklyTotal.kcal * durationWeeks);
-                const loss = (sum.projectedWeightLossKg * durationWeeks).toFixed(1);
-                const p = Math.round(sum.weeklyTotal.p * durationWeeks);
-                const c = Math.round(sum.weeklyTotal.c * durationWeeks);
-                const f = Math.round(sum.weeklyTotal.f * durationWeeks);
-
-                summaryHtml = `
-                <div class="summary">
-                    <div class="summary-title">Plan Impact</div>
-                    <div class="summary-stats">
-                        <div class="stat">
-                            <div class="stat-val" style="color:#6366F1">${totalK}</div>
-                            <div class="stat-label">Total kcal</div>
-                        </div>
-                        <div class="stat-divider"></div>
-                        <div class="stat">
-                            <div class="stat-val" style="color:${Number(loss) > 0 ? '#10B981' : '#F59E0B'}">${Number(loss) > 0 ? '-' : ''}${Math.abs(Number(loss))} kg</div>
-                            <div class="stat-label">Expected change</div>
-                        </div>
-                    </div>
-                    <div class="macro-bar">
-                        <div class="macro-pill" style="background:#6366F120;color:#6366F1">Protein ${p}g</div>
-                        <div class="macro-pill" style="background:#F59E0B20;color:#F59E0B">Carbs ${c}g</div>
-                        <div class="macro-pill" style="background:#EC489920;color:#EC4899">Fat ${f}g</div>
-                    </div>
-                    ${sum.replacedJunkCalories > 200 ? `
-                    <div class="swap-note">Swapped ~${Math.round(sum.replacedJunkCalories * durationWeeks)} kcal of processed food for whole food alternatives</div>` : ''}
-                </div>`;
-            }
 
             const html = `<!DOCTYPE html>
 <html>
@@ -158,56 +106,24 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 <meta charset="utf-8">
 <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: -apple-system, 'Helvetica Neue', sans-serif; padding: 48px 40px; color: #1a1a1a; background: #fff; max-width: 700px; margin: 0 auto; }
-    .header { margin-bottom: 32px; }
-    .header h1 { font-size: 28px; font-weight: 800; letter-spacing: -0.5px; }
-    .header .meta { font-size: 13px; color: #888; margin-top: 6px; }
-    .coach { background: #F8F7FF; border-left: 3px solid #6366F1; padding: 16px 20px; border-radius: 0 12px 12px 0; margin-bottom: 32px; }
-    .coach-label { font-size: 11px; font-weight: 700; color: #6366F1; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 6px; }
-    .coach-text { font-size: 14px; line-height: 1.6; color: #333; }
-    .category { margin-bottom: 28px; }
-    .cat-header { display: flex; align-items: center; margin-bottom: 12px; gap: 8px; }
-    .cat-dot { width: 10px; height: 10px; border-radius: 5px; }
-    .cat-label { font-size: 15px; font-weight: 700; }
-    .cat-count { font-size: 12px; color: #999; margin-left: auto; }
-    .item { display: flex; align-items: flex-start; padding: 14px 0; border-bottom: 1px solid #f0f0f0; gap: 12px; }
-    .item:last-child { border-bottom: none; }
-    .item.checked .item-name { text-decoration: line-through; color: #bbb; }
-    .item-check { width: 20px; height: 20px; border: 2px solid #ddd; border-radius: 6px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: #10B981; flex-shrink: 0; margin-top: 2px; }
-    .item.checked .item-check { background: #10B981; border-color: #10B981; color: #fff; }
-    .item-body { flex: 1; }
-    .item-top { display: flex; justify-content: space-between; align-items: baseline; }
-    .item-name { font-size: 15px; font-weight: 600; }
-    .item-qty { font-size: 13px; color: #666; font-weight: 500; }
-    .item-bottom { display: flex; gap: 12px; margin-top: 4px; }
-    .item-kcal { font-size: 12px; font-weight: 600; color: #6366F1; }
-    .item-macros { font-size: 11px; color: #999; }
-    .item-reason { font-size: 12px; color: #888; margin-top: 4px; line-height: 1.4; }
-    .summary { background: #FAFAFA; border: 1px solid #eee; border-radius: 16px; padding: 24px; margin-top: 12px; margin-bottom: 32px; }
-    .summary-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; }
-    .summary-stats { display: flex; align-items: center; justify-content: center; gap: 32px; margin-bottom: 16px; }
-    .stat { text-align: center; }
-    .stat-val { font-size: 28px; font-weight: 800; }
-    .stat-label { font-size: 11px; color: #999; margin-top: 2px; text-transform: uppercase; letter-spacing: 0.3px; }
-    .stat-divider { width: 1px; height: 40px; background: #eee; }
-    .macro-bar { display: flex; gap: 8px; justify-content: center; }
-    .macro-pill { font-size: 12px; font-weight: 600; padding: 6px 14px; border-radius: 20px; }
-    .swap-note { margin-top: 16px; font-size: 12px; color: #10B981; text-align: center; font-weight: 500; }
-    .footer { text-align: center; font-size: 10px; color: #ccc; margin-top: 40px; padding-top: 20px; border-top: 1px solid #f0f0f0; }
+    body { font-family: -apple-system, 'Helvetica Neue', sans-serif; padding: 40px; color: #000; background: #fff; max-width: 600px; margin: 0 auto; }
+    h1 { font-size: 22px; font-weight: 800; margin-bottom: 4px; }
+    .meta { font-size: 12px; color: #666; margin-bottom: 32px; }
+    .category { margin-bottom: 24px; }
+    .cat-label { font-size: 13px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 8px; padding-bottom: 6px; border-bottom: 2px solid #000; }
+    table { width: 100%; border-collapse: collapse; }
+    tr { border-bottom: 1px solid #eee; }
+    tr:last-child { border-bottom: none; }
+    td { padding: 10px 0; vertical-align: middle; }
+    .name { font-size: 14px; font-weight: 500; }
+    .qty { text-align: right; font-size: 13px; font-weight: 600; color: #555; }
+    .footer { text-align: center; font-size: 9px; color: #ccc; margin-top: 40px; padding-top: 16px; border-top: 1px solid #eee; }
 </style>
 </head>
 <body>
-    <div class="header">
-        <h1>Your Grocery List</h1>
-        <div class="meta">${durationWeeks} week${durationWeeks > 1 ? 's' : ''} &middot; ${groceryData.items.length} items &middot; ${groceryData.primaryFocus}</div>
-    </div>
-    ${explanation?.summary ? `
-    <div class="coach">
-        <div class="coach-label">AI Insight</div>
-        <div class="coach-text">${explanation.summary}</div>
-    </div>` : ''}
+    <h1>Grocery List</h1>
+    <div class="meta">${durationWeeks} week${durationWeeks > 1 ? 's' : ''} &middot; ${groceryData.items.length} items</div>
     ${itemsHtml}
-    ${summaryHtml}
     <div class="footer">Generated by TrackKcal</div>
 </body>
 </html>`;
