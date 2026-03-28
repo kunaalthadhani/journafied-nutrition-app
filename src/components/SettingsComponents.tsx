@@ -9,6 +9,7 @@ interface SettingItemProps {
     title: string;
     subtitle?: string;
     onPress?: () => void;
+    onLongPress?: () => void;
     rightElement?: React.ReactNode;
     showChevron?: boolean;
     disabled?: boolean;
@@ -19,6 +20,7 @@ export const SettingItem: React.FC<SettingItemProps> = ({
     title,
     subtitle,
     onPress,
+    onLongPress,
     rightElement,
     showChevron = true,
     disabled = false,
@@ -29,6 +31,7 @@ export const SettingItem: React.FC<SettingItemProps> = ({
         <TouchableOpacity
             style={[styles.settingItem, { borderBottomColor: theme.colors.border }, disabled && { opacity: 0.5 }]}
             onPress={disabled ? undefined : onPress}
+            onLongPress={disabled ? undefined : onLongPress}
             activeOpacity={0.7}
             disabled={disabled || !onPress}
         >

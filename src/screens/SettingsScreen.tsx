@@ -55,7 +55,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const { weightUnit, setWeightUnit } = usePreferences();
 
   // Slide-up panel state
-  type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview';
+  type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview' | 'grocery';
   const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
   const activeSlideUpRef = useRef<SlideUpType | null>(null);
 
@@ -71,7 +71,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const slideUpAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const openSlideUp = (type: SlideUpType) => {
-    if (['dynamic', 'smartSuggest', 'patternDetection', 'weeklyOverview'].includes(type) && plan !== 'premium') {
+    if (['dynamic', 'smartSuggest', 'patternDetection', 'weeklyOverview', 'grocery'].includes(type) && plan !== 'premium') {
       onOpenSubscription?.();
       return;
     }
@@ -319,8 +319,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingItem
               icon="shopping-cart"
               title="Grocery Suggestions"
-              subtitle="AI-Powered Lists"
-              onPress={() => onGrocerySuggestions?.()}
+              subtitle="AI-Powered Lists · Hold to open"
+              onPress={() => openSlideUp('grocery')}
+              onLongPress={() => onGrocerySuggestions?.()}
             />
           ) : (
             <View style={{ opacity: 0.5 }}>
@@ -763,7 +764,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
 
                   <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
-                    Pattern Detection runs in the background and analyzes your food log history to find recurring habits — both good and bad. It looks at what you eat, when you eat, and how your intake shifts across days of the week.
+                    Pattern Detection runs in the background and analyzes your food log history to find recurring habits, both good and bad. It looks at what you eat, when you eat, and how your intake shifts across days of the week.
                   </Text>
 
                   <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
@@ -807,6 +808,91 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               </>
             )}
 
+            {/* Grocery Suggestions Slide-Up */}
+            {activeSlideUp === 'grocery' && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Grocery Suggestions</Text>
+                      <View style={{ backgroundColor: '#18181B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                        <MaterialCommunityIcons name="crown" size={14} color="#EAB308" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+                    Grocery Suggestions uses AI to generate a personalized shopping list based on your nutrition goals, the foods you already enjoy, and your macro targets.
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                    Instead of guessing what to buy, you get a curated list that aligns with your calorie budget and helps you stay on track for the week ahead.
+                  </Text>
+
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>Features</Text>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>1 Week or 2 Weeks</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Choose how far ahead you want to shop. The 1 week option gives you just enough for the next 7 days. The 2 week option doubles all quantities so you can do a bigger shop and avoid midweek trips.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Weekly Plan Impact</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      At the bottom of your list you'll see a summary showing the total calories, protein, carbs, and fats the grocery list covers for your chosen duration. It also shows your expected weight change if you follow the plan, so you can see the real impact before you shop.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Healthier swaps</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      If the AI detects that a significant portion of your recent calories came from processed food, it will flag how many calories were replaced with healthier staples. This shows you the exact calorie difference between what you were eating and what the new list provides.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Organized by category</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Items are grouped into proteins, fiber, carbs, and fats so you can move through the store efficiently without backtracking.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 24, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Export and share</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Export your grocery list as a PDF to share with someone else or keep on your phone while you shop.
+                    </Text>
+                  </View>
+
+                  {/* Open Grocery Screen Button */}
+                  <TouchableOpacity
+                    onPress={() => {
+                      closeSlideUp();
+                      setTimeout(() => onGrocerySuggestions?.(), 300);
+                    }}
+                    style={{
+                      backgroundColor: theme.colors.textPrimary,
+                      borderRadius: 14,
+                      paddingVertical: 16,
+                      alignItems: 'center',
+                    }}
+                  >
+                    <Text style={{ color: theme.colors.background, fontSize: 16, fontWeight: '700' }}>Generate Grocery List</Text>
+                  </TouchableOpacity>
+                </ScrollView>
+              </>
+            )}
+
             {/* Weekly AI Overview Slide-Up */}
             {activeSlideUp === 'weeklyOverview' && (
               <>
@@ -843,7 +929,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
 
                   <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
-                    Every week, our AI reviews your complete nutrition data — what you ate, how much, when, and how it compares to your goals — and writes a personalized analysis just for you.
+                    Every week, our AI reviews your complete nutrition data including what you ate, how much, when, and how it compares to your goals, then writes a personalized analysis just for you.
                   </Text>
 
                   <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
@@ -869,7 +955,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                   <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.colors.border }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Actionable next steps</Text>
                     <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
-                      Each insight comes with a concrete suggestion you can try this week — not vague advice, but something specific to your data.
+                      Each insight comes with a concrete suggestion you can try this week. Not vague advice, but something specific to your data.
                     </Text>
                   </View>
 
