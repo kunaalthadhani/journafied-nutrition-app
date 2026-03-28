@@ -55,7 +55,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const { weightUnit, setWeightUnit } = usePreferences();
 
   // Slide-up panel state
-  type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic';
+  type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview';
   const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
   const activeSlideUpRef = useRef<SlideUpType | null>(null);
 
@@ -71,7 +71,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const slideUpAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const openSlideUp = (type: SlideUpType) => {
-    if (type === 'dynamic' && plan !== 'premium') {
+    if (['dynamic', 'smartSuggest', 'patternDetection', 'weeklyOverview'].includes(type) && plan !== 'premium') {
       onOpenSubscription?.();
       return;
     }
@@ -300,21 +300,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingItem
               icon="zap"
               title="Smart Suggest"
-              subtitle="Show next meal suggestions on Home"
-              rightElement={
-                <Switch
-                  value={smartSuggestEnabled}
-                  onValueChange={async (val) => {
-                    setSmartSuggestEnabled(val);
-                    const current = await dataStorage.loadPreferences() || {};
-                    // @ts-ignore
-                    await dataStorage.savePreferences({ ...current, smartSuggestEnabled: val });
-                  }}
-                  trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                  thumbColor={Colors.white}
-                />
-              }
-              showChevron={false}
+              subtitle={smartSuggestEnabled ? 'On · Suggestions on Home' : 'Off · Tap to configure'}
+              onPress={() => openSlideUp('smartSuggest')}
             />
           ) : (
             <View style={{ opacity: 0.5 }}>
@@ -370,13 +357,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingItem
               icon="eye"
               title="Pattern Detection"
-              subtitle="Spot trends in your eating habits"
-              showChevron={false}
-              rightElement={
-                <View style={{ backgroundColor: theme.colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                  <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>Active</Text>
-                </View>
-              }
+              subtitle="Active · Analyzing your eating habits"
+              onPress={() => openSlideUp('patternDetection')}
             />
           ) : (
             <View style={{ opacity: 0.5 }}>
@@ -394,13 +376,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             <SettingItem
               icon="bar-chart-2"
               title="Weekly AI Overview"
-              subtitle="Personalized nutrition insights every week"
-              showChevron={false}
-              rightElement={
-                <View style={{ backgroundColor: theme.colors.primary + '20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-                  <Text style={{ color: theme.colors.primary, fontSize: 11, fontWeight: '600' }}>Active</Text>
-                </View>
-              }
+              subtitle="Active · New insights every Monday"
+              onPress={() => openSlideUp('weeklyOverview')}
             />
           ) : (
             <View style={{ opacity: 0.5 }}>
@@ -672,6 +649,238 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
                   <Text style={{ fontSize: 13, color: theme.colors.textTertiary, lineHeight: 20 }}>
                     The lower the threshold, the more often you'll get suggestions. Pick what feels right for you.
+                  </Text>
+                </ScrollView>
+              </>
+            )}
+
+            {/* Smart Suggest Slide-Up */}
+            {activeSlideUp === 'smartSuggest' && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Smart Suggest</Text>
+                      <View style={{ backgroundColor: '#18181B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                        <MaterialCommunityIcons name="crown" size={14} color="#EAB308" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                  {/* Toggle */}
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    backgroundColor: theme.colors.card, borderRadius: 14, padding: 16, marginBottom: 24,
+                    borderWidth: 1, borderColor: theme.colors.border,
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary }}>
+                      {smartSuggestEnabled ? 'Enabled' : 'Disabled'}
+                    </Text>
+                    <Switch
+                      trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                      thumbColor={'white'}
+                      ios_backgroundColor={theme.colors.border}
+                      onValueChange={async (val) => {
+                        setSmartSuggestEnabled(val);
+                        const current = await dataStorage.loadPreferences() || {};
+                        // @ts-ignore
+                        await dataStorage.savePreferences({ ...current, smartSuggestEnabled: val });
+                      }}
+                      value={smartSuggestEnabled}
+                    />
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: theme.colors.border, marginBottom: 24 }} />
+
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+                    Smart Suggest learns from your eating patterns and recommends what to eat next based on your goals, the time of day, and what you've already logged today.
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                    Suggestions appear on your Home screen as a quick-add card. Tap any suggestion to instantly log it, or dismiss it if you have something else in mind.
+                  </Text>
+
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>Where to find it</Text>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Home screen</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      A suggestion card appears below your food log when Smart Suggest is enabled. It updates throughout the day as you log meals.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Adapts to you</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      The more you log, the better the suggestions get. It factors in your macro targets, calorie budget remaining, and foods you actually enjoy eating.
+                    </Text>
+                  </View>
+                </ScrollView>
+              </>
+            )}
+
+            {/* Pattern Detection Slide-Up */}
+            {activeSlideUp === 'patternDetection' && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Pattern Detection</Text>
+                      <View style={{ backgroundColor: '#18181B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                        <MaterialCommunityIcons name="crown" size={14} color="#EAB308" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                  {/* Status */}
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    backgroundColor: theme.colors.card, borderRadius: 14, padding: 16, marginBottom: 24,
+                    borderWidth: 1, borderColor: theme.colors.border,
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary }}>Always Active</Text>
+                    <View style={{ backgroundColor: '#10B981' + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                      <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Running</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: theme.colors.border, marginBottom: 24 }} />
+
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+                    Pattern Detection runs in the background and analyzes your food log history to find recurring habits — both good and bad. It looks at what you eat, when you eat, and how your intake shifts across days of the week.
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                    When a pattern is detected, a card appears on your Home screen explaining what was found and suggesting a specific action you can take to improve.
+                  </Text>
+
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>What it detects</Text>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Weekend overeating</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Flags when your Saturday and Sunday intake consistently exceeds your weekday average by a significant margin.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Late-night eating</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Identifies when a large portion of your calories are being logged in the evening, which can affect sleep and weight management.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Protein gaps</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Detects when your protein intake is consistently below your target, which can impact muscle retention and satiety.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Consistency streaks</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Recognizes when you've been hitting your targets consistently, so you know what's working.
+                    </Text>
+                  </View>
+
+                  <Text style={{ fontSize: 13, color: theme.colors.textTertiary, lineHeight: 20 }}>
+                    Patterns are refreshed automatically as you log more data. The more you track, the more accurate the detection becomes.
+                  </Text>
+                </ScrollView>
+              </>
+            )}
+
+            {/* Weekly AI Overview Slide-Up */}
+            {activeSlideUp === 'weeklyOverview' && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
+                  <TouchableOpacity onPress={closeSlideUp} style={{ padding: 8 }}>
+                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                  </TouchableOpacity>
+                  <View style={{ flex: 1, alignItems: 'center' }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary }}>Weekly AI Overview</Text>
+                      <View style={{ backgroundColor: '#18181B', paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 }}>
+                        <MaterialCommunityIcons name="crown" size={14} color="#EAB308" />
+                      </View>
+                    </View>
+                  </View>
+                  <View style={{ width: 40 }} />
+                </View>
+
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 24, paddingBottom: 60 }} showsVerticalScrollIndicator={false}>
+                  {/* Status */}
+                  <View style={{
+                    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                    backgroundColor: theme.colors.card, borderRadius: 14, padding: 16, marginBottom: 24,
+                    borderWidth: 1, borderColor: theme.colors.border,
+                  }}>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary }}>Always Active</Text>
+                    <View style={{ backgroundColor: '#10B981' + '20', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+                      <Text style={{ color: '#10B981', fontSize: 12, fontWeight: '700' }}>Running</Text>
+                    </View>
+                  </View>
+
+                  <View style={{ height: 1, backgroundColor: theme.colors.border, marginBottom: 24 }} />
+
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>How it works</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 12 }}>
+                    Every week, our AI reviews your complete nutrition data — what you ate, how much, when, and how it compares to your goals — and writes a personalized analysis just for you.
+                  </Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 24 }}>
+                    This isn't generic advice. Each insight references your actual numbers, specific foods, and real patterns from the past 7 days.
+                  </Text>
+
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>What you get</Text>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Target comparison</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      See exactly how your average intake stacks up against your calorie and macro goals, with specific numbers.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 10, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Day-by-day patterns</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Identifies which days you went off-track and explains why, so you can plan ahead next week.
+                    </Text>
+                  </View>
+
+                  <View style={{ backgroundColor: theme.colors.card, borderRadius: 12, padding: 16, marginBottom: 16, borderWidth: 1, borderColor: theme.colors.border }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Actionable next steps</Text>
+                    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 20 }}>
+                      Each insight comes with a concrete suggestion you can try this week — not vague advice, but something specific to your data.
+                    </Text>
+                  </View>
+
+                  <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 14 }}>Where to find it</Text>
+
+                  <Text style={{ fontSize: 14, color: theme.colors.textSecondary, lineHeight: 22, marginBottom: 16 }}>
+                    Open Nutrition Analysis from the Home screen, then tap the Insights tab. A new overview is generated every Monday based on the previous week's data.
+                  </Text>
+
+                  <Text style={{ fontSize: 13, color: theme.colors.textTertiary, lineHeight: 20 }}>
+                    The more days you log each week, the more useful and specific your insights will be.
                   </Text>
                 </ScrollView>
               </>

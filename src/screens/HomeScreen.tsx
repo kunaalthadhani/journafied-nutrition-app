@@ -360,12 +360,10 @@ export const HomeScreen: React.FC = () => {
 
   const handleOpenSubscription = () => {
     analyticsService.trackSubscriptionScreenOpen();
-    setShowSettings(false);
     setShowSubscription(true);
   };
   const handleSubscriptionBack = () => {
     setShowSubscription(false);
-    setShowSettings(true);
   };
   const handleSubscribe = async (plan: 'annual' | 'monthly') => {
     setUserPlan('premium');
@@ -1964,6 +1962,14 @@ export const HomeScreen: React.FC = () => {
             }
           }}
         />
+        <Modal
+          visible={showSubscription}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleSubscriptionBack}
+        >
+          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+        </Modal>
       </Modal>
     );
   }
@@ -1986,13 +1992,6 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
-  if (showSubscription) {
-    return (
-      <Modal visible={showSubscription} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSubscriptionBack}>
-        <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
-      </Modal>
-    );
-  }
 
   // Account Wall — mandatory sign-up after 5 food logs
   if (showAccountWall) {
@@ -2464,6 +2463,15 @@ export const HomeScreen: React.FC = () => {
           }}
           hideOffer={walkthroughHideOffer || isPremium}
         />
+
+        <Modal
+          visible={showSubscription}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={handleSubscriptionBack}
+        >
+          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+        </Modal>
       </View>
     </SafeAreaView>
   );
