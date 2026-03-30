@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { View, StyleSheet, Dimensions, PanResponder, Animated, Easing } from 'react-native';
 import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
+import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -12,34 +13,57 @@ interface SwipeableCardsProps {
   macros2Data?: MacroData;
   dailyCalories?: number;
   onScrollEnable?: (enabled: boolean) => void;
+  calorieBankActive?: boolean;
+  calorieBankBalance?: number;
+  todayCaloriesEaten?: number;
+  adjustedDailyTarget?: number;
+  dailyCapAmount?: number;
+  weeklyBudget?: number;
+  weeklyActual?: number;
+  remainingDays?: number;
+  daysInCycle?: number;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
-const SWIPE_THRESHOLD = 30; // Minimum distance to trigger swipe
-const CARD_HEIGHT = 120; // Match height
+const SWIPE_THRESHOLD = 30;
+const CARD_HEIGHT = 120;
 
-type CardType = 'macros' | 'macros2';
+type CardType = 'macros' | 'macros2' | 'weekly';
 
 export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   macrosData,
   macros2Data,
   dailyCalories,
-  onScrollEnable
+  onScrollEnable,
+  calorieBankActive,
+  calorieBankBalance,
+  todayCaloriesEaten,
+  adjustedDailyTarget,
+  dailyCapAmount,
+  weeklyBudget,
+  weeklyActual,
+  remainingDays,
+  daysInCycle,
 }) => {
   const theme = useTheme();
   const [currentCard, setCurrentCard] = useState<CardType>('macros2');
 
-  // Animation values
+  // Card order depends on whether bank is active
+  const cardOrder: CardType[] = calorieBankActive
+    ? ['macros2', 'weekly', 'macros']
+    : ['macros2', 'macros'];
+
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;
 
-  // Helper functions for two-card navigation
   const getNextCard = (current: CardType): CardType => {
-    return current === 'macros' ? 'macros2' : 'macros';
+    const idx = cardOrder.indexOf(current);
+    return cardOrder[(idx + 1) % cardOrder.length];
   };
 
   const getPreviousCard = (current: CardType): CardType => {
-    return current === 'macros2' ? 'macros' : 'macros2';
+    const idx = cardOrder.indexOf(current);
+    return cardOrder[(idx - 1 + cardOrder.length) % cardOrder.length];
   };
 
   const animateSwitch = (direction: 'up' | 'down') => {
@@ -47,7 +71,6 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
     const slideOutTo = direction === 'up' ? -50 : 50;
     const slideInFrom = direction === 'up' ? 50 : -50;
 
-    // Animate OUT
     Animated.parallel([
       Animated.timing(fadeAnim, {
         toValue: 0,
@@ -62,12 +85,9 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
         easing: Easing.ease,
       }),
     ]).start(() => {
-      // Switch Content
       setCurrentCard(nextCard);
-      // Construct IN state
       slideAnim.setValue(slideInFrom);
 
-      // Animate IN
       Animated.parallel([
         Animated.timing(fadeAnim, {
           toValue: 1,
@@ -101,10 +121,8 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
 
       if (Math.abs(dy) > SWIPE_THRESHOLD) {
         if (dy < 0) {
-          // Swipe up
           animateSwitch('up');
         } else if (dy > 0) {
-          // Swipe down
           animateSwitch('down');
         }
       }
@@ -127,7 +145,26 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
           {...panResponder.panHandlers}
         >
           {currentCard === 'macros' && <MacrosCard data={macrosData} />}
-          {currentCard === 'macros2' && <Macros2Card data={macros2Data} dailyCalories={dailyCalories} />}
+          {currentCard === 'macros2' && (
+            <Macros2Card
+              data={macros2Data}
+              dailyCalories={dailyCalories}
+              calorieBankActive={calorieBankActive}
+              calorieBankBalance={calorieBankBalance}
+              todayCaloriesEaten={todayCaloriesEaten}
+              adjustedDailyTarget={adjustedDailyTarget}
+              dailyCapAmount={dailyCapAmount}
+            />
+          )}
+          {currentCard === 'weekly' && calorieBankActive && (
+            <CalorieBankWeeklyCard
+              weeklyBudget={weeklyBudget || 0}
+              weeklyActual={weeklyActual || 0}
+              bankBalance={calorieBankBalance || 0}
+              remainingDays={remainingDays || 0}
+              daysInCycle={daysInCycle || 7}
+            />
+          )}
         </Animated.View>
       </View>
     </View>

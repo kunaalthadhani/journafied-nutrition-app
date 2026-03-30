@@ -193,13 +193,13 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
                 const backgroundColor = isSelected ? theme.colors.textPrimary : 'transparent';
 
-                // Simple Indicator: Colored Underline Bar
+                // Simple Indicator: Green = logged, Red = missed
                 const isPast = startOfDay(dayData.date) < startOfDay(new Date());
-                const isMissed = isPast && dayData.status === 'no-data';
+                const hasLog = dayData.status !== 'no-data';
+                const isMissed = isPast && !hasLog;
                 let indicatorColor = 'transparent';
                 if (isCurrentMonth && !isSelected) {
-                  if (dayData.status === 'within') indicatorColor = '#10B981'; // Emerald - logged
-                  else if (dayData.status === 'exceeded') indicatorColor = '#EF4444'; // Red - exceeded
+                  if (hasLog) indicatorColor = '#10B981'; // Green - logged
                   else if (isMissed) indicatorColor = '#EF4444'; // Red - missed day
                 }
 

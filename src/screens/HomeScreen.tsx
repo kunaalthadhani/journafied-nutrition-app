@@ -42,6 +42,11 @@ import { MacroData } from '../types';
 import { FoodLogSection } from '../components/FoodLogSection';
 import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
+import { CalorieBankCard } from '../components/CalorieBankCard';
+import { CycleResetCard } from '../components/CycleResetCard';
+import { CalorieBankConfig, CalorieBankCompletedCycle } from '../services/dataStorage';
+import { calculateCurrentCycle, CalorieBankCycle, getDayName } from '../utils/calorieBankEngine';
+import { checkAndResetCycle } from '../services/calorieBankService';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
 import { AccountWallModal } from '../components/AccountWallModal';
@@ -135,8 +140,10 @@ export const HomeScreen: React.FC = () => {
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
 
-  // Derived Premium 
+  // Derived Premium — requires sign-in
+  const isSignedIn = !!accountInfo?.email;
   const isPremium = React.useMemo(() => {
+    if (!accountInfo?.email) return false; // MUST be signed in
     if (userPlan === 'premium') return true;
     if (accountInfo?.premiumUntil) {
       return new Date(accountInfo.premiumUntil) > new Date();
@@ -164,6 +171,12 @@ export const HomeScreen: React.FC = () => {
   const [showStreakWidget, setShowStreakWidget] = useState(false);
 
 
+  // Calorie Bank
+  const [calorieBankConfig, setCalorieBankConfig] = useState<CalorieBankConfig | null>(null);
+  const [calorieBankCycle, setCalorieBankCycle] = useState<CalorieBankCycle | null>(null);
+  const [cycleResetData, setCycleResetData] = useState<CalorieBankCompletedCycle | null>(null);
+  const [showCycleResetCard, setShowCycleResetCard] = useState(false);
+
   // Smart Adjustment
   const [adjustmentAvailable, setAdjustmentAvailable] = useState<AdjustmentRecord | null>(null);
   const [showSmartAdjustmentModal, setShowSmartAdjustmentModal] = useState(false);
@@ -183,10 +196,18 @@ export const HomeScreen: React.FC = () => {
   const currentNutrition = calculateTotalNutrition(allLoggedFoods);
 
   // Generate macro data from saved goals with current values (with null safety)
+  // When calorie banking is active, use the adjusted targets from the cycle
+  const bankAdjustedMacros = isPremium && calorieBankCycle && calorieBankConfig?.enabled
+    ? calorieBankCycle.todayMacros
+    : null;
+  const bankAdjustedCalories = isPremium && calorieBankCycle && calorieBankConfig?.enabled
+    ? calorieBankCycle.adjustedTodayTarget
+    : dailyCalories;
+
   const macrosData: MacroData = {
-    carbs: { current: currentNutrition.totalCarbs, target: savedGoals?.carbsGrams ?? 0, unit: 'g' },
-    protein: { current: currentNutrition.totalProtein, target: savedGoals?.proteinGrams ?? 0, unit: 'g' },
-    fat: { current: currentNutrition.totalFat, target: savedGoals?.fatGrams ?? 0, unit: 'g' }
+    carbs: { current: currentNutrition.totalCarbs, target: bankAdjustedMacros?.carbs ?? savedGoals?.carbsGrams ?? 0, unit: 'g' },
+    protein: { current: currentNutrition.totalProtein, target: bankAdjustedMacros?.protein ?? savedGoals?.proteinGrams ?? 0, unit: 'g' },
+    fat: { current: currentNutrition.totalFat, target: bankAdjustedMacros?.fat ?? savedGoals?.fatGrams ?? 0, unit: 'g' }
   };
 
   // Load meals for selected date (Pagination/Sharding)
@@ -353,10 +374,30 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettingsBack = async () => {
-    setShowSettings(false);
-    // Reload preferences in case they changed
+    // Reload ALL state before closing settings so Home refreshes correctly
+    const freshAccount = await dataStorage.loadAccountInfo();
+    setAccountInfo(freshAccount || null);
+
+    const freshPlan = await dataStorage.loadUserPlan();
+    setUserPlan(freshPlan);
+
     const prefs = await dataStorage.loadPreferences();
     setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+
+    const bankConfig = await dataStorage.loadCalorieBankConfig();
+    setCalorieBankConfig(bankConfig);
+
+    const isFreshPremium = !!freshAccount?.email && freshPlan === 'premium';
+    if (isFreshPremium && bankConfig?.enabled && savedGoals) {
+      const summaries = await dataStorage.loadDailySummaries();
+      setSummariesByDate(summaries);
+      const cycle = calculateCurrentCycle(bankConfig, summaries, savedGoals);
+      setCalorieBankCycle(cycle);
+    } else {
+      setCalorieBankCycle(null);
+    }
+
+    setShowSettings(false);
   };
 
   const handleOpenSubscription = () => {
@@ -503,6 +544,20 @@ export const HomeScreen: React.FC = () => {
       setAccountInfo(updated);
     }
     analyticsService.trackOnboardingGoalSet();
+
+    // Reset calorie bank if active (plan change = mid-cycle reset)
+    if (calorieBankConfig?.enabled) {
+      const { handlePlanChange } = require('../services/calorieBankService');
+      handlePlanChange().then(() => {
+        dataStorage.loadCalorieBankConfig().then(cfg => {
+          setCalorieBankConfig(cfg);
+          if (cfg?.enabled) {
+            const cycle = calculateCurrentCycle(cfg, summariesByDate, goals);
+            setCalorieBankCycle(cycle);
+          }
+        });
+      });
+    }
   };
 
   const handleCalendarPress = () => {
@@ -548,6 +603,17 @@ export const HomeScreen: React.FC = () => {
       dataStorage.saveExercises(exercisesByDate);
     }
   }, [exercisesByDate]);
+
+  // Recalculate calorie bank cycle when summaries, goals, or config change
+  // MUST check isPremium (which requires sign-in) before showing any bank data
+  useEffect(() => {
+    if (isPremium && calorieBankConfig?.enabled && savedGoals) {
+      const cycle = calculateCurrentCycle(calorieBankConfig, summariesByDate, savedGoals);
+      setCalorieBankCycle(cycle);
+    } else {
+      setCalorieBankCycle(null);
+    }
+  }, [summariesByDate, savedGoals, calorieBankConfig, isPremium]);
 
   // Entry limit persistence
   const ENTRY_COUNT_KEY = '@trackkal:entryCount';
@@ -809,6 +875,38 @@ export const HomeScreen: React.FC = () => {
       smartReminderService.scheduleAllReminders()
         .catch(err => console.error('Smart reminder scheduling failed:', err));
 
+      // Calorie Bank: load config, check for cycle reset, calculate current cycle
+      // Use local `plan` variable instead of `isPremium` memo (memo won't update until next render)
+      if (plan === 'premium') {
+        try {
+          const bankConfig = await dataStorage.loadCalorieBankConfig();
+          setCalorieBankConfig(bankConfig);
+          if (bankConfig && bankConfig.enabled && savedGoalsData) {
+            const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData);
+            if (updatedConfig) setCalorieBankConfig(updatedConfig);
+
+            // If a reset just happened, show the cycle reset card
+            if (didReset) {
+              const cycles = await dataStorage.loadCompletedCycles();
+              if (cycles.length > 0) {
+                const lastCycle = cycles[cycles.length - 1];
+                const resetSeen = await dataStorage.isCycleResetSeen(lastCycle.startDate);
+                if (!resetSeen) {
+                  setCycleResetData(lastCycle);
+                  setShowCycleResetCard(true);
+                }
+              }
+            }
+
+            // Calculate current cycle
+            const cycle = calculateCurrentCycle(updatedConfig || bankConfig, savedSummaries, savedGoalsData);
+            setCalorieBankCycle(cycle);
+          }
+        } catch (err) {
+          if (__DEV__) console.error('Calorie bank init failed:', err);
+        }
+      }
+
     } catch (e) {
       console.error("Failed to load home screen data", e);
     }
@@ -888,6 +986,31 @@ export const HomeScreen: React.FC = () => {
         // Re-schedule smart reminders on foreground
         smartReminderService.scheduleAllReminders()
           .catch(err => console.error('Smart reminder scheduling failed:', err));
+
+        // Recalculate calorie bank on foreground (handles midnight crossing)
+        if (calorieBankConfig?.enabled && summaries && savedGoals) {
+          try {
+            const { didReset } = await checkAndResetCycle(summaries, savedGoals);
+            if (didReset) {
+              const bankCfg = await dataStorage.loadCalorieBankConfig();
+              if (bankCfg) setCalorieBankConfig(bankCfg);
+              const cycles = await dataStorage.loadCompletedCycles();
+              if (cycles.length > 0) {
+                const last = cycles[cycles.length - 1];
+                const seen = await dataStorage.isCycleResetSeen(last.startDate);
+                if (!seen) {
+                  setCycleResetData(last);
+                  setShowCycleResetCard(true);
+                }
+              }
+            }
+            const bankCfg = await dataStorage.loadCalorieBankConfig();
+            if (bankCfg?.enabled) {
+              const cycle = calculateCurrentCycle(bankCfg, summaries, savedGoals);
+              setCalorieBankCycle(cycle);
+            }
+          } catch {}
+        }
       }
     });
 
@@ -2175,8 +2298,17 @@ export const HomeScreen: React.FC = () => {
         <StatCardsSection
           macrosData={macrosData}
           macros2Data={macros2Data}
-          dailyCalories={dailyCalories}
+          dailyCalories={bankAdjustedCalories}
           onScrollEnable={setScrollEnabled}
+          calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
+          calorieBankBalance={calorieBankCycle?.bankBalance || 0}
+          todayCaloriesEaten={currentNutrition.totalCalories || 0}
+          adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
+          dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
+          weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
+          weeklyActual={calorieBankCycle?.weeklyActual || 0}
+          remainingDays={calorieBankCycle?.remainingDays || 0}
+          daysInCycle={calorieBankCycle?.daysInCycle || 7}
         />
 
         {/* Streak Widget Modal is rendered at the bottom with other modals */}
@@ -2317,6 +2449,21 @@ export const HomeScreen: React.FC = () => {
                 }
               }}
             />
+
+            {/* Cycle Reset Summary Card (shown once at start of new cycle) */}
+            {showCycleResetCard && cycleResetData && (
+              <View style={{ paddingHorizontal: 8 }}>
+                <CycleResetCard
+                  cycle={cycleResetData}
+                  onDismiss={async () => {
+                    setShowCycleResetCard(false);
+                    if (cycleResetData) {
+                      await dataStorage.setCycleResetSeen(cycleResetData.startDate);
+                    }
+                  }}
+                />
+              </View>
+            )}
 
             <ExerciseLogSection
               entries={currentDayExercises}
@@ -2491,6 +2638,29 @@ export const HomeScreen: React.FC = () => {
             targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
             targetFat={goalsSet ? savedGoals.fatGrams : undefined}
             isPremium={isPremium}
+            calorieBankData={calorieBankCycle && calorieBankConfig?.enabled ? {
+              enabled: true,
+              weeklyBudget: calorieBankCycle.weeklyBudget,
+              weeklyActual: calorieBankCycle.weeklyActual,
+              bankBalance: calorieBankCycle.bankBalance,
+              bankUtilization: calorieBankCycle.perDayData.reduce((s, d) => s + d.banked, 0) > 0
+                ? Math.round((calorieBankCycle.perDayData.reduce((s, d) => s + d.spent, 0) / calorieBankCycle.perDayData.reduce((s, d) => s + d.banked, 0)) * 100)
+                : 0,
+              expiredCalories: 0,
+              dailyCapPercent: calorieBankConfig.dailyCapPercent,
+              cycleStartDay: getDayName(calorieBankConfig.cycleStartDay),
+              cycleStartDayNum: calorieBankConfig.cycleStartDay,
+              perDayBreakdown: calorieBankCycle.perDayData.map(d => ({
+                day: d.date,
+                base: d.baseTarget,
+                adjusted: d.adjustedTarget,
+                actual: d.actual,
+                banked: d.banked,
+                spent: d.spent,
+              })),
+              capHitDays: calorieBankCycle.perDayData.filter(d => d.capHit).length,
+              spendCapHitDays: calorieBankCycle.perDayData.filter(d => d.spendCapHit).length,
+            } : null}
           />
         </Modal>
 

@@ -34,6 +34,20 @@ interface NutritionAnalysisScreenProps {
   targetCarbs?: number;
   targetFat?: number;
   isPremium?: boolean;
+  calorieBankData?: {
+    enabled: boolean;
+    weeklyBudget: number;
+    weeklyActual: number;
+    bankBalance: number;
+    bankUtilization: number;
+    expiredCalories: number;
+    dailyCapPercent: number;
+    cycleStartDay: string;
+    cycleStartDayNum: number; // 0=Sun, 1=Mon, ..., 6=Sat
+    perDayBreakdown: { day: string; base: number; adjusted: number; actual: number; banked: number; spent: number }[];
+    capHitDays: number;
+    spendCapHitDays: number;
+  } | null;
 }
 
 type TimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
@@ -59,6 +73,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   targetCarbs: targetCarbsProp,
   targetFat: targetFatProp,
   isPremium = false,
+  calorieBankData = null,
 }) => {
   const theme = useTheme();
   const [activeTab, setActiveTab] = useState<TabType>('Calories');
@@ -642,8 +657,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const insightRequestInFlight = useRef(false);
 
-  // Get the Monday of the current week as cache key (e.g., "2026-02-23")
-  const getWeekKey = () => format(startOfWeek(new Date(), { weekStartsOn: 1 }), 'yyyy-MM-dd');
+  // Get the start of the current week as cache key
+  // When calorie bank is active, align to the bank's cycle start day
+  const getWeekKey = () => {
+    const weekStartDay = calorieBankData?.enabled ? calorieBankData.cycleStartDayNum : 1;
+    return format(startOfWeek(new Date(), { weekStartsOn: weekStartDay as 0 | 1 | 2 | 3 | 4 | 5 | 6 }), 'yyyy-MM-dd');
+  };
 
   useEffect(() => {
     if (activeTab !== 'Insights' || !isPremium || insightRequestInFlight.current || graphData.length === 0) return;
@@ -741,6 +760,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           dayOfWeekAvg,
           mealTimingDistribution: timingBuckets,
           topFoods,
+          ...(calorieBankData ? { calorieBank: calorieBankData } : {}),
         };
 
         const text = await generateWeeklyInsights(weeklySummary);
@@ -1716,7 +1736,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             )}
                             {!isGeneratingInsight && (
                               <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginLeft: 'auto' }}>
-                                Refreshes every Monday
+                                Refreshes every {calorieBankData?.enabled ? calorieBankData.cycleStartDay : 'Monday'}
                               </Text>
                             )}
                           </View>
@@ -1731,6 +1751,105 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             </Text>
                           )}
                         </View>
+                      )}
+
+                      {/* ── Calorie Bank Insights ── */}
+                      {calorieBankData?.enabled && (
+                        <>
+                          {/* Bank Utilization */}
+                          <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                              <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#22C55E15', alignItems: 'center', justifyContent: 'center' }}>
+                                <Feather name="credit-card" size={14} color="#22C55E" />
+                              </View>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Bank</Text>
+                              <View style={{ backgroundColor: '#22C55E20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' }}>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#22C55E' }}>ACTIVE</Text>
+                              </View>
+                            </View>
+
+                            {/* Budget progress */}
+                            <View style={{ marginBottom: 16 }}>
+                              <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Weekly budget</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textPrimary }}>
+                                  {Math.round(calorieBankData.weeklyActual).toLocaleString()} / {Math.round(calorieBankData.weeklyBudget).toLocaleString()} kcal
+                                </Text>
+                              </View>
+                              <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.input, overflow: 'hidden' }}>
+                                <View style={{
+                                  height: '100%', borderRadius: 4,
+                                  width: `${Math.min(100, (calorieBankData.weeklyActual / (calorieBankData.weeklyBudget || 1)) * 100)}%`,
+                                  backgroundColor: calorieBankData.weeklyActual > calorieBankData.weeklyBudget ? '#EF4444' : '#22C55E',
+                                }} />
+                              </View>
+                            </View>
+
+                            {/* Stats grid */}
+                            <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: '#22C55E' }}>+{Math.round(calorieBankData.bankBalance)}</Text>
+                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Banked</Text>
+                              </View>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{calorieBankData.bankUtilization}%</Text>
+                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Utilization</Text>
+                              </View>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{calorieBankData.capHitDays}</Text>
+                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Cap days</Text>
+                              </View>
+                            </View>
+                          </View>
+
+                          {/* Daily Distribution */}
+                          {calorieBankData.perDayBreakdown.length > 0 && (
+                            <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Bank Distribution</Text>
+                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Daily banking and spending this cycle</Text>
+                              {calorieBankData.perDayBreakdown.map((day, i) => {
+                                const dayDate = new Date(day.day + 'T12:00:00');
+                                const dayLabel = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayDate.getDay()];
+                                const isToday = day.day === new Date().toISOString().split('T')[0];
+                                const maxBar = calorieBankData.dailyCapPercent / 100 * day.base;
+                                const bankedPct = maxBar > 0 ? Math.min(1, day.banked / maxBar) : 0;
+                                const spentPct = maxBar > 0 ? Math.min(1, day.spent / maxBar) : 0;
+                                const isFuture = day.actual === 0 && !isToday;
+
+                                return (
+                                  <View key={day.day} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                    <Text style={{
+                                      width: 32, fontSize: 12,
+                                      fontWeight: isToday ? '700' : '400',
+                                      color: isToday ? theme.colors.textPrimary : theme.colors.textSecondary,
+                                    }}>{dayLabel}</Text>
+                                    <View style={{ flex: 1, height: 16, borderRadius: 4, backgroundColor: theme.colors.input, overflow: 'hidden', flexDirection: 'row' }}>
+                                      {!isFuture && day.banked > 0 && (
+                                        <View style={{ width: `${bankedPct * 100}%`, height: '100%', backgroundColor: '#22C55E', borderRadius: 4 }} />
+                                      )}
+                                      {!isFuture && day.spent > 0 && (
+                                        <View style={{ width: `${spentPct * 100}%`, height: '100%', backgroundColor: '#F59E0B', borderRadius: 4 }} />
+                                      )}
+                                    </View>
+                                    <Text style={{ width: 50, textAlign: 'right', fontSize: 11, color: isFuture ? theme.colors.textTertiary : theme.colors.textSecondary }}>
+                                      {isFuture ? '—' : day.banked > 0 ? `+${Math.round(day.banked)}` : day.spent > 0 ? `-${Math.round(day.spent)}` : '0'}
+                                    </Text>
+                                  </View>
+                                );
+                              })}
+                              <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#22C55E' }} />
+                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>Banked</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#F59E0B' }} />
+                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>Spent</Text>
+                                </View>
+                              </View>
+                            </View>
+                          )}
+                        </>
                       )}
 
                       {/* ── Macro Adherence Rings ── */}

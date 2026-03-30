@@ -34,6 +34,32 @@ export interface MealEntry {
   loadingState?: 'analyzing' | 'done' | 'failed';
 }
 
+// Premium: Calorie Bank Config
+export interface CalorieBankConfig {
+  enabled: boolean;
+  cycleStartDay: 0 | 1 | 2 | 3 | 4 | 5 | 6; // 0=Sun, 1=Mon, ..., 6=Sat
+  dailyCapPercent: 15 | 20 | 25; // max % of base daily target that can be banked per day
+  spendingCapPercent: 15 | 20 | 25; // max % of base daily target that can be spent over per day
+  enabledDate: string; // ISO date string — when feature was first turned on
+  onboardingSeen: boolean; // whether the user has seen the 3-card onboarding
+}
+
+// Premium: Calorie Bank Completed Cycle (for analytics)
+export interface CalorieBankCompletedCycle {
+  startDate: string; // ISO date
+  endDate: string; // ISO date
+  weeklyBudget: number;
+  weeklyActual: number;
+  bankUtilization: number; // percentage of banked calories that were actually used
+  expiredCalories: number; // banked but unused at reset
+  daysLogged: number; // out of total days in cycle
+  daysInCycle: number; // 7, or fewer for partial first cycle
+  peakBankBalance: number;
+  capHitDays: number; // days where banking cap was reached
+  spendCapHitDays: number; // days where spending cap was reached
+  goalType: 'lose' | 'gain' | 'maintain';
+}
+
 // Premium: Detected Pattern
 export interface DetectedPattern {
   id: string;
@@ -96,6 +122,10 @@ const STORAGE_KEYS = {
   SMART_REMINDER_EFFECTIVENESS: '@trackkal:smartReminderEffectiveness',
   GROCERY_UNLOCKED: '@trackkal:groceryUnlocked',
   GROCERY_UNLOCK_SEEN: '@trackkal:groceryUnlockSeen',
+  // Calorie Bank
+  CALORIE_BANK_CONFIG: '@trackkal:calorieBankConfig',
+  CALORIE_BANK_COMPLETED_CYCLES: '@trackkal:calorieBankCompletedCycles',
+  CALORIE_BANK_CYCLE_RESET_SEEN: '@trackkal:calorieBankCycleResetSeen',
 };
 
 // ... (rest of file)
@@ -3184,6 +3214,51 @@ export const dataStorage = {
 
   async setGroceryUnlockSeen(): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.GROCERY_UNLOCK_SEEN, 'true');
+  },
+
+  // ── Calorie Bank ──
+
+  async saveCalorieBankConfig(config: CalorieBankConfig): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.CALORIE_BANK_CONFIG, JSON.stringify(config));
+  },
+
+  async loadCalorieBankConfig(): Promise<CalorieBankConfig | null> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CONFIG);
+      return raw ? JSON.parse(raw) : null;
+    } catch {
+      return null;
+    }
+  },
+
+  async saveCompletedCycle(cycle: CalorieBankCompletedCycle): Promise<void> {
+    const existing = await this.loadCompletedCycles();
+    existing.push(cycle);
+    // Keep last 52 cycles (1 year of weekly data)
+    const trimmed = existing.slice(-52);
+    await AsyncStorage.setItem(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, JSON.stringify(trimmed));
+  },
+
+  async loadCompletedCycles(): Promise<CalorieBankCompletedCycle[]> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  async isCycleResetSeen(cycleStartDate: string): Promise<boolean> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CYCLE_RESET_SEEN);
+      return raw === cycleStartDate;
+    } catch {
+      return false;
+    }
+  },
+
+  async setCycleResetSeen(cycleStartDate: string): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.CALORIE_BANK_CYCLE_RESET_SEEN, cycleStartDate);
   },
 };
 

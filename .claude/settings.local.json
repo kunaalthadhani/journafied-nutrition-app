@@ -6,7 +6,13 @@
       "Bash(git add:*)",
       "Bash(git commit:*)",
       "Bash(git push:*)",
-      "Bash(xargs grep -l \"analyzePatterns\")"
+      "Bash(xargs grep -l \"analyzePatterns\")",
+      "Bash(grep -r \"isPremium\\\\|plan === ''premium''\\\\|isSignedIn\" src/ --include=\"*.tsx\" -n)",
+      "Bash(grep -r \"PREMIUM\\\\|premium\" src/screens/*.tsx -n)",
+      "Bash(grep -rn \"free\" src/screens/*.tsx)",
+      "Bash(grep -rn \"reached your free\\\\|entry limit\\\\|3 meals\" src/screens/*.tsx)",
+      "Bash(grep -n \"Streak\\\\|streak\" src/screens/*.tsx)",
+      "Bash(grep -rn \"Referral\\\\|referral\\\\|ReferralScreen\" src/screens/*.tsx)"
     ]
   }
 }

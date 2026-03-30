@@ -316,32 +316,33 @@ export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
       messages: [
         {
           role: 'system',
-          content: `You are a personal nutrition analyst writing a short weekly review for one specific person based on their actual tracking data.
+          content: `You are a personal nutrition analyst reviewing one person's actual food log data for the past week.
 
-Write exactly 3 insights as a short paragraph each, separated by double newlines. No bullet points, no hyphens, no dashes, no emojis, no numbered lists. Just plain sentences.
+Write exactly 3 insights. Each is a short paragraph (3-4 sentences), separated by double newlines. No bullet points, no hyphens, no dashes, no emojis, no numbered lists, no headers. Just plain flowing sentences.
 
-Each insight must:
-1. Reference their specific numbers from the data (exact calories, grams, days, food names).
-2. Explain WHY it matters for their body or goals — not just what happened, but the consequence or opportunity.
-3. Give one concrete, actionable next step they can try this week.
+Rules for each insight:
+1. Start with their specific numbers (exact calories, grams, food names, days). Never say "you did well" or "great job" without data backing it.
+2. Explain the consequence or opportunity. Not "your protein was low" but "your protein averaged 68g against a 150g target, which means you're getting less than half of what your muscles need to recover, and this is likely why you feel hungrier by evening."
+3. End with one specific action. Not "eat more protein" but "adding a Greek yogurt (150g) after lunch would close about 15g of that gap without changing your meals."
 
-Focus areas (pick the 3 most relevant):
-- How their actual intake compares to their targets and what the gap means practically.
-- Which specific days were off-track and what pattern explains it (e.g. weekends, skipped meals, late eating).
-- Macro balance issues: if protein is consistently low, explain what that does to satiety and muscle. If fat is high, explain caloric density.
-- Meal timing patterns: if most calories land in the evening, explain how redistribution could help energy and appetite.
-- Their most-eaten foods and whether rotating in alternatives could improve nutrient variety.
-- Consistency: how many days they actually logged vs the full week, and why gaps make the data less useful.
+Pick the 3 most impactful from their data:
+- Calorie accuracy: how close were they to target on average, and what does the gap mean for their goal timeline.
+- Macro imbalances: which macro is furthest from target and what that does to their body practically (satiety, energy, muscle, fat storage).
+- Day patterns: which days were off-track and what likely caused it (weekends, skipped meals, late logging).
+- Food variety: are they eating the same 3-4 foods repeatedly, and what nutrients they might be missing.
+- Meal timing: if most calories land in one window, what redistribution could do for energy and appetite.
+- Logging gaps: how many days they actually logged and why incomplete data limits the advice you can give.
+- If calorie banking data is present: how effectively they used their bank, whether their distribution pattern is healthy or shows restrict/binge tendencies, and whether their cap setting seems right for their behavior.
 
-Tone: Direct, knowledgeable, specific. Like a nutritionist reviewing your food diary in a 1-on-1 session. No cheerleading, no filler, no generic advice. Every sentence should feel like it could only apply to THIS person's data.`
+Tone: Like a nutritionist reviewing your food diary face-to-face. Specific, honest, no filler. Every sentence should contain a number or a food name from their data.`
         },
         {
           role: 'user',
           content: JSON.stringify(sanitizeObjectForAI(weeklyData))
         }
       ],
-      temperature: 0.6,
-      max_tokens: 400,
+      temperature: 0.4,
+      max_tokens: 600,
       call_type: 'weekly-insights',
     });
     return data.choices[0]?.message?.content || "Log a few more days this week and we'll have enough data for real insights.";

@@ -46,6 +46,8 @@ You will receive an array of daily summaries with:
   ]
 }
 
+**Important:** If calorieBankEnabled is true in the input data, the user is using weekly calorie banking (flexible daily targets). On banking days, eating under target is INTENTIONAL (they are saving calories for later). Do NOT flag intentional under-eating on banking days as restriction or a concern. Only flag if the pattern looks like genuine restrict-then-binge cycles (e.g., severe restriction for multiple days followed by extreme overeating).
+
 **Return empty array if no strong patterns found.**
 `;
 
@@ -92,7 +94,10 @@ export const patternDetectionService = {
                 return [];
             }
 
-            // 3. Call AI for pattern detection
+            // 3. Check if calorie banking is active
+            const bankConfig = await dataStorage.loadCalorieBankConfig();
+
+            // 4. Call AI for pattern detection
             const data = await invokeAI({
                 model: 'gpt-4o-mini',
                 messages: [
@@ -100,6 +105,7 @@ export const patternDetectionService = {
                     { role: 'user', content: JSON.stringify(sanitizeObjectForAI({
                         dailyCalorieTarget: calorieTarget || undefined,
                         dailyData: dailyData.slice(0, 14),
+                        calorieBankEnabled: bankConfig?.enabled || false,
                     })) }
                 ],
                 temperature: 0.3,

@@ -84,9 +84,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
 
   // -- Auth State --
-  const [authSession, setAuthSession] = useState<Session | null>(null);
-  // Only show loading if we don't have basic account info AND we suspect we might need to load it
-  // If we have accountInfo (logged in) or if we explicitly have null (guest), we can skip full blocker
+  // If we have stored account info with an email, treat as logged in until session check completes
+  const [authSession, setAuthSession] = useState<Session | null>(
+    initialAccountInfo?.email ? ({ user: { email: initialAccountInfo.email } } as any) : null
+  );
   const [isLoading, setIsLoading] = useState(!initialAccountInfo && initialAccountInfo !== null);
   const [authStatus, setAuthStatus] = useState<'idle' | 'sending' | 'verifying'>('idle');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
