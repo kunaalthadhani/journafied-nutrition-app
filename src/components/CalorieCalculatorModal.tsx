@@ -68,8 +68,8 @@ const STEP_ACCENT: Record<StepId, string> = {
 
 const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
 
-const buildSteps = (goal: Goal | null): StepId[] => {
-  const s: StepId[] = ['name', 'goal', 'sex', 'dob', 'height', 'weight'];
+const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
+  const s: StepId[] = hasName ? ['goal', 'sex', 'dob', 'height', 'weight'] : ['name', 'goal', 'sex', 'dob', 'height', 'weight'];
   if (goal !== 'maintain') s.push('pace');
   s.push('activity');
   return s;
@@ -248,7 +248,8 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
-  const steps = buildSteps(goal);
+  const hasExistingName = !!(initialData?.name && initialData.name.trim().length > 0);
+  const steps = buildSteps(goal, hasExistingName);
   const currentStepId = steps[currentIdx];
 
   useEffect(() => { setWeightUnit(preferredWeightUnit); setTargetWeightUnit(preferredWeightUnit); }, [preferredWeightUnit]);

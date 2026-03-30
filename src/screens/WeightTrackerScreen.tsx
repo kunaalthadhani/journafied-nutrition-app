@@ -1446,7 +1446,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
-                        <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Goal Progress</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Goal Progress</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Goal Progress', 'Shows how far you have come toward your target weight as a percentage. The progress bar fills as you get closer. Lost/gained so far and remaining are shown below. This gives you a clear picture of where you stand without needing to do the math yourself.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                           <Text style={[styles.bmiGaugeValue, { color: goalProgressData.statusColor }]}>
                             {goalProgressData.percentage}%
@@ -1498,7 +1503,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 2. Estimated Goal Date */}
                 {estimatedGoalData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
-                    <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Estimated Goal Date</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Estimated Goal Date</Text>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Estimated Goal Date', 'Calculates when you will reach your target weight based on your current rate of change. This updates as you log more weight entries. The estimate gets more accurate over time as the app has more data to work with. If progress stalls, the date will push further out, which is a signal to review your plan.')}>
+                        <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
                     {estimatedGoalData.reached ? (
                       <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8, marginTop: 4 }}>
                         <Text style={[styles.bmiGaugeValue, { color: '#10B981' }]}>Done!</Text>
@@ -1548,7 +1558,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
-                        <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weekly Rate of Change</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weekly Rate of Change</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weekly Rate of Change', 'Shows how much weight you are losing or gaining per week on average. A healthy rate for weight loss is 0.5 to 1 kg per week. Faster than that usually means muscle loss. Slower is fine but may need patience. This number helps you decide if your calorie target needs adjustment.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                           <Text style={[styles.bmiGaugeValue, { color: weeklyRateData.statusColor }]}>
                             {weeklyRateData.direction === 'maintaining' ? '0.0' : convertWeightToDisplay(weeklyRateData.absRate).toFixed(1)}
@@ -1585,7 +1600,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {(deficitInsight || deficitInsightLoading) && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Deficit & Surplus Impact</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Deficit & Surplus Impact</Text>
+                        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Deficit & Surplus Impact', 'AI analysis of how your calorie intake is affecting your weight. It looks at the relationship between what you eat and how your weight responds, then explains what the numbers mean in practical terms. Refreshed weekly so the analysis stays relevant to your recent behavior.')}>
+                          <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                        </TouchableOpacity>
+                      </View>
                       <View style={[styles.bmiCategoryBadge, { backgroundColor: '#8B5CF615' }]}>
                         <Text style={[styles.bmiCategoryText, { color: '#8B5CF6' }]}>AI</Text>
                       </View>
@@ -1608,7 +1628,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 5. Weight vs Calories */}
                 {calorieCorrelation && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
-                    <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight vs Calories</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight vs Calories</Text>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight vs Calories', 'Overlays your daily calorie intake (blue bars) with your weight trend (green line) on the same chart. This helps you see the direct relationship between what you eat and what the scale shows. If calories drop but weight stays flat, it may take a few more days to show, or water retention could be masking progress.')}>
+                        <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2, marginBottom: 12 }}>
                       Last {calorieCorrelation.days.length} days with both weight & calorie data
                     </Text>
@@ -1666,7 +1691,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 6. Monthly Comparison */}
                 {monthlyComparison && (monthlyComparison.thisChange !== null || monthlyComparison.lastChange !== null) && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
-                    <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Monthly Comparison</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Monthly Comparison</Text>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Monthly Comparison', 'Compares your weight change this month versus last month. This shows whether your progress is accelerating, slowing down, or staying consistent. If last month you lost 2 kg and this month only 0.5 kg, it might be time to reassess your approach or check if a plateau is forming.')}>
+                        <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
                     {monthlyComparison.thisChange !== null && monthlyComparison.lastChange !== null ? (
                       <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, lineHeight: 20 }}>
                         You {monthlyComparison.thisChange < 0 ? 'lost' : 'gained'}{' '}
@@ -1700,7 +1730,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 7. Milestones & Records */}
                 {milestoneData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
-                    <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Milestones & Records</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Milestones & Records</Text>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Milestones & Records', 'Tracks your achievements and extremes. Shows your lowest and highest recorded weights with dates, plus milestones like breaking through round numbers or reaching new lows. These markers give you something to celebrate and a record of how far you have come.')}>
+                        <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
                     {milestoneData.milestones.length > 0 && (
                       <View style={{ marginTop: 8, gap: 6 }}>
                         {milestoneData.milestones.map((m, i) => (
@@ -1739,7 +1774,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 8. Weight Fluctuation */}
                 {fluctuationData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
-                    <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight Fluctuation</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight Fluctuation</Text>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight Fluctuation', 'Shows how much your weight varied over the past 7 days. A range of 1 to 2 kg is completely normal and caused by water, sodium, and digestion. If the fluctuation is larger, it does not necessarily mean fat gain. Tracking this over time helps you stop reacting emotionally to daily scale changes.')}>
+                        <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                      </TouchableOpacity>
+                    </View>
                     <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, lineHeight: 20 }}>
                       Your weight varied by <Text style={{ fontWeight: '700', color: fluctuationData.isNormal ? '#10B981' : '#F59E0B' }}>{convertWeightToDisplay(fluctuationData.range).toFixed(1)} {getWeightUnitLabel()}</Text> this week
                       {fluctuationData.isNormal ? ' — that\'s normal.' : ' — consider tracking hydration and sodium.'}
@@ -1766,7 +1806,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View style={{ flex: 1 }}>
-                        <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Logging Consistency</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Logging Consistency</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Logging Consistency', 'Shows how many days this week you logged your weight. Consistent logging gives the app better data to work with, which means more accurate trend lines, better AI insights, and more reliable goal date estimates. Aim for at least 4 to 5 days per week.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2, lineHeight: 20 }}>
                           You logged <Text style={{ fontWeight: '700', color: loggingConsistency.statusColor }}>{loggingConsistency.count} out of 7</Text> days this week.
                         </Text>
@@ -1815,7 +1860,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
-                        <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Body Mass Index</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                          <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Body Mass Index</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Body Mass Index', 'BMI is a ratio of your weight to your height. It gives a rough estimate of whether you are underweight, normal, overweight, or obese. It is not perfect because it does not account for muscle mass, but it is a useful baseline number. The gauge shows where you fall on the scale and the colored zones show the healthy range.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                           <Text style={[styles.bmiGaugeValue, { color: bmiData.categoryColor }]}>
                             {bmiData.bmi.toFixed(1)}

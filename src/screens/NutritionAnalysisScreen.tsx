@@ -9,6 +9,7 @@ import {
   Dimensions,
   PanResponder,
   Modal,
+  Alert,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -654,6 +655,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const INSIGHT_CACHE_KEY = '@trackkal:weeklyInsightCache';
   const [insightText, setInsightText] = useState<string | null>(null);
   const [insightIsNew, setInsightIsNew] = useState(false);
+  const [insightCollapsed, setInsightCollapsed] = useState(false);
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const insightRequestInFlight = useRef(false);
 
@@ -1721,10 +1723,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Time Range Selector ── */}
                       {renderTimeRangePills()}
 
-                      {/* ── AI Weekly Insight ── */}
+                      {/* ── AI Weekly Insight (collapsible) ── */}
                       {(insightText || isGeneratingInsight) && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                          <TouchableOpacity
+                            activeOpacity={0.7}
+                            onPress={() => !isGeneratingInsight && setInsightCollapsed(prev => !prev)}
+                            style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                          >
                             <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${theme.colors.primary}15`, alignItems: 'center', justifyContent: 'center' }}>
                               <Feather name="cpu" size={14} color={theme.colors.primary} />
                             </View>
@@ -1734,21 +1740,30 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>NEW</Text>
                               </View>
                             )}
-                            {!isGeneratingInsight && (
-                              <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginLeft: 'auto' }}>
-                                Refreshes every {calorieBankData?.enabled ? calorieBankData.cycleStartDay : 'Monday'}
-                              </Text>
-                            )}
-                          </View>
-                          {isGeneratingInsight ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <Feather name="loader" size={14} color={theme.colors.textSecondary} />
-                              <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your nutrition data...</Text>
+                            <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                              {!isGeneratingInsight && (
+                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>
+                                  Refreshes every {calorieBankData?.enabled ? calorieBankData.cycleStartDay : 'Monday'}
+                                </Text>
+                              )}
+                              {!isGeneratingInsight && (
+                                <Feather name={insightCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={theme.colors.textTertiary} />
+                              )}
                             </View>
-                          ) : (
-                            <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
-                              {insightText}
-                            </Text>
+                          </TouchableOpacity>
+                          {!insightCollapsed && (
+                            <View style={{ marginTop: 12 }}>
+                              {isGeneratingInsight ? (
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Feather name="loader" size={14} color={theme.colors.textSecondary} />
+                                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your nutrition data...</Text>
+                                </View>
+                              ) : (
+                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                                  {insightText}
+                                </Text>
+                              )}
+                            </View>
                           )}
                         </View>
                       )}
@@ -1763,6 +1778,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <Feather name="credit-card" size={14} color="#22C55E" />
                               </View>
                               <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Bank</Text>
+                              <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Bank', 'Shows your weekly calorie budget progress, how much you have banked, and your bank utilization. Utilization tells you what percentage of your banked calories you actually used. A low number means you are saving calories but not spending them, which could mean your daily target is higher than you need.')}>
+                                <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                              </TouchableOpacity>
                               <View style={{ backgroundColor: '#22C55E20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' }}>
                                 <Text style={{ fontSize: 10, fontWeight: '600', color: '#22C55E' }}>ACTIVE</Text>
                               </View>
@@ -1805,7 +1823,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           {/* Daily Distribution */}
                           {calorieBankData.perDayBreakdown.length > 0 && (
                             <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Bank Distribution</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Bank Distribution</Text>
+                                <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Bank Distribution', 'Shows how much you banked or spent each day of your current cycle. Green bars are days you ate under target and saved calories. Amber bars are days you ate over and drew from the bank. This helps you see whether your week is balanced or if you are front-loading restriction and back-loading spending.')}>
+                                  <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                </TouchableOpacity>
+                              </View>
                               <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Daily banking and spending this cycle</Text>
                               {calorieBankData.perDayBreakdown.map((day, i) => {
                                 const dayDate = new Date(day.day + 'T12:00:00');
@@ -1855,7 +1878,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Macro Adherence Rings ── */}
                       {(targetProtein || targetCarbs || targetFat) && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Goal Adherence</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Goal Adherence</Text>
+                            <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Goal Adherence', 'Shows how close your average daily intake is to your targets for each macro and calories. 100% means you are hitting the target exactly. Below 100% means you are under, above means you are over. This helps you see which macros need attention and whether your overall intake matches your plan.')}>
+                              <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                            </TouchableOpacity>
+                          </View>
                           <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average vs. target</Text>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                             {[
@@ -1902,7 +1930,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                             <View>
-                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Calorie Trend</Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Trend</Text>
+                                <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Trend', 'Tracks your daily calorie intake over time as a line chart. The dashed line shows your average and the red line shows your target. Use this to spot upward or downward trends in your eating. A steady line near target means consistency. A rising line means you are gradually eating more than planned.')}>
+                                  <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                </TouchableOpacity>
+                              </View>
                               <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Daily intake over time</Text>
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
@@ -1980,7 +2013,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                       {/* ── Macro Split Bar ── */}
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Macro Split</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Macro Split</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Macro Split', 'Breaks down your average daily calories into protein, carbs, and fat as a percentage. The colored bar shows the proportion visually. This helps you see if your diet is balanced or leaning too heavily toward one macro. For example, a very low protein percentage often leads to muscle loss and increased hunger.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average daily ratio</Text>
                         {(() => {
                           const p = averageProtein ?? 0;
@@ -2033,7 +2071,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {radarData.length > 0 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, alignItems: 'center' }]}>
                           <View style={{ width: '100%', marginBottom: 8 }}>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Nutrition Balance</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Nutrition Balance</Text>
+                              <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Nutrition Balance', 'A radar chart comparing your actual intake against your targets across all macros. A perfectly balanced shape means you are hitting every target evenly. If one axis is shorter than the others, that macro needs more attention. This gives you a quick visual of your overall nutrition quality.')}>
+                                <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                              </TouchableOpacity>
+                            </View>
                             <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Target vs. actual performance</Text>
                           </View>
                           {renderRadarChart()}
@@ -2043,7 +2086,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Day-of-Week Activity ── */}
                       {graphData.length >= 3 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Weekly Pattern</Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Weekly Pattern</Text>
+                            <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weekly Pattern', 'Shows your average calorie intake for each day of the week. This reveals habits you might not notice. Many people eat significantly more on weekends or less on Mondays. Knowing your pattern helps you plan ahead for days you tend to overeat.')}>
+                              <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                            </TouchableOpacity>
+                          </View>
                           <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average calories by day of week</Text>
                           {(() => {
                             const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
@@ -2099,7 +2147,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                       {/* ── Meal Timing ── */}
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Meal Timing</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Meal Timing</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Meal Timing', 'Breaks down what percentage of your calories you eat in the morning, afternoon, and evening. If most of your calories come from evening meals, it may explain energy dips during the day or late-night hunger. Spreading intake more evenly can improve energy and reduce overeating.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>When are you eating?</Text>
                         {(() => {
                           const buckets = { Morning: { cals: 0, count: 0 }, Afternoon: { cals: 0, count: 0 }, Evening: { cals: 0, count: 0 } };
@@ -2166,7 +2219,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                       {/* ── Top Foods ── */}
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Top Foods</Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Top Foods</Text>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Top Foods', 'Lists the foods you log most often, ranked by frequency. This shows what your diet actually looks like day to day. If the same 3 foods dominate, you may be missing key nutrients. More variety generally means better micronutrient coverage and less food fatigue.')}>
+                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                          </TouchableOpacity>
+                        </View>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items</Text>
                         {(() => {
                           const now = new Date();
