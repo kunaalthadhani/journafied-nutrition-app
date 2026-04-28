@@ -122,6 +122,8 @@ const STORAGE_KEYS = {
   SMART_REMINDER_EFFECTIVENESS: '@trackkal:smartReminderEffectiveness',
   GROCERY_UNLOCKED: '@trackkal:groceryUnlocked',
   GROCERY_UNLOCK_SEEN: '@trackkal:groceryUnlockSeen',
+  // Insight Unlocks
+  INSIGHT_UNLOCKS: '@trackkal:insightUnlocks',
   // Calorie Bank
   CALORIE_BANK_CONFIG: '@trackkal:calorieBankConfig',
   CALORIE_BANK_COMPLETED_CYCLES: '@trackkal:calorieBankCompletedCycles',
@@ -3214,6 +3216,29 @@ export const dataStorage = {
 
   async setGroceryUnlockSeen(): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.GROCERY_UNLOCK_SEEN, 'true');
+  },
+
+  // ── Insight Unlocks ──
+
+  async loadInsightUnlocks(): Promise<Record<string, { unlockedAt: string; seenAt?: string }>> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.INSIGHT_UNLOCKS);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  },
+
+  async saveInsightUnlocks(unlocks: Record<string, { unlockedAt: string; seenAt?: string }>): Promise<void> {
+    await AsyncStorage.setItem(STORAGE_KEYS.INSIGHT_UNLOCKS, JSON.stringify(unlocks));
+  },
+
+  async markInsightSeen(id: string): Promise<void> {
+    const unlocks = await this.loadInsightUnlocks();
+    if (unlocks[id]) {
+      unlocks[id].seenAt = new Date().toISOString();
+      await this.saveInsightUnlocks(unlocks);
+    }
   },
 
   // ── Calorie Bank ──

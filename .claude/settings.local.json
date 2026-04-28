@@ -12,7 +12,9 @@
       "Bash(grep -rn \"free\" src/screens/*.tsx)",
       "Bash(grep -rn \"reached your free\\\\|entry limit\\\\|3 meals\" src/screens/*.tsx)",
       "Bash(grep -n \"Streak\\\\|streak\" src/screens/*.tsx)",
-      "Bash(grep -rn \"Referral\\\\|referral\\\\|ReferralScreen\" src/screens/*.tsx)"
+      "Bash(grep -rn \"Referral\\\\|referral\\\\|ReferralScreen\" src/screens/*.tsx)",
+      "Bash(grep -n \"activeTab === ''Insights''\" src/screens/NutritionAnalysisScreen.tsx)",
+      "Bash(grep -n \"activeTab === ''Insights''\" src/screens/WeightTrackerScreen.tsx)"
     ]
   }
 }

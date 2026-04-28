@@ -47,6 +47,8 @@ import { CycleResetCard } from '../components/CycleResetCard';
 import { CalorieBankConfig, CalorieBankCompletedCycle } from '../services/dataStorage';
 import { calculateCurrentCycle, CalorieBankCycle, getDayName } from '../utils/calorieBankEngine';
 import { checkAndResetCycle } from '../services/calorieBankService';
+import { InsightUnlocks, InsightDefinition, InsightStats, InsightId, getUnlockedInsightIds, getNewlyUnlockedInsights, getFirstUnseenUnlock } from '../utils/insightUnlockEngine';
+import { InsightUnlockCard } from '../components/InsightUnlockCard';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { ImageUploadStatus } from '../components/ImageUploadStatus';
 import { AccountWallModal } from '../components/AccountWallModal';
@@ -170,6 +172,13 @@ export const HomeScreen: React.FC = () => {
   const [justFrozeToday, setJustFrozeToday] = useState(false);
   const [showStreakWidget, setShowStreakWidget] = useState(false);
 
+
+  // Insight Unlocks
+  const [insightUnlocks, setInsightUnlocks] = useState<InsightUnlocks>({});
+  const [pendingUnlockAnnouncement, setPendingUnlockAnnouncement] = useState<InsightDefinition | null>(null);
+  const [openNutritionOnInsights, setOpenNutritionOnInsights] = useState(false);
+  const [openWeightOnInsights, setOpenWeightOnInsights] = useState(false);
+  const [scrollToInsightId, setScrollToInsightId] = useState<InsightId | null>(null);
 
   // Calorie Bank
   const [calorieBankConfig, setCalorieBankConfig] = useState<CalorieBankConfig | null>(null);
@@ -342,6 +351,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleNutritionAnalysisBack = () => {
     setShowNutritionAnalysis(false);
+    setOpenNutritionOnInsights(false);
     setShouldFocusInput(false);
   };
 
@@ -416,6 +426,7 @@ export const HomeScreen: React.FC = () => {
 
   const handleWeightTrackerBack = () => {
     setShowWeightTracker(false);
+    setOpenWeightOnInsights(false);
   };
 
   const handleAccount = (mode?: 'signin' | 'signup') => {
@@ -594,6 +605,11 @@ export const HomeScreen: React.FC = () => {
           }
         }).catch(() => {});
       }
+
+      // Check insight unlocks after meal changes
+      const latestSummaries = await dataStorage.loadDailySummaries();
+      setSummariesByDate(latestSummaries);
+      checkInsightUnlocks(latestSummaries).catch(() => {});
     };
     persistAndSync();
   }, [mealsByDate]);
@@ -614,6 +630,78 @@ export const HomeScreen: React.FC = () => {
       setCalorieBankCycle(null);
     }
   }, [summariesByDate, savedGoals, calorieBankConfig, isPremium]);
+
+  // Check for new insight unlocks when data changes
+  const checkInsightUnlocks = async (summaries: Record<string, DailySummary>) => {
+    if (!isPremium) return;
+    try {
+      const weightEntries = await dataStorage.loadWeightEntries();
+      const goals = await dataStorage.loadGoals();
+
+      // Calculate stats
+      const loggedDays = Object.values(summaries).filter(s => s.entryCount > 0).length;
+      const allFoods = new Set<string>();
+      // Count unique foods from summaries (approximation — actual foods need meal data)
+      const weightDates = (weightEntries || []).map(e => new Date(e.date));
+      const weightSpan = weightDates.length >= 2
+        ? Math.abs(weightDates[weightDates.length - 1].getTime() - weightDates[0].getTime()) / (1000 * 60 * 60 * 24)
+        : 0;
+
+      // Days with both weight and calorie data
+      const weightDateSet = new Set((weightEntries || []).map(e => {
+        const d = new Date(e.date);
+        return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      }));
+      const calorieDateSet = new Set(Object.keys(summaries).filter(k => summaries[k].entryCount > 0));
+      let pairedDays = 0;
+      calorieDateSet.forEach(d => { if (weightDateSet.has(d)) pairedDays++; });
+
+      // Months with weight data
+      const weightMonths = new Set((weightEntries || []).map(e => {
+        const d = new Date(e.date);
+        return `${d.getFullYear()}-${d.getMonth()}`;
+      }));
+
+      const stats: InsightStats = {
+        loggedDays,
+        uniqueFoods: 0, // not critical for unlock checks that don't use it
+        weightEntries: (weightEntries || []).length,
+        weightEntrySpanDays: Math.round(weightSpan),
+        hasTargetWeight: !!(goals?.targetWeightKg),
+        hasHeight: !!(goals?.heightCm || goals?.heightFeet),
+        calorieAndWeightDays: pairedDays,
+        monthsWithWeightData: weightMonths.size,
+      };
+
+      const existingUnlocks = await dataStorage.loadInsightUnlocks();
+      const newlyUnlocked = getNewlyUnlockedInsights(stats, existingUnlocks);
+
+      if (newlyUnlocked.length > 0) {
+        const now = new Date().toISOString();
+        const updatedUnlocks = { ...existingUnlocks };
+        newlyUnlocked.forEach(def => {
+          updatedUnlocks[def.id] = { unlockedAt: now };
+        });
+        await dataStorage.saveInsightUnlocks(updatedUnlocks);
+        setInsightUnlocks(updatedUnlocks);
+
+        // Show announcement for first unseen
+        const unseen = getFirstUnseenUnlock(updatedUnlocks);
+        if (unseen) {
+          setPendingUnlockAnnouncement(unseen.definition);
+        }
+      } else {
+        setInsightUnlocks(existingUnlocks);
+        // Check if there's still an unseen announcement from before
+        const unseen = getFirstUnseenUnlock(existingUnlocks);
+        if (unseen) {
+          setPendingUnlockAnnouncement(unseen.definition);
+        }
+      }
+    } catch (err) {
+      if (__DEV__) console.error('Insight unlock check failed:', err);
+    }
+  };
 
   // Entry limit persistence
   const ENTRY_COUNT_KEY = '@trackkal:entryCount';
@@ -874,6 +962,9 @@ export const HomeScreen: React.FC = () => {
       // Schedule smart reminders (non-blocking)
       smartReminderService.scheduleAllReminders()
         .catch(err => console.error('Smart reminder scheduling failed:', err));
+
+      // Check for insight unlocks (non-blocking)
+      checkInsightUnlocks(savedSummaries).catch(() => {});
 
       // Calorie Bank: load config, check for cycle reset, calculate current cycle
       // Use local `plan` variable instead of `isPremium` memo (memo won't update until next render)
@@ -2356,6 +2447,38 @@ export const HomeScreen: React.FC = () => {
               </View>
             ))}
 
+            {/* Insight Unlock Announcement */}
+            {pendingUnlockAnnouncement && isPremium && (
+              <InsightUnlockCard
+                definition={pendingUnlockAnnouncement}
+                onDismiss={async () => {
+                  await dataStorage.markInsightSeen(pendingUnlockAnnouncement.id);
+                  const updated = await dataStorage.loadInsightUnlocks();
+                  setInsightUnlocks(updated);
+                  const next = getFirstUnseenUnlock(updated);
+                  setPendingUnlockAnnouncement(next?.definition || null);
+                }}
+                onPress={async () => {
+                  const tappedId = pendingUnlockAnnouncement.id;
+                  const tappedScreen = pendingUnlockAnnouncement.screen;
+                  await dataStorage.markInsightSeen(tappedId);
+                  const updated = await dataStorage.loadInsightUnlocks();
+                  setInsightUnlocks(updated);
+                  const next = getFirstUnseenUnlock(updated);
+                  setPendingUnlockAnnouncement(next?.definition || null);
+                  // Navigate to the correct screen's Insights tab and scroll to the chart
+                  setScrollToInsightId(tappedId);
+                  if (tappedScreen === 'nutrition') {
+                    setOpenNutritionOnInsights(true);
+                    setShowNutritionAnalysis(true);
+                  } else {
+                    setOpenWeightOnInsights(true);
+                    setShowWeightTracker(true);
+                  }
+                }}
+              />
+            )}
+
             {/* Grocery Unlock Card */}
             {showGroceryUnlockCard && (
               <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
@@ -2617,6 +2740,10 @@ export const HomeScreen: React.FC = () => {
             targetWeightKg={savedGoals.targetWeightKg ?? undefined}
             onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
             isPremium={isPremium}
+            insightUnlocks={insightUnlocks}
+            initialTab={openWeightOnInsights ? 'Insights' : undefined}
+            scrollToInsight={scrollToInsightId}
+            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
           />
         </Modal>
 
@@ -2661,6 +2788,10 @@ export const HomeScreen: React.FC = () => {
               capHitDays: calorieBankCycle.perDayData.filter(d => d.capHit).length,
               spendCapHitDays: calorieBankCycle.perDayData.filter(d => d.spendCapHit).length,
             } : null}
+            insightUnlocks={insightUnlocks}
+            initialTab={openNutritionOnInsights ? 'Insights' : undefined}
+            scrollToInsight={scrollToInsightId}
+            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
           />
         </Modal>
 

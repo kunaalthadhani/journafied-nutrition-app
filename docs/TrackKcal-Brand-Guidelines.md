@@ -33,12 +33,12 @@ Make calorie tracking effortless by letting AI do the hard work — no barcode s
 
 ### Tone of Voice
 - **Casual + clean** — friendly but polished
-- **Humanized** — not corporate, not robotic
+- **Humanized** — not corporate, not robotic, never use hypens
 - **Encouraging** — celebrate progress, never shame
 - **Direct** — say it in one line, not three
 - **Regional awareness** — shawarma, biryani, manakeesh are first-class citizens, not afterthoughts
 
-**Do say:** "You had a solid day — protein was on point 💪"
+**Do say:** "You had a solid day, protein was on point 💪"
 **Don't say:** "Your daily protein intake has met the recommended threshold per your configured targets."
 
 ---
@@ -430,7 +430,7 @@ HomeScreen (root)
 
 ### Founder's Personal Brand
 - **Name:** Kunaal Thadhani
-- **Handle:** @VibeWithKT (Instagram + TikTok)
+- **Handle:** @Kunaal_Thadhani (Instagram + TikTok)
 - **LinkedIn:** Personal account for founder-led content
 
 ### Content Guidelines

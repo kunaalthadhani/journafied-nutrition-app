@@ -16,6 +16,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { InsightUnlocks, isInsightUnlocked, getInsightDefinition, InsightId } from '../utils/insightUnlockEngine';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { useTheme } from '../constants/theme';
@@ -35,6 +36,10 @@ interface WeightTrackerScreenProps {
   targetWeightKg?: number | null;
   onRequestSetGoals?: () => void;
   isPremium?: boolean;
+  insightUnlocks?: InsightUnlocks;
+  initialTab?: 'Tracker' | 'Insights';
+  scrollToInsight?: InsightId | null;
+  onScrollToInsightConsumed?: () => void;
 }
 
 interface WeightEntry {
@@ -72,8 +77,40 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   targetWeightKg,
   onRequestSetGoals,
   isPremium = false,
+  insightUnlocks = {},
+  initialTab: initialTabProp,
+  scrollToInsight = null,
+  onScrollToInsightConsumed,
 }) => {
   const theme = useTheme();
+  const insightsScrollRef = useRef<ScrollView>(null);
+  const insightPositions = useRef<Partial<Record<InsightId, number>>>({});
+  const registerInsightPosition = (id: InsightId) => (e: { nativeEvent: { layout: { y: number } } }) => {
+    insightPositions.current[id] = e.nativeEvent.layout.y;
+  };
+  const InsightSlot: React.FC<{ id: InsightId; children: React.ReactNode }> = ({ id, children }) => (
+    <View onLayout={registerInsightPosition(id)}>{children}</View>
+  );
+
+  const LockedInsightCard = ({ id }: { id: InsightId }) => {
+    const def = getInsightDefinition(id);
+    if (!def) return null;
+    return (
+      <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A', opacity: 0.5 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.input, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="lock" size={14} color={theme.colors.textTertiary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>{def.name}</Text>
+            <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>{def.requirementText}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const isUnlocked = (id: InsightId) => isInsightUnlocked(id, insightUnlocks);
   const { convertWeightToDisplay, convertWeightFromDisplay, getWeightUnitLabel, weightUnit } = usePreferences();
   const { weightEntries: contextWeightEntries, goals: contextGoals } = useUser();
   const [timeRange, setTimeRange] = useState<TimeRange>('1Y');
@@ -90,7 +127,21 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [insightIcon, setInsightIcon] = useState<string>('info');
   const [insightIconColor, setInsightIconColor] = useState<string>('');
   const [showInfo, setShowInfo] = useState(false);
-  const [activeTab, setActiveTab] = useState<TabType>('Tracker');
+  const [activeTab, setActiveTab] = useState<TabType>(initialTabProp || 'Tracker');
+
+  useEffect(() => {
+    if (!scrollToInsight) return;
+    setActiveTab('Insights');
+    const timer = setTimeout(() => {
+      const y = insightPositions.current[scrollToInsight];
+      if (y !== undefined && insightsScrollRef.current) {
+        insightsScrollRef.current.scrollTo({ y: Math.max(0, y - 16), animated: true });
+      }
+      onScrollToInsightConsumed?.();
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [scrollToInsight]);
+
   const [heightCm, setHeightCm] = useState<number | null>(() => {
     if (contextGoals?.heightCm && contextGoals.heightCm > 0) return contextGoals.heightCm;
     if (contextGoals?.heightFeet && contextGoals.heightFeet > 0) {
@@ -1106,6 +1157,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
         >
           <ScrollView
+            ref={insightsScrollRef}
             style={styles.content}
             contentContainerStyle={{ flexGrow: 1 }}
             showsVerticalScrollIndicator={false}
@@ -1442,7 +1494,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* ===== ACTIVE CARDS (only render when data is available) ===== */}
 
                 {/* 1. Goal Progress */}
-                {goalProgressData && !goalProgressData.isMaintain && (
+                <InsightSlot id="goal-progress">
+                {!isUnlocked('goal-progress') && <LockedInsightCard id="goal-progress" />}
+                {isUnlocked('goal-progress') && goalProgressData && !goalProgressData.isMaintain && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
@@ -1499,9 +1553,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 2. Estimated Goal Date */}
-                {estimatedGoalData && (
+                <InsightSlot id="estimated-goal-date">
+                {!isUnlocked('estimated-goal-date') && <LockedInsightCard id="estimated-goal-date" />}
+                {isUnlocked('estimated-goal-date') && estimatedGoalData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Estimated Goal Date</Text>
@@ -1552,9 +1609,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     )}
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 3. Weekly Rate of Change */}
-                {weeklyRateData && (
+                <InsightSlot id="weekly-rate">
+                {!isUnlocked('weekly-rate') && <LockedInsightCard id="weekly-rate" />}
+                {isUnlocked('weekly-rate') && weeklyRateData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
@@ -1595,9 +1655,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 4. Deficit/Surplus Impact (AI) */}
-                {(deficitInsight || deficitInsightLoading) && (
+                <InsightSlot id="deficit-surplus-ai">
+                {!isUnlocked('deficit-surplus-ai') && <LockedInsightCard id="deficit-surplus-ai" />}
+                {isUnlocked('deficit-surplus-ai') && (deficitInsight || deficitInsightLoading) && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1624,9 +1687,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </Text>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 5. Weight vs Calories */}
-                {calorieCorrelation && (
+                <InsightSlot id="weight-vs-calories">
+                {!isUnlocked('weight-vs-calories') && <LockedInsightCard id="weight-vs-calories" />}
+                {isUnlocked('weight-vs-calories') && calorieCorrelation && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight vs Calories</Text>
@@ -1687,9 +1753,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 6. Monthly Comparison */}
-                {monthlyComparison && (monthlyComparison.thisChange !== null || monthlyComparison.lastChange !== null) && (
+                <InsightSlot id="monthly-comparison">
+                {!isUnlocked('monthly-comparison') && <LockedInsightCard id="monthly-comparison" />}
+                {isUnlocked('monthly-comparison') && monthlyComparison && (monthlyComparison.thisChange !== null || monthlyComparison.lastChange !== null) && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Monthly Comparison</Text>
@@ -1726,9 +1795,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 7. Milestones & Records */}
-                {milestoneData && (
+                <InsightSlot id="milestones-records">
+                {!isUnlocked('milestones-records') && <LockedInsightCard id="milestones-records" />}
+                {isUnlocked('milestones-records') && milestoneData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Milestones & Records</Text>
@@ -1770,9 +1842,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 8. Weight Fluctuation */}
-                {fluctuationData && (
+                <InsightSlot id="weight-fluctuation">
+                {!isUnlocked('weight-fluctuation') && <LockedInsightCard id="weight-fluctuation" />}
+                {isUnlocked('weight-fluctuation') && fluctuationData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight Fluctuation</Text>
@@ -1800,9 +1875,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 9. Logging Consistency */}
-                {loggingConsistency && (
+                <InsightSlot id="logging-consistency">
+                {!isUnlocked('logging-consistency') && <LockedInsightCard id="logging-consistency" />}
+                {isUnlocked('logging-consistency') && loggingConsistency && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View style={{ flex: 1 }}>
@@ -1854,9 +1932,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     )}
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* 10. BMI */}
-                {bmiData && (
+                <InsightSlot id="bmi">
+                {!isUnlocked('bmi') && <LockedInsightCard id="bmi" />}
+                {isUnlocked('bmi') && bmiData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
                       <View>
@@ -1913,6 +1994,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   </View>
                 )}
+                </InsightSlot>
 
                 {/* ===== LOCKED CARDS (pushed to bottom) ===== */}
                 {!(goalProgressData && !goalProgressData.isMaintain) && renderLockedCard('Goal Progress', 'Requires a target weight and at least 1 weigh-in.')}

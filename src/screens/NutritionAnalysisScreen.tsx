@@ -22,6 +22,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
 import { DailySummary } from '../services/dataStorage';
+import { InsightUnlocks, isInsightUnlocked, getInsightDefinition, InsightId } from '../utils/insightUnlockEngine';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
@@ -49,6 +50,10 @@ interface NutritionAnalysisScreenProps {
     capHitDays: number;
     spendCapHitDays: number;
   } | null;
+  insightUnlocks?: InsightUnlocks;
+  initialTab?: 'Calories' | 'Macros' | 'Insights';
+  scrollToInsight?: InsightId | null;
+  onScrollToInsightConsumed?: () => void;
 }
 
 type TimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
@@ -75,11 +80,58 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   targetFat: targetFatProp,
   isPremium = false,
   calorieBankData = null,
+  insightUnlocks = {},
+  initialTab,
+  scrollToInsight = null,
+  onScrollToInsightConsumed,
 }) => {
   const theme = useTheme();
-  const [activeTab, setActiveTab] = useState<TabType>('Calories');
+  const insightsScrollRef = useRef<ScrollView>(null);
+  const insightPositions = useRef<Partial<Record<InsightId, number>>>({});
+  const registerInsightPosition = (id: InsightId) => (e: { nativeEvent: { layout: { y: number } } }) => {
+    insightPositions.current[id] = e.nativeEvent.layout.y;
+  };
+  const InsightSlot: React.FC<{ id: InsightId; children: React.ReactNode }> = ({ id, children }) => (
+    <View onLayout={registerInsightPosition(id)}>{children}</View>
+  );
+
+  const LockedInsightCard = ({ id }: { id: InsightId }) => {
+    const def = getInsightDefinition(id);
+    if (!def) return null;
+    return (
+      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, opacity: 0.5 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.input, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="lock" size={14} color={theme.colors.textTertiary} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>{def.name}</Text>
+            <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>{def.requirementText}</Text>
+          </View>
+        </View>
+      </View>
+    );
+  };
+
+  const isUnlocked = (id: InsightId) => isInsightUnlocked(id, insightUnlocks);
+
+  const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
   const [showInfo, setShowInfo] = useState(false);
+
+  useEffect(() => {
+    if (!scrollToInsight) return;
+    setActiveTab('Insights');
+    const timer = setTimeout(() => {
+      const y = insightPositions.current[scrollToInsight];
+      if (y !== undefined && insightsScrollRef.current) {
+        insightsScrollRef.current.scrollTo({ y: Math.max(0, y - 16), animated: true });
+      }
+      onScrollToInsightConsumed?.();
+    }, 450);
+    return () => clearTimeout(timer);
+  }, [scrollToInsight]);
+
   const handleSetGoalPress = () => {
     if (onRequestSetGoals) {
       onRequestSetGoals();
@@ -898,6 +950,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         </View>
 
         <ScrollView
+          ref={insightsScrollRef}
           style={styles.content}
           contentContainerStyle={{ flexGrow: 1 }}
           showsVerticalScrollIndicator={false}
@@ -1724,7 +1777,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {renderTimeRangePills()}
 
                       {/* ── AI Weekly Insight (collapsible) ── */}
-                      {(insightText || isGeneratingInsight) && (
+                      <InsightSlot id="ai-weekly-insight">
+                      {!isUnlocked('ai-weekly-insight') ? (
+                        <LockedInsightCard id="ai-weekly-insight" />
+                      ) : (insightText || isGeneratingInsight) && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <TouchableOpacity
                             activeOpacity={0.7}
@@ -1767,9 +1823,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           )}
                         </View>
                       )}
+                      </InsightSlot>
 
                       {/* ── Calorie Bank Insights ── */}
-                      {calorieBankData?.enabled && (
+                      {calorieBankData?.enabled && isUnlocked('ai-weekly-insight') && (
                         <>
                           {/* Bank Utilization */}
                           <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
@@ -1876,7 +1933,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       )}
 
                       {/* ── Macro Adherence Rings ── */}
-                      {(targetProtein || targetCarbs || targetFat) && (
+                      <InsightSlot id="goal-adherence">
+                      {!isUnlocked('goal-adherence') && <LockedInsightCard id="goal-adherence" />}
+                      {isUnlocked('goal-adherence') && (targetProtein || targetCarbs || targetFat) && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Goal Adherence</Text>
@@ -1924,9 +1983,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           </View>
                         </View>
                       )}
+                      </InsightSlot>
 
                       {/* ── Calorie Trend Chart ── */}
-                      {graphData.length >= 2 && (
+                      <InsightSlot id="calorie-trend">
+                      {!isUnlocked('calorie-trend') && <LockedInsightCard id="calorie-trend" />}
+                      {isUnlocked('calorie-trend') && graphData.length >= 2 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                             <View>
@@ -2010,9 +2072,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           })()}
                         </View>
                       )}
+                      </InsightSlot>
 
                       {/* ── Macro Split Bar ── */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      <InsightSlot id="macro-split">
+                      {!isUnlocked('macro-split') && <LockedInsightCard id="macro-split" />}
+                      {isUnlocked('macro-split') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Macro Split</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Macro Split', 'Breaks down your average daily calories into protein, carbs, and fat as a percentage. The colored bar shows the proportion visually. This helps you see if your diet is balanced or leaning too heavily toward one macro. For example, a very low protein percentage often leads to muscle loss and increased hunger.')}>
@@ -2065,10 +2130,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             </View>
                           );
                         })()}
-                      </View>
+                      </View>}
+                      </InsightSlot>
 
                       {/* ── Radar Chart ── */}
-                      {radarData.length > 0 && (
+                      <InsightSlot id="nutrition-balance">
+                      {!isUnlocked('nutrition-balance') && <LockedInsightCard id="nutrition-balance" />}
+                      {isUnlocked('nutrition-balance') && radarData.length > 0 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, alignItems: 'center' }]}>
                           <View style={{ width: '100%', marginBottom: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -2082,9 +2150,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           {renderRadarChart()}
                         </View>
                       )}
+                      </InsightSlot>
 
                       {/* ── Day-of-Week Activity ── */}
-                      {graphData.length >= 3 && (
+                      <InsightSlot id="weekly-pattern">
+                      {!isUnlocked('weekly-pattern') && <LockedInsightCard id="weekly-pattern" />}
+                      {isUnlocked('weekly-pattern') && graphData.length >= 3 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Weekly Pattern</Text>
@@ -2144,9 +2215,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           })()}
                         </View>
                       )}
+                      </InsightSlot>
 
                       {/* ── Meal Timing ── */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      <InsightSlot id="meal-timing">
+                      {!isUnlocked('meal-timing') && <LockedInsightCard id="meal-timing" />}
+                      {isUnlocked('meal-timing') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Meal Timing</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Meal Timing', 'Breaks down what percentage of your calories you eat in the morning, afternoon, and evening. If most of your calories come from evening meals, it may explain energy dips during the day or late-night hunger. Spreading intake more evenly can improve energy and reduce overeating.')}>
@@ -2215,10 +2289,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             </View>
                           );
                         })()}
-                      </View>
+                      </View>}
+                      </InsightSlot>
 
                       {/* ── Top Foods ── */}
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      <InsightSlot id="top-foods">
+                      {!isUnlocked('top-foods') && <LockedInsightCard id="top-foods" />}
+                      {isUnlocked('top-foods') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                           <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Top Foods</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Top Foods', 'Lists the foods you log most often, ranked by frequency. This shows what your diet actually looks like day to day. If the same 3 foods dominate, you may be missing key nutrients. More variety generally means better micronutrient coverage and less food fatigue.')}>
@@ -2272,7 +2349,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             </View>
                           );
                         })()}
-                      </View>
+                      </View>}
+                      </InsightSlot>
 
                       {/* ── Sugar Load ── */}
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
