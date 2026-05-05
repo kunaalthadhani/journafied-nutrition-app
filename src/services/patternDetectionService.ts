@@ -51,6 +51,30 @@ You will receive an array of daily summaries with:
 **Return empty array if no strong patterns found.**
 `;
 
+const PATTERN_DETECTION_SCHEMA = {
+  type: 'object',
+  properties: {
+    patterns: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: { type: 'string', enum: ['correlation', 'trigger', 'outcome'] },
+          title: { type: 'string' },
+          description: { type: 'string' },
+          fix: { type: 'string' },
+          confidence: { type: 'number' },
+          dataPoints: { type: 'number' },
+        },
+        required: ['type', 'title', 'description', 'fix', 'confidence', 'dataPoints'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['patterns'],
+  additionalProperties: false,
+};
+
 export const patternDetectionService = {
     /**
      * Analyze user's meal data and detect patterns
@@ -109,7 +133,10 @@ export const patternDetectionService = {
                     })) }
                 ],
                 temperature: 0.3,
-                response_format: { type: "json_object" },
+                response_format: {
+                    type: 'json_schema',
+                    json_schema: { name: 'pattern_detection', strict: true, schema: PATTERN_DETECTION_SCHEMA },
+                },
                 call_type: 'pattern-detection',
             });
 

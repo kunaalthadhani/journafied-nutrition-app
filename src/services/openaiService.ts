@@ -6,40 +6,45 @@ import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
 import { NutritionLibraryItem } from './dataStorage';
 import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
+import { hashPrompt } from '../utils/promptVersion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 // ─── Food Analysis Cache ───────────────────────────────────────
 // Caches AI results in AsyncStorage so repeat meals return instantly.
-// Cache never expires — user-edited macros are persisted permanently.
+// Cache entries are tagged with a hash of the prompt that produced them; when the
+// prompt text changes, the hash changes and old entries are silently invalidated.
 const FOOD_CACHE_PREFIX = '@food_cache:';
 
 interface CachedFoodResult {
   foods: Omit<ParsedFood, 'id'>[];
   summary?: string;
   cachedAt: number;
+  promptVersion?: string;
 }
 
 function normalizeFoodInput(input: string): string {
   return input.toLowerCase().trim().replace(/\s+/g, ' ');
 }
 
-async function getCachedFood(input: string): Promise<CachedFoodResult | null> {
+async function getCachedFood(input: string, expectedVersion: string): Promise<CachedFoodResult | null> {
   try {
     const key = FOOD_CACHE_PREFIX + normalizeFoodInput(input);
     const raw = await AsyncStorage.getItem(key);
     if (!raw) return null;
-    return JSON.parse(raw);
+    const parsed = JSON.parse(raw) as CachedFoodResult;
+    if (parsed.promptVersion !== expectedVersion) return null;
+    return parsed;
   } catch {
     return null;
   }
 }
 
-async function setCachedFood(input: string, foods: ParsedFood[], summary?: string): Promise<void> {
+async function setCachedFood(input: string, foods: ParsedFood[], summary: string | undefined, version: string): Promise<void> {
   try {
     const key = FOOD_CACHE_PREFIX + normalizeFoodInput(input);
     // Strip IDs before caching — fresh IDs are generated on each cache hit
     const stripped = foods.map(({ id, ...rest }) => rest);
-    const entry: CachedFoodResult = { foods: stripped, summary, cachedAt: Date.now() };
+    const entry: CachedFoodResult = { foods: stripped, summary, cachedAt: Date.now(), promptVersion: version };
     await AsyncStorage.setItem(key, JSON.stringify(entry));
   } catch {
     // Cache write failure is non-critical
@@ -51,7 +56,7 @@ async function setCachedFood(input: string, foods: ParsedFood[], summary?: strin
  * Next time the same prompt is logged, the user-corrected values are used.
  */
 export async function updateFoodCache(prompt: string, foods: ParsedFood[], summary?: string): Promise<void> {
-  await setCachedFood(prompt, foods, summary);
+  await setCachedFood(prompt, foods, summary, AGENTIC_PROMPT_VERSION);
 }
 
 
@@ -168,12 +173,56 @@ B) If you have enough info (or are making safe assumptions):
 - Return ONLY valid JSON.
 `;
 
+// Cache version derived from the prompt text — bumps automatically when the prompt changes.
+const AGENTIC_PROMPT_VERSION = hashPrompt(AGENTIC_ANALYSIS_PROMPT);
+
+const AGENTIC_NUTRITION_FIELDS = [
+  'calories', 'protein', 'carbs', 'fat',
+  'dietary_fiber', 'sugar', 'added_sugars', 'sugar_alcohols',
+  'saturated_fat', 'sodium_mg', 'potassium_mg', 'cholesterol_mg',
+  'calcium_mg', 'iron_mg',
+  'vitamin_a_mcg', 'vitamin_c_mg', 'vitamin_d_mcg', 'vitamin_b12_mcg',
+] as const;
+
+const AGENTIC_RESPONSE_SCHEMA = {
+  type: 'object',
+  properties: {
+    clarification_question: { type: ['string', 'null'] },
+    summary: { type: ['string', 'null'] },
+    items: {
+      type: ['array', 'null'],
+      items: {
+        type: 'object',
+        properties: {
+          log_name: { type: 'string' },
+          reasoning: { type: 'string' },
+          quantity: { type: 'number' },
+          unit: { type: 'string' },
+          total_weight_g: { type: 'number' },
+          nutrition: {
+            type: 'object',
+            properties: Object.fromEntries(
+              AGENTIC_NUTRITION_FIELDS.map((key) => [key, { type: 'number' as const }]),
+            ),
+            required: [...AGENTIC_NUTRITION_FIELDS],
+            additionalProperties: false,
+          },
+        },
+        required: ['log_name', 'reasoning', 'quantity', 'unit', 'total_weight_g', 'nutrition'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['clarification_question', 'summary', 'items'],
+  additionalProperties: false,
+};
+
 export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
   try {
     if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
 
     // ── Cache check: return near-instantly for repeat meals ──
-    const cached = await getCachedFood(foodInput);
+    const cached = await getCachedFood(foodInput, AGENTIC_PROMPT_VERSION);
     if (cached && cached.foods.length > 0) {
       if (__DEV__) console.log('Cache HIT for:', foodInput);
       await new Promise(resolve => setTimeout(resolve, 300)); // Brief delay so UI transition feels smooth
@@ -193,7 +242,10 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
         { role: 'user', content: sanitizeForAI(foodInput) }
       ],
       temperature: 0.3,
-      response_format: { type: "json_object" },
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'food_analysis', strict: true, schema: AGENTIC_RESPONSE_SCHEMA },
+      },
       call_type: 'food-analysis',
     });
 
@@ -239,7 +291,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
 
     // ── Cache the result for future instant lookups ──
     if (finalFoods.length > 0) {
-      setCachedFood(foodInput, finalFoods, result.summary);
+      setCachedFood(foodInput, finalFoods, result.summary, AGENTIC_PROMPT_VERSION);
     }
 
     return { foods: finalFoods, summary: result.summary };
@@ -252,6 +304,31 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
   }
 }
 
+const NUTRITION_FACTORS_PER_100G_FIELDS = [
+  'calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g',
+  'fiber_per_100g', 'sugar_per_100g', 'added_sugars_per_100g', 'sugar_alcohols_per_100g',
+  'net_carbs_per_100g',
+  'saturated_fat_per_100g', 'trans_fat_per_100g', 'polyunsaturated_fat_per_100g', 'monounsaturated_fat_per_100g',
+  'sodium_mg_per_100g', 'potassium_mg_per_100g', 'cholesterol_mg_per_100g',
+  'calcium_mg_per_100g', 'iron_mg_per_100g',
+  'vitamin_a_mcg_per_100g', 'vitamin_c_mg_per_100g', 'vitamin_d_mcg_per_100g',
+  'vitamin_e_mg_per_100g', 'vitamin_k_mcg_per_100g', 'vitamin_b12_mcg_per_100g',
+] as const;
+
+const NUTRITION_FACTORS_SCHEMA = {
+  type: 'object',
+  properties: {
+    name: { type: 'string' },
+    ...Object.fromEntries(
+      NUTRITION_FACTORS_PER_100G_FIELDS.map((key) => [key, { type: 'number' as const }]),
+    ),
+    standard_unit: { type: 'string' },
+    standard_serving_weight_g: { type: 'number' },
+  },
+  required: ['name', ...NUTRITION_FACTORS_PER_100G_FIELDS, 'standard_unit', 'standard_serving_weight_g'],
+  additionalProperties: false,
+};
+
 // Helper to fetch deterministic factors for the library
 async function fetchNutritionFactors(foodName: string): Promise<NutritionLibraryItem | null> {
   try {
@@ -262,6 +339,10 @@ async function fetchNutritionFactors(foodName: string): Promise<NutritionLibrary
         { role: 'user', content: sanitizeForAI(foodName, 500) }
       ],
       temperature: 0.2,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'nutrition_factors', strict: true, schema: NUTRITION_FACTORS_SCHEMA },
+      },
       call_type: 'nutrition-factors',
     });
     const content = data.choices[0]?.message?.content;
@@ -500,6 +581,17 @@ Return a strictly valid JSON object:
 
 const SMART_SUGGEST_LIMIT_KEY = 'smart_suggest_limit_v1';
 
+const SMART_SUGGEST_SCHEMA = {
+  type: 'object',
+  properties: {
+    display_text: { type: 'string' },
+    loggable_text: { type: 'string' },
+    reasoning: { type: 'string' },
+  },
+  required: ['display_text', 'loggable_text', 'reasoning'],
+  additionalProperties: false,
+};
+
 interface SmartSuggestionResult {
   displayText: string;
   loggableText: string;
@@ -544,7 +636,10 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
         { role: 'user', content: JSON.stringify(sanitizeObjectForAI(enrichedContext)) }
       ],
       temperature: 0.3,
-      response_format: { type: "json_object" },
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'smart_suggestion', strict: true, schema: SMART_SUGGEST_SCHEMA },
+      },
       call_type: 'smart-suggestion',
     });
     const content = data.choices[0]?.message?.content;

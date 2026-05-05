@@ -6,12 +6,24 @@ import { supabase } from './supabaseClient';
  * The OpenAI key never leaves the server — the app only sends the request payload.
  */
 
+type ResponseFormat =
+  | { type: 'json_object' }
+  | { type: 'text' }
+  | {
+      type: 'json_schema';
+      json_schema: {
+        name: string;
+        strict?: boolean;
+        schema: Record<string, any>;
+      };
+    };
+
 interface AIRequest {
   model: string;
   messages: { role: string; content: string | any[] }[];
   temperature?: number;
   max_tokens?: number;
-  response_format?: { type: string };
+  response_format?: ResponseFormat;
   call_type?: string;
 }
 

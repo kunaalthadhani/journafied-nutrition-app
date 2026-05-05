@@ -23,6 +23,28 @@ export interface GroceryCoachExplanation {
     };
 }
 
+const GROCERY_COACH_SCHEMA = {
+    type: 'object',
+    properties: {
+        title: { type: 'string' },
+        summary: { type: 'string' },
+        itemExplanations: {
+            type: 'array',
+            items: {
+                type: 'object',
+                properties: {
+                    name: { type: 'string' },
+                    explanation: { type: 'string' },
+                },
+                required: ['name', 'explanation'],
+                additionalProperties: false,
+            },
+        },
+    },
+    required: ['title', 'summary', 'itemExplanations'],
+    additionalProperties: false,
+};
+
 
 const GROCERY_COACH_SYSTEM_PROMPT = `
 You are a calm, practical, and non-preachy nutrition coach.
@@ -57,9 +79,9 @@ Return ONLY a valid JSON object with this shape:
 {
   "title": "A short, encouraging title for this list",
   "summary": "A 1-2 sentence summary of the strategy, incorporating any plateau/preparation reasoning if applicable.",
-  "itemExplanations": {
-    "Food Name": "One short sentence explaining this choice."
-  }
+  "itemExplanations": [
+    { "name": "Food Name", "explanation": "One short sentence explaining this choice." }
+  ]
 }
 `;
 
@@ -87,7 +109,10 @@ export const groceryCoachService = {
                 ],
                 temperature: 0.5,
                 max_tokens: 450,
-                response_format: { type: "json_object" },
+                response_format: {
+                    type: 'json_schema',
+                    json_schema: { name: 'grocery_coach', strict: true, schema: GROCERY_COACH_SCHEMA },
+                },
                 call_type: 'grocery-coach',
             });
             const content = data.choices[0]?.message?.content;
@@ -95,15 +120,26 @@ export const groceryCoachService = {
             if (!content) return null;
 
             // 4. Parse & Validate
-            const parsed = JSON.parse(content) as GroceryCoachExplanation;
+            const parsed = JSON.parse(content) as { title: string; summary: string; itemExplanations: Array<{ name: string; explanation: string }> };
 
-            // Basic validation check
-            if (!parsed.title || !parsed.itemExplanations) {
+            if (!parsed.title || !Array.isArray(parsed.itemExplanations)) {
                 console.error('Grocery Coach: Invalid JSON structure');
                 return null;
             }
 
-            return parsed;
+            // Convert array of {name, explanation} pairs back to the dict shape the app uses
+            const itemExplanations: Record<string, string> = {};
+            for (const item of parsed.itemExplanations) {
+                if (item?.name && item?.explanation) {
+                    itemExplanations[item.name] = item.explanation;
+                }
+            }
+
+            return {
+                title: parsed.title,
+                summary: parsed.summary,
+                itemExplanations,
+            };
 
         } catch (error) {
             console.error('Grocery Coach Service Error:', error);
