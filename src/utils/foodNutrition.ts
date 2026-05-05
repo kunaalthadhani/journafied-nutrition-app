@@ -42,6 +42,9 @@ export interface ParsedFood {
   calcium_mg?: number;
   iron_mg?: number;
   potassium_mg?: number;
+  magnesium_mg?: number;
+  zinc_mg?: number;
+  omega_3_g?: number;
 
   // Vitamins
   vitamin_a_mcg?: number; // micro-grams (RAE)
@@ -50,6 +53,11 @@ export interface ParsedFood {
   vitamin_e_mg?: number;
   vitamin_k_mcg?: number;
   vitamin_b12_mcg?: number;
+
+  // Confidence — how trustworthy is this estimate, given how the user described the food
+  confidence?: 'low' | 'medium' | 'high';
+  confidence_reason?: string; // short one-liner shown in the explain modal
+
   // Legacy backups for compatibility if needed (mapped to new fields ideally)
   flavor?: string; // Optional flavor text
 }

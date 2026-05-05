@@ -9,6 +9,7 @@ import { ParsedFood } from '../utils/foodNutrition';
 import { useTheme } from '../constants/theme';
 import { MealEntry } from '../services/dataStorage';
 import { SavedPrompt } from '../services/dataStorage';
+import { ConfidenceBadge } from './ConfidenceBadge';
 
 export interface Meal extends MealEntry { }
 
@@ -330,12 +331,19 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                           {food.name}
                           <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
                         </Text>
-                        <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
-                          {Math.round(food.calories)} kcal ·{' '}
-                          <Text style={{ color: MACRO_COLORS.protein }}>P:{Math.round(food.protein)}</Text>{' '}
-                          <Text style={{ color: MACRO_COLORS.carbs }}>C:{Math.round(food.carbs)}</Text>{' '}
-                          <Text style={{ color: MACRO_COLORS.fat }}>F:{Math.round(food.fat)}</Text>
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                          <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
+                            {Math.round(food.calories)} kcal ·{' '}
+                            <Text style={{ color: MACRO_COLORS.protein }}>P:{Math.round(food.protein)}</Text>{' '}
+                            <Text style={{ color: MACRO_COLORS.carbs }}>C:{Math.round(food.carbs)}</Text>{' '}
+                            <Text style={{ color: MACRO_COLORS.fat }}>F:{Math.round(food.fat)}</Text>
+                          </Text>
+                          <ConfidenceBadge
+                            confidence={food.confidence}
+                            confidenceReason={food.confidence_reason}
+                            foodName={food.name}
+                          />
+                        </View>
                       </View>
                       <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
                     </TouchableOpacity>

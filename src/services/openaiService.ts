@@ -87,6 +87,9 @@ Required JSON structure:
   "cholesterol_mg_per_100g": number,
   "calcium_mg_per_100g": number,
   "iron_mg_per_100g": number,
+  "magnesium_mg_per_100g": number,
+  "zinc_mg_per_100g": number,
+  "omega_3_g_per_100g": number,
   "vitamin_a_mcg_per_100g": number,
   "vitamin_c_mg_per_100g": number,
   "vitamin_d_mcg_per_100g": number,
@@ -120,11 +123,20 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
 3. **The Quantifier (The Physicist):**
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
-   - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, and key Vitamins (A, C, D, B12), Calcium, and Iron. Use standard nutritional data.
+   - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, Calcium, Iron, Magnesium, Zinc, Omega-3 (total grams, ALA + EPA + DHA combined), and key Vitamins (A, C, D, B12). Use standard nutritional data.
    - **CRITICAL SUGAR BREAKDOWN:**
-     - For items high in sugar (candy, soda, desserts, processed snacks), you **MUST** estimate \`added_sugars\`. 
+     - For items high in sugar (candy, soda, desserts, processed snacks), you **MUST** estimate \`added_sugars\`.
      - Do NOT leave \`added_sugars\` as 0 if the item is clearly a sweet treat (e.g. invalid: Candy Bar with 20g Sugar but 0g Added Sugar).
      - If the item is "Sugar Free" or "Keto" but sweet, you **MUST** estimate \`sugar_alcohols\`.
+
+4. **The Estimator (Confidence):**
+   - For EACH item, set a \`confidence\` rating based on how the user described the food:
+     - **"high"** — User gave specific quantity AND preparation/portion (e.g. "200g grilled chicken breast, no skin", "1 medium banana", "2 slices of cheese pizza, thin crust").
+     - **"medium"** — User gave the food and at least one qualifier (quantity OR preparation OR portion), but not all (e.g. "chicken breast", "1 burger", "pasta with tomato sauce").
+     - **"low"** — User gave only a generic food name with no qualifiers (e.g. "pasta", "burger", "rice", "salad"), OR critical info was missing AND a clarification was already attempted.
+   - For each item, set \`confidence_reason\` to a SHORT sentence (max 18 words) explaining why this confidence level was chosen — specific to THIS food.
+     - Example "low" for pasta: "Sauce, portion size, and protein add-ons heavily affect calories — none were specified."
+     - Example "high" for "200g grilled chicken breast, skinless": "Specific weight, preparation, and skin status all given — minimal estimation needed."
 
 ### OUTPUT INSTRUCTIONS:
 Return a JSON Object.
@@ -146,6 +158,8 @@ B) If you have enough info (or are making safe assumptions):
           "quantity": Number,
           "unit": "String",
           "total_weight_g": Number,
+          "confidence": "low" | "medium" | "high",
+          "confidence_reason": "String — short, food-specific reason for this confidence level",
           "nutrition": {
             "calories": Number,
             "protein": Number,
@@ -161,6 +175,9 @@ B) If you have enough info (or are making safe assumptions):
             "cholesterol_mg": Number,
             "calcium_mg": Number,
             "iron_mg": Number,
+            "magnesium_mg": Number,
+            "zinc_mg": Number,
+            "omega_3_g": Number,
             "vitamin_a_mcg": Number,
             "vitamin_c_mg": Number,
             "vitamin_d_mcg": Number,
@@ -181,6 +198,7 @@ const AGENTIC_NUTRITION_FIELDS = [
   'dietary_fiber', 'sugar', 'added_sugars', 'sugar_alcohols',
   'saturated_fat', 'sodium_mg', 'potassium_mg', 'cholesterol_mg',
   'calcium_mg', 'iron_mg',
+  'magnesium_mg', 'zinc_mg', 'omega_3_g',
   'vitamin_a_mcg', 'vitamin_c_mg', 'vitamin_d_mcg', 'vitamin_b12_mcg',
 ] as const;
 
@@ -199,6 +217,8 @@ const AGENTIC_RESPONSE_SCHEMA = {
           quantity: { type: 'number' },
           unit: { type: 'string' },
           total_weight_g: { type: 'number' },
+          confidence: { type: 'string', enum: ['low', 'medium', 'high'] },
+          confidence_reason: { type: 'string' },
           nutrition: {
             type: 'object',
             properties: Object.fromEntries(
@@ -208,7 +228,7 @@ const AGENTIC_RESPONSE_SCHEMA = {
             additionalProperties: false,
           },
         },
-        required: ['log_name', 'reasoning', 'quantity', 'unit', 'total_weight_g', 'nutrition'],
+        required: ['log_name', 'reasoning', 'quantity', 'unit', 'total_weight_g', 'confidence', 'confidence_reason', 'nutrition'],
         additionalProperties: false,
       },
     },
@@ -282,10 +302,15 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
         cholesterol_mg: item.nutrition.cholesterol_mg,
         calcium_mg: item.nutrition.calcium_mg,
         iron_mg: item.nutrition.iron_mg,
+        magnesium_mg: item.nutrition.magnesium_mg,
+        zinc_mg: item.nutrition.zinc_mg,
+        omega_3_g: item.nutrition.omega_3_g,
         vitamin_a_mcg: item.nutrition.vitamin_a_mcg,
         vitamin_c_mg: item.nutrition.vitamin_c_mg,
         vitamin_d_mcg: item.nutrition.vitamin_d_mcg,
         vitamin_b12_mcg: item.nutrition.vitamin_b12_mcg,
+        confidence: item.confidence,
+        confidence_reason: item.confidence_reason,
       });
     }
 
@@ -311,6 +336,7 @@ const NUTRITION_FACTORS_PER_100G_FIELDS = [
   'saturated_fat_per_100g', 'trans_fat_per_100g', 'polyunsaturated_fat_per_100g', 'monounsaturated_fat_per_100g',
   'sodium_mg_per_100g', 'potassium_mg_per_100g', 'cholesterol_mg_per_100g',
   'calcium_mg_per_100g', 'iron_mg_per_100g',
+  'magnesium_mg_per_100g', 'zinc_mg_per_100g', 'omega_3_g_per_100g',
   'vitamin_a_mcg_per_100g', 'vitamin_c_mg_per_100g', 'vitamin_d_mcg_per_100g',
   'vitamin_e_mg_per_100g', 'vitamin_k_mcg_per_100g', 'vitamin_b12_mcg_per_100g',
 ] as const;
@@ -373,6 +399,9 @@ async function fetchNutritionFactors(foodName: string): Promise<NutritionLibrary
       cholesterol_mg_per_100g: result.cholesterol_mg_per_100g,
       calcium_mg_per_100g: result.calcium_mg_per_100g,
       iron_mg_per_100g: result.iron_mg_per_100g,
+      magnesium_mg_per_100g: result.magnesium_mg_per_100g,
+      zinc_mg_per_100g: result.zinc_mg_per_100g,
+      omega_3_g_per_100g: result.omega_3_g_per_100g,
 
       vitamin_a_mcg_per_100g: result.vitamin_a_mcg_per_100g,
       vitamin_c_mg_per_100g: result.vitamin_c_mg_per_100g,
@@ -672,5 +701,85 @@ export async function generateSmartSuggestion(context: any, forceNew: boolean = 
   } catch (error) {
     console.error('Error generating smart suggestion:', error);
     return { displayText: "Smart Suggest is temporarily offline.", loggableText: "" };
+  }
+}
+
+// ─── Confidence Improvement Hint ───────────────────────────────────────
+// Fired lazily when the user taps a Low/Medium confidence badge.
+// Returns food-specific guidance on what to add to the next log to raise confidence.
+
+const CONFIDENCE_HINT_PROMPT = `
+You are a nutrition logging coach.
+
+Given a food name and the current confidence level of its nutrition estimate, return the SHORT, SPECIFIC information the user could add to their next log to raise the estimate's accuracy.
+
+Tailor the hint to the food. For pasta, the missing variables are sauce + portion + protein. For pizza, slice count + size + toppings. For chicken, weight + preparation + skin. For salad, dressing + protein + portion. For rice, cooked or uncooked + cup or grams.
+
+Output strict JSON with two fields:
+- "what_to_add": a single sentence (max 22 words) listing the specific variables to include next time.
+- "example": one example of a high-confidence rephrasing of the same food (max 14 words).
+
+Tone: helpful, direct, no fluff. No emojis. No headers.
+`;
+
+const CONFIDENCE_HINT_SCHEMA = {
+  type: 'object',
+  properties: {
+    what_to_add: { type: 'string' },
+    example: { type: 'string' },
+  },
+  required: ['what_to_add', 'example'],
+  additionalProperties: false,
+};
+
+const CONFIDENCE_HINT_CACHE_PREFIX = '@confidence_hint:';
+const CONFIDENCE_HINT_PROMPT_VERSION = hashPrompt(CONFIDENCE_HINT_PROMPT);
+
+export interface ConfidenceHint {
+  what_to_add: string;
+  example: string;
+}
+
+export async function generateConfidenceHint(foodName: string, currentConfidence: 'low' | 'medium'): Promise<ConfidenceHint | null> {
+  try {
+    const cacheKey = CONFIDENCE_HINT_CACHE_PREFIX + normalizeFoodInput(foodName);
+    const cached = await AsyncStorage.getItem(cacheKey);
+    if (cached) {
+      try {
+        const parsed = JSON.parse(cached);
+        if (parsed.promptVersion === CONFIDENCE_HINT_PROMPT_VERSION && parsed.hint) {
+          return parsed.hint as ConfidenceHint;
+        }
+      } catch {
+        // fall through to regenerate
+      }
+    }
+
+    const data = await invokeAI({
+      model: 'gpt-4o-mini',
+      messages: [
+        { role: 'system', content: CONFIDENCE_HINT_PROMPT },
+        { role: 'user', content: `Food: ${sanitizeForAI(foodName, 200)}\nCurrent confidence: ${currentConfidence}` },
+      ],
+      temperature: 0.4,
+      max_tokens: 150,
+      response_format: {
+        type: 'json_schema',
+        json_schema: { name: 'confidence_hint', strict: true, schema: CONFIDENCE_HINT_SCHEMA },
+      },
+      call_type: 'confidence-hint',
+    });
+    const content = data.choices[0]?.message?.content;
+    if (!content) return null;
+
+    const hint = JSON.parse(content) as ConfidenceHint;
+    AsyncStorage.setItem(
+      cacheKey,
+      JSON.stringify({ promptVersion: CONFIDENCE_HINT_PROMPT_VERSION, hint, cachedAt: Date.now() }),
+    ).catch(() => {});
+    return hint;
+  } catch (error) {
+    if (__DEV__) console.error('Error generating confidence hint:', error);
+    return null;
   }
 }

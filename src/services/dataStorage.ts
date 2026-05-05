@@ -456,6 +456,9 @@ export interface NutritionLibraryItem {
   potassium_mg_per_100g?: number;
   calcium_mg_per_100g?: number;
   iron_mg_per_100g?: number;
+  magnesium_mg_per_100g?: number;
+  zinc_mg_per_100g?: number;
+  omega_3_g_per_100g?: number;
 
   vitamin_a_mcg_per_100g?: number;
   vitamin_c_mg_per_100g?: number;
