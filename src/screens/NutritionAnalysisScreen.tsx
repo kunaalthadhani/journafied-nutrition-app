@@ -2138,7 +2138,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <InsightSlot id="micronutrient-balance">
                       {!isUnlocked('micronutrient-balance') && <LockedInsightCard id="micronutrient-balance" />}
                       {isUnlocked('micronutrient-balance') && summariesByDate && (
-                        <MicronutrientCard summariesByDate={summariesByDate} />
+                        <MicronutrientCard summariesByDate={summariesByDate} timeRange={timeRange} />
                       )}
                       </InsightSlot>
 

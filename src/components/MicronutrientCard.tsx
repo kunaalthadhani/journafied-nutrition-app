@@ -12,10 +12,11 @@ import {
   statusFor,
 } from '../utils/microTargets';
 
-type ViewMode = 'today' | 'weekly';
+export type MicroTimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
 
 interface MicronutrientCardProps {
   summariesByDate: Record<string, DailySummary>;
+  timeRange: MicroTimeRange;
 }
 
 interface Row {
@@ -57,14 +58,27 @@ const ORDER: Array<{ key: keyof MicroTargetSet; label: string; summaryKey: keyof
   { key: 'vitamin_b12_mcg', label: 'Vitamin B12', summaryKey: 'totalVitaminB12' },
 ];
 
+const RANGE_DAYS: Record<MicroTimeRange, number> = {
+  '1D': 1, '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365, '2Y': 730,
+};
+
+const RANGE_LABEL: Record<MicroTimeRange, string> = {
+  '1D': 'today',
+  '1W': 'past 7 days',
+  '1M': 'past 30 days',
+  '3M': 'past 90 days',
+  '6M': 'past 6 months',
+  '1Y': 'past year',
+  '2Y': 'past 2 years',
+};
+
 function formatValue(value: number, unit: MicroTarget['unit']): string {
   if (unit === 'g') return value < 10 ? value.toFixed(1) : Math.round(value).toString();
   return Math.round(value).toString();
 }
 
-export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesByDate }) => {
+export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesByDate, timeRange }) => {
   const theme = useTheme();
-  const [mode, setMode] = useState<ViewMode>('today');
   const [targets, setTargets] = useState<MicroTargetSet | null>(null);
 
   useEffect(() => {
@@ -82,27 +96,32 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
     return () => { cancelled = true; };
   }, []);
 
-  const rows = useMemo<Row[]>(() => {
-    if (!targets) return [];
+  const { rows, loggedDaysInRange } = useMemo<{ rows: Row[]; loggedDaysInRange: number }>(() => {
+    if (!targets) return { rows: [], loggedDaysInRange: 0 };
 
     const today = new Date();
     const todayKey = today.toISOString().split('T')[0];
+    const rangeDays = RANGE_DAYS[timeRange];
 
-    // build the "values" object depending on mode
     const values: Partial<Record<keyof DailySummary, number>> = {};
-    if (mode === 'today') {
+    let daysCounted = 0;
+
+    if (timeRange === '1D') {
       const s = summariesByDate[todayKey];
+      const hasData = !!s && (s.entryCount || 0) > 0;
+      daysCounted = hasData ? 1 : 0;
       ORDER.forEach(o => {
         values[o.summaryKey] = (s?.[o.summaryKey] as number) || 0;
       });
     } else {
       const dates: string[] = [];
-      for (let i = 0; i < 7; i++) {
+      for (let i = 0; i < rangeDays; i++) {
         const d = new Date(today);
         d.setDate(today.getDate() - i);
         dates.push(d.toISOString().split('T')[0]);
       }
       const daysWithData = dates.filter(k => summariesByDate[k] && (summariesByDate[k].entryCount || 0) > 0);
+      daysCounted = daysWithData.length;
       const denom = Math.max(1, daysWithData.length);
 
       ORDER.forEach(o => {
@@ -114,56 +133,51 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
       });
     }
 
-    return ORDER.map(o => {
+    const computedRows = ORDER.map(o => {
       const actual = values[o.summaryKey] || 0;
       const target = targets[o.key];
       const status = statusFor(actual, target);
       const pct = percentOfTarget(actual, target);
       return { key: o.key, label: o.label, actual, target, status, pct };
     });
-  }, [targets, summariesByDate, mode]);
+
+    return { rows: computedRows, loggedDaysInRange: daysCounted };
+  }, [targets, summariesByDate, timeRange]);
 
   const handleInfo = () => {
     Alert.alert(
       'Micronutrients',
-      'Tracks vitamins, minerals, fiber, and omega-3 from your food logs against personalized daily targets based on your age and sex.\n\nGreen means you are on track. Yellow means you are trending off. Red means deficient or way over a limit.\n\nThese are estimates from AI analysis of your meals. For medical concerns, see a doctor.',
+      'Tracks vitamins, minerals, fiber, and omega-3 from your food logs against personalized daily targets based on your age and sex.\n\nGreen means you are on track. Yellow means you are trending off. Red means deficient or way over a limit.\n\nThe range follows the filter at the top of the screen. For 1D, this shows today\'s intake. For longer ranges, it shows your daily average across the logged days in that window.\n\nThese are estimates from AI analysis of your meals. For medical concerns, see a doctor.',
     );
   };
 
   if (!targets) return null;
 
+  // Subtitle copy that reflects the actual time window and data availability.
+  const expectedDays = RANGE_DAYS[timeRange];
+  const sparse = timeRange !== '1D' && loggedDaysInRange > 0 && loggedDaysInRange < expectedDays;
+  let subtitle = '';
+  if (timeRange === '1D') {
+    subtitle = "Today's intake vs your targets";
+  } else if (loggedDaysInRange === 0) {
+    subtitle = `No food logged in the ${RANGE_LABEL[timeRange]} yet`;
+  } else if (sparse) {
+    subtitle = `Daily average across your ${loggedDaysInRange} logged ${loggedDaysInRange === 1 ? 'day' : 'days'} in the ${RANGE_LABEL[timeRange]}`;
+  } else {
+    subtitle = `Daily average across the ${RANGE_LABEL[timeRange]}`;
+  }
+
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
       <View style={styles.headerRow}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Micronutrients</Text>
-          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={handleInfo}>
-            <Feather name="info" size={13} color={theme.colors.textTertiary} />
-          </TouchableOpacity>
-        </View>
-
-        <View style={[styles.toggleWrap, { backgroundColor: theme.colors.input }]}>
-          <TouchableOpacity
-            style={[styles.toggleBtn, mode === 'today' && { backgroundColor: theme.colors.primary }]}
-            onPress={() => setMode('today')}
-          >
-            <Text style={{ fontSize: 11, fontWeight: '700', color: mode === 'today' ? theme.colors.primaryForeground : theme.colors.textSecondary }}>
-              Today
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[styles.toggleBtn, mode === 'weekly' && { backgroundColor: theme.colors.primary }]}
-            onPress={() => setMode('weekly')}
-          >
-            <Text style={{ fontSize: 11, fontWeight: '700', color: mode === 'weekly' ? theme.colors.primaryForeground : theme.colors.textSecondary }}>
-              Daily average
-            </Text>
-          </TouchableOpacity>
-        </View>
+        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Micronutrients</Text>
+        <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={handleInfo}>
+          <Feather name="info" size={13} color={theme.colors.textTertiary} />
+        </TouchableOpacity>
       </View>
 
       <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>
-        {mode === 'today' ? "Today's intake vs your targets" : 'Your daily average over the past 7 days'}
+        {subtitle}
       </Text>
 
       <View style={{ gap: 10 }}>
@@ -217,22 +231,12 @@ const styles = StyleSheet.create({
   headerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 6,
     marginBottom: 4,
   },
   title: {
     fontSize: 15,
     fontWeight: '700',
-  },
-  toggleWrap: {
-    flexDirection: 'row',
-    borderRadius: 8,
-    padding: 2,
-  },
-  toggleBtn: {
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    borderRadius: 6,
   },
   row: {
     flexDirection: 'row',
