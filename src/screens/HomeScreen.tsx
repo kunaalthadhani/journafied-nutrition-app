@@ -633,8 +633,23 @@ export const HomeScreen: React.FC = () => {
 
   // Check for new insight unlocks when data changes
   const checkInsightUnlocks = async (summaries: Record<string, DailySummary>) => {
-    if (!isPremium) return;
     try {
+      // Always load existing unlocks into state. Render-time premium gate handles visibility.
+      // This avoids a stale-isPremium race on initial app load where the useMemo has not
+      // recomputed yet by the time loadAllData calls this function.
+      const existingUnlocks = await dataStorage.loadInsightUnlocks();
+      setInsightUnlocks(existingUnlocks);
+
+      // Only premium users get NEW unlocks computed and saved.
+      const plan = await dataStorage.loadUserPlan();
+      const account = await dataStorage.loadAccountInfo();
+      const isPremiumNow = plan === 'premium' && !!account?.email;
+      if (!isPremiumNow) {
+        const unseen = getFirstUnseenUnlock(existingUnlocks);
+        if (unseen) setPendingUnlockAnnouncement(unseen.definition);
+        return;
+      }
+
       const weightEntries = await dataStorage.loadWeightEntries();
       const goals = await dataStorage.loadGoals();
 
@@ -673,7 +688,6 @@ export const HomeScreen: React.FC = () => {
         monthsWithWeightData: weightMonths.size,
       };
 
-      const existingUnlocks = await dataStorage.loadInsightUnlocks();
       const newlyUnlocked = getNewlyUnlockedInsights(stats, existingUnlocks);
 
       if (newlyUnlocked.length > 0) {
@@ -691,7 +705,6 @@ export const HomeScreen: React.FC = () => {
           setPendingUnlockAnnouncement(unseen.definition);
         }
       } else {
-        setInsightUnlocks(existingUnlocks);
         // Check if there's still an unseen announcement from before
         const unseen = getFirstUnseenUnlock(existingUnlocks);
         if (unseen) {

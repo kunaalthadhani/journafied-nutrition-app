@@ -300,6 +300,24 @@ export interface DailySummary {
   totalFat: number;
   entryCount: number;
   updatedAt: string;
+
+  // ── Micros and detailed macros (all optional, may be missing on older summaries) ──
+  totalFiber?: number;
+  totalSugar?: number;
+  totalAddedSugars?: number;
+  totalSaturatedFat?: number;
+  totalSodium?: number;
+  totalPotassium?: number;
+  totalCholesterol?: number;
+  totalCalcium?: number;
+  totalIron?: number;
+  totalMagnesium?: number;
+  totalZinc?: number;
+  totalOmega3?: number;
+  totalVitaminA?: number;
+  totalVitaminC?: number;
+  totalVitaminD?: number;
+  totalVitaminB12?: number;
 }
 
 // ---- Smart Reminder Types ----
@@ -2209,29 +2227,69 @@ export const dataStorage = {
 
   recalculateDailySummary(date: string, mealsOrFoods: MealEntry[] | any[]): DailySummary {
     // This helper can take full daily meals and produce the summary
-    // Needs to handle both MealEntry (which has ParsedFood[]) 
+    // Needs to handle both MealEntry (which has ParsedFood[])
     // or flat ParsedFood list if we change structure later.
 
     // Flatten to just foods
     const foods = (mealsOrFoods as MealEntry[]).flatMap(m => m.foods);
 
-    const totals = foods.reduce((acc, food) => {
-      return {
-        calories: acc.calories + (food.calories || 0),
-        protein: acc.protein + (food.protein || 0),
-        carbs: acc.carbs + (food.carbs || 0),
-        fat: acc.fat + (food.fat || 0),
-      };
-    }, { calories: 0, protein: 0, carbs: 0, fat: 0 });
+    const totals = foods.reduce((acc, food) => ({
+      calories: acc.calories + (food.calories || 0),
+      protein: acc.protein + (food.protein || 0),
+      carbs: acc.carbs + (food.carbs || 0),
+      fat: acc.fat + (food.fat || 0),
+      fiber: acc.fiber + (food.dietary_fiber || 0),
+      sugar: acc.sugar + (food.sugar || 0),
+      addedSugars: acc.addedSugars + (food.added_sugars || 0),
+      saturatedFat: acc.saturatedFat + (food.saturated_fat || 0),
+      sodium: acc.sodium + (food.sodium_mg || 0),
+      potassium: acc.potassium + (food.potassium_mg || 0),
+      cholesterol: acc.cholesterol + (food.cholesterol_mg || 0),
+      calcium: acc.calcium + (food.calcium_mg || 0),
+      iron: acc.iron + (food.iron_mg || 0),
+      magnesium: acc.magnesium + (food.magnesium_mg || 0),
+      zinc: acc.zinc + (food.zinc_mg || 0),
+      omega3: acc.omega3 + (food.omega_3_g || 0),
+      vitaminA: acc.vitaminA + (food.vitamin_a_mcg || 0),
+      vitaminC: acc.vitaminC + (food.vitamin_c_mg || 0),
+      vitaminD: acc.vitaminD + (food.vitamin_d_mcg || 0),
+      vitaminB12: acc.vitaminB12 + (food.vitamin_b12_mcg || 0),
+    }), {
+      calories: 0, protein: 0, carbs: 0, fat: 0,
+      fiber: 0, sugar: 0, addedSugars: 0, saturatedFat: 0,
+      sodium: 0, potassium: 0, cholesterol: 0,
+      calcium: 0, iron: 0, magnesium: 0, zinc: 0, omega3: 0,
+      vitaminA: 0, vitaminC: 0, vitaminD: 0, vitaminB12: 0,
+    });
+
+    const round1 = (v: number) => Number(v.toFixed(1));
+    const round0 = (v: number) => Math.round(v);
 
     return {
       date,
-      totalCalories: totals.calories,
-      totalProtein: Number(totals.protein.toFixed(1)),
-      totalCarbs: Number(totals.carbs.toFixed(1)),
-      totalFat: Number(totals.fat.toFixed(1)),
+      totalCalories: round0(totals.calories),
+      totalProtein: round1(totals.protein),
+      totalCarbs: round1(totals.carbs),
+      totalFat: round1(totals.fat),
       entryCount: mealsOrFoods.length,
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+
+      totalFiber: round1(totals.fiber),
+      totalSugar: round1(totals.sugar),
+      totalAddedSugars: round1(totals.addedSugars),
+      totalSaturatedFat: round1(totals.saturatedFat),
+      totalSodium: round0(totals.sodium),
+      totalPotassium: round0(totals.potassium),
+      totalCholesterol: round0(totals.cholesterol),
+      totalCalcium: round0(totals.calcium),
+      totalIron: round1(totals.iron),
+      totalMagnesium: round0(totals.magnesium),
+      totalZinc: round1(totals.zinc),
+      totalOmega3: round1(totals.omega3),
+      totalVitaminA: round0(totals.vitaminA),
+      totalVitaminC: round1(totals.vitaminC),
+      totalVitaminD: round1(totals.vitaminD),
+      totalVitaminB12: round1(totals.vitaminB12),
     };
   },
 

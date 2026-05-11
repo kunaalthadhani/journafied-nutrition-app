@@ -14,6 +14,7 @@ export type InsightId =
   | 'top-foods'
   | 'weekly-pattern'
   | 'nutrition-balance'
+  | 'micronutrient-balance'
   | 'ai-weekly-insight'
   // Weight Tracker
   | 'bmi'
@@ -121,6 +122,15 @@ export const INSIGHT_DEFINITIONS: InsightDefinition[] = [
     description: 'A radar view of how balanced your diet is',
     screen: 'nutrition',
     icon: 'compass',
+    requirementText: 'Log 5 days to unlock',
+    check: (s) => s.loggedDays >= 5,
+  },
+  {
+    id: 'micronutrient-balance',
+    name: 'Micronutrients',
+    description: 'Vitamins, minerals, and omega-3 vs your personalized targets',
+    screen: 'nutrition',
+    icon: 'zap',
     requirementText: 'Log 5 days to unlock',
     check: (s) => s.loggedDays >= 5,
   },

@@ -23,6 +23,7 @@ import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
 import { DailySummary } from '../services/dataStorage';
 import { InsightUnlocks, isInsightUnlocked, getInsightDefinition, InsightId } from '../utils/insightUnlockEngine';
+import { MicronutrientCard } from '../components/MicronutrientCard';
 
 interface NutritionAnalysisScreenProps {
   onBack: () => void;
@@ -2131,6 +2132,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           );
                         })()}
                       </View>}
+                      </InsightSlot>
+
+                      {/* ── Micronutrients ── */}
+                      <InsightSlot id="micronutrient-balance">
+                      {!isUnlocked('micronutrient-balance') && <LockedInsightCard id="micronutrient-balance" />}
+                      {isUnlocked('micronutrient-balance') && summariesByDate && (
+                        <MicronutrientCard summariesByDate={summariesByDate} />
+                      )}
                       </InsightSlot>
 
                       {/* ── Radar Chart ── */}
