@@ -501,18 +501,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     return Math.ceil(length * 1.5); // 1.5x for bezier overhead
   };
 
-  // Screen-level slide-up for smooth navigation
-  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  // Slide value retained at 0. iOS Modal handles entrance and exit animations.
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const handleClose = () => {
-    // Save in background -- don't block the dismiss animation
     dataStorage.saveWeightEntries(weightEntries);
-
-    Animated.timing(slideAnim, {
-      toValue: Dimensions.get('window').height,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(onBack);
+    onBack();
   };
 
   const panResponder = useRef(
@@ -696,15 +690,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const lineProgress = useRef(new Animated.Value(0)).current;
   const AnimatedPath = useRef(Animated.createAnimatedComponent(Path as any)).current;
 
-  useEffect(() => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 20,
-      stiffness: 90,
-      overshootClamping: true,
-    }).start();
-  }, []);
+  // iOS Modal handles the entrance animation. No internal entrance needed.
 
   useEffect(() => {
     const { path: newPath, length } = generateSmoothPath();

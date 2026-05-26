@@ -52,7 +52,7 @@ export const ExerciseLogSection: React.FC<ExerciseLogSectionProps> = ({
           <View style={styles.exerciseList}>
             {entry.exercises.map((exercise, idx) => (
               <View
-                key={`${exercise.id}-${idx}`}
+                key={exercise.id}
                 style={[
                   styles.exerciseItem,
                   idx < entry.exercises.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }

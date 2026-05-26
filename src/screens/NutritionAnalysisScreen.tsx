@@ -530,15 +530,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     </View>
   );
 
-  // Screen-level slide-up for smooth navigation
-  const slideAnim = useRef(new Animated.Value(Dimensions.get('window').height)).current;
+  // Slide value retained at 0. iOS Modal handles entrance and exit animations.
+  // Pan responder still uses this for drag feedback but no JS-driven entrance animation.
+  const slideAnim = useRef(new Animated.Value(0)).current;
 
   const handleClose = () => {
-    Animated.timing(slideAnim, {
-      toValue: Dimensions.get('window').height,
-      duration: 300,
-      useNativeDriver: true,
-    }).start(onBack);
+    onBack();
   };
 
   const panResponder = useRef(
@@ -640,15 +637,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     })
   ).current;
 
-  useEffect(() => {
-    Animated.spring(slideAnim, {
-      toValue: 0,
-      useNativeDriver: true,
-      damping: 20,
-      stiffness: 90,
-      overshootClamping: true,
-    }).start();
-  }, []);
+  // iOS Modal handles the entrance animation. No internal entrance needed.
 
   // Animate calories line when data changes
   useEffect(() => {

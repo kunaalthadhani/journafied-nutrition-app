@@ -1,4 +1,5 @@
 import { supabase } from './supabaseClient';
+import * as Sentry from '@sentry/react-native';
 
 /**
  * AI Proxy Service
@@ -42,12 +43,48 @@ export async function invokeAI(request: AIRequest): Promise<AIResponse> {
 
   if (error) {
     let message = error.message || 'AI request failed';
+
+    // The Edge Function returns the actual OpenAI error in the response body. The
+    // supabase-js client wraps it under error.context. Pull that out so callers and dev
+    // logs see the real cause (rate limit, schema validation, bad key, etc).
     try {
-      const parsed = JSON.parse(message);
-      message = parsed.message || parsed.error || message;
+      const ctx: any = (error as any).context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        if (txt) {
+          try {
+            const parsed = JSON.parse(txt);
+            message = parsed.error || parsed.message || txt;
+          } catch {
+            message = txt;
+          }
+        }
+      }
     } catch {
-      // error.message was not JSON, use as-is
+      // best effort, fall through with default message
     }
+
+    if (__DEV__) {
+      console.error('[invokeAI] Edge function error for call_type=', request.call_type, 'model=', request.model);
+      console.error('[invokeAI] Real error from server:', message);
+    }
+
+    // Send to Sentry with tags so we can filter by which AI call failed.
+    try {
+      Sentry.captureException(new Error(`AI proxy error: ${message}`), {
+        tags: {
+          ai_call_type: request.call_type || 'unknown',
+          ai_model: request.model || 'unknown',
+        },
+        extra: {
+          message_count: request.messages?.length,
+          temperature: request.temperature,
+          max_tokens: request.max_tokens,
+          response_format_type: request.response_format?.type,
+        },
+      });
+    } catch { /* Sentry capture should never break the app */ }
+
     throw new Error(message);
   }
 

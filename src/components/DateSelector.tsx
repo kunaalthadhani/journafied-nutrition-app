@@ -72,7 +72,7 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
           const isMissed = isPast && !hasLog;
           return (
             <TouchableOpacity
-              key={`${dateKey}-${index}`}
+              key={dateKey}
               style={[
                 styles.dayBlock,
               ]}

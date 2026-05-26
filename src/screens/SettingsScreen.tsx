@@ -81,6 +81,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const slideUpAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
 
   const openSlideUp = (type: SlideUpType) => {
+    // Block double-tap: if a slide-up is already open or animating, ignore the second tap.
+    if (activeSlideUpRef.current !== null) return;
+
     const premiumFeatures = ['dynamic', 'smartSuggest', 'patternDetection', 'weeklyOverview', 'grocery', 'calorieBank'];
     if (premiumFeatures.includes(type)) {
       if (!isSignedIn) {

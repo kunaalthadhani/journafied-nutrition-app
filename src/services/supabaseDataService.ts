@@ -80,9 +80,21 @@ async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUse
   if (!isSupabaseConfigured() || !supabase) return null;
   if (!accountInfo?.supabaseUserId && !accountInfo?.email) return null;
 
-  // If we have supabaseUserId but no email, fetch email from Supabase Auth
-  let emailToUse = accountInfo.email;
-  if (!emailToUse && accountInfo.supabaseUserId && supabase) {
+  // Always derive auth_user_id from the CURRENT authenticated session, not from
+  // accountInfo (which can be stale or missing). RLS policies on app_users require
+  // auth_user_id to equal auth.uid() for both INSERT and UPDATE.
+  const { data: sessionData } = await supabase.auth.getSession();
+  const currentAuthUid = sessionData?.session?.user?.id ?? null;
+  const sessionEmail = sessionData?.session?.user?.email ?? null;
+
+  // If no active session, we cannot satisfy RLS. Bail without erroring.
+  if (!currentAuthUid) {
+    return null;
+  }
+
+  // Prefer email from current session, fall back to accountInfo, then Supabase Auth lookup.
+  let emailToUse = sessionEmail || accountInfo.email;
+  if (!emailToUse && accountInfo.supabaseUserId) {
     try {
       const { data: { user } } = await supabase.auth.getUser(accountInfo.supabaseUserId);
       if (user?.email) emailToUse = user.email;
@@ -97,7 +109,7 @@ async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUse
     const needsUpdate =
       (accountInfo.name && existing.display_name !== accountInfo.name) ||
       (accountInfo.phoneNumber && existing.phone_number !== accountInfo.phoneNumber) ||
-      (accountInfo.supabaseUserId && existing.auth_user_id !== accountInfo.supabaseUserId) ||
+      (existing.auth_user_id !== currentAuthUid) ||
       (emailToUse && existing.email !== emailToUse.trim().toLowerCase());
 
     if (needsUpdate) {
@@ -106,7 +118,7 @@ async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUse
         .update({
           display_name: accountInfo.name ?? existing.display_name,
           phone_number: accountInfo.phoneNumber ?? existing.phone_number,
-          auth_user_id: accountInfo.supabaseUserId ?? existing.auth_user_id,
+          auth_user_id: currentAuthUid,
           email: emailToUse ? emailToUse.trim().toLowerCase() : existing.email,
         })
         .eq('id', existing.id)
@@ -135,7 +147,7 @@ async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUse
       email: emailToUse.trim().toLowerCase(),
       display_name: accountInfo.name ?? null,
       phone_number: accountInfo.phoneNumber ?? null,
-      auth_user_id: accountInfo.supabaseUserId ?? null,
+      auth_user_id: currentAuthUid,
     })
     .select()
     .single();

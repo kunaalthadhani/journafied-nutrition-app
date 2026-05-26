@@ -45,3 +45,12 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+.env.local
+
+# Local dev helpers (DB query runner, password files)
+_dbq.cjs
+db_password.txt
+
+# Supabase CLI temp state
+supabase/.temp/

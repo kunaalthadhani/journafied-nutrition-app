@@ -161,40 +161,25 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
     }
   }, [visible, SCREEN_WIDTH]);
 
-  const handleSetGoals = () => {
-    onSetGoals();
+  // Tracks whether a menu item has already fired. Prevents a second tap from queueing
+  // another navigation while the sidebar is mid-close (~250ms slide-out).
+  const handlerFiredRef = useRef(false);
+  const fireOnce = (fn?: () => void) => {
+    if (handlerFiredRef.current) return;
+    handlerFiredRef.current = true;
+    fn?.();
     onClose();
+    // Release the guard after the sidebar close animation finishes.
+    setTimeout(() => { handlerFiredRef.current = false; }, 350);
   };
 
-  const handleWeightTracker = () => {
-    onWeightTracker?.();
-    onClose();
-  };
-
-  const handleNutritionAnalysis = () => {
-    onNutritionAnalysis?.();
-    onClose();
-  };
-
-  const handleLogin = () => {
-    onLogin?.();
-    onClose();
-  };
-
-  const handleSettings = () => {
-    onSettings?.();
-    onClose();
-  };
-
-  const handleAbout = () => {
-    onAbout?.();
-    onClose();
-  };
-
-  const handleReferral = () => {
-    onReferral?.();
-    onClose();
-  };
+  const handleSetGoals = () => fireOnce(onSetGoals);
+  const handleWeightTracker = () => fireOnce(onWeightTracker);
+  const handleNutritionAnalysis = () => fireOnce(onNutritionAnalysis);
+  const handleLogin = () => fireOnce(onLogin);
+  const handleSettings = () => fireOnce(onSettings);
+  const handleAbout = () => fireOnce(onAbout);
+  const handleReferral = () => fireOnce(onReferral);
 
 
 

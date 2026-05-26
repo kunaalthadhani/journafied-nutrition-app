@@ -123,6 +123,8 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
 3. **The Quantifier (The Physicist):**
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
+   - **CRITICAL WEIGHT RULE:** If the user states an explicit weight in grams, ounces, pounds, or kilograms (e.g. "100g", "100 grams", "8 oz", "1 lb", "0.5 kg"), that is the TOTAL weight of the item. Use it directly. Do NOT multiply by quantity. Do NOT scale by per-piece weight. "100 grams chicken thigh" means total_weight_g = 100, not 100 pieces × 100g.
+   - **CRITICAL IDENTITY RULE:** Preserve the specific cut, type, variety, brand, or preparation the user named. If they say "chicken thigh," do not substitute "chicken breast." If they say "skim milk," do not substitute "whole milk." If they say "brown rice," do not substitute "white rice." If they say "olive oil," do not substitute "vegetable oil." The user's words are authoritative for what the food IS. Your job is to estimate the macros, not pick the food.
    - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, Calcium, Iron, Magnesium, Zinc, Omega-3 (total grams, ALA + EPA + DHA combined), and key Vitamins (A, C, D, B12). Use standard nutritional data.
    - **CRITICAL SUGAR BREAKDOWN:**
      - For items high in sugar (candy, soda, desserts, processed snacks), you **MUST** estimate \`added_sugars\`.
@@ -154,6 +156,7 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
      - Example "high" for "200g grilled chicken breast, skinless": "Weight, preparation, and skin status all given. Minimal estimation needed."
      - Example "low" for "pasta": "Sauce, portion, and protein add-ons heavily affect calories. None were specified."
    - **DO NOT downgrade confidence for missing details that have small calorie impact** (e.g. exact pasta shape, brand of bread, freshness of vegetables). These do not move the estimate meaningfully.
+   - **HARD STOP:** If you ever feel the urge to substitute a DIFFERENT food than what the user named (e.g. swap "thigh" for "breast"), do not do it. The user's named food is final. If you truly cannot estimate that food, set confidence to "low" and \`confidence_reason\` to explain why, but still keep the food name they gave you.
 
 ### OUTPUT INSTRUCTIONS:
 Return a JSON Object.
@@ -209,6 +212,64 @@ B) If you have enough info (or are making safe assumptions):
 
 // Cache version derived from the prompt text — bumps automatically when the prompt changes.
 const AGENTIC_PROMPT_VERSION = hashPrompt(AGENTIC_ANALYSIS_PROMPT);
+
+/**
+ * Extract a single explicit weight from the user's input, returned in grams.
+ * Supports g, grams, oz, ounces, lb, lbs, pounds, kg, kilograms.
+ * Returns null if no weight, multiple weights, or ambiguous input.
+ */
+function extractStatedWeightG(input: string): number | null {
+  if (!input) return null;
+  const re = /(\d+(?:\.\d+)?)\s*(kg|kilograms?|kilos?|g|grams?|oz|ounces?|lbs?|pounds?)\b/gi;
+  const matches: Array<{ value: number; unit: string }> = [];
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(input)) !== null) {
+    matches.push({ value: parseFloat(m[1]), unit: m[2].toLowerCase() });
+  }
+  if (matches.length !== 1) return null; // 0 or multiple weights, do not enforce
+
+  const { value, unit } = matches[0];
+  if (unit.startsWith('kg') || unit.startsWith('kilo')) return value * 1000;
+  if (unit.startsWith('lb') || unit.startsWith('pound')) return value * 453.592;
+  if (unit.startsWith('oz') || unit.startsWith('ounce')) return value * 28.3495;
+  return value; // grams
+}
+
+/**
+ * If the user gave an explicit total weight and the AI returned a different weight for a
+ * single-item meal, scale the nutrition values proportionally and override the weight.
+ * This protects against AI quantity/weight confusion (e.g. "100 grams chicken thigh" being
+ * misread as 100 pieces times per-piece weight).
+ */
+function enforceStatedWeight(userInput: string, items: any[]): any[] {
+  const statedG = extractStatedWeightG(userInput);
+  if (statedG === null || items.length !== 1) return items;
+
+  const item = items[0];
+  const aiWeight = Number(item.total_weight_g) || 0;
+  if (aiWeight <= 0) return items;
+
+  // Allow up to 5% drift (rounding, AI imprecision).
+  const ratio = statedG / aiWeight;
+  if (ratio > 0.95 && ratio < 1.05) return items;
+
+  // Scale nutrition and override weight.
+  const scaledNutrition: Record<string, number> = {};
+  if (item.nutrition && typeof item.nutrition === 'object') {
+    for (const [key, val] of Object.entries(item.nutrition)) {
+      scaledNutrition[key] = typeof val === 'number' ? Number((val * ratio).toFixed(2)) : (val as any);
+    }
+  }
+  if (__DEV__) console.log(`[enforceStatedWeight] scaling: AI=${aiWeight}g -> user=${statedG}g, ratio=${ratio.toFixed(3)}`);
+
+  return [{
+    ...item,
+    total_weight_g: statedG,
+    nutrition: scaledNutrition,
+    // The AI's confidence stands. Note in reasoning that we scaled.
+    reasoning: `${item.reasoning || ''} [Auto-scaled to user stated ${statedG}g.]`.trim(),
+  }];
+}
 
 const AGENTIC_NUTRITION_FIELDS = [
   'calories', 'protein', 'carbs', 'fat',
@@ -269,7 +330,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
 
     let finalPrompt = AGENTIC_ANALYSIS_PROMPT;
     if (!allowClarification) {
-      finalPrompt += `\n\nCRITICAL OVERRIDE: failed to clarify. You MUST NOT return a "clarification_question". You MUST make reasonable assumptions for any missing details and return the nutritional JSON.`;
+      finalPrompt += `\n\nCRITICAL OVERRIDE: clarification is disabled. Do not return a "clarification_question". You MUST return a non-empty "items" array AND a non-null "summary" string. Make reasonable assumptions for any missing details (default portions, default preparation). Set "confidence" to "low" if you had to guess, but never bail by returning empty items or a null summary.`;
     }
 
     const data = await invokeAI({
@@ -289,13 +350,24 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     const content = data.choices[0]?.message?.content;
     if (!content) throw new Error('No response from OpenAI');
 
+    if (__DEV__) {
+      console.log('[FoodAnalysis] input:', JSON.stringify(foodInput));
+      console.log('[FoodAnalysis] raw response:', content);
+    }
+
     const result = JSON.parse(content);
 
     if (result.clarification_question && allowClarification) {
       return { foods: [], clarificationQuestion: result.clarification_question };
     }
 
-    const items = result.items || [];
+    if (__DEV__ && (!result.items || result.items.length === 0)) {
+      console.warn('[FoodAnalysis] AI returned empty items. clarification_question:', result.clarification_question, 'summary:', result.summary);
+    }
+
+    // Deterministic guardrail: if the user gave an explicit weight (e.g. "100 grams"),
+    // and the AI returned a different weight for a single-item meal, scale to match.
+    const items = enforceStatedWeight(foodInput, result.items || []);
     const finalFoods: ParsedFood[] = [];
 
     for (const item of items) {
@@ -331,12 +403,26 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
       });
     }
 
-    // ── Cache the result for future instant lookups ──
-    if (finalFoods.length > 0) {
-      setCachedFood(foodInput, finalFoods, result.summary, AGENTIC_PROMPT_VERSION);
+    // ── Build a fallback summary if the AI returned items but skipped the summary. ──
+    // The strict json_schema allows summary to be null, but the meal row UX needs SOMETHING
+    // to display. Build a short title from the first 1-2 food names so the user does not see
+    // "Image" or a blank row.
+    let finalSummary: string | undefined = result.summary || undefined;
+    if (!finalSummary && finalFoods.length > 0) {
+      const names = finalFoods.slice(0, 2).map(f => f.name).filter(Boolean);
+      if (finalFoods.length > 2) {
+        finalSummary = `${names.join(', ')} + ${finalFoods.length - 2} more`;
+      } else {
+        finalSummary = names.join(', ');
+      }
     }
 
-    return { foods: finalFoods, summary: result.summary };
+    // ── Cache the result for future instant lookups ──
+    if (finalFoods.length > 0) {
+      setCachedFood(foodInput, finalFoods, finalSummary, AGENTIC_PROMPT_VERSION);
+    }
+
+    return { foods: finalFoods, summary: finalSummary };
 
   } catch (error) {
     if (__DEV__) console.error('Error in agentic food analysis:', error);

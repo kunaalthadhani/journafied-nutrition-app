@@ -1019,18 +1019,81 @@ export const dataStorage = {
     const allKeys = await AsyncStorage.getAllKeys();
     const shardKeys = allKeys.filter(k => k.startsWith('@trackkal:log:'));
 
-    if (shardKeys.length === 0) return {};
+    const localByDate: Record<string, MealEntry[]> = {};
+    if (shardKeys.length > 0) {
+      const pairs = await AsyncStorage.multiGet(shardKeys);
+      pairs.forEach(([key, value]) => {
+        if (value) {
+          const date = key.replace('@trackkal:log:', '');
+          localByDate[date] = JSON.parse(value);
+        }
+      });
+    }
 
-    const pairs = await AsyncStorage.multiGet(shardKeys);
-    const constructed: Record<string, MealEntry[]> = {};
+    // If user is signed in, pull remote meals and merge. This restores meals after sign-in on a
+    // fresh device, after a sign-out (which clears local), or any case where local is missing.
+    const accountInfo = await getCachedAccountInfo();
+    if (!accountInfo?.supabaseUserId) {
+      return localByDate;
+    }
 
-    pairs.forEach(([key, value]) => {
-      if (value) {
-        const date = key.replace('@trackkal:log:', '');
-        constructed[date] = JSON.parse(value);
+    try {
+      const remoteByDate = await supabaseDataService.fetchMeals(accountInfo);
+      const remoteDates = Object.keys(remoteByDate);
+      if (remoteDates.length === 0) {
+        return localByDate;
       }
-    });
-    return constructed;
+
+      const merged: Record<string, MealEntry[]> = { ...localByDate };
+      const datesToPersist = new Set<string>();
+
+      for (const date of remoteDates) {
+        const local = localByDate[date] || [];
+        const remote = remoteByDate[date] || [];
+
+        // Merge by meal id. Remote wins on conflict because it is the synced source of truth.
+        // Local-only meals are preserved (they may be pending sync).
+        const byId = new Map<string, MealEntry>();
+        local.forEach(m => byId.set(m.id, m));
+        remote.forEach(m => byId.set(m.id, m));
+
+        const mergedDay = Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
+        const localCount = local.length;
+        const mergedCount = mergedDay.length;
+
+        merged[date] = mergedDay;
+
+        // Only write back to local if the merged set differs from what was on disk.
+        if (mergedCount !== localCount) {
+          datesToPersist.add(date);
+        } else {
+          // Same count, but check if any id differs (remote replaced a local meal).
+          const localIds = new Set(local.map(m => m.id));
+          const changed = mergedDay.some(m => !localIds.has(m.id));
+          if (changed) datesToPersist.add(date);
+        }
+      }
+
+      // Persist merged shards back to local so subsequent reads are fast and offline-safe.
+      const pairs: [string, string][] = Array.from(datesToPersist).map(date => [
+        STORAGE_KEYS.dailyLog(date),
+        JSON.stringify(merged[date]),
+      ]);
+      if (pairs.length > 0) {
+        try {
+          await AsyncStorage.multiSet(pairs);
+        } catch {
+          for (const [k, v] of pairs) {
+            try { await AsyncStorage.setItem(k, v); } catch { /* best effort */ }
+          }
+        }
+      }
+
+      return merged;
+    } catch (error) {
+      console.error('Error fetching meals from Supabase, falling back to local:', error);
+      return localByDate;
+    }
   },
 
   // Save exercises by date
@@ -3094,6 +3157,30 @@ export const dataStorage = {
       await AsyncStorage.clear();
     } catch (e) {
       console.error('Error clearing all local data:', e);
+    }
+  },
+
+  /**
+   * Clear only the account identity from local storage.
+   * Used on sign-out so the user's meals, goals, weight history, premium plan,
+   * insight unlocks, calorie bank settings, and food cache all stay on device.
+   * Next sign-in restores account info and the data is still there.
+   *
+   * Note: this is a single-user-per-device assumption. If we ever support
+   * account switching on shared devices, we will need to also wipe user data here
+   * and rely on remote fetches to restore on sign-in.
+   */
+  async clearAccountData(): Promise<void> {
+    try {
+      // Clear identity and anything tied directly to the signed-in user session.
+      // Everything else (meals, weight, goals, plan, preferences, etc) stays.
+      await AsyncStorage.multiRemove([
+        STORAGE_KEYS.ACCOUNT_INFO,
+        STORAGE_KEYS.SYNC_QUEUE,        // pending writes for the previous session
+        STORAGE_KEYS.PUSH_TOKENS,        // device push token will be re-registered on next sign-in
+      ]);
+    } catch (e) {
+      console.error('Error clearing account data:', e);
     }
   },
 

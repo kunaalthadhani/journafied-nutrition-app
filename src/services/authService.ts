@@ -87,7 +87,10 @@ export const authService = {
 
   async signOut() {
     ensureClient();
-    await dataStorage.clearAllData();
+    // Clear only the account identity, NOT the user's data.
+    // The user's meals, goals, weight history, plan, and feature state all stay on device.
+    // When they sign back in, account info is restored and remote fetches re-merge with local.
+    await dataStorage.clearAccountData();
     return supabase!.auth.signOut();
   },
 

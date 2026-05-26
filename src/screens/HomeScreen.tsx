@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { GrocerySuggestionsScreen } from './GrocerySuggestionsScreen';
 import {
   View,
@@ -54,6 +54,7 @@ import { ImageUploadStatus } from '../components/ImageUploadStatus';
 import { AccountWallModal } from '../components/AccountWallModal';
 import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
 import { analyzeFoodWithChatGPT, analyzeFoodFromImage, updateFoodCache } from '../services/openaiService';
+import { authService } from '../services/authService';
 import { ParsedExercise, calculateExerciseCalories, parseExerciseInput } from '../utils/exerciseParser';
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
@@ -141,6 +142,16 @@ export const HomeScreen: React.FC = () => {
   const [shouldFocusInput, setShouldFocusInput] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+
+  // Navigation guard. Returns true on the first call, false for any call within 500ms.
+  // Use this to wrap every modal-opening handler so a double-tap does not fire twice.
+  const navInFlightRef = useRef(0);
+  const canNavigate = () => {
+    const now = Date.now();
+    if (now - navInFlightRef.current < 500) return false;
+    navInFlightRef.current = now;
+    return true;
+  };
 
   // Derived Premium — requires sign-in
   const isSignedIn = !!accountInfo?.email;
@@ -321,6 +332,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSetGoals = () => {
+    if (!canNavigate()) return;
     analyticsService.trackSetGoalsOpen();
     setShowSetGoals(true);
   };
@@ -340,11 +352,13 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleWeightTracker = () => {
+    if (!canNavigate()) return;
     analyticsService.trackWeightTrackerOpen();
     setShowWeightTracker(true);
   };
 
   const handleNutritionAnalysis = () => {
+    if (!canNavigate()) return;
     analyticsService.trackNutritionAnalysisOpen();
     setShowNutritionAnalysis(true);
   };
@@ -367,6 +381,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettings = async () => {
+    if (!canNavigate()) return;
     setShowSettings(true);
     // Reload referral data to ensure it's up to date
     try {
@@ -383,34 +398,42 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const handleSettingsBack = async () => {
-    // Reload ALL state before closing settings so Home refreshes correctly
-    const freshAccount = await dataStorage.loadAccountInfo();
-    setAccountInfo(freshAccount || null);
-
-    const freshPlan = await dataStorage.loadUserPlan();
-    setUserPlan(freshPlan);
-
-    const prefs = await dataStorage.loadPreferences();
-    setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
-
-    const bankConfig = await dataStorage.loadCalorieBankConfig();
-    setCalorieBankConfig(bankConfig);
-
-    const isFreshPremium = !!freshAccount?.email && freshPlan === 'premium';
-    if (isFreshPremium && bankConfig?.enabled && savedGoals) {
-      const summaries = await dataStorage.loadDailySummaries();
-      setSummariesByDate(summaries);
-      const cycle = calculateCurrentCycle(bankConfig, summaries, savedGoals);
-      setCalorieBankCycle(cycle);
-    } else {
-      setCalorieBankCycle(null);
-    }
-
+  const handleSettingsBack = () => {
+    // Close immediately so the back tap feels responsive. State refresh runs in the
+    // background — Home is still mounted and will re-render when the new state lands.
     setShowSettings(false);
+
+    (async () => {
+      try {
+        const [freshAccount, freshPlan, prefs, bankConfig] = await Promise.all([
+          dataStorage.loadAccountInfo(),
+          dataStorage.loadUserPlan(),
+          dataStorage.loadPreferences(),
+          dataStorage.loadCalorieBankConfig(),
+        ]);
+
+        setAccountInfo(freshAccount || null);
+        setUserPlan(freshPlan);
+        setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+        setCalorieBankConfig(bankConfig);
+
+        const isFreshPremium = !!freshAccount?.email && freshPlan === 'premium';
+        if (isFreshPremium && bankConfig?.enabled && savedGoals) {
+          const summaries = await dataStorage.loadDailySummaries();
+          setSummariesByDate(summaries);
+          const cycle = calculateCurrentCycle(bankConfig, summaries, savedGoals);
+          setCalorieBankCycle(cycle);
+        } else {
+          setCalorieBankCycle(null);
+        }
+      } catch (e) {
+        if (__DEV__) console.error('Settings back refresh failed:', e);
+      }
+    })();
   };
 
   const handleOpenSubscription = () => {
+    if (!canNavigate()) return;
     analyticsService.trackSubscriptionScreenOpen();
     setShowSubscription(true);
   };
@@ -430,6 +453,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAccount = (mode?: 'signin' | 'signup') => {
+    if (!canNavigate()) return;
     if (mode) setAccountInitialMode(mode);
     setMenuVisible(false);
     setShowSettings(false);
@@ -464,6 +488,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAbout = () => {
+    if (!canNavigate()) return;
     setShowAbout(true);
   };
 
@@ -472,6 +497,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenReferral = () => {
+    if (!canNavigate()) return;
     setMenuVisible(false);
     setShowReferral(true);
   };
@@ -1055,9 +1081,30 @@ export const HomeScreen: React.FC = () => {
     loadAllData();
 
     // App State Listener (Moved inside here or separate effect?)
-    // Best to keep separate, but since we are refactoring... let's keep it separate to avoid closure staleness issues if possible, 
+    // Best to keep separate, but since we are refactoring... let's keep it separate to avoid closure staleness issues if possible,
     // although AppState listener is usually static.
     // The previous code had it inside the same huge useEffect.
+  }, []);
+
+  // Auth state listener: when the user signs in or out anywhere in the app, refresh
+  // accountInfo and plan so isPremium recomputes immediately. Without this, sign-in
+  // changes from the Account screen leave HomeScreen with stale state until the user
+  // manually opens and closes Account/Settings.
+  useEffect(() => {
+    const { data: sub } = authService.onAuthStateChange(async (event) => {
+      try {
+        const freshAccount = await dataStorage.loadAccountInfo();
+        setAccountInfo(freshAccount || null);
+        const freshPlan = await dataStorage.loadUserPlan();
+        setUserPlan(freshPlan);
+        if (__DEV__) console.log(`[Auth] event=${event} -> reloaded accountInfo (email=${freshAccount?.email ? 'yes' : 'no'}) plan=${freshPlan}`);
+      } catch (e) {
+        if (__DEV__) console.error('Auth state refresh failed:', e);
+      }
+    });
+    return () => {
+      try { sub?.subscription?.unsubscribe?.(); } catch { /* noop */ }
+    };
   }, []);
 
   // Separate Effect for AppState to keep it clean
@@ -2625,7 +2672,7 @@ export const HomeScreen: React.FC = () => {
           {/* Floating AI Coach Button - Premium Only */}
           {!isAnalyzingFood && !isRecording && isPremium && (
             <TouchableOpacity
-              onPress={() => setShowChatCoach(true)}
+              onPress={() => { if (canNavigate()) setShowChatCoach(true); }}
               style={{
                 position: 'absolute',
                 right: 16,
@@ -2741,6 +2788,7 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
+        {/* Animation handled by iOS. No internal slideAnim. */}
         <Modal
           visible={showWeightTracker}
           animationType="slide"

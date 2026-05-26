@@ -319,7 +319,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                 <View style={styles.foodList}>
                   {meal.foods.map((food, idx) => (
                     <TouchableOpacity
-                      key={`${food.id}-${idx}`}
+                      key={food.id}
                       style={[
                         styles.foodItem,
                         { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
