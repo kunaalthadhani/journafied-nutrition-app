@@ -8,6 +8,7 @@ import { NutritionLibraryItem } from './dataStorage';
 import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
 import { hashPrompt } from '../utils/promptVersion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Sentry from '@sentry/react-native';
 
 // ─── Food Analysis Cache ───────────────────────────────────────
 // Caches AI results in AsyncStorage so repeat meals return instantly.
@@ -286,6 +287,93 @@ function enforceStatedWeight(userInput: string, items: any[]): any[] {
   }];
 }
 
+/**
+ * Identity groups: members within a group are commonly confused by the AI but
+ * are nutritionally distinct (chicken thigh vs breast, salmon vs tuna, etc).
+ * If the user named one member and the AI returned a different member, we keep
+ * the user's term and surface the swap to Sentry so we can measure how often
+ * the prompt drifts.
+ */
+const IDENTITY_GROUPS: ReadonlyArray<ReadonlyArray<string>> = [
+  // chicken cuts
+  ['thigh', 'thighs', 'breast', 'breasts', 'wing', 'wings', 'drumstick', 'drumsticks', 'leg quarter'],
+  // beef cuts
+  ['ribeye', 'sirloin', 'filet', 'tenderloin', 'brisket', 'flank', 'chuck', 't-bone', 'porterhouse'],
+  // fish species
+  ['salmon', 'tuna', 'cod', 'tilapia', 'mackerel', 'sea bass', 'seabass', 'halibut', 'trout', 'sardine', 'sardines'],
+  // dairy fat tier (look for the qualifier paired with milk)
+  ['skim milk', 'whole milk', '2% milk', '1% milk', 'low fat milk', 'full fat milk'],
+  // bread types
+  ['white bread', 'whole wheat bread', 'whole grain bread', 'sourdough', 'rye bread', 'multigrain bread', 'pita', 'naan'],
+  // pasta shapes
+  ['spaghetti', 'penne', 'rigatoni', 'fusilli', 'ravioli', 'lasagna', 'linguine', 'fettuccine', 'macaroni'],
+  // rice
+  ['white rice', 'brown rice', 'basmati', 'jasmine', 'sushi rice'],
+  // egg prep
+  ['scrambled', 'fried egg', 'fried eggs', 'boiled egg', 'boiled eggs', 'poached egg', 'poached eggs', 'omelet', 'omelette'],
+  // potato prep
+  ['baked potato', 'mashed potato', 'french fries', 'hash browns', 'sweet potato'],
+  // coffee prep
+  ['espresso', 'americano', 'latte', 'cappuccino', 'macchiato', 'mocha', 'flat white'],
+];
+
+function escapeRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function detectIdentityToken(text: string, group: readonly string[]): string | null {
+  if (!text) return null;
+  // Try longer phrases first so "whole milk" beats "milk" if both ever appear.
+  const sorted = [...group].sort((a, b) => b.length - a.length);
+  for (const token of sorted) {
+    const re = new RegExp(`\\b${escapeRegex(token)}\\b`, 'i');
+    if (re.test(text)) return token;
+  }
+  return null;
+}
+
+/**
+ * If the user named a specific food identity (e.g. "thigh") and the AI returned
+ * a different one in the same group (e.g. "breast"), rewrite log_name to keep
+ * the user's term. Nutrition stays untouched — we cannot deterministically
+ * substitute correct macros — but the meal label will at least match what the
+ * user said, and the user can edit macros if it matters.
+ *
+ * Limited to single-item meals: with multiple items we cannot tell which user
+ * phrase maps to which AI item.
+ */
+function enforceFoodIdentity(userInput: string, items: any[]): any[] {
+  if (!userInput || !Array.isArray(items) || items.length !== 1) return items;
+  const item = items[0];
+  if (!item || typeof item.log_name !== 'string') return items;
+
+  for (const group of IDENTITY_GROUPS) {
+    const userToken = detectIdentityToken(userInput, group);
+    if (!userToken) continue;
+    const aiToken = detectIdentityToken(item.log_name, group);
+    if (!aiToken || aiToken.toLowerCase() === userToken.toLowerCase()) continue;
+
+    if (__DEV__) {
+      console.warn(`[enforceFoodIdentity] AI used "${aiToken}", user said "${userToken}" — rewriting log_name`);
+    }
+    try {
+      Sentry.captureMessage(`Food identity swap: ai="${aiToken}" user="${userToken}"`, {
+        level: 'warning',
+        tags: { ai_call_type: 'food-analysis', identity_swap: 'true' },
+        extra: { userInput, aiLogName: item.log_name },
+      });
+    } catch { /* sentry must never break flow */ }
+
+    const rewritten = item.log_name.replace(new RegExp(escapeRegex(aiToken), 'i'), userToken);
+    return [{
+      ...item,
+      log_name: rewritten,
+      reasoning: `${item.reasoning || ''} [Identity preserved: kept user's "${userToken}".]`.trim(),
+    }];
+  }
+  return items;
+}
+
 const AGENTIC_NUTRITION_FIELDS = [
   'calories', 'protein', 'carbs', 'fat',
   'dietary_fiber', 'sugar', 'added_sugars', 'sugar_alcohols',
@@ -380,9 +468,12 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
       console.warn('[FoodAnalysis] AI returned empty items. clarification_question:', result.clarification_question, 'summary:', result.summary);
     }
 
-    // Deterministic guardrail: if the user gave an explicit weight (e.g. "100 grams"),
-    // and the AI returned a different weight for a single-item meal, scale to match.
-    const items = enforceStatedWeight(foodInput, result.items || []);
+    // Deterministic guardrails:
+    // 1) If the user gave an explicit weight, scale to match.
+    // 2) If the AI swapped a specific food identity (thigh→breast, salmon→tuna),
+    //    rewrite log_name to keep the user's term.
+    const scaledItems = enforceStatedWeight(foodInput, result.items || []);
+    const items = enforceFoodIdentity(foodInput, scaledItems);
     const finalFoods: ParsedFood[] = [];
 
     for (const item of items) {

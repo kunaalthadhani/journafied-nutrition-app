@@ -110,7 +110,44 @@ export async function invokeWhisper(audioBase64: string): Promise<string> {
   });
 
   if (error) {
-    throw new Error(error.message || 'Transcription failed');
+    let message = error.message || 'Transcription failed';
+
+    // Same unwrap pattern as invokeAI: pull the real error out of error.context.text()
+    // so we see rate limits, quota issues, bad audio etc instead of a generic 5xx.
+    try {
+      const ctx: any = (error as any).context;
+      if (ctx && typeof ctx.text === 'function') {
+        const txt = await ctx.text();
+        if (txt) {
+          try {
+            const parsed = JSON.parse(txt);
+            message = parsed.error || parsed.message || txt;
+          } catch {
+            message = txt;
+          }
+        }
+      }
+    } catch {
+      // best effort
+    }
+
+    if (__DEV__) {
+      console.error('[invokeWhisper] Edge function error:', message);
+    }
+
+    try {
+      Sentry.captureException(new Error(`Whisper proxy error: ${message}`), {
+        tags: {
+          ai_call_type: 'whisper-transcription',
+          ai_model: 'whisper-1',
+        },
+        extra: {
+          audio_size_bytes: audioBase64?.length,
+        },
+      });
+    } catch { /* Sentry capture must never break the app */ }
+
+    throw new Error(message);
   }
 
   return data?.text || '';
