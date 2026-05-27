@@ -3198,23 +3198,21 @@ export const dataStorage = {
   },
 
   /**
-   * Clear only the account identity from local storage.
-   * Used on sign-out so the user's meals, goals, weight history, premium plan,
-   * insight unlocks, calorie bank settings, and food cache all stay on device.
-   * Next sign-in restores account info and the data is still there.
+   * Clear account identity AND any cached premium state on sign-out.
+   * User content (meals, goals, weight, food cache, calorie bank settings)
+   * stays on device so a re-sign-in is fast.
    *
-   * Note: this is a single-user-per-device assumption. If we ever support
-   * account switching on shared devices, we will need to also wipe user data here
-   * and rely on remote fetches to restore on sign-in.
+   * Why USER_PLAN gets wiped: on a shared device, leaving the previous user's
+   * "premium" cached lets a brand-new free signup briefly see premium features
+   * before the remote settings fetch returns and corrects it.
    */
   async clearAccountData(): Promise<void> {
     try {
-      // Clear identity and anything tied directly to the signed-in user session.
-      // Everything else (meals, weight, goals, plan, preferences, etc) stays.
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.ACCOUNT_INFO,
-        STORAGE_KEYS.SYNC_QUEUE,        // pending writes for the previous session
-        STORAGE_KEYS.PUSH_TOKENS,        // device push token will be re-registered on next sign-in
+        STORAGE_KEYS.SYNC_QUEUE,
+        STORAGE_KEYS.PUSH_TOKENS,
+        STORAGE_KEYS.USER_PLAN,
       ]);
     } catch (e) {
       console.error('Error clearing account data:', e);
