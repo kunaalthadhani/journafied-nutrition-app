@@ -41,74 +41,59 @@ const formatDate = (timestamp: number) => {
   return date.toISOString().slice(0, 10);
 };
 
-async function findExistingUser(accountInfo?: AccountInfo | null) {
-  if (!accountInfo) return null;
-  if (!isSupabaseConfigured() || !supabase) return null;
-
-  if (accountInfo.supabaseUserId) {
-    const { data, error } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('auth_user_id', accountInfo.supabaseUserId)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching Supabase user by auth id:', error);
-      return null;
-    }
-    if (data) return data;
-  }
-
-  if (accountInfo.email) {
-    const { data, error } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('email', accountInfo.email.trim().toLowerCase())
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching Supabase user by email:', error);
-      return null;
-    }
-    if (data) return data;
-  }
-
-  return null;
-}
-
 async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUser | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
-  if (!accountInfo?.supabaseUserId && !accountInfo?.email) return null;
 
-  // Always derive auth_user_id from the CURRENT authenticated session, not from
-  // accountInfo (which can be stale or missing). RLS policies on app_users require
-  // auth_user_id to equal auth.uid() for both INSERT and UPDATE.
+  // Source of truth is the live session. accountInfo can be stale, empty after sign-out,
+  // or missing the supabaseUserId for a brand-new sign-in. Reading the session every time
+  // makes RLS happy (auth.uid() = auth_user_id) and lets us recover from orphan rows
+  // that earlier lookups missed.
   const { data: sessionData } = await supabase.auth.getSession();
   const currentAuthUid = sessionData?.session?.user?.id ?? null;
   const sessionEmail = sessionData?.session?.user?.email ?? null;
 
-  // If no active session, we cannot satisfy RLS. Bail without erroring.
-  if (!currentAuthUid) {
-    return null;
-  }
+  if (!currentAuthUid) return null;
 
-  // Prefer email from current session, fall back to accountInfo, then Supabase Auth lookup.
-  let emailToUse = sessionEmail || accountInfo.email;
-  if (!emailToUse && accountInfo.supabaseUserId) {
+  let emailToUse = sessionEmail || accountInfo?.email || null;
+  if (!emailToUse) {
     try {
-      const { data: { user } } = await supabase.auth.getUser(accountInfo.supabaseUserId);
+      const { data: { user } } = await supabase.auth.getUser();
       if (user?.email) emailToUse = user.email;
     } catch (error) {
-      console.error('Error fetching user email from Supabase Auth:', error);
+      console.error('Error fetching auth user email:', error);
     }
   }
 
-  const existing = await findExistingUser(accountInfo);
+  // Look up by auth_user_id first (canonical), then by email (orphan recovery —
+  // catches rows whose auth_user_id link is missing or stale).
+  let existing: any = null;
+  {
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('auth_user_id', currentAuthUid)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error looking up app_users by auth_user_id:', error);
+    }
+    if (data) existing = data;
+  }
+  if (!existing && emailToUse) {
+    const { data, error } = await supabase
+      .from('app_users')
+      .select('*')
+      .eq('email', emailToUse.trim().toLowerCase())
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') {
+      console.error('Error looking up app_users by email:', error);
+    }
+    if (data) existing = data;
+  }
 
   if (existing) {
     const needsUpdate =
-      (accountInfo.name && existing.display_name !== accountInfo.name) ||
-      (accountInfo.phoneNumber && existing.phone_number !== accountInfo.phoneNumber) ||
+      (accountInfo?.name && existing.display_name !== accountInfo.name) ||
+      (accountInfo?.phoneNumber && existing.phone_number !== accountInfo.phoneNumber) ||
       (existing.auth_user_id !== currentAuthUid) ||
       (emailToUse && existing.email !== emailToUse.trim().toLowerCase());
 
@@ -116,47 +101,49 @@ async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUse
       const { data: updated, error: updateError } = await supabase
         .from('app_users')
         .update({
-          display_name: accountInfo.name ?? existing.display_name,
-          phone_number: accountInfo.phoneNumber ?? existing.phone_number,
+          display_name: accountInfo?.name ?? existing.display_name,
+          phone_number: accountInfo?.phoneNumber ?? existing.phone_number,
           auth_user_id: currentAuthUid,
           email: emailToUse ? emailToUse.trim().toLowerCase() : existing.email,
         })
         .eq('id', existing.id)
         .select()
         .single();
-
       if (updateError) {
-        console.error('Error updating Supabase user:', updateError);
+        console.error('Error updating app_users row:', updateError);
         return mapAppUser(existing);
       }
       return mapAppUser(updated);
     }
-
     return mapAppUser(existing);
   }
 
-  // If we still don't have an email, we can't create a user
   if (!emailToUse) {
-    console.error('Cannot create user: no email available');
+    console.error('Cannot create app_users row: no email on session or accountInfo');
     return null;
   }
 
+  // Nothing found by auth_user_id or email. Use upsert on email so that if a row
+  // exists but our SELECT missed it (race condition, RLS visibility quirk, etc),
+  // we update it instead of failing on the unique-email constraint.
   const { data, error } = await supabase
     .from('app_users')
-    .insert({
-      email: emailToUse.trim().toLowerCase(),
-      display_name: accountInfo.name ?? null,
-      phone_number: accountInfo.phoneNumber ?? null,
-      auth_user_id: currentAuthUid,
-    })
+    .upsert(
+      {
+        email: emailToUse.trim().toLowerCase(),
+        display_name: accountInfo?.name ?? null,
+        phone_number: accountInfo?.phoneNumber ?? null,
+        auth_user_id: currentAuthUid,
+      },
+      { onConflict: 'email' },
+    )
     .select()
     .single();
 
   if (error) {
-    console.error('Error creating Supabase user:', error);
+    console.error('Error upserting app_users row:', error);
     return null;
   }
-
   return data ? mapAppUser(data) : null;
 }
 

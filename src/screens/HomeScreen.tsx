@@ -143,13 +143,15 @@ export const HomeScreen: React.FC = () => {
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
 
-  // Navigation guard. Returns true on the first call, false for any call within 500ms.
-  // Use this to wrap every modal-opening handler so a double-tap does not fire twice.
-  const navInFlightRef = useRef(0);
-  const canNavigate = () => {
+  // Per-action navigation guard. Each action key has its own 500ms cooldown, so
+  // double-tapping "Settings" is debounced but tapping Settings then quickly tapping
+  // Account still goes through. Without per-key isolation, any single tap blocked
+  // every other nav for 500ms which felt sticky.
+  const navInFlightRef = useRef<Record<string, number>>({});
+  const canNavigate = (key: string = 'default') => {
     const now = Date.now();
-    if (now - navInFlightRef.current < 500) return false;
-    navInFlightRef.current = now;
+    if (now - (navInFlightRef.current[key] || 0) < 500) return false;
+    navInFlightRef.current[key] = now;
     return true;
   };
 
@@ -332,7 +334,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSetGoals = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('setGoals')) return;
     analyticsService.trackSetGoalsOpen();
     setShowSetGoals(true);
   };
@@ -352,13 +354,13 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleWeightTracker = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('weightTracker')) return;
     analyticsService.trackWeightTrackerOpen();
     setShowWeightTracker(true);
   };
 
   const handleNutritionAnalysis = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('nutritionAnalysis')) return;
     analyticsService.trackNutritionAnalysisOpen();
     setShowNutritionAnalysis(true);
   };
@@ -381,7 +383,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettings = async () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('settings')) return;
     setShowSettings(true);
     // Reload referral data to ensure it's up to date
     try {
@@ -433,7 +435,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenSubscription = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('subscription')) return;
     analyticsService.trackSubscriptionScreenOpen();
     setShowSubscription(true);
   };
@@ -453,7 +455,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAccount = (mode?: 'signin' | 'signup') => {
-    if (!canNavigate()) return;
+    if (!canNavigate('account')) return;
     if (mode) setAccountInitialMode(mode);
     setMenuVisible(false);
     setShowSettings(false);
@@ -488,7 +490,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleAbout = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('about')) return;
     setShowAbout(true);
   };
 
@@ -497,7 +499,7 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleOpenReferral = () => {
-    if (!canNavigate()) return;
+    if (!canNavigate('referral')) return;
     setMenuVisible(false);
     setShowReferral(true);
   };
@@ -2672,7 +2674,7 @@ export const HomeScreen: React.FC = () => {
           {/* Floating AI Coach Button - Premium Only */}
           {!isAnalyzingFood && !isRecording && isPremium && (
             <TouchableOpacity
-              onPress={() => { if (canNavigate()) setShowChatCoach(true); }}
+              onPress={() => { if (canNavigate('chatCoach')) setShowChatCoach(true); }}
               style={{
                 position: 'absolute',
                 right: 16,

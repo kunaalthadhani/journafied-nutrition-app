@@ -214,25 +214,51 @@ B) If you have enough info (or are making safe assumptions):
 // Cache version derived from the prompt text — bumps automatically when the prompt changes.
 const AGENTIC_PROMPT_VERSION = hashPrompt(AGENTIC_ANALYSIS_PROMPT);
 
+// Words that imply the food is liquid. When present, "oz" / "ounce" is treated
+// as fluid oz (~29.57 g for water-density beverages) instead of weight oz (~28.35 g).
+// Close enough for most drinks; will be slightly off for honey or oils but those
+// are rarely ordered "by the ounce."
+const LIQUID_FOOD_KEYWORDS = [
+  'water', 'milk', 'juice', 'coffee', 'tea', 'soda', 'cola', 'pepsi', 'sprite',
+  'beer', 'wine', 'champagne', 'cocktail', 'whiskey', 'vodka', 'gin', 'rum', 'tequila',
+  'smoothie', 'shake', 'milkshake', 'protein shake', 'kombucha', 'lemonade', 'iced tea',
+  'broth', 'stock', 'soup', 'oil', 'sauce', 'syrup', 'honey', 'cream',
+  'lassi', 'ayran', 'jallab', 'tamarind drink', 'qamar al-din',
+];
+
+function hasLiquidContext(input: string): boolean {
+  const lower = input.toLowerCase();
+  return LIQUID_FOOD_KEYWORDS.some(kw => lower.includes(kw));
+}
+
 /**
  * Extract a single explicit weight from the user's input, returned in grams.
- * Supports g, grams, oz, ounces, lb, lbs, pounds, kg, kilograms.
+ * Supports g, grams, oz, ounces, lb, lbs, pounds, kg, kilograms, ml, l, liters.
+ * For "oz" in a liquid context, uses fluid oz conversion.
  * Returns null if no weight, multiple weights, or ambiguous input.
  */
 function extractStatedWeightG(input: string): number | null {
   if (!input) return null;
-  const re = /(\d+(?:\.\d+)?)\s*(kg|kilograms?|kilos?|g|grams?|oz|ounces?|lbs?|pounds?)\b/gi;
+  const re = /(\d+(?:\.\d+)?)\s*(kg|kilograms?|kilos?|g|grams?|oz|ounces?|fl\.?\s*oz|fluid\s*ounces?|lbs?|pounds?|ml|millilit(?:er|re)s?|l|lit(?:er|re)s?)\b/gi;
   const matches: Array<{ value: number; unit: string }> = [];
   let m: RegExpExecArray | null;
   while ((m = re.exec(input)) !== null) {
-    matches.push({ value: parseFloat(m[1]), unit: m[2].toLowerCase() });
+    matches.push({ value: parseFloat(m[1]), unit: m[2].toLowerCase().replace(/\s+/g, '') });
   }
   if (matches.length !== 1) return null; // 0 or multiple weights, do not enforce
 
   const { value, unit } = matches[0];
   if (unit.startsWith('kg') || unit.startsWith('kilo')) return value * 1000;
   if (unit.startsWith('lb') || unit.startsWith('pound')) return value * 453.592;
-  if (unit.startsWith('oz') || unit.startsWith('ounce')) return value * 28.3495;
+  // Volume units — assume water density (~1 g/ml).
+  if (unit === 'ml' || unit.startsWith('millilit')) return value;
+  if (unit === 'l' || unit.startsWith('lit')) return value * 1000;
+  // Explicit fluid oz (e.g. "12 fl oz") always uses liquid conversion.
+  if (unit.startsWith('floz') || unit.startsWith('fluidounce')) return value * 29.5735;
+  if (unit.startsWith('oz') || unit.startsWith('ounce')) {
+    // Plain "oz" — depends on context. Liquid food → fluid oz; otherwise weight oz.
+    return value * (hasLiquidContext(input) ? 29.5735 : 28.3495);
+  }
   return value; // grams
 }
 
