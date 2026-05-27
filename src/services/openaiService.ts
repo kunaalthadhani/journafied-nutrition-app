@@ -253,12 +253,27 @@ function enforceStatedWeight(userInput: string, items: any[]): any[] {
   const ratio = statedG / aiWeight;
   if (ratio > 0.95 && ratio < 1.05) return items;
 
-  // Scale nutrition and override weight.
-  const scaledNutrition: Record<string, number> = {};
-  if (item.nutrition && typeof item.nutrition === 'object') {
-    for (const [key, val] of Object.entries(item.nutrition)) {
-      scaledNutrition[key] = typeof val === 'number' ? Number((val * ratio).toFixed(2)) : (val as any);
-    }
+  // If nutrition is missing or empty, do NOT scale. Returning an empty nutrition object
+  // would produce a 0-calorie meal — worse than the AI's wrong weight. Trust the AI.
+  if (!item.nutrition || typeof item.nutrition !== 'object') {
+    if (__DEV__) console.warn('[enforceStatedWeight] nutrition missing, skipping scale');
+    return items;
+  }
+  const nutritionEntries = Object.entries(item.nutrition);
+  if (nutritionEntries.length === 0) {
+    if (__DEV__) console.warn('[enforceStatedWeight] nutrition is empty object, skipping scale');
+    return items;
+  }
+  // Require at least calories to be a valid number before we scale.
+  const aiCalories = Number((item.nutrition as any).calories);
+  if (!isFinite(aiCalories) || aiCalories < 0) {
+    if (__DEV__) console.warn('[enforceStatedWeight] nutrition.calories invalid, skipping scale');
+    return items;
+  }
+
+  const scaledNutrition: Record<string, number | unknown> = {};
+  for (const [key, val] of nutritionEntries) {
+    scaledNutrition[key] = typeof val === 'number' ? Number((val * ratio).toFixed(2)) : val;
   }
   if (__DEV__) console.log(`[enforceStatedWeight] scaling: AI=${aiWeight}g -> user=${statedG}g, ratio=${ratio.toFixed(3)}`);
 

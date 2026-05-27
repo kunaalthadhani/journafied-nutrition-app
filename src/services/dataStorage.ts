@@ -128,6 +128,10 @@ const STORAGE_KEYS = {
   CALORIE_BANK_CONFIG: '@trackkal:calorieBankConfig',
   CALORIE_BANK_COMPLETED_CYCLES: '@trackkal:calorieBankCompletedCycles',
   CALORIE_BANK_CYCLE_RESET_SEEN: '@trackkal:calorieBankCycleResetSeen',
+  // Records the timestamp of the last successful fetchMeals from Supabase.
+  // Used to distinguish "local meal pending sync" from "local meal previously synced
+  // but now deleted on remote" so deleted meals do not re-appear.
+  LAST_MEALS_SYNC_AT: '@trackkal:lastMealsSyncAt',
 };
 
 // ... (rest of file)
@@ -1039,35 +1043,56 @@ export const dataStorage = {
 
     try {
       const remoteByDate = await supabaseDataService.fetchMeals(accountInfo);
-      const remoteDates = Object.keys(remoteByDate);
-      if (remoteDates.length === 0) {
-        return localByDate;
-      }
 
-      const merged: Record<string, MealEntry[]> = { ...localByDate };
+      // Read the last successful sync timestamp BEFORE we overwrite it. Local meals older
+      // than this timestamp have been seen by remote at least once. If they are missing from
+      // the current remote response, they were deleted on another device. Drop them.
+      const lastSyncRaw = await AsyncStorage.getItem(STORAGE_KEYS.LAST_MEALS_SYNC_AT);
+      const lastSyncAt = lastSyncRaw ? parseInt(lastSyncRaw, 10) : 0;
+
+      // Build merged. Process the union of dates from local + remote so we catch deletions
+      // on dates that are now empty on remote.
+      const allDates = new Set<string>([...Object.keys(localByDate), ...Object.keys(remoteByDate)]);
+      const merged: Record<string, MealEntry[]> = {};
       const datesToPersist = new Set<string>();
 
-      for (const date of remoteDates) {
+      for (const date of allDates) {
         const local = localByDate[date] || [];
         const remote = remoteByDate[date] || [];
+        const remoteIds = new Set(remote.map(m => m.id));
 
-        // Merge by meal id. Remote wins on conflict because it is the synced source of truth.
-        // Local-only meals are preserved (they may be pending sync).
+        // Start with remote meals (source of truth for previously-synced items).
         const byId = new Map<string, MealEntry>();
-        local.forEach(m => byId.set(m.id, m));
         remote.forEach(m => byId.set(m.id, m));
 
-        const mergedDay = Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
-        const localCount = local.length;
-        const mergedCount = mergedDay.length;
+        // Add local meals that are either (a) NOT in remote AND newer than last sync (pending),
+        // OR (b) IN remote (no-op since remote already added them, but harmless).
+        // Local meals older than last sync that are NOT in remote = previously synced and now
+        // deleted on remote. We drop them.
+        for (const localMeal of local) {
+          if (remoteIds.has(localMeal.id)) continue; // already in map from remote pass
 
+          const localMealTime = typeof localMeal.timestamp === 'number' ? localMeal.timestamp : 0;
+          const updatedAtTime = localMeal.updatedAt ? new Date(localMeal.updatedAt).getTime() : 0;
+          const latestLocalTouch = Math.max(localMealTime, updatedAtTime);
+
+          if (lastSyncAt === 0 || latestLocalTouch > lastSyncAt) {
+            // First sync OR locally edited/created since last sync. Treat as pending. Keep it.
+            byId.set(localMeal.id, localMeal);
+          } else {
+            // Previously synced, now missing on remote. Treat as deleted elsewhere.
+            if (__DEV__) console.log(`[loadMeals] dropping locally-orphaned meal ${localMeal.id} on ${date}`);
+            // Do not add to merged.
+          }
+        }
+
+        const mergedDay = Array.from(byId.values()).sort((a, b) => a.timestamp - b.timestamp);
         merged[date] = mergedDay;
 
-        // Only write back to local if the merged set differs from what was on disk.
-        if (mergedCount !== localCount) {
+        // Compare with what's on disk to decide if we need to rewrite the shard.
+        if (mergedDay.length !== local.length) {
           datesToPersist.add(date);
         } else {
-          // Same count, but check if any id differs (remote replaced a local meal).
           const localIds = new Set(local.map(m => m.id));
           const changed = mergedDay.some(m => !localIds.has(m.id));
           if (changed) datesToPersist.add(date);
@@ -1075,19 +1100,31 @@ export const dataStorage = {
       }
 
       // Persist merged shards back to local so subsequent reads are fast and offline-safe.
-      const pairs: [string, string][] = Array.from(datesToPersist).map(date => [
-        STORAGE_KEYS.dailyLog(date),
-        JSON.stringify(merged[date]),
-      ]);
-      if (pairs.length > 0) {
-        try {
-          await AsyncStorage.multiSet(pairs);
-        } catch {
-          for (const [k, v] of pairs) {
-            try { await AsyncStorage.setItem(k, v); } catch { /* best effort */ }
-          }
+      // Also remove shards for dates that are now empty (otherwise old data lingers).
+      const setPairs: [string, string][] = [];
+      const removeKeys: string[] = [];
+      for (const date of datesToPersist) {
+        const meals = merged[date];
+        if (meals.length === 0) {
+          removeKeys.push(STORAGE_KEYS.dailyLog(date));
+        } else {
+          setPairs.push([STORAGE_KEYS.dailyLog(date), JSON.stringify(meals)]);
         }
       }
+      if (setPairs.length > 0) {
+        try { await AsyncStorage.multiSet(setPairs); } catch {
+          for (const [k, v] of setPairs) { try { await AsyncStorage.setItem(k, v); } catch { /* best effort */ } }
+        }
+      }
+      if (removeKeys.length > 0) {
+        try { await AsyncStorage.multiRemove(removeKeys); } catch {
+          for (const k of removeKeys) { try { await AsyncStorage.removeItem(k); } catch { /* best effort */ } }
+        }
+      }
+
+      // Record this sync. Subsequent loads use this to decide which local-only meals are
+      // pending sync vs. previously synced and now deleted.
+      await AsyncStorage.setItem(STORAGE_KEYS.LAST_MEALS_SYNC_AT, String(Date.now()));
 
       return merged;
     } catch (error) {
