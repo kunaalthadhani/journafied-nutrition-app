@@ -96,21 +96,32 @@ export const authService = {
 
   async deleteAccount() {
     ensureClient();
+
+    // 1. Delete all remote app data (food_logs, weights, etc) and the app_users row.
     try {
-      // 1. Delete all remote data for this user
       const { data: { session } } = await supabase!.auth.getSession();
       if (session?.user) {
         const accountInfo = { supabaseUserId: session.user.id, email: session.user.email };
         await supabaseDataService.deleteAllUserData(accountInfo);
       }
     } catch (e) {
-      console.error("Error deleting remote data", e);
+      console.error('Error deleting remote app data', e);
     }
 
-    // 2. Clear local data
+    // 2. Server-side admin delete of the auth.users record. Without this, the user's
+    // email + auth identifier remain in Supabase Auth even after data is wiped, and
+    // signing in with the same email would create a fresh (empty) account. Required
+    // for App Store account-deletion compliance.
+    try {
+      await supabase!.functions.invoke('ai-proxy', { body: { type: 'delete_user' } });
+    } catch (e) {
+      console.error('Error deleting auth user (will still sign out and clear local):', e);
+    }
+
+    // 3. Clear local data.
     await dataStorage.clearAllData();
 
-    // 3. Sign out (which effectively invalidates session)
+    // 4. Sign out (also invalidates any cached session).
     return supabase!.auth.signOut();
   },
 

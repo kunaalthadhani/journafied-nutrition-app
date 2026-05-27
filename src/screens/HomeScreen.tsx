@@ -33,6 +33,7 @@ import { SettingsScreen } from './SettingsScreen';
 import { SubscriptionScreen } from './SubscriptionScreen';
 import { AccountScreen } from './AccountScreen';
 import { AboutScreen } from './AboutScreen';
+import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 import { AdminPushScreen } from './AdminPushScreen';
 import { ReferralScreen } from './ReferralScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
@@ -159,6 +160,9 @@ export const HomeScreen: React.FC = () => {
   const isSignedIn = !!accountInfo?.email;
   const isPremium = React.useMemo(() => {
     if (!accountInfo?.email) return false; // MUST be signed in
+    // Launch mode: every signed-in user gets premium. Flip FREE_PREMIUM_LAUNCH to false
+    // when paid tiers + RevenueCat go live.
+    if (FREE_PREMIUM_LAUNCH) return true;
     if (userPlan === 'premium') return true;
     if (accountInfo?.premiumUntil) {
       return new Date(accountInfo.premiumUntil) > new Date();
@@ -2222,7 +2226,7 @@ export const HomeScreen: React.FC = () => {
       <Modal visible={showSettings} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSettingsBack}>
         <SettingsScreen
           onBack={handleSettingsBack}
-          plan={userPlan}
+          plan={isPremium ? 'premium' : 'free'}
           onOpenSubscription={handleOpenSubscription}
           onLogin={handleAccount}
           onDowngradeToFree={handleDowngradeToFree}
@@ -2238,7 +2242,7 @@ export const HomeScreen: React.FC = () => {
               onRequestSync={handleSyncAccount}
               initialAccountInfo={accountInfo}
               initialEntryCount={entryCount}
-              initialPlan={userPlan}
+              initialPlan={isPremium ? 'premium' : 'free'}
               initialGoals={savedGoals}
               initialReferralCode={referralCode}
               initialTotalEarnedEntries={totalEarnedEntries}
@@ -2327,7 +2331,7 @@ export const HomeScreen: React.FC = () => {
           onRequestSync={handleSyncAccount}
           initialAccountInfo={accountInfo}
           initialEntryCount={entryCount}
-          initialPlan={userPlan}
+          initialPlan={isPremium ? 'premium' : 'free'}
           initialGoals={savedGoals}
           initialReferralCode={referralCode}
           initialTotalEarnedEntries={totalEarnedEntries}

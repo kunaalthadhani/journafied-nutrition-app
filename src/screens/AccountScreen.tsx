@@ -617,30 +617,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
             )}
           </TouchableOpacity>
 
-          {/* Disabled OAuth placeholders */}
-          <View style={{ marginTop: 16, gap: 10 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 4 }}>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.border }} />
-              <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>or</Text>
-              <View style={{ flex: 1, height: 1, backgroundColor: theme.colors.border }} />
-            </View>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, opacity: 0.4 }}
-              disabled
-            >
-              <Text style={{ fontSize: 18 }}>G</Text>
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Continue with Google</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, opacity: 0.4 }}
-              disabled
-            >
-              <Feather name="smartphone" size={16} color={theme.colors.textSecondary} />
-              <Text style={{ color: theme.colors.textSecondary, fontSize: 14, fontWeight: '500' }}>Continue with Apple</Text>
-            </TouchableOpacity>
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 11, textAlign: 'center', marginTop: 2 }}>Google & Apple sign-in coming soon</Text>
-          </View>
-
           {/* Reset All Data */}
           <TouchableOpacity
             onPress={() => {

@@ -13,6 +13,7 @@ import {
 } from './dataStorage';
 import { generateId } from '../utils/uuid';
 import { analyticsService } from './analyticsService';
+import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 
 const STORAGE_KEYS = {
   CACHE: '@trackkal:smartReminderCache',
@@ -22,6 +23,7 @@ const STORAGE_KEYS = {
 
 const DEFAULT_PREFERENCES: SmartReminderPreferences = {
   enabled: true,
+  reminderMode: 'smart',
   smartRemindersEnabled: true,
   mealSlots: { breakfast: true, lunch: true, dinner: true },
   endOfDaySummary: true,
@@ -314,10 +316,11 @@ export const smartReminderService = {
    */
   async scheduleAllReminders(): Promise<ScheduledReminder[]> {
     try {
-      // Self-contained premium check (no closure dependency)
+      // Self-contained premium check (no closure dependency). Launch mode treats
+      // every signed-in user as premium; flip FREE_PREMIUM_LAUNCH off when paid tiers go live.
       const plan = await dataStorage.loadUserPlan();
       const accountInfo = await dataStorage.getAccountInfo();
-      const isPremium = isUserPremium(plan, accountInfo?.premiumUntil);
+      const isPremium = !!accountInfo?.email && (FREE_PREMIUM_LAUNCH || isUserPremium(plan, accountInfo?.premiumUntil));
 
       // Load preferences
       const prefs = await dataStorage.loadPreferences();
@@ -380,9 +383,14 @@ export const smartReminderService = {
         let reminderIsPremium = false;
 
         const pattern = patternMap.get(slot);
+        // User explicit mode wins. Default to 'smart' for back-compat with users who
+        // upgraded from a version that didn't have this field.
+        const mode = reminderPrefs.reminderMode
+          ?? (reminderPrefs.smartRemindersEnabled ? 'smart' : 'scheduled');
+        const useSmart = mode === 'smart' && isPremium && pattern && pattern.stdDevMinutes < 60;
 
-        if (isPremium && reminderPrefs.smartRemindersEnabled && pattern && pattern.stdDevMinutes < 60) {
-          // Premium: schedule 10 min before detected average
+        if (useSmart) {
+          // Smart: schedule 10 min before detected average
           let totalMinutes = pattern.averageHour * 60 + pattern.averageMinute - 10;
           if (totalMinutes < 0) totalMinutes = 0;
           scheduleHour = Math.floor(totalMinutes / 60);
@@ -390,8 +398,10 @@ export const smartReminderService = {
           content = generateReminderContent({ mealSlot: slot, pattern, isPremium: true });
           reminderIsPremium = true;
         } else {
-          // Free / fallback: use configured fixed time
+          // Scheduled: use the time the user picked in Settings.
           const mealReminderConfig = prefs?.mealReminders?.[slot];
+          // Respect the user's per-meal enable toggle when in scheduled mode.
+          if (mode === 'scheduled' && mealReminderConfig?.enabled === false) continue;
           scheduleHour = mealReminderConfig?.hour ?? (slot === 'breakfast' ? 8 : slot === 'lunch' ? 12 : 18);
           scheduleMinute = mealReminderConfig?.minute ?? (slot === 'lunch' ? 30 : 0);
           content = generateReminderContent({ mealSlot: slot, isPremium: false });

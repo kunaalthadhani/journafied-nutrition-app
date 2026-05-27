@@ -328,7 +328,11 @@ export interface DailySummary {
 
 export interface SmartReminderPreferences {
   enabled: boolean;
-  smartRemindersEnabled: boolean; // premium: use pattern-based timing
+  // 'smart' = auto-time based on detected eating patterns.
+  // 'scheduled' = fire at the times the user picked in preferences.mealReminders.
+  // Default 'smart' so existing users with no field set keep the pattern-based behavior.
+  reminderMode?: 'smart' | 'scheduled';
+  smartRemindersEnabled: boolean; // legacy: kept for back-compat; new code reads reminderMode
   mealSlots: {
     breakfast: boolean;
     lunch: boolean;

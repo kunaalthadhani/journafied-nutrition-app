@@ -19,6 +19,7 @@ type MealType = 'breakfast' | 'lunch' | 'dinner';
 
 const DEFAULT_SMART_PREFS: SmartReminderPreferences = {
     enabled: true,
+    reminderMode: 'smart',
     smartRemindersEnabled: true,
     mealSlots: { breakfast: true, lunch: true, dinner: true },
     endOfDaySummary: true,
@@ -120,6 +121,8 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     // ---- Smart Reminder Handlers ----
 
     const smartPrefs = preferences?.smartReminderPreferences ?? DEFAULT_SMART_PREFS;
+    // Default to 'smart' for any user upgrading from a version that didn't have this field.
+    const reminderMode: 'smart' | 'scheduled' = smartPrefs.reminderMode ?? 'smart';
 
     const updateSmartPrefs = (updates: Partial<SmartReminderPreferences>) => {
         if (!preferences) return;
@@ -176,74 +179,13 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                     />
                 </SettingSection>
 
-                {/* Meal Reminders */}
+                {/* Reminders */}
                 {preferences.notificationsEnabled && (
-                    <SettingSection title="Meal Reminders">
-                        <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
-                            TrackKcal will remind you to log your meals at these times if you haven't already.
-                        </Text>
-
+                    <SettingSection title="Reminders">
                         <SettingItem
-                            icon="sunrise"
-                            title="Breakfast"
-                            subtitle={mealReminders.breakfast.enabled ? formatTime(mealReminders.breakfast.hour, mealReminders.breakfast.minute) : 'Off'}
-                            onPress={() => handleTimeSelect('breakfast')}
-                            rightElement={
-                                <Switch
-                                    value={mealReminders.breakfast.enabled}
-                                    onValueChange={(val) => handleMealReminderToggle('breakfast', val)}
-                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                                    thumbColor={Colors.white}
-                                />
-                            }
-                            showChevron={mealReminders.breakfast.enabled}
-                        />
-                        <SettingItem
-                            icon="sun"
-                            title="Lunch"
-                            subtitle={mealReminders.lunch.enabled ? formatTime(mealReminders.lunch.hour, mealReminders.lunch.minute) : 'Off'}
-                            onPress={() => handleTimeSelect('lunch')}
-                            rightElement={
-                                <Switch
-                                    value={mealReminders.lunch.enabled}
-                                    onValueChange={(val) => handleMealReminderToggle('lunch', val)}
-                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                                    thumbColor={Colors.white}
-                                />
-                            }
-                            showChevron={mealReminders.lunch.enabled}
-                        />
-                        <SettingItem
-                            icon="moon"
-                            title="Dinner"
-                            subtitle={mealReminders.dinner.enabled ? formatTime(mealReminders.dinner.hour, mealReminders.dinner.minute) : 'Off'}
-                            onPress={() => handleTimeSelect('dinner')}
-                            rightElement={
-                                <Switch
-                                    value={mealReminders.dinner.enabled}
-                                    onValueChange={(val) => handleMealReminderToggle('dinner', val)}
-                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                                    thumbColor={Colors.white}
-                                />
-                            }
-                            showChevron={mealReminders.dinner.enabled}
-                        />
-                    </SettingSection>
-                )}
-
-                {/* Smart Reminders */}
-                {preferences.notificationsEnabled && (
-                    <SettingSection title="Smart Reminders">
-                        <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
-                            {isPremium
-                                ? 'Smart reminders learn when you typically eat and nudge you at the right time with nutrition context.'
-                                : 'Get timely reminders to log your meals. Upgrade to Premium for personalized timing based on your habits.'}
-                        </Text>
-
-                        <SettingItem
-                            icon="zap"
-                            title="Smart Reminders"
-                            subtitle={smartPrefs.enabled ? 'On' : 'Off'}
+                            icon="bell"
+                            title="Reminders"
+                            subtitle={smartPrefs.enabled ? (reminderMode === 'smart' ? 'Smart timing' : 'At set times') : 'Off'}
                             rightElement={
                                 <Switch
                                     value={smartPrefs.enabled}
@@ -257,21 +199,86 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
                         {smartPrefs.enabled && (
                             <>
-                                {isPremium && (
-                                    <SettingItem
-                                        icon="cpu"
-                                        title="Pattern-Based Timing"
-                                        subtitle="Use your eating patterns to time reminders"
-                                        rightElement={
-                                            <Switch
-                                                value={smartPrefs.smartRemindersEnabled}
-                                                onValueChange={(val) => updateSmartPrefs({ smartRemindersEnabled: val })}
-                                                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
-                                                thumbColor={Colors.white}
-                                            />
-                                        }
-                                        showChevron={false}
-                                    />
+                                {/* Mode toggle */}
+                                <View style={[styles.modeToggleRow, { backgroundColor: theme.colors.input }]}>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.modeToggleOption,
+                                            reminderMode === 'smart' && { backgroundColor: theme.colors.primary },
+                                        ]}
+                                        onPress={() => updateSmartPrefs({ reminderMode: 'smart' })}
+                                    >
+                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'smart' ? Colors.white : theme.colors.textPrimary }]}>
+                                            Smart
+                                        </Text>
+                                    </TouchableOpacity>
+                                    <TouchableOpacity
+                                        style={[
+                                            styles.modeToggleOption,
+                                            reminderMode === 'scheduled' && { backgroundColor: theme.colors.primary },
+                                        ]}
+                                        onPress={() => updateSmartPrefs({ reminderMode: 'scheduled' })}
+                                    >
+                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'scheduled' ? Colors.white : theme.colors.textPrimary }]}>
+                                            Scheduled
+                                        </Text>
+                                    </TouchableOpacity>
+                                </View>
+
+                                <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+                                    {reminderMode === 'smart'
+                                        ? 'TrackKcal learns when you typically eat and nudges you at the right time. Needs a few days of logging to calibrate.'
+                                        : 'Reminders fire at the times you pick below.'}
+                                </Text>
+
+                                {reminderMode === 'scheduled' && (
+                                    <>
+                                        <SettingItem
+                                            icon="sunrise"
+                                            title="Breakfast"
+                                            subtitle={mealReminders.breakfast.enabled ? formatTime(mealReminders.breakfast.hour, mealReminders.breakfast.minute) : 'Off'}
+                                            onPress={() => handleTimeSelect('breakfast')}
+                                            rightElement={
+                                                <Switch
+                                                    value={mealReminders.breakfast.enabled}
+                                                    onValueChange={(val) => handleMealReminderToggle('breakfast', val)}
+                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    thumbColor={Colors.white}
+                                                />
+                                            }
+                                            showChevron={mealReminders.breakfast.enabled}
+                                        />
+                                        <SettingItem
+                                            icon="sun"
+                                            title="Lunch"
+                                            subtitle={mealReminders.lunch.enabled ? formatTime(mealReminders.lunch.hour, mealReminders.lunch.minute) : 'Off'}
+                                            onPress={() => handleTimeSelect('lunch')}
+                                            rightElement={
+                                                <Switch
+                                                    value={mealReminders.lunch.enabled}
+                                                    onValueChange={(val) => handleMealReminderToggle('lunch', val)}
+                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    thumbColor={Colors.white}
+                                                />
+                                            }
+                                            showChevron={mealReminders.lunch.enabled}
+                                        />
+                                        <SettingItem
+                                            icon="moon"
+                                            title="Dinner"
+                                            subtitle={mealReminders.dinner.enabled ? formatTime(mealReminders.dinner.hour, mealReminders.dinner.minute) : 'Off'}
+                                            onPress={() => handleTimeSelect('dinner')}
+                                            rightElement={
+                                                <Switch
+                                                    value={mealReminders.dinner.enabled}
+                                                    onValueChange={(val) => handleMealReminderToggle('dinner', val)}
+                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    thumbColor={Colors.white}
+                                                />
+                                            }
+                                            showChevron={mealReminders.dinner.enabled}
+                                        />
+                                    </>
                                 )}
 
                                 <SettingItem
@@ -342,5 +349,21 @@ const styles = StyleSheet.create({
         marginBottom: 12,
         lineHeight: 20,
         paddingHorizontal: 4,
-    }
+    },
+    modeToggleRow: {
+        flexDirection: 'row',
+        borderRadius: 10,
+        padding: 4,
+        marginVertical: 8,
+    },
+    modeToggleOption: {
+        flex: 1,
+        paddingVertical: 10,
+        alignItems: 'center',
+        borderRadius: 8,
+    },
+    modeToggleText: {
+        fontSize: Typography.fontSize.sm,
+        fontWeight: Typography.fontWeight.semiBold,
+    },
 });
