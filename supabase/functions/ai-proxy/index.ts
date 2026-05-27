@@ -46,6 +46,9 @@ serve(async (req) => {
           method: "POST",
           headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
           body: formData,
+          // When the client closes the connection (timeout / user backs out)
+          // req.signal fires and OpenAI stops billing once the upstream socket dies.
+          signal: req.signal,
         }
       );
 
@@ -80,6 +83,9 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify(openaiBody),
+      // When the client closes the connection (timeout / user backs out)
+      // req.signal fires and OpenAI stops billing once the upstream socket dies.
+      signal: req.signal,
     });
 
     if (!chatRes.ok) {

@@ -1,6 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { AccountInfo, AdjustmentRecord, dataStorage, ExtendedGoalData, MealEntry, StreakFreezeData } from '../services/dataStorage';
 import { checkMissedDaysAndFreeze } from '../utils/streakLogic';
+import { subscribeMealsForUser, unsubscribeMeals } from '../services/realtimeMealsService';
+import { authService } from '../services/authService';
 import { format } from 'date-fns';
 
 interface UserContextType {
@@ -102,6 +104,53 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         loadAllData();
     }, [loadAllData]);
+
+    // Auth state listener: when the user signs in/out (anywhere in the app),
+    // refresh accountInfo so the realtime subscription below tracks the session.
+    // Without this, signing in after the initial load leaves UserContext.accountInfo
+    // stale and the realtime subscription never activates.
+    useEffect(() => {
+        const { data: sub } = authService.onAuthStateChange(async () => {
+            try {
+                const fresh = await dataStorage.getAccountInfo();
+                setAccountInfo(fresh || null);
+            } catch (e) {
+                if (__DEV__) console.error('UserContext: auth refresh failed', e);
+            }
+        });
+        return () => {
+            try { sub?.subscription?.unsubscribe?.(); } catch { /* noop */ }
+        };
+    }, []);
+
+    // Realtime: when another device upserts/deletes a meal for this user, drop the
+    // cache and pull fresh. Self-fired writes also fire here — that's fine, the local
+    // copy is already correct and the re-fetch just reconciles whatever is stored.
+    // Debounce slightly because realtime can deliver bursts (e.g. batch insert).
+    const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+    useEffect(() => {
+        const userId = accountInfo?.supabaseUserId;
+        if (!userId) {
+            unsubscribeMeals();
+            return;
+        }
+        subscribeMealsForUser(userId, () => {
+            if (reloadTimer.current) clearTimeout(reloadTimer.current);
+            reloadTimer.current = setTimeout(async () => {
+                try {
+                    const fresh = await dataStorage.loadMeals();
+                    setMeals(fresh);
+                    setLastRefresh(Date.now());
+                } catch (e) {
+                    if (__DEV__) console.error('UserContext: realtime reload failed', e);
+                }
+            }, 400);
+        });
+        return () => {
+            if (reloadTimer.current) clearTimeout(reloadTimer.current);
+            unsubscribeMeals();
+        };
+    }, [accountInfo?.supabaseUserId]);
 
     // Actions
     const saveMeal = async (date: string, meal: MealEntry) => {

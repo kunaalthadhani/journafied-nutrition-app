@@ -496,6 +496,21 @@ export interface NutritionLibraryItem {
   fiber_per_100g?: number;
 }
 
+// In-memory cache + in-flight dedupe for loadMeals.
+// Many call sites (UserContext startup, HomeScreen AppState 'active', stats calc, migration)
+// can trigger loadMeals in rapid succession. Without a cache each call re-hits Supabase.
+// Invalidated whenever a meal write touches local storage or the account is cleared.
+const MEALS_CACHE_TTL_MS = 10_000;
+let mealsCache: { value: Record<string, MealEntry[]>; expiresAt: number } | null = null;
+let mealsLoadPromise: Promise<Record<string, MealEntry[]>> | null = null;
+
+function invalidateMealsCache() {
+  mealsCache = null;
+}
+
+// Exposed for the realtime subscription to drop the cache when another device writes.
+export { invalidateMealsCache };
+
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
@@ -945,6 +960,7 @@ export const dataStorage = {
     return withWriteLock('log:' + date, async () => {
       try {
         await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(meals));
+        invalidateMealsCache();
 
         // Update summary automatically
         await this.updateSummaryForDate(date, meals);
@@ -957,6 +973,7 @@ export const dataStorage = {
   async deleteDailyLog(date: string): Promise<void> {
     try {
       await AsyncStorage.removeItem(STORAGE_KEYS.dailyLog(date));
+      invalidateMealsCache();
       await this.updateSummaryForDate(date, []);
     } catch (error) {
       console.error(`Error deleting daily log for ${date}:`, error);
@@ -1012,7 +1029,28 @@ export const dataStorage = {
 
   // Load ALL meals (Expensive - avoids returning partial data if usage expects all)
   // WARNING: This reconstructs the full blob. Use getDailyLog whenever possible.
+  // Cached in-memory for MEALS_CACHE_TTL_MS to dedupe burst calls from app startup
+  // and AppState transitions. Any write that mutates a daily log invalidates the cache.
   async loadMeals(): Promise<Record<string, MealEntry[]>> {
+    if (mealsCache && mealsCache.expiresAt > Date.now()) {
+      return mealsCache.value;
+    }
+    if (mealsLoadPromise) {
+      return mealsLoadPromise;
+    }
+    mealsLoadPromise = (async () => {
+      try {
+        const result = await this._loadMealsInternal();
+        mealsCache = { value: result, expiresAt: Date.now() + MEALS_CACHE_TTL_MS };
+        return result;
+      } finally {
+        mealsLoadPromise = null;
+      }
+    })();
+    return mealsLoadPromise;
+  },
+
+  async _loadMealsInternal(): Promise<Record<string, MealEntry[]>> {
     // First check if we need to migrate
     const legacy = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
     if (legacy) {
@@ -2875,6 +2913,7 @@ export const dataStorage = {
       const dayMeals = await dataStorage.getDailyLog(date);
       const updated = [...dayMeals, meal];
       await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(updated));
+      invalidateMealsCache();
       await dataStorage.updateSummaryForDate(date, updated);
     });
   },
@@ -3192,6 +3231,7 @@ export const dataStorage = {
   async clearAllData(): Promise<void> {
     try {
       await AsyncStorage.clear();
+      invalidateMealsCache();
     } catch (e) {
       console.error('Error clearing all local data:', e);
     }
@@ -3214,6 +3254,9 @@ export const dataStorage = {
         STORAGE_KEYS.PUSH_TOKENS,
         STORAGE_KEYS.USER_PLAN,
       ]);
+      // Drop the cached meals: the next loadMeals re-fetches under the new auth state
+      // (or returns just local if signed out) instead of serving stale signed-in data.
+      invalidateMealsCache();
     } catch (e) {
       console.error('Error clearing account data:', e);
     }
