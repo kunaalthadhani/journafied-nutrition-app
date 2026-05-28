@@ -131,7 +131,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
 
         } catch (e) {
             console.error(e);
-            Alert.alert("Error", "Could not load Coach.");
+            Alert.alert("Error", "Could not load AI Nutritionist.");
         } finally {
             setLoading(false);
         }
@@ -166,7 +166,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
             setLimitStatus(newLimit);
 
         } catch (e) {
-            Alert.alert("Connection Error", "Coach is offline temporarily.");
+            Alert.alert("Connection Error", "AI Nutritionist is offline temporarily.");
         } finally {
             setLoading(false);
         }
@@ -182,7 +182,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                     <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Coach</Text>
+                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>AI Nutritionist</Text>
                     <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}>
                         {limitStatus.remaining} messages left
                     </Text>
@@ -248,9 +248,9 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                 {isInsufficient ? (
                     <View style={[styles.lockContainer, { backgroundColor: theme.colors.secondaryBg, borderTopColor: theme.colors.border }]}>
                         <Feather name="lock" size={20} color={theme.colors.textSecondary} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.lockTitle, { color: theme.colors.textPrimary }]}>Coach Locked</Text>
+                        <Text style={[styles.lockTitle, { color: theme.colors.textPrimary }]}>AI Nutritionist Locked</Text>
                         <Text style={[styles.lockSub, { color: theme.colors.textSecondary }]}>
-                            Log meals for 14 days and track your weight to unlock Coach. The more data you log, the smarter it gets.
+                            Log meals for 14 days and track your weight to unlock the AI Nutritionist. The more data you log, the smarter it gets.
                         </Text>
                     </View>
                 ) : !limitStatus.allowed ? (
@@ -300,31 +300,31 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                 <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
                     <View style={[styles.infoHeader, { borderBottomColor: theme.colors.border }]}>
                         <View style={styles.headerBtn} />
-                        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About Coach</Text>
+                        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About AI Nutritionist</Text>
                         <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.headerBtn}>
                             <Feather name="x" size={22} color={theme.colors.textPrimary} />
                         </TouchableOpacity>
                     </View>
                     <ScrollView contentContainerStyle={styles.infoContent}>
-                        <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>What is Coach?</Text>
+                        <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>What is the AI Nutritionist?</Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
-                            Coach is your personal AI nutrition assistant. It reads your logged meals, weight trend, macro averages, and the foods you actually eat to give you advice that is specific to you, not generic tips you could find anywhere online.
+                            The AI Nutritionist is your personal AI nutrition assistant. It reads your logged meals, weight trend, macro averages, and the foods you actually eat to give you advice that is specific to you, not generic tips you could find anywhere online.
                         </Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
                             You can ask it things like "Am I eating enough protein?", "What should I have for dinner?", or "Why is my weight not changing?" and it will answer using your real data. It will only suggest foods it has seen in your meal history, so you will never get recommendations for things you do not eat.
                         </Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
-                            The more consistently you log, the better Coach gets. It uses your last 14 days of data to understand your patterns, which is why it requires 14 days of logging before it unlocks.
+                            The more consistently you log, the better it gets. It uses your last 14 days of data to understand your patterns, which is why it requires 14 days of logging before it unlocks.
                         </Text>
 
                         <View style={[styles.infoDivider, { backgroundColor: theme.colors.border }]} />
 
                         <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Important Disclaimer</Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
-                            Coach is powered by AI and its responses are estimates based on the data you provide. It is not always 100% accurate.
+                            The AI Nutritionist is powered by AI and its responses are estimates based on the data you provide. It is not always 100% accurate.
                         </Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
-                            Coach does not currently account for food allergies, intolerances, or medical conditions. If you have specific dietary restrictions or health concerns, please consult a qualified healthcare professional or registered dietitian before making changes to your diet.
+                            It does not currently account for food allergies, intolerances, or medical conditions. If you have specific dietary restrictions or health concerns, please consult a qualified healthcare professional or registered dietitian before making changes to your diet.
                         </Text>
                         <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
                             This feature is not a substitute for professional medical or nutritional advice.

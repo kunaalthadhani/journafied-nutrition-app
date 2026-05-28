@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>TrackKcal. The AI calorie tracker that knows shawarma.</title>
+    <meta name="description" content="Type what you ate. Get calories, macros, and micros in seconds. Built in the UAE for the food you actually eat.">
+    <meta name="theme-color" content="#FBF9F4">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="TrackKcal. The AI calorie tracker that knows shawarma.">
+    <meta property="og:description" content="Built in the UAE. Launching soon.">
+    <meta property="og:url" content="https://trackkcal.com/">
+
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav">
+            <a class="brand" href="/">
+                <span class="brand-mark">TK</span>
+                <span>TrackKcal</span>
+            </a>
+            <a class="nav-cta" href="#hero-cta">Get early access</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero-min">
+            <div class="hero-deco" aria-hidden="true">
+                <div class="blob blob-1"></div>
+                <div class="blob blob-2"></div>
+                <div class="blob blob-3"></div>
+            </div>
+
+            <div class="hero-min-inner">
+                <span class="flag-badge">
+                    <span class="dot"></span>
+                    Launching Q2 2026
+                </span>
+
+                <h1>The AI calorie tracker that <em>knows shawarma.</em></h1>
+
+                <p class="lede">
+                    Type what you ate. Get calories, macros, and micros in three seconds. Powered by agentic AI. Built for the food you actually eat.
+                </p>
+
+                <form id="hero-cta" class="hero-form" novalidate>
+                    <label for="notify-email" class="sr-only">Email</label>
+                    <input id="notify-email" type="email" required placeholder="you@example.com" autocomplete="email">
+                    <button type="submit">Get early access</button>
+                </form>
+
+                <p id="hero-status" class="notify-status-hero" role="status" aria-live="polite"></p>
+
+                <p class="made-in">
+                    <span class="flag">🇦🇪</span>
+                    Made in the UAE. For the Middle East. Works anywhere.
+                </p>
+
+                <div class="dual-mockup">
+                    <img src="mockup-home.svg" alt="TrackKcal home screen with logged meals">
+                    <img src="mockup-ai.svg" alt="TrackKcal AI parsing food into nutrition data">
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <footer class="minimal-footer">
+        <div class="footer-links">
+            <a href="privacy.html">Privacy</a>
+            <a href="terms.html">Terms</a>
+            <a href="support.html">Support</a>
+            <a href="mailto:TrackKcal@gmail.com">Contact</a>
+        </div>
+        <p class="footer-meta">
+            &copy; <span id="footer-year"></span> TrackKcal. Built in the UAE.
+        </p>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

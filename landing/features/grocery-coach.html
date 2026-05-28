@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Grocery Coach — TrackKcal</title>
+    <meta name="description" content="AI grocery list built from your actual nutritional gaps. Tells you what to buy this week and why.">
+    <meta name="theme-color" content="#FBF9F4">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav">
+            <a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a>
+            <div class="nav-links">
+                <a href="../features.html" class="active">Features</a>
+                <a href="../how-it-works.html">How it works</a>
+                <a href="../support.html">Support</a>
+            </div>
+            <a class="nav-cta" href="../#download">Get the app</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero" style="padding-bottom: 56px;">
+            <div class="hero-deco" aria-hidden="true">
+                <div class="blob blob-2"></div>
+                <div class="blob blob-3"></div>
+            </div>
+            <div class="hero-inner">
+                <div class="hero-text">
+                    <div class="eyebrow-row">
+                        <span class="eyebrow">Grocery Coach</span>
+                        <span class="premium-badge">Premium</span>
+                    </div>
+                    <h1>Buy what you <em>actually need.</em></h1>
+                    <p class="lede">
+                        Most grocery lists are based on habit. TrackKcal's Grocery Coach is based on your data. Low on omega-3? It suggests salmon. Low on iron? It suggests spinach and red meat. With reasoning.
+                    </p>
+                    <div class="hero-cta">
+                        <a class="btn btn-accent" href="../#download">Try it at launch</a>
+                        <a class="btn btn-ghost" href="../features.html">All features →</a>
+                    </div>
+                </div>
+                <div class="hero-art">
+                    <img class="phone-frame" src="../mockup-insights.svg" alt="Grocery Coach suggestions">
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="padding-top: 32px;">
+            <div class="section-head">
+                <span class="eyebrow">How it works</span>
+                <h2>Gaps in. <em>Groceries out.</em></h2>
+            </div>
+            <div class="detail-points">
+                <div class="detail-point">
+                    <span class="point-num">1</span>
+                    <h3>Audits your last 7 days</h3>
+                    <p>Computes micronutrient averages. Compares to recommended daily intake. Identifies the gaps that matter.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">2</span>
+                    <h3>Suggests foods that close them</h3>
+                    <p>Deterministic math picks the best foods for your specific gaps. Then the AI writes a short reason for each one.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">3</span>
+                    <h3>Updates as you shop</h3>
+                    <p>Tap an item to mark it bought. Tap to dismiss if you don't want it. The list adapts as your gaps shift week by week.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="background: var(--bg-soft); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="feature-row reverse">
+                <div class="feature-row-text">
+                    <span class="eyebrow">Why it exists</span>
+                    <h2>Vitamin pills <em>are not the answer.</em></h2>
+                    <p>
+                        If your iron is low, the answer is often food, not a supplement. Lentils. Spinach. Red meat. Real food in the cart, not a bottle on the shelf.
+                    </p>
+                    <p>
+                        The Grocery Coach exists because most people don't know which foods actually fix which gaps. The math is not obvious.
+                    </p>
+                    <ul>
+                        <li>Regional food choices when possible (your gaps, your cuisine)</li>
+                        <li>Vegetarian-aware if your logs trend that way</li>
+                        <li>Optional weekly notification when the list refreshes</li>
+                    </ul>
+                </div>
+                <div class="feature-row-art">
+                    <img class="phone-frame" src="../mockup-home.svg" alt="Grocery list view in the app">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <span class="eyebrow">Related</span>
+                <h2>Pairs well with</h2>
+            </div>
+            <div class="related-features">
+                <a class="related-card" href="micronutrients.html"><h4>Micronutrients</h4><p>The tracking that surfaces the gaps to fix.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="ai-nutritionist.html"><h4>AI Nutritionist</h4><p>Ask "why this food?" and get a real answer.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="weekly-insights.html"><h4>Weekly Insights</h4><p>The summary that explains why the list is what it is.</p><span class="arrow">Learn more →</span></a>
+            </div>
+        </section>
+
+        <section id="download" class="download">
+            <div class="download-inner">
+                <span class="eyebrow">Launching soon</span>
+                <h2>Shop <em>with intent.</em></h2>
+                <p>TrackKcal launches on iOS and Android in Q2 2026.</p>
+                <div class="store-badges">
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">App Store</span></a>
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">Google Play</span></a>
+                </div>
+                <form id="notify-form" class="notify-form" novalidate>
+                    <label for="notify-email" class="sr-only">Email</label>
+                    <input id="notify-email" type="email" required placeholder="you@example.com" autocomplete="email">
+                    <button type="submit" class="btn btn-accent">Notify me at launch</button>
+                </form>
+                <p id="notify-status" class="notify-status" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-top">
+                <div class="footer-brand"><a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a><p class="footer-tagline">The food logger that actually understands food.</p></div>
+                <div class="footer-col"><h4>Product</h4><ul><li><a href="../features.html">Features</a></li><li><a href="../how-it-works.html">How it works</a></li><li><a href="../#download">Download</a></li></ul></div>
+                <div class="footer-col"><h4>Company</h4><ul><li><a href="../support.html">Support</a></li><li><a href="mailto:TrackKcal@gmail.com">Contact</a></li></ul></div>
+                <div class="footer-col"><h4>Legal</h4><ul><li><a href="../privacy.html">Privacy Policy</a></li><li><a href="../terms.html">Terms of Service</a></li></ul></div>
+            </div>
+            <div class="footer-bottom"><span>&copy; <span id="footer-year"></span> TrackKcal. Built in the UAE.</span><a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a></div>
+        </div>
+    </footer>
+    <script src="../script.js"></script>
+</body>
+</html>

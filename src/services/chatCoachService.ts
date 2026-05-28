@@ -135,7 +135,7 @@ export const chatCoachService = {
             if (isSufficient) {
                 await Notifications.scheduleNotificationAsync({
                     content: {
-                        title: "🔓 AI Coach Unlocked!",
+                        title: "🔓 AI Nutritionist Unlocked!",
                         body: "You've logged enough data. Tap to chat with your personal nutrition expert.",
                         sound: true,
                     },

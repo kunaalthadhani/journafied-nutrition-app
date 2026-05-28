@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Pattern Detection — TrackKcal</title>
+    <meta name="description" content="Behavioral patterns you didn't know you had. TrackKcal looks at 21 days of logs and surfaces the habits that derail your goals.">
+    <meta name="theme-color" content="#FBF9F4">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav">
+            <a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a>
+            <div class="nav-links">
+                <a href="../features.html" class="active">Features</a>
+                <a href="../how-it-works.html">How it works</a>
+                <a href="../support.html">Support</a>
+            </div>
+            <a class="nav-cta" href="../#download">Get the app</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero" style="padding-bottom: 56px;">
+            <div class="hero-deco" aria-hidden="true">
+                <div class="blob blob-1"></div>
+                <div class="blob blob-2"></div>
+            </div>
+            <div class="hero-inner">
+                <div class="hero-text">
+                    <div class="eyebrow-row">
+                        <span class="eyebrow">Pattern Detection</span>
+                        <span class="premium-badge">Premium</span>
+                    </div>
+                    <h1>Habits you <em>didn't know</em> you had.</h1>
+                    <p class="lede">
+                        TrackKcal looks at 21 days of logs and surfaces the patterns behind your stalls: you overeat after long workdays, you skip protein on weekends, you snack between 9 and 10 PM. Not generic advice. Your actual behavior.
+                    </p>
+                    <div class="hero-cta">
+                        <a class="btn btn-accent" href="../#download">Try it at launch</a>
+                        <a class="btn btn-ghost" href="../features.html">All features →</a>
+                    </div>
+                </div>
+                <div class="hero-art">
+                    <img class="phone-frame" src="../mockup-insights.svg" alt="Pattern Detection card showing behavioral insights">
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="padding-top: 32px;">
+            <div class="section-head">
+                <span class="eyebrow">What it finds</span>
+                <h2>The patterns <em>that matter.</em></h2>
+            </div>
+            <div class="detail-points">
+                <div class="detail-point">
+                    <span class="point-num">a</span>
+                    <h3>Timing patterns</h3>
+                    <p>"You overeat on days you logged dinner after 9 PM." Surfaces correlations between meal timing and total intake.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">b</span>
+                    <h3>Day-of-week patterns</h3>
+                    <p>"Your weekend calories are 30% higher than weekdays." Highlights the cycles you might not see in a day-by-day chart.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">c</span>
+                    <h3>Plateau triggers</h3>
+                    <p>"Your weight stalled the week your protein dropped below 100g." Connects nutrition shifts to weight outcomes.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="background: var(--bg-soft); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="feature-row reverse">
+                <div class="feature-row-text">
+                    <span class="eyebrow">How it runs</span>
+                    <h2>21 days. <em>Quietly.</em></h2>
+                    <p>
+                        Every week, the AI looks at the last 21 days of food logs, weight entries, and goal adherence. It runs the math locally where possible, sends the rest through our proxy, and returns a short list of findings.
+                    </p>
+                    <ul>
+                        <li>Runs in the background, no manual trigger needed</li>
+                        <li>Shows new findings as a notification once weekly</li>
+                        <li>Tap a finding to see the data behind it</li>
+                        <li>Dismissed findings don't come back unless the pattern changes</li>
+                    </ul>
+                </div>
+                <div class="feature-row-art">
+                    <img class="phone-frame" src="../mockup-home.svg" alt="Pattern Detection card on home screen">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <span class="eyebrow">Related</span>
+                <h2>Pairs well with</h2>
+            </div>
+            <div class="related-features">
+                <a class="related-card" href="weekly-insights.html"><h4>Weekly Insights</h4><p>Pattern Detection findings appear in the weekly summary.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="smart-macro-adjustment.html"><h4>Smart Macro Adjustment</h4><p>When patterns explain stalls, adjustments come next.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="ai-nutritionist.html"><h4>AI Nutritionist</h4><p>Ask follow-up questions about any pattern it finds.</p><span class="arrow">Learn more →</span></a>
+            </div>
+        </section>
+
+        <section id="download" class="download">
+            <div class="download-inner">
+                <span class="eyebrow">Launching soon</span>
+                <h2>See <em>your real story.</em></h2>
+                <p>TrackKcal launches on iOS and Android in Q2 2026.</p>
+                <div class="store-badges">
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">App Store</span></a>
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">Google Play</span></a>
+                </div>
+                <form id="notify-form" class="notify-form" novalidate>
+                    <label for="notify-email" class="sr-only">Email</label>
+                    <input id="notify-email" type="email" required placeholder="you@example.com" autocomplete="email">
+                    <button type="submit" class="btn btn-accent">Notify me at launch</button>
+                </form>
+                <p id="notify-status" class="notify-status" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-top">
+                <div class="footer-brand"><a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a><p class="footer-tagline">The food logger that actually understands food.</p></div>
+                <div class="footer-col"><h4>Product</h4><ul><li><a href="../features.html">Features</a></li><li><a href="../how-it-works.html">How it works</a></li><li><a href="../#download">Download</a></li></ul></div>
+                <div class="footer-col"><h4>Company</h4><ul><li><a href="../support.html">Support</a></li><li><a href="mailto:TrackKcal@gmail.com">Contact</a></li></ul></div>
+                <div class="footer-col"><h4>Legal</h4><ul><li><a href="../privacy.html">Privacy Policy</a></li><li><a href="../terms.html">Terms of Service</a></li></ul></div>
+            </div>
+            <div class="footer-bottom"><span>&copy; <span id="footer-year"></span> TrackKcal. Built in the UAE.</span><a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a></div>
+        </div>
+    </footer>
+    <script src="../script.js"></script>
+</body>
+</html>

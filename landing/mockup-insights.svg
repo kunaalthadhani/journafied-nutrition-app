@@ -1,0 +1,131 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 740" role="img" aria-label="TrackKcal insights screen showing weekly trends">
+    <defs>
+        <linearGradient id="insightsBg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#FAFAFA"/>
+        </linearGradient>
+        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#0F8C5C" stop-opacity="0.25"/>
+            <stop offset="100%" stop-color="#0F8C5C" stop-opacity="0"/>
+        </linearGradient>
+        <clipPath id="insightsClip">
+            <rect x="8" y="8" width="344" height="724" rx="46"/>
+        </clipPath>
+    </defs>
+
+    <rect x="2" y="2" width="356" height="736" rx="52" fill="#18181B"/>
+    <rect x="8" y="8" width="344" height="724" rx="46" fill="url(#insightsBg)"/>
+
+    <g clip-path="url(#insightsClip)">
+        <rect x="138" y="18" width="84" height="26" rx="13" fill="#0C0C0E"/>
+        <text x="36" y="36" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#18181B">9:41</text>
+
+        <!-- Header -->
+        <g transform="translate(24, 68)">
+            <text font-family="-apple-system, system-ui" font-size="11" font-weight="600" fill="#71717A">NUTRITION ANALYSIS</text>
+            <text y="22" font-family="Instrument Serif, serif" font-size="26" font-weight="400" fill="#18181B" letter-spacing="-0.5">This week</text>
+        </g>
+
+        <!-- Filter pills -->
+        <g transform="translate(20, 130)">
+            <rect width="320" height="40" rx="20" fill="#F4F4F5"/>
+            <g transform="translate(8, 6)">
+                <rect width="48" height="28" rx="14" fill="white"/>
+                <text x="24" y="19" font-family="-apple-system, system-ui" font-size="12" font-weight="600" text-anchor="middle" fill="#18181B">1D</text>
+            </g>
+            <g transform="translate(60, 6)">
+                <rect width="48" height="28" rx="14" fill="#18181B"/>
+                <text x="24" y="19" font-family="-apple-system, system-ui" font-size="12" font-weight="600" text-anchor="middle" fill="white">1W</text>
+            </g>
+            <text x="138" y="25" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1M</text>
+            <text x="178" y="25" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">3M</text>
+            <text x="218" y="25" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">6M</text>
+            <text x="258" y="25" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1Y</text>
+        </g>
+
+        <!-- Stat card with chart -->
+        <g transform="translate(20, 190)">
+            <rect width="320" height="220" rx="20" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <text x="20" y="32" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#71717A">DAILY AVERAGE</text>
+            <text x="20" y="66" font-family="-apple-system, system-ui" font-size="32" font-weight="700" fill="#18181B">1,847<tspan font-size="14" font-weight="500" fill="#71717A"> kcal</tspan></text>
+            <g transform="translate(20, 78)">
+                <rect width="62" height="22" rx="11" fill="#E2F3EB"/>
+                <text x="31" y="15" font-family="-apple-system, system-ui" font-size="11" font-weight="600" text-anchor="middle" fill="#0F8C5C">↓ 8% vs goal</text>
+            </g>
+
+            <!-- Chart area -->
+            <g transform="translate(20, 124)">
+                <!-- Grid lines -->
+                <line x1="0" y1="0" x2="280" y2="0" stroke="#F4F4F5" stroke-width="1"/>
+                <line x1="0" y1="30" x2="280" y2="30" stroke="#F4F4F5" stroke-width="1"/>
+                <line x1="0" y1="60" x2="280" y2="60" stroke="#F4F4F5" stroke-width="1"/>
+
+                <!-- Chart fill -->
+                <path d="M0,40 L40,32 L80,48 L120,18 L160,28 L200,12 L240,22 L280,10 L280,80 L0,80 Z" fill="url(#chartFill)"/>
+                <!-- Chart line -->
+                <path d="M0,40 L40,32 L80,48 L120,18 L160,28 L200,12 L240,22 L280,10" fill="none" stroke="#0F8C5C" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+
+                <!-- Points -->
+                <circle cx="0" cy="40" r="3" fill="#0F8C5C"/>
+                <circle cx="40" cy="32" r="3" fill="#0F8C5C"/>
+                <circle cx="80" cy="48" r="3" fill="#0F8C5C"/>
+                <circle cx="120" cy="18" r="3" fill="#0F8C5C"/>
+                <circle cx="160" cy="28" r="3" fill="#0F8C5C"/>
+                <circle cx="200" cy="12" r="3" fill="#0F8C5C"/>
+                <circle cx="240" cy="22" r="3" fill="#0F8C5C"/>
+                <circle cx="280" cy="10" r="5" fill="#0F8C5C"/>
+                <circle cx="280" cy="10" r="9" fill="#0F8C5C" fill-opacity="0.2"/>
+            </g>
+
+            <!-- X labels -->
+            <g transform="translate(20, 210)" font-family="-apple-system, system-ui" font-size="10" fill="#A1A1AA">
+                <text x="0">M</text>
+                <text x="40">T</text>
+                <text x="80">W</text>
+                <text x="120">T</text>
+                <text x="160">F</text>
+                <text x="200">S</text>
+                <text x="240">S</text>
+                <text x="276" font-weight="600" fill="#18181B">M</text>
+            </g>
+        </g>
+
+        <!-- Insight card -->
+        <g transform="translate(20, 432)">
+            <rect width="320" height="118" rx="20" fill="#FBF1DA"/>
+            <g transform="translate(20, 20)">
+                <rect width="36" height="36" rx="10" fill="#E8A623"/>
+                <text x="18" y="24" font-family="-apple-system, system-ui" font-size="18" text-anchor="middle">✨</text>
+            </g>
+            <text x="68" y="34" font-family="-apple-system, system-ui" font-size="12" font-weight="700" fill="#E8A623">WEEKLY INSIGHT</text>
+            <text x="20" y="78" font-family="-apple-system, system-ui" font-size="14" font-weight="500" fill="#18181B">Your protein went up 22% this week.</text>
+            <text x="20" y="100" font-family="-apple-system, system-ui" font-size="13" fill="#595964">Mostly from chicken and yogurt. Keep it up.</text>
+        </g>
+
+        <!-- Micros header -->
+        <text x="24" y="582" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#71717A">MICRONUTRIENTS · 7 DAY AVG</text>
+
+        <!-- Micro bars -->
+        <g transform="translate(20, 598)">
+            <rect width="320" height="100" rx="20" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <g transform="translate(20, 22)">
+                <text font-family="-apple-system, system-ui" font-size="12" fill="#18181B">Iron</text>
+                <rect x="100" y="-8" width="180" height="6" rx="3" fill="#F4F4F5"/>
+                <rect x="100" y="-8" width="120" height="6" rx="3" fill="#0F8C5C"/>
+                <text x="280" y="0" font-family="-apple-system, system-ui" font-size="11" font-weight="600" text-anchor="end" fill="#18181B">67%</text>
+            </g>
+            <g transform="translate(20, 50)">
+                <text font-family="-apple-system, system-ui" font-size="12" fill="#18181B">Calcium</text>
+                <rect x="100" y="-8" width="180" height="6" rx="3" fill="#F4F4F5"/>
+                <rect x="100" y="-8" width="160" height="6" rx="3" fill="#0F8C5C"/>
+                <text x="280" y="0" font-family="-apple-system, system-ui" font-size="11" font-weight="600" text-anchor="end" fill="#18181B">89%</text>
+            </g>
+            <g transform="translate(20, 78)">
+                <text font-family="-apple-system, system-ui" font-size="12" fill="#18181B">Vitamin D</text>
+                <rect x="100" y="-8" width="180" height="6" rx="3" fill="#F4F4F5"/>
+                <rect x="100" y="-8" width="60" height="6" rx="3" fill="#E76A55"/>
+                <text x="280" y="0" font-family="-apple-system, system-ui" font-size="11" font-weight="600" text-anchor="end" fill="#E76A55">33%</text>
+            </g>
+        </g>
+    </g>
+</svg>

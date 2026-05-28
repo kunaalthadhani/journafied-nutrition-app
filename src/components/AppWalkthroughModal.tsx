@@ -64,7 +64,7 @@ const STEPS: Step[] = [
     },
     {
         id: '4',
-        title: 'Your AI nutrition coach',
+        title: 'Your AI Nutritionist',
         tagline: 'Answers based on your data',
         description: 'Ask anything — "Is my protein too low?" "What should I eat before a workout?" Get answers based on your actual data.',
         icon: 'message-circle',

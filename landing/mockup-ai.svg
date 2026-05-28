@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 740" role="img" aria-label="TrackKcal AI analysis screen showing food being parsed from text">
+    <defs>
+        <linearGradient id="aiBg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#FAFAFA"/>
+        </linearGradient>
+        <clipPath id="aiPhoneClip">
+            <rect x="8" y="8" width="344" height="724" rx="46"/>
+        </clipPath>
+    </defs>
+
+    <rect x="2" y="2" width="356" height="736" rx="52" fill="#18181B"/>
+    <rect x="8" y="8" width="344" height="724" rx="46" fill="url(#aiBg)"/>
+
+    <g clip-path="url(#aiPhoneClip)">
+        <rect x="138" y="18" width="84" height="26" rx="13" fill="#0C0C0E"/>
+
+        <text x="36" y="36" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#18181B">9:41</text>
+
+        <!-- Header -->
+        <g transform="translate(24, 68)">
+            <text font-family="-apple-system, system-ui" font-size="11" font-weight="600" fill="#71717A">AI ANALYSIS</text>
+            <text y="22" font-family="Instrument Serif, serif" font-size="26" font-weight="400" fill="#18181B" letter-spacing="-0.5">What you ate</text>
+        </g>
+
+        <!-- User input chip -->
+        <g transform="translate(24, 138)">
+            <rect width="312" height="68" rx="16" fill="#F4F4F5"/>
+            <text x="16" y="24" font-family="-apple-system, system-ui" font-size="11" font-weight="600" fill="#71717A">YOU SAID</text>
+            <text x="16" y="48" font-family="-apple-system, system-ui" font-size="14" fill="#18181B">"two manakeesh zaatar and a karak"</text>
+        </g>
+
+        <!-- Processing indicator -->
+        <g transform="translate(24, 222)">
+            <circle cx="6" cy="6" r="6" fill="#0F8C5C"/>
+            <text x="20" y="11" font-family="-apple-system, system-ui" font-size="12" font-weight="600" fill="#18181B">AI parsed 3 items</text>
+        </g>
+
+        <!-- Item 1 -->
+        <g transform="translate(20, 250)">
+            <rect width="320" height="92" rx="16" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <text x="16" y="28" font-family="-apple-system, system-ui" font-size="15" font-weight="600" fill="#18181B">Manakeesh zaatar</text>
+            <text x="16" y="46" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">2 pieces · 240g</text>
+            <g transform="translate(16, 60)">
+                <rect width="48" height="22" rx="11" fill="#F4F4F5"/>
+                <text x="24" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#18181B">580 kcal</text>
+                <rect x="56" width="36" height="22" rx="11" fill="#DDEAFB"/>
+                <text x="74" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#2D6CDF">18p</text>
+                <rect x="100" width="36" height="22" rx="11" fill="#FBF1DA"/>
+                <text x="118" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#E8A623">62c</text>
+                <rect x="144" width="36" height="22" rx="11" fill="#ECE3FA"/>
+                <text x="162" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#7C57E0">28f</text>
+            </g>
+            <g transform="translate(258, 14)">
+                <rect width="48" height="22" rx="11" fill="#E2F3EB"/>
+                <text x="24" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#0F8C5C">HIGH</text>
+            </g>
+        </g>
+
+        <!-- Item 2 -->
+        <g transform="translate(20, 358)">
+            <rect width="320" height="92" rx="16" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <text x="16" y="28" font-family="-apple-system, system-ui" font-size="15" font-weight="600" fill="#18181B">Karak chai</text>
+            <text x="16" y="46" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1 cup · 200ml</text>
+            <g transform="translate(16, 60)">
+                <rect width="48" height="22" rx="11" fill="#F4F4F5"/>
+                <text x="24" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#18181B">110 kcal</text>
+                <rect x="56" width="36" height="22" rx="11" fill="#DDEAFB"/>
+                <text x="74" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#2D6CDF">4p</text>
+                <rect x="100" width="36" height="22" rx="11" fill="#FBF1DA"/>
+                <text x="118" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#E8A623">14c</text>
+                <rect x="144" width="36" height="22" rx="11" fill="#ECE3FA"/>
+                <text x="162" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#7C57E0">5f</text>
+            </g>
+            <g transform="translate(258, 14)">
+                <rect width="48" height="22" rx="11" fill="#FBF1DA"/>
+                <text x="24" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#E8A623">MED</text>
+            </g>
+        </g>
+
+        <!-- Total card -->
+        <g transform="translate(20, 466)">
+            <rect width="320" height="80" rx="16" fill="#18181B"/>
+            <text x="20" y="28" font-family="-apple-system, system-ui" font-size="11" font-weight="600" fill="rgba(255,255,255,0.55)">TOTAL FOR THIS MEAL</text>
+            <text x="20" y="56" font-family="-apple-system, system-ui" font-size="26" font-weight="700" fill="white">690 kcal</text>
+            <text x="20" y="72" font-family="-apple-system, system-ui" font-size="11" fill="rgba(255,255,255,0.55)">22g protein · 76g carbs · 33g fat</text>
+        </g>
+
+        <!-- Confirm button -->
+        <g transform="translate(20, 580)">
+            <rect width="320" height="52" rx="26" fill="#0F8C5C"/>
+            <text x="160" y="33" font-family="-apple-system, system-ui" font-size="15" font-weight="600" text-anchor="middle" fill="white">Add to log</text>
+        </g>
+
+        <!-- Edit hint -->
+        <text x="180" y="660" font-family="-apple-system, system-ui" font-size="12" text-anchor="middle" fill="#71717A">Tap any item to edit calories</text>
+    </g>
+</svg>

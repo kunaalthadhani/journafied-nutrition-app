@@ -54,3 +54,11 @@ db_password.txt
 
 # Supabase CLI temp state
 supabase/.temp/
+
+# PWA / Web build output
+dist/
+web-build/
+.expo/
+
+# Local SQL helpers used in dev sessions
+_*.sql

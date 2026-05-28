@@ -42,12 +42,12 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
 
         <View style={[styles.section, { borderColor: theme.colors.border }]}>
           <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Links</Text>
-          <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/privacy')}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://trackkcal.com/privacy.html')}>
             <Feather name="shield" size={18} color={theme.colors.textPrimary} />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Privacy Policy</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
           </TouchableOpacity>
-          <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://example.com/terms')}>
+          <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://trackkcal.com/terms.html')}>
             <Feather name="file-text" size={18} color={theme.colors.textPrimary} />
             <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Terms of Service</Text>
             <Feather name="external-link" size={16} color={theme.colors.textTertiary} />

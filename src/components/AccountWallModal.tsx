@@ -54,7 +54,7 @@ export const AccountWallModal: React.FC<AccountWallModalProps> = ({
             {[
               { icon: 'cloud', text: 'Your data backed up securely' },
               { icon: 'smartphone', text: 'Access from any device' },
-              { icon: 'zap', text: 'Unlock AI coaching & insights' },
+              { icon: 'zap', text: 'Unlock the AI Nutritionist & insights' },
             ].map((b, i) => (
               <View key={i} style={st.benefitRow}>
                 <View style={[st.benefitIcon, { backgroundColor: theme.colors.secondaryBg }]}>

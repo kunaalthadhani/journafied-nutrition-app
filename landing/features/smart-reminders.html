@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0">
+    <title>Smart Reminders — TrackKcal</title>
+    <meta name="description" content="TrackKcal learns when you actually eat and reminds you at that time. Or pick your own schedule. Your choice.">
+    <meta name="theme-color" content="#FBF9F4">
+    <link rel="icon" type="image/svg+xml" href="../favicon.svg">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="../styles.css">
+</head>
+<body>
+    <header class="site-header">
+        <nav class="nav">
+            <a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a>
+            <div class="nav-links">
+                <a href="../features.html" class="active">Features</a>
+                <a href="../how-it-works.html">How it works</a>
+                <a href="../support.html">Support</a>
+            </div>
+            <a class="nav-cta" href="../#download">Get the app</a>
+        </nav>
+    </header>
+
+    <main>
+        <section class="hero" style="padding-bottom: 56px;">
+            <div class="hero-deco" aria-hidden="true">
+                <div class="blob blob-2"></div>
+                <div class="blob blob-3"></div>
+            </div>
+            <div class="hero-inner">
+                <div class="hero-text">
+                    <div class="eyebrow-row">
+                        <span class="eyebrow">Smart Reminders</span>
+                        <span class="premium-badge">Premium</span>
+                    </div>
+                    <h1>Reminders that <em>actually fire when you eat.</em></h1>
+                    <p class="lede">
+                        Most apps ping you at 8 AM whether you eat at 7 or 10. TrackKcal learns your timing and shows up when it's useful. Or if you'd rather pick your own times, that works too.
+                    </p>
+                    <div class="hero-cta">
+                        <a class="btn btn-accent" href="../#download">Try it at launch</a>
+                        <a class="btn btn-ghost" href="../features.html">All features →</a>
+                    </div>
+                </div>
+                <div class="hero-art">
+                    <img class="phone-frame" src="../mockup-home.svg" alt="Reminder notification fired at the right moment">
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="padding-top: 32px;">
+            <div class="section-head">
+                <span class="eyebrow">Two modes</span>
+                <h2>Smart or <em>Scheduled.</em></h2>
+                <p>You pick. The toggle lives in Settings → Notifications.</p>
+            </div>
+            <div class="detail-points">
+                <div class="detail-point">
+                    <span class="point-num">1</span>
+                    <h3>Smart mode</h3>
+                    <p>The AI watches when you log meals over a few days. Detects your real breakfast, lunch, and dinner times. Reminds you 10 minutes before, if you haven't logged.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">2</span>
+                    <h3>Scheduled mode</h3>
+                    <p>Pick your own times for breakfast, lunch, dinner. Toggle each on or off independently. Predictable and quiet.</p>
+                </div>
+                <div class="detail-point">
+                    <span class="point-num">3</span>
+                    <h3>Quiet hours</h3>
+                    <p>Set a do-not-disturb window. Reminders that would fall inside it are skipped, not pushed to a different time.</p>
+                </div>
+            </div>
+        </section>
+
+        <section class="section" style="background: var(--bg-soft); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border);">
+            <div class="feature-row">
+                <div class="feature-row-text">
+                    <span class="eyebrow">Bonus</span>
+                    <h2>End-of-day <em>wrap-up.</em></h2>
+                    <p>
+                        Optional 8:30 PM notification that summarizes what you ate, how close you got to your macros, and whether the day went the way you planned. Brief. No guilt.
+                    </p>
+                    <ul>
+                        <li>One tap to open today's full breakdown</li>
+                        <li>Skipped if you've already logged a full day</li>
+                        <li>Adjustable time so it fits your evening</li>
+                    </ul>
+                </div>
+                <div class="feature-row-art">
+                    <img class="phone-frame" src="../mockup-insights.svg" alt="End of day summary notification">
+                </div>
+            </div>
+        </section>
+
+        <section class="section">
+            <div class="section-head">
+                <span class="eyebrow">Related</span>
+                <h2>Pairs well with</h2>
+            </div>
+            <div class="related-features">
+                <a class="related-card" href="ai-nutritionist.html"><h4>AI Nutritionist</h4><p>Tap a reminder, get a nudge with macro context.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="pattern-detection.html"><h4>Pattern Detection</h4><p>Reminders adapt as your patterns shift.</p><span class="arrow">Learn more →</span></a>
+                <a class="related-card" href="weekly-insights.html"><h4>Weekly Insights</h4><p>The end-of-week version of the wrap-up.</p><span class="arrow">Learn more →</span></a>
+            </div>
+        </section>
+
+        <section id="download" class="download">
+            <div class="download-inner">
+                <span class="eyebrow">Launching soon</span>
+                <h2>Reminders that <em>respect you.</em></h2>
+                <p>TrackKcal launches on iOS and Android in Q2 2026.</p>
+                <div class="store-badges">
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">App Store</span></a>
+                    <a class="store-badge" href="#"><span class="store-line-1">Coming soon to</span><span class="store-line-2">Google Play</span></a>
+                </div>
+                <form id="notify-form" class="notify-form" novalidate>
+                    <label for="notify-email" class="sr-only">Email</label>
+                    <input id="notify-email" type="email" required placeholder="you@example.com" autocomplete="email">
+                    <button type="submit" class="btn btn-accent">Notify me at launch</button>
+                </form>
+                <p id="notify-status" class="notify-status" role="status" aria-live="polite"></p>
+            </div>
+        </section>
+    </main>
+
+    <footer class="site-footer">
+        <div class="footer-inner">
+            <div class="footer-top">
+                <div class="footer-brand"><a class="brand" href="../"><span class="brand-mark">TK</span><span>TrackKcal</span></a><p class="footer-tagline">The food logger that actually understands food.</p></div>
+                <div class="footer-col"><h4>Product</h4><ul><li><a href="../features.html">Features</a></li><li><a href="../how-it-works.html">How it works</a></li><li><a href="../#download">Download</a></li></ul></div>
+                <div class="footer-col"><h4>Company</h4><ul><li><a href="../support.html">Support</a></li><li><a href="mailto:TrackKcal@gmail.com">Contact</a></li></ul></div>
+                <div class="footer-col"><h4>Legal</h4><ul><li><a href="../privacy.html">Privacy Policy</a></li><li><a href="../terms.html">Terms of Service</a></li></ul></div>
+            </div>
+            <div class="footer-bottom"><span>&copy; <span id="footer-year"></span> TrackKcal. Built in the UAE.</span><a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a></div>
+        </div>
+    </footer>
+    <script src="../script.js"></script>
+</body>
+</html>

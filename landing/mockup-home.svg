@@ -1,0 +1,142 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 740" role="img" aria-label="TrackKcal home screen showing today's macros and a logged meal">
+    <defs>
+        <linearGradient id="screenBg" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#FAFAFA"/>
+        </linearGradient>
+        <clipPath id="phoneClip">
+            <rect x="8" y="8" width="344" height="724" rx="46"/>
+        </clipPath>
+    </defs>
+
+    <!-- Phone body -->
+    <rect x="2" y="2" width="356" height="736" rx="52" fill="#18181B"/>
+    <rect x="8" y="8" width="344" height="724" rx="46" fill="url(#screenBg)"/>
+
+    <g clip-path="url(#phoneClip)">
+        <!-- Notch -->
+        <rect x="138" y="18" width="84" height="26" rx="13" fill="#0C0C0E"/>
+
+        <!-- Status bar -->
+        <text x="36" y="36" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#18181B">9:41</text>
+        <g transform="translate(280, 28)" fill="#18181B">
+            <rect x="0" y="2" width="3" height="10" rx="0.5"/>
+            <rect x="5" y="0" width="3" height="12" rx="0.5"/>
+            <rect x="10" y="-2" width="3" height="14" rx="0.5"/>
+            <rect x="22" y="-2" width="20" height="11" rx="3" fill="none" stroke="#18181B" stroke-width="1.2"/>
+            <rect x="24" y="0" width="14" height="7" rx="1.5"/>
+        </g>
+
+        <!-- Top bar with menu + streak -->
+        <g transform="translate(24, 64)">
+            <g>
+                <rect x="0" y="0" width="22" height="2.5" rx="1.25" fill="#18181B"/>
+                <rect x="0" y="7" width="22" height="2.5" rx="1.25" fill="#18181B"/>
+                <rect x="0" y="14" width="22" height="2.5" rx="1.25" fill="#18181B"/>
+            </g>
+            <g transform="translate(265, -6)">
+                <rect width="48" height="28" rx="14" fill="#FBF1DA"/>
+                <text x="14" y="18" font-family="-apple-system, system-ui" font-size="13" fill="#E8A623">🔥</text>
+                <text x="29" y="19" font-family="-apple-system, system-ui" font-size="13" font-weight="700" fill="#E8A623">7</text>
+            </g>
+        </g>
+
+        <!-- Date selector -->
+        <g transform="translate(24, 108)">
+            <text font-family="-apple-system, system-ui" font-size="11" font-weight="600" fill="#71717A">TODAY · MAR 5</text>
+        </g>
+
+        <!-- Hero calorie card -->
+        <g transform="translate(20, 138)">
+            <rect width="320" height="148" rx="20" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <!-- Ring -->
+            <g transform="translate(40, 30)">
+                <circle cx="44" cy="44" r="36" fill="none" stroke="#F4F4F5" stroke-width="8"/>
+                <circle cx="44" cy="44" r="36" fill="none" stroke="#0F8C5C" stroke-width="8"
+                    stroke-dasharray="160 226" stroke-linecap="round" transform="rotate(-90 44 44)"/>
+                <text x="44" y="42" font-family="-apple-system, system-ui" font-size="22" font-weight="700" text-anchor="middle" fill="#18181B">1428</text>
+                <text x="44" y="56" font-family="-apple-system, system-ui" font-size="9" font-weight="500" text-anchor="middle" fill="#71717A">of 2000 kcal</text>
+            </g>
+            <!-- Macros -->
+            <g transform="translate(160, 36)">
+                <g>
+                    <circle cx="6" cy="6" r="5" fill="#2D6CDF"/>
+                    <text x="20" y="10" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">Protein</text>
+                    <text x="120" y="10" font-family="-apple-system, system-ui" font-size="12" font-weight="600" fill="#18181B" text-anchor="end">88g</text>
+                </g>
+                <g transform="translate(0, 28)">
+                    <circle cx="6" cy="6" r="5" fill="#E8A623"/>
+                    <text x="20" y="10" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">Carbs</text>
+                    <text x="120" y="10" font-family="-apple-system, system-ui" font-size="12" font-weight="600" fill="#18181B" text-anchor="end">142g</text>
+                </g>
+                <g transform="translate(0, 56)">
+                    <circle cx="6" cy="6" r="5" fill="#7C57E0"/>
+                    <text x="20" y="10" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">Fat</text>
+                    <text x="120" y="10" font-family="-apple-system, system-ui" font-size="12" font-weight="600" fill="#18181B" text-anchor="end">52g</text>
+                </g>
+            </g>
+        </g>
+
+        <!-- Section title -->
+        <text x="24" y="324" font-family="-apple-system, system-ui" font-size="13" font-weight="600" fill="#71717A">RECENT MEALS</text>
+
+        <!-- Meal card 1 -->
+        <g transform="translate(20, 340)">
+            <rect width="320" height="74" rx="16" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <g transform="translate(16, 14)">
+                <rect width="44" height="44" rx="12" fill="#FBF1DA"/>
+                <text x="22" y="29" font-family="-apple-system, system-ui" font-size="20" text-anchor="middle">🥙</text>
+            </g>
+            <text x="76" y="34" font-family="-apple-system, system-ui" font-size="14" font-weight="600" fill="#18181B">Chicken shawarma wrap</text>
+            <text x="76" y="52" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1 wrap · 480 kcal</text>
+            <g transform="translate(264, 22)">
+                <rect width="42" height="22" rx="11" fill="#E2F3EB"/>
+                <text x="21" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#0F8C5C">HIGH</text>
+            </g>
+        </g>
+
+        <!-- Meal card 2 -->
+        <g transform="translate(20, 432)">
+            <rect width="320" height="74" rx="16" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <g transform="translate(16, 14)">
+                <rect width="44" height="44" rx="12" fill="#DDEAFB"/>
+                <text x="22" y="29" font-family="-apple-system, system-ui" font-size="20" text-anchor="middle">🥗</text>
+            </g>
+            <text x="76" y="34" font-family="-apple-system, system-ui" font-size="14" font-weight="600" fill="#18181B">Fattoush salad</text>
+            <text x="76" y="52" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1 bowl · 220 kcal</text>
+            <g transform="translate(264, 22)">
+                <rect width="42" height="22" rx="11" fill="#E2F3EB"/>
+                <text x="21" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#0F8C5C">HIGH</text>
+            </g>
+        </g>
+
+        <!-- Meal card 3 -->
+        <g transform="translate(20, 524)">
+            <rect width="320" height="74" rx="16" fill="#FFFFFF" stroke="#E4E4E7" stroke-width="1"/>
+            <g transform="translate(16, 14)">
+                <rect width="44" height="44" rx="12" fill="#ECE3FA"/>
+                <text x="22" y="29" font-family="-apple-system, system-ui" font-size="20" text-anchor="middle">🍵</text>
+            </g>
+            <text x="76" y="34" font-family="-apple-system, system-ui" font-size="14" font-weight="600" fill="#18181B">Karak chai</text>
+            <text x="76" y="52" font-family="-apple-system, system-ui" font-size="12" fill="#71717A">1 cup · 110 kcal</text>
+            <g transform="translate(264, 22)">
+                <rect width="42" height="22" rx="11" fill="#FBF1DA"/>
+                <text x="21" y="15" font-family="-apple-system, system-ui" font-size="10" font-weight="600" text-anchor="middle" fill="#E8A623">MED</text>
+            </g>
+        </g>
+
+        <!-- Input bar -->
+        <g transform="translate(20, 644)">
+            <rect width="320" height="56" rx="28" fill="#18181B"/>
+            <text x="32" y="34" font-family="-apple-system, system-ui" font-size="14" fill="rgba(255,255,255,0.55)">What did you eat?</text>
+            <g transform="translate(248, 12)">
+                <circle cx="16" cy="16" r="16" fill="rgba(255,255,255,0.12)"/>
+                <text x="16" y="22" font-family="-apple-system, system-ui" font-size="14" text-anchor="middle" fill="#FFFFFF">🎤</text>
+            </g>
+            <g transform="translate(284, 12)">
+                <circle cx="16" cy="16" r="16" fill="#0F8C5C"/>
+                <path d="M16 8v16M8 16h16" stroke="white" stroke-width="2" stroke-linecap="round"/>
+            </g>
+        </g>
+    </g>
+</svg>

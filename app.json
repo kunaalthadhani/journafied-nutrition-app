@@ -41,7 +41,16 @@
       ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/favicon.png",
+      "output": "single",
+      "bundler": "metro",
+      "themeColor": "#FBF9F4",
+      "backgroundColor": "#FBF9F4",
+      "display": "standalone",
+      "lang": "en",
+      "name": "TrackKcal",
+      "shortName": "TrackKcal",
+      "description": "The AI calorie tracker that knows shawarma."
     },
     "plugins": [
       "expo-web-browser",
@@ -53,6 +62,14 @@
           "url": "https://sentry.io/",
           "project": "react-native",
           "organization": "trackkcal"
+        }
+      ],
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
         }
       ]
     ],
