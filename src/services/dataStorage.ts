@@ -559,6 +559,93 @@ async function pullDerivedFromSupabase(accountInfo: AccountInfo | null): Promise
   }
 }
 
+/**
+ * One-shot push of every locally-cached entity to Supabase. Called on the first
+ * SIGNED_IN of a session so existing local data (logged before this device was
+ * tied to an account, or saved while signed out) reaches the cloud.
+ *
+ * Runs BEFORE pullDerivedFromSupabase. The pull will then overwrite local with
+ * the union, but since we just pushed our local up, nothing is lost.
+ *
+ * Best-effort. Uses Promise.allSettled so a single failure does not block the
+ * others.
+ */
+async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<void> {
+  if (!accountInfo?.supabaseUserId) return;
+  try {
+    const allKeys = await AsyncStorage.getAllKeys();
+    const shardKeys = allKeys.filter((k) => k.startsWith('@trackkal:log:'));
+
+    const [
+      insightsRaw,
+      patternsRaw,
+      planRaw,
+      unlocksRaw,
+      summariesRaw,
+      bankConfigRaw,
+      cyclesRaw,
+      weightsRaw,
+      mealPairs,
+    ] = await Promise.all([
+      AsyncStorage.getItem(STORAGE_KEYS.INSIGHTS),
+      AsyncStorage.getItem(STORAGE_KEYS.DETECTED_PATTERNS),
+      AsyncStorage.getItem(STORAGE_KEYS.WEEKLY_ACTION_PLAN),
+      AsyncStorage.getItem(STORAGE_KEYS.INSIGHT_UNLOCKS),
+      AsyncStorage.getItem(STORAGE_KEYS.SUMMARIES),
+      AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CONFIG),
+      AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES),
+      AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES),
+      shardKeys.length > 0
+        ? AsyncStorage.multiGet(shardKeys)
+        : Promise.resolve([] as [string, string | null][]),
+    ]);
+
+    const insights: Insight[] = insightsRaw ? JSON.parse(insightsRaw) : [];
+    const patterns: DetectedPattern[] = patternsRaw ? JSON.parse(patternsRaw) : [];
+    const plan: WeeklyActionPlan | null = planRaw ? JSON.parse(planRaw) : null;
+    const unlocks: Record<string, { unlockedAt: string; seenAt?: string }> = unlocksRaw
+      ? JSON.parse(unlocksRaw)
+      : {};
+    const summaries: Record<string, DailySummary> = summariesRaw ? JSON.parse(summariesRaw) : {};
+    const bankConfig: CalorieBankConfig | null = bankConfigRaw ? JSON.parse(bankConfigRaw) : null;
+    const cycles: CalorieBankCompletedCycle[] = cyclesRaw ? JSON.parse(cyclesRaw) : [];
+    const weightEntries: WeightEntry[] = weightsRaw ? JSON.parse(weightsRaw) : [];
+
+    const mealPayloads: MealSyncPayload[] = [];
+    mealPairs.forEach(([key, value]) => {
+      if (!value) return;
+      const dateKey = key.replace('@trackkal:log:', '');
+      try {
+        const dayMeals = JSON.parse(value) as MealEntry[];
+        dayMeals.forEach((meal) => mealPayloads.push({ meal, dateKey }));
+      } catch { /* skip corrupt shard */ }
+    });
+
+    const weightPayloads: WeightSyncPayload[] = weightEntries
+      .filter((w) => w && w.id && w.date)
+      .map((w) => ({
+        id: w.id!,
+        date: typeof w.date === 'string' ? w.date : new Date(w.date as any).toISOString(),
+        weight: w.weight,
+        updatedAt: w.updatedAt || new Date().toISOString(),
+      }));
+
+    await Promise.allSettled([
+      insights.length > 0 ? supabaseDataService.upsertInsights(accountInfo, insights) : Promise.resolve(),
+      patterns.length > 0 ? supabaseDataService.upsertDetectedPatterns(accountInfo, patterns) : Promise.resolve(),
+      plan ? supabaseDataService.upsertWeeklyActionPlan(accountInfo, plan) : Promise.resolve(),
+      Object.keys(unlocks).length > 0 ? supabaseDataService.upsertInsightUnlocks(accountInfo, unlocks) : Promise.resolve(),
+      Object.keys(summaries).length > 0 ? supabaseDataService.upsertDailySummaries(accountInfo, summaries) : Promise.resolve(),
+      bankConfig ? supabaseDataService.upsertCalorieBankConfig(accountInfo, bankConfig) : Promise.resolve(),
+      cycles.length > 0 ? supabaseDataService.upsertCompletedCycles(accountInfo, cycles) : Promise.resolve(),
+      mealPayloads.length > 0 ? supabaseDataService.upsertMeals(accountInfo, mealPayloads) : Promise.resolve(),
+      weightPayloads.length > 0 ? supabaseDataService.upsertWeightEntries(accountInfo, weightPayloads) : Promise.resolve(),
+    ]);
+  } catch (e) {
+    if (__DEV__) console.warn('[pushDerivedToSupabase] failed:', e);
+  }
+}
+
 async function syncMealsToSupabase(date: string, meals: MealEntry[]): Promise<void> {
   if (!meals || meals.length === 0) return;
   try {
@@ -958,6 +1045,15 @@ export const dataStorage = {
   async pullDerivedFromSupabase(): Promise<void> {
     const accountInfo = await getCachedAccountInfo();
     await pullDerivedFromSupabase(accountInfo);
+  },
+
+  // One-shot backfill on sign-in. Pushes every locally-cached entity (meals,
+  // weights, insights, patterns, plan, unlocks, summaries, bank state) to
+  // Supabase so data that pre-dates account sign-in is not stranded on the
+  // device. Best-effort and idempotent (every upsert is keyed by id).
+  async pushDerivedToSupabase(): Promise<void> {
+    const accountInfo = await getCachedAccountInfo();
+    await pushDerivedToSupabase(accountInfo);
   },
 
   // Flush any queued sync ops to Supabase. Called from AppState foreground hook

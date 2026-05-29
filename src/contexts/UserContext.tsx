@@ -122,10 +122,17 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // SIGNED_OUT: also reload — that path returns just local data
                 // (no cloud fetch) which is fine, lets the UI reflect the cleared
                 // account state immediately.
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-                    // Pull derived state (insights, patterns, plan, unlocks,
-                    // summaries, calorie bank) before loadAllData so the next
-                    // local reads include cross-device cloud state.
+                if (event === 'SIGNED_IN') {
+                    // First push local data up so anything saved while signed
+                    // out or under a previous local-only state reaches the cloud.
+                    // Then pull so cross-device data merges into local. Order
+                    // matters: push first, pull second.
+                    try { await dataStorage.pushDerivedToSupabase(); } catch { /* best effort */ }
+                    try { await dataStorage.pullDerivedFromSupabase(); } catch { /* best effort */ }
+                    await loadAllData();
+                } else if (event === 'TOKEN_REFRESHED') {
+                    // Token refresh fires every hour. Only pull (no need to
+                    // re-push every hour).
                     try { await dataStorage.pullDerivedFromSupabase(); } catch { /* best effort */ }
                     await loadAllData();
                 } else if (event === 'SIGNED_OUT') {
