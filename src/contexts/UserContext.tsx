@@ -114,26 +114,45 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     useEffect(() => {
         const { data: sub } = authService.onAuthStateChange(async (event) => {
             try {
-                const fresh = await dataStorage.getAccountInfo();
+                let fresh = await dataStorage.getAccountInfo();
+
+                // Rehydrate AccountInfo from Supabase session if the local cache
+                // was wiped (iOS Safari ITP eviction is the common cause). Without
+                // this, every consumer that reads dataStorage.loadAccountInfo()
+                // sees null even though the session is valid — Settings shows
+                // "Sign in", premium gates fail, etc.
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    if (!fresh?.email || !fresh?.supabaseUserId) {
+                        try {
+                            const { data } = await authService.getSession();
+                            const sessionUser = data?.session?.user;
+                            if (sessionUser?.email) {
+                                const rebuilt = {
+                                    ...(fresh || {}),
+                                    email: sessionUser.email,
+                                    supabaseUserId: sessionUser.id,
+                                };
+                                await dataStorage.saveAccountInfo(rebuilt as any);
+                                fresh = rebuilt as any;
+                            }
+                        } catch (e) {
+                            if (__DEV__) console.warn('AccountInfo rehydrate failed', e);
+                        }
+                    }
+                }
+
                 setAccountInfo(fresh || null);
 
-                // SIGNED_IN: pull everything from the cloud. Any locally-cached
-                // empty state gets replaced with the user's real data.
-                // SIGNED_OUT: also reload — that path returns just local data
-                // (no cloud fetch) which is fine, lets the UI reflect the cleared
-                // account state immediately.
+                // Background push/pull. These can be slow; do not block the UI
+                // by awaiting. The auth listener returning fast also matters
+                // because some screens re-mount on accountInfo change and would
+                // otherwise wait on these.
                 if (event === 'SIGNED_IN') {
-                    // First push local data up so anything saved while signed
-                    // out or under a previous local-only state reaches the cloud.
-                    // Then pull so cross-device data merges into local. Order
-                    // matters: push first, pull second.
-                    try { await dataStorage.pushDerivedToSupabase(); } catch { /* best effort */ }
-                    try { await dataStorage.pullDerivedFromSupabase(); } catch { /* best effort */ }
+                    void dataStorage.pushDerivedToSupabase().catch(() => { /* */ });
+                    void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
                     await loadAllData();
                 } else if (event === 'TOKEN_REFRESHED') {
-                    // Token refresh fires every hour. Only pull (no need to
-                    // re-push every hour).
-                    try { await dataStorage.pullDerivedFromSupabase(); } catch { /* best effort */ }
+                    void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
                     await loadAllData();
                 } else if (event === 'SIGNED_OUT') {
                     await loadAllData();

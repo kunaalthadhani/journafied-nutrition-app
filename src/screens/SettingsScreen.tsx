@@ -126,7 +126,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       if (closingType === 'account') {
         // Re-check sign-in status after account slide-up closes
         const freshAccount = await dataStorage.loadAccountInfo();
-        setIsSignedIn(!!freshAccount?.email);
+        let signedIn = !!freshAccount?.email;
+        if (!signedIn) {
+          try {
+            const { data } = await authService.getSession();
+            signedIn = !!data?.session?.user?.email;
+          } catch { /* ignore */ }
+        }
+        setIsSignedIn(signedIn);
         onAccountClose?.();
       }
     });
@@ -161,7 +168,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const checkFeatureFlags = async () => {
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
-      setIsSignedIn(!!accountInfo?.email);
+      let signedIn = !!accountInfo?.email;
+      // AccountInfo cache can be wiped (iOS Safari ITP eviction) even when
+      // the Supabase session is still valid. Treat a live session as
+      // "signed in" so the premium gates are not falsely closed.
+      if (!signedIn) {
+        try {
+          const { data } = await authService.getSession();
+          signedIn = !!data?.session?.user?.email;
+        } catch { /* ignore */ }
+      }
+      setIsSignedIn(signedIn);
 
       const prefs = await dataStorage.loadPreferences();
       setLoadedPreferences(prefs);

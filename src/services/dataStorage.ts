@@ -646,31 +646,36 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
   }
 }
 
-async function syncMealsToSupabase(date: string, meals: MealEntry[]): Promise<void> {
+/**
+ * Fire-and-forget background sync. Local writes return immediately; cloud
+ * sync runs out-of-band. Per CLAUDE.md: never block UX on a network call.
+ */
+function syncMealsToSupabase(date: string, meals: MealEntry[]): void {
   if (!meals || meals.length === 0) return;
-  try {
-    const accountInfo = await getCachedAccountInfo();
-    const payloads = meals.map((meal) => ({ meal, dateKey: date }));
-
-    if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
-      // Not signed in. Queue for after sign-in.
-      for (const payload of payloads) {
-        await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
-      }
-      return;
-    }
-
+  void (async () => {
     try {
-      await supabaseDataService.upsertMeals(accountInfo, payloads);
-    } catch (error) {
-      console.error('[syncMealsToSupabase] direct push failed, queueing:', error);
-      for (const payload of payloads) {
-        await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+      const accountInfo = await getCachedAccountInfo();
+      const payloads = meals.map((meal) => ({ meal, dateKey: date }));
+
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
+        for (const payload of payloads) {
+          await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+        }
+        return;
       }
+
+      try {
+        await supabaseDataService.upsertMeals(accountInfo, payloads);
+      } catch (error) {
+        if (__DEV__) console.warn('[syncMealsToSupabase] direct push failed, queueing:', error);
+        for (const payload of payloads) {
+          await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+        }
+      }
+    } catch (e) {
+      if (__DEV__) console.warn('[syncMealsToSupabase] unexpected error', e);
     }
-  } catch (e) {
-    console.error('[syncMealsToSupabase] unexpected error', e);
-  }
+  })();
 }
 
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
@@ -1152,10 +1157,9 @@ export const dataStorage = {
         // Update summary automatically
         await this.updateSummaryForDate(date, meals);
 
-        // Push every meal to Supabase. Without this, the meal lives only in
-        // local AsyncStorage and is lost the moment iOS Safari evicts
-        // localStorage or the user re-installs the PWA.
-        await syncMealsToSupabase(date, meals);
+        // Fire-and-forget cloud sync. Local write is done; never block UX
+        // on the network. Falls back to the sync queue on failure.
+        syncMealsToSupabase(date, meals);
       } catch (error) {
         console.error(`Error saving daily log for ${date}:`, error);
       }
@@ -2569,9 +2573,9 @@ export const dataStorage = {
 
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
-        try { await supabaseDataService.upsertDailySummaries(accountInfo, summaries); } catch (err) {
+        void supabaseDataService.upsertDailySummaries(accountInfo, summaries).catch((err) => {
           if (__DEV__) console.warn('daily summaries sync failed', err);
-        }
+        });
       }
     } catch (error) {
       console.error('Error saving summaries:', error);
@@ -2888,10 +2892,8 @@ export const dataStorage = {
       invalidateMealsCache();
       await dataStorage.updateSummaryForDate(date, updated);
 
-      // Push the new meal to Supabase. Critical: without this, meals only
-      // exist in localStorage and are lost on iOS Safari eviction or
-      // PWA reinstall.
-      await syncMealsToSupabase(date, [meal]);
+      // Fire-and-forget cloud sync. Local write is done; never block UX.
+      syncMealsToSupabase(date, [meal]);
     });
   },
 
@@ -3166,9 +3168,9 @@ export const dataStorage = {
 
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
-        try { await supabaseDataService.upsertInsights(accountInfo, insights); } catch (err) {
+        void supabaseDataService.upsertInsights(accountInfo, insights).catch((err) => {
           if (__DEV__) console.warn('insights sync failed', err);
-        }
+        });
       }
     } catch (e) {
       console.error('Error saving insights', e);
@@ -3337,9 +3339,9 @@ export const dataStorage = {
 
     const accountInfo = await getCachedAccountInfo();
     if (accountInfo?.supabaseUserId) {
-      try { await supabaseDataService.upsertDetectedPatterns(accountInfo, updated); } catch (err) {
+      void supabaseDataService.upsertDetectedPatterns(accountInfo, updated).catch((err) => {
         if (__DEV__) console.warn('detected patterns sync failed', err);
-      }
+      });
     }
   },
 
@@ -3360,9 +3362,9 @@ export const dataStorage = {
 
     const accountInfo = await getCachedAccountInfo();
     if (accountInfo?.supabaseUserId) {
-      try { await supabaseDataService.upsertWeeklyActionPlan(accountInfo, plan); } catch (err) {
+      void supabaseDataService.upsertWeeklyActionPlan(accountInfo, plan).catch((err) => {
         if (__DEV__) console.warn('weekly action plan sync failed', err);
-      }
+      });
     }
   },
 
@@ -3458,9 +3460,9 @@ export const dataStorage = {
 
     const accountInfo = await getCachedAccountInfo();
     if (accountInfo?.supabaseUserId) {
-      try { await supabaseDataService.upsertInsightUnlocks(accountInfo, unlocks); } catch (err) {
+      void supabaseDataService.upsertInsightUnlocks(accountInfo, unlocks).catch((err) => {
         if (__DEV__) console.warn('insight unlocks sync failed', err);
-      }
+      });
     }
   },
 
@@ -3479,9 +3481,9 @@ export const dataStorage = {
 
     const accountInfo = await getCachedAccountInfo();
     if (accountInfo?.supabaseUserId) {
-      try { await supabaseDataService.upsertCalorieBankConfig(accountInfo, config); } catch (err) {
+      void supabaseDataService.upsertCalorieBankConfig(accountInfo, config).catch((err) => {
         if (__DEV__) console.warn('calorie bank config sync failed', err);
-      }
+      });
     }
   },
 
@@ -3502,9 +3504,9 @@ export const dataStorage = {
 
     const accountInfo = await getCachedAccountInfo();
     if (accountInfo?.supabaseUserId) {
-      try { await supabaseDataService.upsertCompletedCycles(accountInfo, [cycle]); } catch (err) {
+      void supabaseDataService.upsertCompletedCycles(accountInfo, [cycle]).catch((err) => {
         if (__DEV__) console.warn('completed cycle sync failed', err);
-      }
+      });
     }
   },
 
