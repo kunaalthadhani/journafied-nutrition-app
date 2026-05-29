@@ -116,10 +116,16 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
 
     const handleNext = () => {
         if (currentIndex < filteredSteps.length - 1) {
-            flatListRef.current?.scrollToIndex({
-                index: currentIndex + 1,
+            const nextIndex = currentIndex + 1;
+            // scrollToOffset is reliable on react-native-web (PWA);
+            // scrollToIndex silently no-ops there when layout is racy.
+            flatListRef.current?.scrollToOffset({
+                offset: ITEM_WIDTH * nextIndex,
                 animated: true,
             });
+            // Update index immediately so progress bar moves even if the
+            // onViewableItemsChanged callback is delayed by the scroll anim.
+            setCurrentIndex(nextIndex);
         } else {
             handleFinish();
         }
@@ -223,25 +229,34 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
                         )}
                     </View>
 
-                    {/* Content Slider — swipe enabled */}
-                    <FlatList
-                        ref={flatListRef}
-                        key={listKey}
-                        data={filteredSteps}
-                        keyExtractor={(item) => item.id}
-                        horizontal
-                        pagingEnabled
-                        scrollEnabled={true}
-                        showsHorizontalScrollIndicator={false}
-                        onViewableItemsChanged={onViewableItemsChanged}
-                        viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
-                        renderItem={renderItem}
-                        getItemLayout={(_, index) => ({
-                            length: ITEM_WIDTH,
-                            offset: ITEM_WIDTH * index,
-                            index,
-                        })}
-                    />
+                    {/* Content Slider — swipe enabled.
+                        Wrap in a fixed-width clipped view so RNW (PWA) does not
+                        let neighbor slides peek when the modal container uses
+                        alignItems:center. */}
+                    <View style={{ width: ITEM_WIDTH, overflow: 'hidden' }}>
+                        <FlatList
+                            ref={flatListRef}
+                            key={listKey}
+                            data={filteredSteps}
+                            keyExtractor={(item) => item.id}
+                            horizontal
+                            pagingEnabled
+                            snapToInterval={ITEM_WIDTH}
+                            snapToAlignment="start"
+                            decelerationRate="fast"
+                            scrollEnabled={true}
+                            showsHorizontalScrollIndicator={false}
+                            onViewableItemsChanged={onViewableItemsChanged}
+                            viewabilityConfig={{ itemVisiblePercentThreshold: 50 }}
+                            renderItem={renderItem}
+                            getItemLayout={(_, index) => ({
+                                length: ITEM_WIDTH,
+                                offset: ITEM_WIDTH * index,
+                                index,
+                            })}
+                            style={{ width: ITEM_WIDTH }}
+                        />
+                    </View>
 
                     {/* Footer: Next button (hidden on final card) */}
                     {!currentStep?.isFinal && (
@@ -276,6 +291,7 @@ const styles = StyleSheet.create({
         borderRadius: 24,
         padding: 24,
         alignItems: 'center',
+        overflow: 'hidden',
         shadowColor: '#000',
         shadowOffset: { width: 0, height: 10 },
         shadowOpacity: 0.15,
