@@ -515,6 +515,77 @@ function invalidateMealsCache() {
 // Exposed for the realtime subscription to drop the cache when another device writes.
 export { invalidateMealsCache };
 
+/**
+ * Push meals for a given date to Supabase. Called from every meal save path.
+ * If signed in, upserts directly. On error, queues for later retry. If signed
+ * out, queues so the meals sync up after the next sign-in.
+ *
+ * This function intentionally swallows errors. Meal saves succeed locally
+ * regardless; sync is best-effort. Surface failures via Sentry if needed.
+ */
+/**
+ * Pull derived/settings state from Supabase into local AsyncStorage. Called from
+ * the auth listener on SIGNED_IN so cross-device data follows the user. Each
+ * entity overwrites local with whatever the cloud has — last-write-wins.
+ * Best-effort: individual failures do not abort the pull.
+ */
+async function pullDerivedFromSupabase(accountInfo: AccountInfo | null): Promise<void> {
+  if (!accountInfo?.supabaseUserId) return;
+  try {
+    const [insights, patterns, plan, unlocks, summaries, bankConfig, cycles] = await Promise.all([
+      supabaseDataService.fetchInsights(accountInfo).catch(() => [] as Insight[]),
+      supabaseDataService.fetchDetectedPatterns(accountInfo).catch(() => [] as DetectedPattern[]),
+      supabaseDataService.fetchWeeklyActionPlan(accountInfo).catch(() => null),
+      supabaseDataService.fetchInsightUnlocks(accountInfo).catch(() => ({} as Record<string, { unlockedAt: string; seenAt?: string }>)),
+      supabaseDataService.fetchDailySummaries(accountInfo).catch(() => ({} as Record<string, DailySummary>)),
+      supabaseDataService.fetchCalorieBankConfig(accountInfo).catch(() => null),
+      supabaseDataService.fetchCompletedCycles(accountInfo).catch(() => [] as CalorieBankCompletedCycle[]),
+    ]);
+
+    const writes: Array<[string, string]> = [];
+    if (insights.length > 0) writes.push([STORAGE_KEYS.INSIGHTS, JSON.stringify(insights)]);
+    if (patterns.length > 0) writes.push([STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(patterns)]);
+    if (plan) writes.push([STORAGE_KEYS.WEEKLY_ACTION_PLAN, JSON.stringify(plan)]);
+    if (Object.keys(unlocks).length > 0) writes.push([STORAGE_KEYS.INSIGHT_UNLOCKS, JSON.stringify(unlocks)]);
+    if (Object.keys(summaries).length > 0) writes.push([STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries)]);
+    if (bankConfig) writes.push([STORAGE_KEYS.CALORIE_BANK_CONFIG, JSON.stringify(bankConfig)]);
+    if (cycles.length > 0) writes.push([STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, JSON.stringify(cycles)]);
+
+    if (writes.length > 0) {
+      await AsyncStorage.multiSet(writes);
+    }
+  } catch (e) {
+    if (__DEV__) console.warn('[pullDerivedFromSupabase] failed:', e);
+  }
+}
+
+async function syncMealsToSupabase(date: string, meals: MealEntry[]): Promise<void> {
+  if (!meals || meals.length === 0) return;
+  try {
+    const accountInfo = await getCachedAccountInfo();
+    const payloads = meals.map((meal) => ({ meal, dateKey: date }));
+
+    if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
+      // Not signed in. Queue for after sign-in.
+      for (const payload of payloads) {
+        await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+      }
+      return;
+    }
+
+    try {
+      await supabaseDataService.upsertMeals(accountInfo, payloads);
+    } catch (error) {
+      console.error('[syncMealsToSupabase] direct push failed, queueing:', error);
+      for (const payload of payloads) {
+        await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+      }
+    }
+  } catch (e) {
+    console.error('[syncMealsToSupabase] unexpected error', e);
+  }
+}
+
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
@@ -881,6 +952,22 @@ const mergeWeightEntries = (remote: WeightEntry[], local: WeightEntry[]): Weight
 };
 
 export const dataStorage = {
+  // Cross-device pull for derived/settings state. Called from the auth listener
+  // on SIGNED_IN so insights / patterns / plans / unlocks / summaries / calorie
+  // bank state follow the user across devices.
+  async pullDerivedFromSupabase(): Promise<void> {
+    const accountInfo = await getCachedAccountInfo();
+    await pullDerivedFromSupabase(accountInfo);
+  },
+
+  // Flush any queued sync ops to Supabase. Called from AppState foreground hook
+  // and visibilitychange (web) so the queue does not sit forever if writes
+  // happen while offline / signed out.
+  async flushSyncQueue(): Promise<void> {
+    const accountInfo = await getCachedAccountInfo();
+    await processSyncQueue(accountInfo);
+  },
+
   // Save goals with all profile data
   async saveGoals(goals: ExtendedGoalData): Promise<void> {
     try {
@@ -968,6 +1055,11 @@ export const dataStorage = {
 
         // Update summary automatically
         await this.updateSummaryForDate(date, meals);
+
+        // Push every meal to Supabase. Without this, the meal lives only in
+        // local AsyncStorage and is lost the moment iOS Safari evicts
+        // localStorage or the user re-installs the PWA.
+        await syncMealsToSupabase(date, meals);
       } catch (error) {
         console.error(`Error saving daily log for ${date}:`, error);
       }
@@ -1242,10 +1334,26 @@ export const dataStorage = {
       const previous: WeightEntry[] = prevSerialized ? JSON.parse(prevSerialized) : [];
       await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(normalized));
       const accountInfo = await getCachedAccountInfo();
-      await processSyncQueue(accountInfo);
-      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
+      try { await processSyncQueue(accountInfo); } catch { /* don't let queue failure block save */ }
 
       const { upserts, deletions } = diffWeightEntries(previous, normalized);
+
+      // If signed out, queue everything for after sign-in. Without this the
+      // upserts get dropped silently, which is exactly why weight_entries was
+      // empty in Supabase for every user.
+      if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
+        if (upserts.length > 0) {
+          await Promise.all(
+            upserts.map((payload) => enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload }))
+          );
+        }
+        if (deletions.length > 0) {
+          await Promise.all(
+            deletions.map((id) => enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } }))
+          );
+        }
+        return;
+      }
 
       if (upserts.length > 0) {
         try {
@@ -2362,6 +2470,13 @@ export const dataStorage = {
   async saveDailySummaries(summaries: Record<string, DailySummary>): Promise<void> {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries));
+
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try { await supabaseDataService.upsertDailySummaries(accountInfo, summaries); } catch (err) {
+          if (__DEV__) console.warn('daily summaries sync failed', err);
+        }
+      }
     } catch (error) {
       console.error('Error saving summaries:', error);
     }
@@ -2469,249 +2584,6 @@ export const dataStorage = {
       console.error('Migration failed', error);
     }
   },
-
-  async pushCachedDataToSupabase(): Promise<void> {
-    try {
-      const accountInfo = await getCachedAccountInfo();
-      if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
-      await processSyncQueue(accountInfo);
-
-      // Sync meals
-      const mealsData = await AsyncStorage.getItem(STORAGE_KEYS.MEALS);
-      const meals = mealsData ? JSON.parse(mealsData) : {};
-      ensureMealMetadata(meals);
-      const mealPayloads = Array.from(flattenMeals(meals).values());
-      if (mealPayloads.length) {
-        try {
-          await supabaseDataService.upsertMeals(accountInfo, mealPayloads);
-        } catch (error) {
-          console.error('Bulk meal sync failed, queueing operations:', error);
-          await Promise.all(
-            mealPayloads.map((payload) =>
-              enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload })
-            )
-          );
-        }
-      }
-
-      // Sync weight entries
-      const weightData = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
-      const parsedWeights: WeightEntry[] = weightData ? JSON.parse(weightData) : [];
-      const normalizedWeights = parsedWeights.map((entry) => ({
-        id: entry.id || entry.date,
-        date: entry.date,
-        weight: entry.weight,
-        updatedAt: entry.updatedAt || new Date().toISOString(),
-      }));
-
-      if (normalizedWeights.length) {
-        try {
-          await supabaseDataService.upsertWeightEntries(
-            accountInfo,
-            normalizedWeights.map((entry) => ({
-              id: entry.id!,
-              date: entry.date,
-              weight: entry.weight,
-              updatedAt: entry.updatedAt!,
-            }))
-          );
-        } catch (error) {
-          console.error('Bulk weight sync failed, queueing operations:', error);
-          await Promise.all(
-            normalizedWeights.map((entry) =>
-              enqueueSyncOperation({
-                entity: 'weight',
-                action: 'upsert',
-                payload: {
-                  id: entry.id!,
-                  date: entry.date,
-                  weight: entry.weight,
-                  updatedAt: entry.updatedAt!,
-                },
-              })
-            )
-          );
-        }
-      }
-
-      // Sync exercises
-      const exercisesData = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
-      const exercises = exercisesData ? JSON.parse(exercisesData) : {};
-      const allExercises = Object.values(exercises).flat() as ExerciseEntry[];
-      if (allExercises.length > 0) {
-        try {
-          await supabaseDataService.upsertExercises(accountInfo, allExercises);
-        } catch (error) {
-          console.error('Bulk exercise sync failed, queueing operations:', error);
-          await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
-        }
-      }
-
-      // Sync goals
-      const goalsData = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
-      if (goalsData) {
-        try {
-          const goals = JSON.parse(goalsData) as ExtendedGoalData;
-          await supabaseDataService.saveNutritionGoals(accountInfo, goals);
-        } catch (error) {
-          console.error('Bulk goals sync failed, queueing operation:', error);
-          const goals = JSON.parse(goalsData) as ExtendedGoalData;
-          await enqueueSyncOperation({ entity: 'goals', action: 'upsert', payload: goals });
-        }
-      }
-
-      // Sync push tokens
-      const pushTokensData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_TOKENS);
-      if (pushTokensData) {
-        try {
-          const tokens = JSON.parse(pushTokensData) as string[];
-          await Promise.all(tokens.map((token) => supabaseDataService.upsertPushToken(accountInfo, token)));
-        } catch (error) {
-          console.error('Bulk push token sync failed, queueing operations:', error);
-          const tokens = JSON.parse(pushTokensData) as string[];
-          await Promise.all(
-            tokens.map((token) =>
-              enqueueSyncOperation({ entity: 'push_token', action: 'upsert', payload: { token } })
-            )
-          );
-        }
-      }
-
-      // Sync push history
-      const pushHistoryData = await AsyncStorage.getItem(STORAGE_KEYS.PUSH_HISTORY);
-      if (pushHistoryData) {
-        try {
-          const history = JSON.parse(pushHistoryData) as PushBroadcastRecord[];
-          await Promise.all(history.map((record) => supabaseDataService.savePushHistory(accountInfo, record)));
-        } catch (error) {
-          console.error('Bulk push history sync failed, queueing operations:', error);
-          const history = JSON.parse(pushHistoryData) as PushBroadcastRecord[];
-          await Promise.all(
-            history.map((record) =>
-              enqueueSyncOperation({ entity: 'push_history', action: 'upsert', payload: record })
-            )
-          );
-        }
-      }
-
-      // Sync saved prompts
-      const savedPromptsData = await AsyncStorage.getItem(STORAGE_KEYS.SAVED_PROMPTS);
-      if (savedPromptsData) {
-        try {
-          const prompts = JSON.parse(savedPromptsData) as SavedPrompt[];
-          await Promise.all(prompts.map((prompt) => supabaseDataService.upsertSavedPrompt(accountInfo, prompt)));
-        } catch (error) {
-          console.error('Bulk saved prompts sync failed, queueing operations:', error);
-          const prompts = JSON.parse(savedPromptsData) as SavedPrompt[];
-          await Promise.all(
-            prompts.map((prompt) =>
-              enqueueSyncOperation({ entity: 'saved_prompt', action: 'upsert', payload: prompt })
-            )
-          );
-        }
-      }
-
-      // Sync preferences
-      const preferencesData = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
-      if (preferencesData) {
-        try {
-          const prefs = JSON.parse(preferencesData) as Preferences;
-          await supabaseDataService.savePreferences(accountInfo, prefs);
-        } catch (error) {
-          console.error('Bulk preferences sync failed, queueing operation:', error);
-          const prefs = JSON.parse(preferencesData) as Preferences;
-          await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
-        }
-      }
-
-      // Sync user settings (entry count, user plan, device info)
-      const entryCountData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_COUNT);
-      const userPlanData = await AsyncStorage.getItem(STORAGE_KEYS.USER_PLAN);
-      const deviceInfoData = await AsyncStorage.getItem(STORAGE_KEYS.DEVICE_INFO);
-      const settings: any = {};
-      if (entryCountData) settings.entryCount = parseInt(entryCountData, 10) || 0;
-      if (userPlanData) settings.userPlan = userPlanData === 'premium' ? 'premium' : 'free';
-      if (deviceInfoData) settings.deviceInfo = JSON.parse(deviceInfoData);
-      if (Object.keys(settings).length > 0) {
-        try {
-          await supabaseDataService.saveUserSettings(accountInfo, settings);
-        } catch (error) {
-          console.error('Bulk user settings sync failed, queueing operation:', error);
-          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: settings });
-        }
-      }
-
-      // Sync entry tasks
-      const entryTasksData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
-      if (entryTasksData) {
-        try {
-          const tasks = JSON.parse(entryTasksData) as EntryTasksStatus;
-          await supabaseDataService.saveEntryTasks(accountInfo, tasks);
-        } catch (error) {
-          console.error('Bulk entry tasks sync failed, queueing operation:', error);
-          const tasks = JSON.parse(entryTasksData) as EntryTasksStatus;
-          await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: tasks });
-        }
-      }
-
-      // Sync referral codes
-      const referralCodesData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_CODES);
-      if (referralCodesData) {
-        try {
-          const codes = JSON.parse(referralCodesData) as ReferralCode[];
-          await Promise.all(codes.map((code) => supabaseDataService.saveReferralCode(accountInfo, code)));
-        } catch (error) {
-          console.error('Bulk referral codes sync failed, queueing operations:', error);
-          const codes = JSON.parse(referralCodesData) as ReferralCode[];
-          await Promise.all(
-            codes.map((code) =>
-              enqueueSyncOperation({ entity: 'referral_code', action: 'upsert', payload: code })
-            )
-          );
-        }
-      }
-
-      // Sync referral redemptions
-      const referralRedemptionsData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REDEMPTIONS);
-      if (referralRedemptionsData) {
-        try {
-          const redemptions = JSON.parse(referralRedemptionsData) as ReferralRedemption[];
-          await Promise.all(
-            redemptions.map((redemption) => supabaseDataService.saveReferralRedemption(accountInfo, redemption))
-          );
-        } catch (error) {
-          console.error('Bulk referral redemptions sync failed, queueing operations:', error);
-          const redemptions = JSON.parse(referralRedemptionsData) as ReferralRedemption[];
-          await Promise.all(
-            redemptions.map((redemption) =>
-              enqueueSyncOperation({ entity: 'referral_redemption', action: 'upsert', payload: redemption })
-            )
-          );
-        }
-      }
-
-      // Sync referral rewards
-      const referralRewardsData = await AsyncStorage.getItem(STORAGE_KEYS.REFERRAL_REWARDS);
-      if (referralRewardsData) {
-        try {
-          const rewards = JSON.parse(referralRewardsData) as ReferralReward[];
-          await Promise.all(rewards.map((reward) => supabaseDataService.saveReferralReward(accountInfo, reward)));
-        } catch (error) {
-          console.error('Bulk referral rewards sync failed, queueing operations:', error);
-          const rewards = JSON.parse(referralRewardsData) as ReferralReward[];
-          await Promise.all(
-            rewards.map((reward) =>
-              enqueueSyncOperation({ entity: 'referral_reward', action: 'upsert', payload: reward })
-            )
-          );
-        }
-      }
-    } catch (error) {
-      console.error('Error pushing cached data to Supabase:', error);
-    }
-  },
-
-
 
   saveAdjustmentHistory: async (history: AdjustmentRecord[]): Promise<void> => {
     try {
@@ -2919,6 +2791,11 @@ export const dataStorage = {
       await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(updated));
       invalidateMealsCache();
       await dataStorage.updateSummaryForDate(date, updated);
+
+      // Push the new meal to Supabase. Critical: without this, meals only
+      // exist in localStorage and are lost on iOS Safari eviction or
+      // PWA reinstall.
+      await syncMealsToSupabase(date, [meal]);
     });
   },
 
@@ -3190,6 +3067,13 @@ export const dataStorage = {
 
       const combined = Array.from(newMap.values()).sort((a, b) => b.date.localeCompare(a.date)).slice(0, 50);
       await AsyncStorage.setItem(STORAGE_KEYS.INSIGHTS, JSON.stringify(combined));
+
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        try { await supabaseDataService.upsertInsights(accountInfo, insights); } catch (err) {
+          if (__DEV__) console.warn('insights sync failed', err);
+        }
+      }
     } catch (e) {
       console.error('Error saving insights', e);
     }
@@ -3354,6 +3238,13 @@ export const dataStorage = {
     const existing = await this.getDetectedPatterns();
     const updated = [...existing.filter(p => p.id !== pattern.id), pattern];
     await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+
+    const accountInfo = await getCachedAccountInfo();
+    if (accountInfo?.supabaseUserId) {
+      try { await supabaseDataService.upsertDetectedPatterns(accountInfo, updated); } catch (err) {
+        if (__DEV__) console.warn('detected patterns sync failed', err);
+      }
+    }
   },
 
   async getDetectedPatterns(): Promise<DetectedPattern[]> {
@@ -3370,6 +3261,13 @@ export const dataStorage = {
   // Premium: Weekly Action Plan
   async saveWeeklyActionPlan(plan: WeeklyActionPlan): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.WEEKLY_ACTION_PLAN, JSON.stringify(plan));
+
+    const accountInfo = await getCachedAccountInfo();
+    if (accountInfo?.supabaseUserId) {
+      try { await supabaseDataService.upsertWeeklyActionPlan(accountInfo, plan); } catch (err) {
+        if (__DEV__) console.warn('weekly action plan sync failed', err);
+      }
+    }
   },
 
   async getCurrentWeekPlan(): Promise<WeeklyActionPlan | null> {
@@ -3461,6 +3359,13 @@ export const dataStorage = {
 
   async saveInsightUnlocks(unlocks: Record<string, { unlockedAt: string; seenAt?: string }>): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.INSIGHT_UNLOCKS, JSON.stringify(unlocks));
+
+    const accountInfo = await getCachedAccountInfo();
+    if (accountInfo?.supabaseUserId) {
+      try { await supabaseDataService.upsertInsightUnlocks(accountInfo, unlocks); } catch (err) {
+        if (__DEV__) console.warn('insight unlocks sync failed', err);
+      }
+    }
   },
 
   async markInsightSeen(id: string): Promise<void> {
@@ -3475,6 +3380,13 @@ export const dataStorage = {
 
   async saveCalorieBankConfig(config: CalorieBankConfig): Promise<void> {
     await AsyncStorage.setItem(STORAGE_KEYS.CALORIE_BANK_CONFIG, JSON.stringify(config));
+
+    const accountInfo = await getCachedAccountInfo();
+    if (accountInfo?.supabaseUserId) {
+      try { await supabaseDataService.upsertCalorieBankConfig(accountInfo, config); } catch (err) {
+        if (__DEV__) console.warn('calorie bank config sync failed', err);
+      }
+    }
   },
 
   async loadCalorieBankConfig(): Promise<CalorieBankConfig | null> {
@@ -3489,9 +3401,15 @@ export const dataStorage = {
   async saveCompletedCycle(cycle: CalorieBankCompletedCycle): Promise<void> {
     const existing = await this.loadCompletedCycles();
     existing.push(cycle);
-    // Keep last 52 cycles (1 year of weekly data)
     const trimmed = existing.slice(-52);
     await AsyncStorage.setItem(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, JSON.stringify(trimmed));
+
+    const accountInfo = await getCachedAccountInfo();
+    if (accountInfo?.supabaseUserId) {
+      try { await supabaseDataService.upsertCompletedCycles(accountInfo, [cycle]); } catch (err) {
+        if (__DEV__) console.warn('completed cycle sync failed', err);
+      }
+    }
   },
 
   async loadCompletedCycles(): Promise<CalorieBankCompletedCycle[]> {

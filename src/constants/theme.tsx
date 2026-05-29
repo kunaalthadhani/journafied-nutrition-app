@@ -120,16 +120,16 @@ type ThemeContextValue = {
 
 const ThemeContext = React.createContext<ThemeContextValue>({ theme: lightTheme, currentMode: 'light', setMode: () => { } });
 
-export const ThemeProvider: React.FC<{ children: React.ReactNode; mode?: ThemeMode }> = ({ children, mode }) => {
-	const system = useColorScheme();
-	const [currentMode, setCurrentMode] = React.useState<ThemeMode>(mode || 'system');
+export const ThemeProvider: React.FC<{ children: React.ReactNode; mode?: ThemeMode }> = ({ children, mode: _mode }) => {
+	// Light mode only for launch. Dark mode is off until we fix the visual bugs.
+	const [currentMode, setCurrentMode] = React.useState<ThemeMode>('light');
 
-	const resolvedMode = currentMode === 'system' ? (system === 'dark' ? 'dark' : 'light') : currentMode;
-	const valueTheme = resolvedMode === 'dark' ? darkTheme : lightTheme;
+	// Always resolve to light regardless of what setMode is asked to set.
+	const valueTheme = lightTheme;
 
-	const setMode = (m: ThemeMode) => setCurrentMode(m);
+	const setMode = (_m: ThemeMode) => setCurrentMode('light');
 
-	const contextValue = React.useMemo(() => ({ theme: valueTheme, currentMode, setMode }), [valueTheme, currentMode]);
+	const contextValue = React.useMemo(() => ({ theme: valueTheme, currentMode, setMode }), [currentMode]);
 
 	return (
 		<ThemeContext.Provider value={contextValue}>{children}</ThemeContext.Provider>

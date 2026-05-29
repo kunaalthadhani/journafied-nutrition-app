@@ -27,7 +27,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
     useEffect(() => {
         const checkPref = async () => {
             const prefs = await dataStorage.loadPreferences();
-            if (prefs && prefs.smartSuggestEnabled !== false) {
+            if (prefs && prefs.smartSuggestEnabled === true) {
                 setVisible(true);
             } else {
                 setVisible(false);

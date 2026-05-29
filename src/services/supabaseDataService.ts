@@ -17,7 +17,13 @@ import type {
   StreakFreezeData,
   GroceryItem,
   AnalyticsEvent,
-  DailyUserMetric
+  DailyUserMetric,
+  Insight,
+  DetectedPattern,
+  WeeklyActionPlan,
+  CalorieBankConfig,
+  CalorieBankCompletedCycle,
+  DailySummary,
 } from './dataStorage';
 
 import { ExerciseEntry } from '../components/ExerciseLogSection';
@@ -1316,6 +1322,245 @@ export const supabaseDataService = {
       return [];
     }
   },
+  // Insights
+  async upsertInsights(accountInfo: AccountInfo | null, insights: Insight[]): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || insights.length === 0) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const rows = insights.map((i) => ({
+      id: i.id,
+      user_id: user.id,
+      payload: i as unknown as Record<string, unknown>,
+      updated_at: new Date().toISOString(),
+    }));
+    const { error } = await supabase.from('insights').upsert(rows, { onConflict: 'id' });
+    if (error) throw error;
+  },
+
+  async fetchInsights(accountInfo: AccountInfo | null): Promise<Insight[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from('insights')
+      .select('payload')
+      .eq('user_id', user.id)
+      .order('updated_at', { ascending: false })
+      .limit(50);
+    if (error) { console.error('fetchInsights error:', error); return []; }
+    return (data || []).map((row) => row.payload as Insight);
+  },
+
+  // Detected Patterns (single jsonb per user — array of patterns)
+  async upsertDetectedPatterns(accountInfo: AccountInfo | null, patterns: DetectedPattern[]): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const { error } = await supabase.from('detected_patterns').upsert(
+      {
+        user_id: user.id,
+        payload: { patterns } as unknown as Record<string, unknown>,
+        detected_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+    if (error) throw error;
+  },
+
+  async fetchDetectedPatterns(accountInfo: AccountInfo | null): Promise<DetectedPattern[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from('detected_patterns')
+      .select('payload')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') { console.error('fetchDetectedPatterns error:', error); return []; }
+    const payload = (data?.payload as { patterns?: DetectedPattern[] } | null) ?? null;
+    return payload?.patterns ?? [];
+  },
+
+  // Weekly Action Plan (single per user)
+  async upsertWeeklyActionPlan(accountInfo: AccountInfo | null, plan: WeeklyActionPlan): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const { error } = await supabase.from('weekly_action_plans').upsert(
+      {
+        user_id: user.id,
+        payload: plan as unknown as Record<string, unknown>,
+        generated_at: plan.weekStartDate || new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      },
+      { onConflict: 'user_id' },
+    );
+    if (error) throw error;
+  },
+
+  async fetchWeeklyActionPlan(accountInfo: AccountInfo | null): Promise<WeeklyActionPlan | null> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('weekly_action_plans')
+      .select('payload')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') { console.error('fetchWeeklyActionPlan error:', error); return null; }
+    return (data?.payload as WeeklyActionPlan | null) ?? null;
+  },
+
+  // Insight Unlocks
+  async upsertInsightUnlocks(
+    accountInfo: AccountInfo | null,
+    unlocks: Record<string, { unlockedAt: string; seenAt?: string }>,
+  ): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const rows = Object.entries(unlocks).map(([insightId, value]) => ({
+      user_id: user.id,
+      insight_id: insightId,
+      unlocked_at: value.unlockedAt,
+      seen_at: value.seenAt || null,
+      updated_at: new Date().toISOString(),
+    }));
+    if (rows.length === 0) return;
+    const { error } = await supabase
+      .from('insight_unlocks')
+      .upsert(rows, { onConflict: 'user_id,insight_id' });
+    if (error) throw error;
+  },
+
+  async fetchInsightUnlocks(
+    accountInfo: AccountInfo | null,
+  ): Promise<Record<string, { unlockedAt: string; seenAt?: string }>> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return {};
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return {};
+    const { data, error } = await supabase
+      .from('insight_unlocks')
+      .select('insight_id, unlocked_at, seen_at')
+      .eq('user_id', user.id);
+    if (error) { console.error('fetchInsightUnlocks error:', error); return {}; }
+    const out: Record<string, { unlockedAt: string; seenAt?: string }> = {};
+    (data || []).forEach((row) => {
+      out[row.insight_id] = {
+        unlockedAt: row.unlocked_at,
+        seenAt: row.seen_at || undefined,
+      };
+    });
+    return out;
+  },
+
+  // Daily Summaries
+  async upsertDailySummaries(
+    accountInfo: AccountInfo | null,
+    summaries: Record<string, DailySummary>,
+  ): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const rows = Object.entries(summaries).map(([dateKey, summary]) => ({
+      user_id: user.id,
+      summary_date: dateKey,
+      payload: summary as unknown as Record<string, unknown>,
+      updated_at: summary.updatedAt || new Date().toISOString(),
+    }));
+    if (rows.length === 0) return;
+    const { error } = await supabase
+      .from('daily_summaries')
+      .upsert(rows, { onConflict: 'user_id,summary_date' });
+    if (error) throw error;
+  },
+
+  async fetchDailySummaries(
+    accountInfo: AccountInfo | null,
+  ): Promise<Record<string, DailySummary>> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return {};
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return {};
+    const { data, error } = await supabase
+      .from('daily_summaries')
+      .select('summary_date, payload')
+      .eq('user_id', user.id);
+    if (error) { console.error('fetchDailySummaries error:', error); return {}; }
+    const out: Record<string, DailySummary> = {};
+    (data || []).forEach((row) => {
+      out[row.summary_date] = row.payload as DailySummary;
+    });
+    return out;
+  },
+
+  // Calorie Bank Config (stored as jsonb column on user_settings)
+  async upsertCalorieBankConfig(
+    accountInfo: AccountInfo | null,
+    config: CalorieBankConfig,
+  ): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const { error } = await supabase
+      .from('user_settings')
+      .upsert(
+        { user_id: user.id, calorie_bank_config: config as unknown as Record<string, unknown> },
+        { onConflict: 'user_id' },
+      );
+    if (error) throw error;
+  },
+
+  async fetchCalorieBankConfig(
+    accountInfo: AccountInfo | null,
+  ): Promise<CalorieBankConfig | null> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return null;
+    const { data, error } = await supabase
+      .from('user_settings')
+      .select('calorie_bank_config')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error && error.code !== 'PGRST116') { console.error('fetchCalorieBankConfig error:', error); return null; }
+    return (data?.calorie_bank_config as CalorieBankConfig | null) ?? null;
+  },
+
+  // Calorie Bank Completed Cycles
+  async upsertCompletedCycles(
+    accountInfo: AccountInfo | null,
+    cycles: CalorieBankCompletedCycle[],
+  ): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || cycles.length === 0) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return;
+    const rows = cycles.map((cycle) => ({
+      id: (cycle as any).id || `${cycle.startDate}_${cycle.endDate}`,
+      user_id: user.id,
+      payload: cycle as unknown as Record<string, unknown>,
+      completed_at: cycle.endDate || new Date().toISOString(),
+    }));
+    const { error } = await supabase
+      .from('calorie_bank_completed_cycles')
+      .upsert(rows, { onConflict: 'id' });
+    if (error) throw error;
+  },
+
+  async fetchCompletedCycles(
+    accountInfo: AccountInfo | null,
+  ): Promise<CalorieBankCompletedCycle[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) return [];
+    const { data, error } = await supabase
+      .from('calorie_bank_completed_cycles')
+      .select('payload')
+      .eq('user_id', user.id)
+      .order('completed_at', { ascending: true });
+    if (error) { console.error('fetchCompletedCycles error:', error); return []; }
+    return (data || []).map((row) => row.payload as CalorieBankCompletedCycle);
+  },
+
   async deleteAllUserData(accountInfo: AccountInfo | null): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
     const user = await getOrCreateUser(accountInfo);

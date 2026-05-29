@@ -26,6 +26,7 @@ interface SidebarMenuProps {
   onAbout?: () => void;
   onAdminPush?: () => void;
   onReferral?: () => void;
+  onFeedback?: () => void;
 
   onHowItWorks?: () => void;
 }
@@ -107,6 +108,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   onAbout,
   onAdminPush,
   onReferral,
+  onFeedback,
 
   onHowItWorks,
 }) => {
@@ -180,6 +182,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
   const handleSettings = () => fireOnce(onSettings);
   const handleAbout = () => fireOnce(onAbout);
   const handleReferral = () => fireOnce(onReferral);
+  const handleFeedback = () => fireOnce(onFeedback);
 
 
 
@@ -303,6 +306,9 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
             {/* Bottom Menu Items */}
             <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
+              <MenuItem icon="message-circle" label="Send Feedback" onPress={handleFeedback} isBottom />
+
+              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
               <MenuItem icon="book-open" label="How it Works" onPress={() => { onHowItWorks?.(); onClose(); }} isBottom />
 
               <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />

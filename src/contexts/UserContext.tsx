@@ -105,15 +105,32 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         loadAllData();
     }, [loadAllData]);
 
-    // Auth state listener: when the user signs in/out (anywhere in the app),
-    // refresh accountInfo so the realtime subscription below tracks the session.
-    // Without this, signing in after the initial load leaves UserContext.accountInfo
-    // stale and the realtime subscription never activates.
+    // Auth state listener: when the user signs in or out (anywhere in the app),
+    // refresh accountInfo AND re-pull meals + weights + goals from Supabase.
+    // Without the full reload, signing in after the initial load leaves the UI
+    // showing an empty state because UserContext.meals is still the unauthenticated
+    // snapshot. Symptom: Nutrition Analysis + Weight Tracker say "log your first meal"
+    // even though Supabase has the user's data.
     useEffect(() => {
-        const { data: sub } = authService.onAuthStateChange(async () => {
+        const { data: sub } = authService.onAuthStateChange(async (event) => {
             try {
                 const fresh = await dataStorage.getAccountInfo();
                 setAccountInfo(fresh || null);
+
+                // SIGNED_IN: pull everything from the cloud. Any locally-cached
+                // empty state gets replaced with the user's real data.
+                // SIGNED_OUT: also reload — that path returns just local data
+                // (no cloud fetch) which is fine, lets the UI reflect the cleared
+                // account state immediately.
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                    // Pull derived state (insights, patterns, plan, unlocks,
+                    // summaries, calorie bank) before loadAllData so the next
+                    // local reads include cross-device cloud state.
+                    try { await dataStorage.pullDerivedFromSupabase(); } catch { /* best effort */ }
+                    await loadAllData();
+                } else if (event === 'SIGNED_OUT') {
+                    await loadAllData();
+                }
             } catch (e) {
                 if (__DEV__) console.error('UserContext: auth refresh failed', e);
             }
@@ -121,7 +138,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return () => {
             try { sub?.subscription?.unsubscribe?.(); } catch { /* noop */ }
         };
-    }, []);
+    }, [loadAllData]);
 
     // Realtime: when another device upserts/deletes a meal for this user, drop the
     // cache and pull fresh. Self-fired writes also fire here — that's fine, the local

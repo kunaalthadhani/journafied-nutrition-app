@@ -26,6 +26,7 @@ import { CalendarModal } from '../components/CalendarModal';
 import { StatCardsSection } from '../components/StatCardsSection';
 import { BottomInputBar } from '../components/BottomInputBar';
 import { SidebarMenu } from '../components/SidebarMenu';
+import { FeedbackModal } from '../components/FeedbackModal';
 import { SetGoalsScreen } from './SetGoalsScreen';
 import { WeightTrackerScreen } from './WeightTrackerScreen';
 import { NutritionAnalysisScreen } from './NutritionAnalysisScreen';
@@ -101,6 +102,7 @@ export const HomeScreen: React.FC = () => {
   const [showAbout, setShowAbout] = useState(false);
   const [showAdminPush, setShowAdminPush] = useState(false);
   const [showReferral, setShowReferral] = useState(false);
+  const [showFeedback, setShowFeedback] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
   const [showCalendar, setShowCalendar] = useState(false);
@@ -178,7 +180,8 @@ export const HomeScreen: React.FC = () => {
   const [showWalkthrough, setShowWalkthrough] = useState(false);
   const [walkthroughHideOffer, setWalkthroughHideOffer] = useState(false);
   const [accountInitialMode, setAccountInitialMode] = useState<'signin' | 'signup'>('signin');
-  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
+  // Smart Suggest is OFF by default. User must explicitly turn it on.
+  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(false);
 
   // Premium: Pattern Detection
   const [detectedPatterns, setDetectedPatterns] = useState<DetectedPattern[]>([]);
@@ -420,7 +423,7 @@ export const HomeScreen: React.FC = () => {
 
         setAccountInfo(freshAccount || null);
         setUserPlan(freshPlan);
-        setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+        setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
         setCalorieBankConfig(bankConfig);
 
         const isFreshPremium = !!freshAccount?.email && freshPlan === 'premium';
@@ -972,7 +975,7 @@ export const HomeScreen: React.FC = () => {
 
       // Load Preferences
       const prefs = await dataStorage.loadPreferences();
-      setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+      setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
 
       // Load Pattern Detection (Premium Feature)
       const patterns = await patternDetectionService.getActivePatterns();
@@ -1093,9 +1096,11 @@ export const HomeScreen: React.FC = () => {
   }, []);
 
   // Auth state listener: when the user signs in or out anywhere in the app, refresh
-  // accountInfo and plan so isPremium recomputes immediately. Without this, sign-in
-  // changes from the Account screen leave HomeScreen with stale state until the user
-  // manually opens and closes Account/Settings.
+  // accountInfo and plan so isPremium recomputes immediately, AND re-pull meals,
+  // weights, summaries, and goals from the cloud. Without the data reload, signing
+  // in after the initial load leaves Home / Nutrition Analysis / Weight Tracker
+  // showing the pre-auth empty state ("log your first meal") even though Supabase
+  // has the user's data.
   useEffect(() => {
     const { data: sub } = authService.onAuthStateChange(async (event) => {
       try {
@@ -1104,6 +1109,20 @@ export const HomeScreen: React.FC = () => {
         const freshPlan = await dataStorage.loadUserPlan();
         setUserPlan(freshPlan);
         if (__DEV__) console.log(`[Auth] event=${event} -> reloaded accountInfo (email=${freshAccount?.email ? 'yes' : 'no'}) plan=${freshPlan}`);
+
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+          // Cloud → local merge. loadMeals pulls fresh from Supabase when signed in.
+          // weightEntries are owned by UserContext and reloaded by its own auth listener.
+          const [meals, summaries, goals] = await Promise.all([
+            dataStorage.loadMeals(),
+            dataStorage.loadDailySummaries(),
+            dataStorage.loadGoals(),
+          ]);
+          if (meals) setMealsByDate(meals);
+          if (summaries) setSummariesByDate(summaries);
+          if (goals) setSavedGoals(goals);
+          if (__DEV__) console.log(`[Auth] post-signin reload: meals dates=${Object.keys(meals || {}).length}`);
+        }
       } catch (e) {
         if (__DEV__) console.error('Auth state refresh failed:', e);
       }
@@ -2444,28 +2463,11 @@ export const HomeScreen: React.FC = () => {
 
 
 
-        {/* Date Selector (horizontal scroll/pan within the bar only) */}
+        {/* Date Selector (horizontal scroll/pan within the bar only) — stays pinned */}
         <DateSelector
           selectedDate={selectedDate}
           onDateSelect={handleDateSelect}
           summariesByDate={summariesByDate}
-        />
-
-        {/* Stat Cards */}
-        <StatCardsSection
-          macrosData={macrosData}
-          macros2Data={macros2Data}
-          dailyCalories={bankAdjustedCalories}
-          onScrollEnable={setScrollEnabled}
-          calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
-          calorieBankBalance={calorieBankCycle?.bankBalance || 0}
-          todayCaloriesEaten={currentNutrition.totalCalories || 0}
-          adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
-          dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
-          weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
-          weeklyActual={calorieBankCycle?.weeklyActual || 0}
-          remainingDays={calorieBankCycle?.remainingDays || 0}
-          daysInCycle={calorieBankCycle?.daysInCycle || 7}
         />
 
         {/* Streak Widget Modal is rendered at the bottom with other modals */}
@@ -2476,7 +2478,7 @@ export const HomeScreen: React.FC = () => {
           behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
           keyboardVerticalOffset={0}
         >
-          {/* Scrollable Content for logs */}
+          {/* Scrollable Content: stat cards scroll away with food list */}
           <ScrollView
             style={styles.scrollView}
             contentContainerStyle={styles.scrollContent}
@@ -2485,6 +2487,23 @@ export const HomeScreen: React.FC = () => {
             scrollEnabled={scrollEnabled}
             keyboardShouldPersistTaps="handled"
           >
+            {/* Stat Cards — scroll away as the food log scrolls up so the list gets the full height */}
+            <StatCardsSection
+              macrosData={macrosData}
+              macros2Data={macros2Data}
+              dailyCalories={bankAdjustedCalories}
+              onScrollEnable={setScrollEnabled}
+              calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
+              calorieBankBalance={calorieBankCycle?.bankBalance || 0}
+              todayCaloriesEaten={currentNutrition.totalCalories || 0}
+              adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
+              dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
+              weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
+              weeklyActual={calorieBankCycle?.weeklyActual || 0}
+              remainingDays={calorieBankCycle?.remainingDays || 0}
+              daysInCycle={calorieBankCycle?.daysInCycle || 7}
+            />
+
             {/* Daily AI Coach Card - Premium Only */}
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner
@@ -2739,12 +2758,18 @@ export const HomeScreen: React.FC = () => {
           onAbout={handleAbout}
           onAdminPush={handleAdminPush}
           onReferral={handleOpenReferral}
+          onFeedback={() => {
+            setMenuVisible(false);
+            setShowFeedback(true);
+          }}
           onHowItWorks={() => {
             setMenuVisible(false);
             setWalkthroughHideOffer(false);
             setShowWalkthrough(true);
           }}
         />
+
+        <FeedbackModal visible={showFeedback} onClose={() => setShowFeedback(false)} />
 
         <PhotoOptionsModal
           visible={photoModalVisible}

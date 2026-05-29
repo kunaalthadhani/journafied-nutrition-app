@@ -62,8 +62,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
   const activeSlideUpRef = useRef<SlideUpType | null>(null);
 
-  // Feature flags & settings
-  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(true);
+  // Feature flags & settings. Smart Suggest defaults OFF for new accounts.
+  const [smartSuggestEnabled, setSmartSuggestEnabled] = useState(false);
   const [groceryUnlocked, setGroceryUnlocked] = useState(false);
   const [groceryProgress, setGroceryProgress] = useState({ loggedDays: 0, uniqueFoods: 0 });
   const [dynamicEnabled, setDynamicEnabled] = useState(false);
@@ -165,7 +165,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
       const prefs = await dataStorage.loadPreferences();
       setLoadedPreferences(prefs);
-      setSmartSuggestEnabled(prefs?.smartSuggestEnabled !== false);
+      setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
       setDynamicEnabled(prefs?.dynamicAdjustmentEnabled === true);
       setDynamicThreshold(prefs?.dynamicAdjustmentThreshold || 5);
 

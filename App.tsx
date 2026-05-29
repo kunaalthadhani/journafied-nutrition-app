@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet } from 'react-native';
+import { AppState, AppStateStatus, Platform, StyleSheet } from 'react-native';
+import './src/utils/webAlertShim';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-gesture-handler';
@@ -9,6 +10,7 @@ import { Colors } from './src/constants/colors';
 import { ThemeProvider } from './src/constants/theme';
 import { PreferencesProvider } from './src/contexts/PreferencesContext';
 import { UserProvider } from './src/contexts/UserContext';
+import { dataStorage } from './src/services/dataStorage';
 import * as Sentry from '@sentry/react-native';
 
 Sentry.init({
@@ -30,7 +32,39 @@ Sentry.init({
   // spotlight: __DEV__,
 });
 
+// Flush any queued sync ops whenever the app comes to the foreground (native)
+// or the tab becomes visible (web/PWA). Without this, writes made while offline
+// or signed-out sit in AsyncStorage and never reach Supabase until the next
+// save event triggers processSyncQueue.
+function useSyncQueueOnForeground() {
+  useEffect(() => {
+    const flush = () => {
+      dataStorage.flushSyncQueue().catch(() => { /* best effort */ });
+    };
+
+    if (Platform.OS === 'web') {
+      const onVisibility = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'visible') flush();
+      };
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', onVisibility);
+        flush();
+        return () => document.removeEventListener('visibilitychange', onVisibility);
+      }
+      return;
+    }
+
+    const onChange = (state: AppStateStatus) => {
+      if (state === 'active') flush();
+    };
+    const sub = AppState.addEventListener('change', onChange);
+    flush();
+    return () => sub.remove();
+  }, []);
+}
+
 export default Sentry.wrap(function App() {
+  useSyncQueueOnForeground();
   return (
     <SafeAreaProvider>
       <ThemeProvider>
