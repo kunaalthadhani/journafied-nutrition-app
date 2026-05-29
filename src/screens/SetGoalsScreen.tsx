@@ -15,6 +15,7 @@ import { Feather } from '@expo/vector-icons';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
+import { QuickSignupScreen } from './QuickSignupScreen';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -72,6 +73,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [carbsPercentage, setCarbsPercentage] = useState(initialGoals?.carbsPercentage || 45);
   const [fatPercentage, setFatPercentage] = useState(initialGoals?.fatPercentage || 25);
   const [showCalculator, setShowCalculator] = useState(isFirstTime);
+  // After the first-time calculator finishes, gate the home screen behind a
+  // single-tap signup so the user's plan persists across devices. They can
+  // skip — local-only mode still works.
+  const [showSignup, setShowSignup] = useState(false);
+  const pendingGoalDataRef = React.useRef<GoalData | null>(null);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(initialGoals?.currentWeightKg ?? null);
   const [targetWeightKg, setTargetWeightKg] = useState<number | null>(initialGoals?.targetWeightKg ?? null);
   const [age, setAge] = useState<number | undefined>(initialGoals?.age);
@@ -114,7 +120,9 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
 
-    // First-time flow: calculator includes macros → auto-save and close
+    // First-time flow: calculator includes macros → stage the goal data and
+    // show the signup screen. Goals are saved AFTER signup completes (or skip)
+    // so we don't write a half-baked profile in case the user abandons mid-flow.
     if (isFirstTime && result.proteinPercentage !== undefined) {
       const pPct = result.proteinPercentage;
       const cPct = result.carbsPercentage ?? 45;
@@ -136,8 +144,9 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         name: result.name,
         dob: result.dob,
       };
-      onSave(goalData);
-      onBack();
+      pendingGoalDataRef.current = goalData;
+      setShowCalculator(false);
+      setShowSignup(true);
       return;
     }
 
@@ -188,6 +197,23 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           heightCm, heightFeet, heightInches,
           goal, activityRate, activityLevel,
           proteinPercentage, carbsPercentage, fatPercentage,
+        }}
+      />
+    );
+  }
+
+  if (showSignup) {
+    return (
+      <QuickSignupScreen
+        prefilledName={pendingGoalDataRef.current?.name}
+        onComplete={() => {
+          const staged = pendingGoalDataRef.current;
+          pendingGoalDataRef.current = null;
+          setShowSignup(false);
+          if (staged) {
+            onSave(staged);
+          }
+          onBack();
         }}
       />
     );

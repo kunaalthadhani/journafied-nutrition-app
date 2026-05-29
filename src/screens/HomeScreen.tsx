@@ -2432,6 +2432,34 @@ export const HomeScreen: React.FC = () => {
           onClose={handleDismissAdjustment}
         />
 
+        {/* Skip-mode reminder. Shown when the user finished onboarding without
+            signing up. Tapping it opens the account flow. */}
+        {!isSignedIn && (
+          <TouchableOpacity
+            onPress={() => handleAccount('signup')}
+            activeOpacity={0.85}
+            style={{
+              marginHorizontal: 16,
+              marginTop: 10,
+              backgroundColor: theme.colors.input,
+              borderColor: theme.colors.border,
+              borderWidth: 1,
+              borderRadius: 12,
+              paddingHorizontal: 14,
+              paddingVertical: 10,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 10,
+            }}
+          >
+            <Feather name="bookmark" size={16} color={theme.colors.primary} />
+            <Text style={{ flex: 1, fontSize: 13, color: theme.colors.textPrimary }}>
+              Save your plan across devices
+            </Text>
+            <Feather name="chevron-right" size={16} color={theme.colors.textTertiary} />
+          </TouchableOpacity>
+        )}
+
         {/* Just Frozen Alert / Greeting Replacement */}
         {justFrozeToday ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
