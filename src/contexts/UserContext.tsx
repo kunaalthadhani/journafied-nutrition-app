@@ -121,7 +121,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // this, every consumer that reads dataStorage.loadAccountInfo()
                 // sees null even though the session is valid — Settings shows
                 // "Sign in", premium gates fail, etc.
-                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+                // INITIAL_SESSION fires once when the listener attaches and the
+                // app has a stored session. Treat it the same as SIGNED_IN so a
+                // page refresh on the PWA recovers the signed-in state.
+                if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
                     if (!fresh?.email || !fresh?.supabaseUserId) {
                         try {
                             const { data } = await authService.getSession();
@@ -133,7 +136,15 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                                     supabaseUserId: sessionUser.id,
                                 };
                                 await dataStorage.saveAccountInfo(rebuilt as any);
-                                fresh = rebuilt as any;
+                                // Enrich with remote display_name from app_users
+                                // so the greeting shows "Hi {Name}" not "Hi there"
+                                // after an ITP-induced cache wipe.
+                                try {
+                                    const enriched = await dataStorage.loadAccountInfo();
+                                    fresh = (enriched || rebuilt) as any;
+                                } catch {
+                                    fresh = rebuilt as any;
+                                }
                             }
                         } catch (e) {
                             if (__DEV__) console.warn('AccountInfo rehydrate failed', e);
@@ -147,7 +158,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // by awaiting. The auth listener returning fast also matters
                 // because some screens re-mount on accountInfo change and would
                 // otherwise wait on these.
-                if (event === 'SIGNED_IN') {
+                if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
                     void dataStorage.pushDerivedToSupabase().catch(() => { /* */ });
                     void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
                     await loadAllData();

@@ -1772,13 +1772,22 @@ export const dataStorage = {
     }
   },
 
-  // Load account info
+  // Load account info. AsyncStorage cache is the source of truth — the remote
+  // fetch only ENRICHES it. A remote failure (network down, RLS hiccup, slow
+  // query) must NEVER blank the cache, otherwise the user appears signed out
+  // while their session is still valid.
   async loadAccountInfo(): Promise<AccountInfo | null> {
+    let cached: AccountInfo | null = null;
     try {
       const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
-      const cached = data ? JSON.parse(data) : null;
+      cached = data ? JSON.parse(data) : null;
+    } catch (error) {
+      if (__DEV__) console.warn('loadAccountInfo: cache read failed', error);
+      return null;
+    }
 
-      if (cached?.email) {
+    if (cached?.email) {
+      try {
         const remote = await supabaseDataService.fetchAccountByEmail(cached.email);
         if (remote) {
           const merged: AccountInfo = {
@@ -1788,16 +1797,17 @@ export const dataStorage = {
             phoneNumber: remote.phoneNumber ?? cached.phoneNumber,
             supabaseUserId: remote.id,
           };
-          await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(merged));
+          // Best-effort cache update. Failure here does not affect the return.
+          AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(merged)).catch(() => {});
           return merged;
         }
+      } catch (error) {
+        if (__DEV__) console.warn('loadAccountInfo: remote enrich failed, returning cache', error);
       }
-
       return cached;
-    } catch (error) {
-      console.error('Error loading account info:', error);
-      return null;
     }
+
+    return cached;
   },
 
   // Save preferences

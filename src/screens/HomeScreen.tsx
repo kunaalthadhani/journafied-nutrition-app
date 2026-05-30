@@ -83,9 +83,15 @@ import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
 import { DetectedPattern } from '../services/dataStorage';
+import { useUser } from '../contexts/UserContext';
 
 export const HomeScreen: React.FC = () => {
   const theme = useTheme();
+  // accountInfo is sourced from UserContext (the single source of truth).
+  // Never shadow this with local useState — that recreates the "sticky note"
+  // bug where signing in updated the context but Home kept showing stale state.
+  // After any action that changes account state, call loadAllData() to refresh.
+  const { accountInfo, loadAllData: refreshUserContext } = useUser();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showFirstLogMessage, setShowFirstLogMessage] = useState(false);
   const [scrollEnabled, setScrollEnabled] = useState(true);
@@ -144,7 +150,7 @@ export const HomeScreen: React.FC = () => {
   const [goalsSet, setGoalsSet] = useState(false);
   const [shouldFocusInput, setShouldFocusInput] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
-  const [accountInfo, setAccountInfo] = useState<AccountInfo | null>(null);
+  // accountInfo now comes from UserContext above. Keeping this line removed.
 
   // Per-action navigation guard. Each action key has its own 500ms cooldown, so
   // double-tapping "Settings" is debounced but tapping Settings then quickly tapping
@@ -395,7 +401,7 @@ export const HomeScreen: React.FC = () => {
     // Reload referral data to ensure it's up to date
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
-      setAccountInfo(accountInfo || null);
+      await refreshUserContext();
       if (accountInfo?.email) {
         const code = await dataStorage.getReferralCode(accountInfo.email);
         setReferralCode(code?.code || null);
@@ -420,8 +426,8 @@ export const HomeScreen: React.FC = () => {
           dataStorage.loadPreferences(),
           dataStorage.loadCalorieBankConfig(),
         ]);
+        await refreshUserContext();
 
-        setAccountInfo(freshAccount || null);
         setUserPlan(freshPlan);
         setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
         setCalorieBankConfig(bankConfig);
@@ -474,7 +480,7 @@ export const HomeScreen: React.FC = () => {
     // Reload account data to sync state after potential logout
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
-      setAccountInfo(accountInfo || null);
+      await refreshUserContext();
       if (!accountInfo?.email) {
         // Account was cleared - reset entry count and referral data
         setEntryCount(0);
@@ -516,7 +522,7 @@ export const HomeScreen: React.FC = () => {
     // Reload referral data
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
-      setAccountInfo(accountInfo || null);
+      await refreshUserContext();
       if (accountInfo?.email) {
         const code = await dataStorage.getReferralCode(accountInfo.email);
         setReferralCode(code?.code || null);
@@ -587,8 +593,11 @@ export const HomeScreen: React.FC = () => {
       const existing = await dataStorage.loadAccountInfo();
       const updated = { ...existing, name: goals.name };
       await dataStorage.saveAccountInfo(updated);
-      setAccountInfo(updated);
     }
+    // Tell UserContext to re-pull goals + accountInfo so every screen sees the
+    // newly saved values immediately (otherwise Home greeting + Weight Tracker
+    // would lag until next mount).
+    await refreshUserContext();
     analyticsService.trackOnboardingGoalSet();
 
     // Reset calorie bank if active (plan change = mid-cycle reset)
@@ -949,7 +958,7 @@ export const HomeScreen: React.FC = () => {
 
       // ACCOUNT / REFERRAL info
       const accountInfo = await dataStorage.loadAccountInfo();
-      setAccountInfo(accountInfo || null);
+      await refreshUserContext();
 
       // Identify user in Mixpanel
       if (accountInfo?.supabaseUserId || accountInfo?.email) {
@@ -1105,10 +1114,13 @@ export const HomeScreen: React.FC = () => {
     const { data: sub } = authService.onAuthStateChange(async (event) => {
       try {
         const freshAccount = await dataStorage.loadAccountInfo();
-        setAccountInfo(freshAccount || null);
+        // UserContext is the source of truth for accountInfo. Tell it to
+        // re-load (and pull cloud derived state). Every screen that reads
+        // useUser() re-renders automatically.
+        await refreshUserContext();
         const freshPlan = await dataStorage.loadUserPlan();
         setUserPlan(freshPlan);
-        if (__DEV__) console.log(`[Auth] event=${event} -> reloaded accountInfo (email=${freshAccount?.email ? 'yes' : 'no'}) plan=${freshPlan}`);
+        if (__DEV__) console.log(`[Auth] event=${event} -> refreshed context (email=${freshAccount?.email ? 'yes' : 'no'}) plan=${freshPlan}`);
 
         if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
           // Cloud → local merge. loadMeals pulls fresh from Supabase when signed in.
@@ -2272,7 +2284,7 @@ export const HomeScreen: React.FC = () => {
           onAccountClose={async () => {
             try {
               const info = await dataStorage.loadAccountInfo();
-              setAccountInfo(info || null);
+              await refreshUserContext();
               if (!info?.email) {
                 setEntryCount(0);
                 setReferralCode(null);

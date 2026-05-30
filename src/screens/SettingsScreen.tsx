@@ -22,6 +22,7 @@ import { usePreferences } from '../contexts/PreferencesContext';
 import { featureFlags } from '../config/featureFlags';
 import { dataStorage } from '../services/dataStorage';
 import { authService } from '../services/authService';
+import { useUser } from '../contexts/UserContext';
 import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
@@ -56,6 +57,11 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 }) => {
   const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
+  // Source of truth for whether the user is signed in. Reactive — when
+  // UserContext refreshes (after signup, sign-in, sign-out, ITP rehydrate)
+  // every screen re-renders. No more stale sticky notes.
+  const { accountInfo } = useUser();
+  const isSignedIn = !!accountInfo?.email;
 
   // Slide-up panel state
   type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview' | 'grocery' | 'calorieBank';
@@ -70,7 +76,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const [dynamicThreshold, setDynamicThreshold] = useState<number>(5);
   const [currentWeightKg, setCurrentWeightKg] = useState<number | null>(null);
   const [loadedPreferences, setLoadedPreferences] = useState<any>(null);
-  const [isSignedIn, setIsSignedIn] = useState(false);
+  // isSignedIn is now derived from UserContext above. Local useState removed.
 
   // Calorie Bank
   const [calorieBankConfig, setCalorieBankConfig] = useState<CalorieBankConfig | null>(null);
@@ -124,16 +130,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       setActiveSlideUp(null);
       activeSlideUpRef.current = null;
       if (closingType === 'account') {
-        // Re-check sign-in status after account slide-up closes
-        const freshAccount = await dataStorage.loadAccountInfo();
-        let signedIn = !!freshAccount?.email;
-        if (!signedIn) {
-          try {
-            const { data } = await authService.getSession();
-            signedIn = !!data?.session?.user?.email;
-          } catch { /* ignore */ }
-        }
-        setIsSignedIn(signedIn);
+        // isSignedIn is reactive via UserContext. Just notify parent to
+        // refresh its own state and the auth listener will propagate.
         onAccountClose?.();
       }
     });
@@ -167,19 +165,9 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   const checkFeatureFlags = async () => {
     try {
-      const accountInfo = await dataStorage.loadAccountInfo();
-      let signedIn = !!accountInfo?.email;
-      // AccountInfo cache can be wiped (iOS Safari ITP eviction) even when
-      // the Supabase session is still valid. Treat a live session as
-      // "signed in" so the premium gates are not falsely closed.
-      if (!signedIn) {
-        try {
-          const { data } = await authService.getSession();
-          signedIn = !!data?.session?.user?.email;
-        } catch { /* ignore */ }
-      }
-      setIsSignedIn(signedIn);
-
+      // isSignedIn is now reactive via UserContext (see useUser above).
+      // checkFeatureFlags only loads the local-only settings that this screen
+      // owns (preferences, weight, grocery, calorie bank).
       const prefs = await dataStorage.loadPreferences();
       setLoadedPreferences(prefs);
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
