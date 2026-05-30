@@ -155,6 +155,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   };
 
   const handleCalculatorBack = () => {
+    // The calculator calls onBack() immediately after onCalculated() to dismiss
+    // itself. If we just staged goalData for the QuickSignup step, we must NOT
+    // dismiss SetGoalsScreen — the signup screen is about to render. The ref is
+    // set synchronously inside handleCalculatedCalories so it's safe to check.
+    if (pendingGoalDataRef.current) return;
     if (isFirstTime) { onBack(); return; } // first-time user closes calculator = cancel
     setShowCalculator(false);
   };
