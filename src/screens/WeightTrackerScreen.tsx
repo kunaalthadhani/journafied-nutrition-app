@@ -47,6 +47,7 @@ interface WeightEntry {
   date: Date;
   weight: number;
   updatedAt?: string;
+  seeded?: boolean; // onboarding starting weight, display only, never persisted
 }
 
 type TimeRange = '1W' | '1M' | '3M' | '6M' | '1Y';
@@ -160,7 +161,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       return deduplicateByDate(mapped.sort((a, b) => a.date.getTime() - b.date.getTime()));
     }
     if (typeof initialCurrentWeightKg === 'number' && !isNaN(initialCurrentWeightKg) && initialCurrentWeightKg > 0) {
-      return [{ date: startOfDay(new Date()), weight: initialCurrentWeightKg }];
+      return [{ date: startOfDay(new Date()), weight: initialCurrentWeightKg, seeded: true }];
     }
     return [];
   });
@@ -244,10 +245,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     })();
   }, []);
 
-  // Persist weight entries whenever they change -- but only after initial load
+  // Persist weight entries whenever they change -- but only after initial load.
+  // The onboarding seed is display only. Persisting it turns it into a real
+  // today dated weigh in, which then blocks logging every day on the PWA.
   useEffect(() => {
     if (!dataLoaded.current) return; // don't overwrite storage before load completes
-    dataStorage.saveWeightEntries(weightEntries);
+    const real = weightEntries.filter(e => !e.seeded);
+    if (real.length === 0 && weightEntries.some(e => e.seeded)) return; // seed only, nothing to persist
+    dataStorage.saveWeightEntries(real);
   }, [weightEntries]);
 
   useEffect(() => {
@@ -735,8 +740,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       updated = [...weightEntries];
       updated[existingIndex] = {
         ...updated[existingIndex],
+        id: updated[existingIndex].id || generateId(),
         weight: weightKg,
         updatedAt: new Date().toISOString(),
+        seeded: false,
       };
     } else {
       const newEntry: WeightEntry = {
@@ -2006,7 +2013,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
             onPress={() => {
               const today = new Date();
               const todayKey = format(today, 'yyyy-MM-dd');
-              const alreadyLogged = weightEntries.some(e => format(e.date, 'yyyy-MM-dd') === todayKey);
+              const alreadyLogged = weightEntries.some(e => !e.seeded && format(e.date, 'yyyy-MM-dd') === todayKey);
 
               if (alreadyLogged) {
                 Alert.alert(

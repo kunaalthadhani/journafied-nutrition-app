@@ -148,6 +148,10 @@ export const HomeScreen: React.FC = () => {
   const overlayOpacity = React.useRef(new Animated.Value(0)).current;
   const [showAnalyzingOverlay, setShowAnalyzingOverlay] = useState(false);
   const [goalsSet, setGoalsSet] = useState(false);
+  // Shimmer the calorie card until goals hydrate, so the default never flashes
+  // to the real number on cold open. Capped so it can never hang if goals are
+  // genuinely absent.
+  const [statsShimmerTimedOut, setStatsShimmerTimedOut] = useState(false);
   const [shouldFocusInput, setShouldFocusInput] = useState(false);
   const [savedPrompts, setSavedPrompts] = useState<SavedPrompt[]>([]);
   // accountInfo now comes from UserContext above. Keeping this line removed.
@@ -239,11 +243,21 @@ export const HomeScreen: React.FC = () => {
     ? calorieBankCycle.adjustedTodayTarget
     : dailyCalories;
 
+  // Only show the calorie numbers once goals have actually hydrated. On cold
+  // open (especially the PWA after cache eviction) this avoids the 1500 default
+  // flashing to the real target a second later.
+  const statsLoading = !goalsSet && !statsShimmerTimedOut;
+
   const macrosData: MacroData = {
     carbs: { current: currentNutrition.totalCarbs, target: bankAdjustedMacros?.carbs ?? savedGoals?.carbsGrams ?? 0, unit: 'g' },
     protein: { current: currentNutrition.totalProtein, target: bankAdjustedMacros?.protein ?? savedGoals?.proteinGrams ?? 0, unit: 'g' },
     fat: { current: currentNutrition.totalFat, target: bankAdjustedMacros?.fat ?? savedGoals?.fatGrams ?? 0, unit: 'g' }
   };
+
+  React.useEffect(() => {
+    const t = setTimeout(() => setStatsShimmerTimedOut(true), 2500);
+    return () => clearTimeout(t);
+  }, []);
 
   // Load meals for selected date (Pagination/Sharding)
   React.useEffect(() => {
@@ -2562,6 +2576,7 @@ export const HomeScreen: React.FC = () => {
               weeklyActual={calorieBankCycle?.weeklyActual || 0}
               remainingDays={calorieBankCycle?.remainingDays || 0}
               daysInCycle={calorieBankCycle?.daysInCycle || 7}
+              loading={statsLoading}
             />
 
             {/* Daily AI Coach Card - Premium Only */}

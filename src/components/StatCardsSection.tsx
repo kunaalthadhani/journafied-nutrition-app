@@ -16,6 +16,7 @@ interface StatCardsSectionProps {
   weeklyActual?: number;
   remainingDays?: number;
   daysInCycle?: number;
+  loading?: boolean;
 }
 
 export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
@@ -32,6 +33,7 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
   weeklyActual,
   remainingDays,
   daysInCycle,
+  loading,
 }) => {
   return (
     <SwipeableCards
@@ -48,6 +50,7 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
       weeklyActual={weeklyActual}
       remainingDays={remainingDays}
       daysInCycle={daysInCycle}
+      loading={loading}
     />
   );
 };

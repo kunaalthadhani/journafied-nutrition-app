@@ -3,6 +3,7 @@ import { View, StyleSheet, Dimensions, PanResponder, Animated, Easing } from 're
 import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
 import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
+import { StatCardSkeleton } from './StatCardSkeleton';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
@@ -22,6 +23,7 @@ interface SwipeableCardsProps {
   weeklyActual?: number;
   remainingDays?: number;
   daysInCycle?: number;
+  loading?: boolean;
 }
 
 const { height: SCREEN_HEIGHT } = Dimensions.get('window');
@@ -44,6 +46,7 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   weeklyActual,
   remainingDays,
   daysInCycle,
+  loading,
 }) => {
   const theme = useTheme();
   const [currentCard, setCurrentCard] = useState<CardType>('macros2');
@@ -130,6 +133,16 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
       onScrollEnable?.(true);
     },
   });
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <View style={styles.cardWrapper}>
+          <StatCardSkeleton />
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
