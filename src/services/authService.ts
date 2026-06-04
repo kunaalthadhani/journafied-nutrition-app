@@ -97,27 +97,34 @@ export const authService = {
   async deleteAccount() {
     ensureClient();
 
-    // 1. Delete all remote app data (food_logs, weights, etc) and the app_users row.
-    try {
-      const { data: { session } } = await supabase!.auth.getSession();
-      if (session?.user) {
-        const accountInfo = { supabaseUserId: session.user.id, email: session.user.email };
-        await supabaseDataService.deleteAllUserData(accountInfo);
+    const { data: { session } } = await supabase!.auth.getSession();
+
+    // With a live session the server-side deletes MUST succeed before we wipe the
+    // device and tell the user it is gone. Otherwise a silent server failure
+    // leaves their email and auth record alive in Supabase while they believe
+    // everything was deleted. Required for App Store and GDPR compliance.
+    if (session?.user) {
+      // 1. Remote app data (food_logs, weights, the app_users row).
+      await supabaseDataService.deleteAllUserData({
+        supabaseUserId: session.user.id,
+        email: session.user.email ?? undefined,
+      });
+
+      // 2. Admin delete of the auth.users record via the edge function.
+      // functions.invoke resolves with { error } on a 4xx/5xx, it does NOT throw,
+      // so we have to check it explicitly.
+      const { error } = await supabase!.functions.invoke('ai-proxy', {
+        body: { type: 'delete_user' },
+      });
+      if (error) {
+        throw new Error(
+          `Account deletion failed on our servers, so nothing was removed. ${error.message ?? ''}`.trim()
+        );
       }
-    } catch (e) {
-      console.error('Error deleting remote app data', e);
     }
 
-    // 2. Server-side admin delete of the auth.users record. Without this, the user's
-    // email + auth identifier remain in Supabase Auth even after data is wiped, and
-    // signing in with the same email would create a fresh (empty) account. Required
-    // for App Store account-deletion compliance.
-    try {
-      await supabase!.functions.invoke('ai-proxy', { body: { type: 'delete_user' } });
-    } catch (e) {
-      console.error('Error deleting auth user (will still sign out and clear local):', e);
-    }
-
+    // Either there was no live session to authenticate a server delete, or the
+    // server deletes were confirmed. Now it is safe to clear the device.
     // 3. Clear local data.
     await dataStorage.clearAllData();
 

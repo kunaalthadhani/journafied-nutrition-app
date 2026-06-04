@@ -693,7 +693,22 @@ let sessionAccountFallbackPromise: Promise<AccountInfo | null> | null = null;
 let sessionAccountFallbackAt = 0;
 const SESSION_FALLBACK_TTL_MS = 4000;
 
+// Sign-out tombstone. After an explicit sign out the cache is empty AND the
+// session is, for a moment, still valid. Without this, the fallback below would
+// rebuild the account from that lingering session and silently undo the sign
+// out (on a shared device it would resurface the previous user). A deliberately
+// cleared cache (sign out) must be distinguishable from a PWA-evicted one
+// (recover from session). Cleared on the next real sign in via saveAccountInfo.
+let signedOut = false;
+const markSignedOut = () => {
+  signedOut = true;
+  sessionAccountFallbackPromise = null;
+  sessionAccountFallbackAt = 0;
+};
+const clearSignedOutMark = () => { signedOut = false; };
+
 const resolveAccountFromSession = async (): Promise<AccountInfo | null> => {
+  if (signedOut) return null;
   const now = Date.now();
   if (sessionAccountFallbackPromise && now - sessionAccountFallbackAt < SESSION_FALLBACK_TTL_MS) {
     return sessionAccountFallbackPromise;
@@ -1808,6 +1823,9 @@ export const dataStorage = {
   // Save account info
   async saveAccountInfo(info: AccountInfo): Promise<void> {
     try {
+      // A real identity is being persisted: this is a sign in, so lift the
+      // sign-out tombstone and let the session fallback work again.
+      if (info?.email || info?.supabaseUserId) clearSignedOutMark();
       await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(info));
       if (info?.email) {
         const remoteProfile = await supabaseDataService.saveAccountToSupabase(info);
@@ -3296,6 +3314,7 @@ export const dataStorage = {
 
   async clearAllData(): Promise<void> {
     try {
+      markSignedOut();
       await AsyncStorage.clear();
       invalidateMealsCache();
     } catch (e) {
@@ -3314,6 +3333,7 @@ export const dataStorage = {
    */
   async clearAccountData(): Promise<void> {
     try {
+      markSignedOut();
       await AsyncStorage.multiRemove([
         STORAGE_KEYS.ACCOUNT_INFO,
         STORAGE_KEYS.SYNC_QUEUE,

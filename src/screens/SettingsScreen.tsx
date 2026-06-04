@@ -249,8 +249,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               Alert.alert('Processing...', 'Deleting your data... please wait.');
               await authService.deleteAccount();
               Alert.alert('Account Deleted', 'Your account and data have been removed. You will be signed out.');
-            } catch (error) {
-              Alert.alert('Error', 'Failed to delete account completely. Local data cleared.');
+            } catch (error: any) {
+              Alert.alert('Error', error?.message || 'Could not delete your account. Nothing was changed, please try again.');
             }
           }
         }
