@@ -1023,36 +1023,38 @@ export const HomeScreen: React.FC = () => {
       // Check for insight unlocks (non-blocking)
       checkInsightUnlocks(savedSummaries).catch(() => {});
 
-      // Calorie Bank: load config, check for cycle reset, calculate current cycle
-      // Use local `plan` variable instead of `isPremium` memo (memo won't update until next render)
-      if (plan === 'premium') {
-        try {
-          const bankConfig = await dataStorage.loadCalorieBankConfig();
-          setCalorieBankConfig(bankConfig);
-          if (bankConfig && bankConfig.enabled && savedGoalsData) {
-            const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData);
-            if (updatedConfig) setCalorieBankConfig(updatedConfig);
+      // Calorie Bank: ALWAYS load the config (do not gate on the cold `plan`
+      // variable, which is stale='free' on PWA cold open before the session
+      // rehydrates). The calorieBankCycle effect re-gates on isPremium, so the
+      // card stays hidden for non-premium and recomputes once isPremium flips
+      // true. Gating only the load behind plan was why the bank stayed dark
+      // until the Settings poke. Mirrors checkInsightUnlocks' unconditional load.
+      try {
+        const bankConfig = await dataStorage.loadCalorieBankConfig();
+        setCalorieBankConfig(bankConfig);
+        if (bankConfig && bankConfig.enabled && savedGoalsData) {
+          const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData);
+          if (updatedConfig) setCalorieBankConfig(updatedConfig);
 
-            // If a reset just happened, show the cycle reset card
-            if (didReset) {
-              const cycles = await dataStorage.loadCompletedCycles();
-              if (cycles.length > 0) {
-                const lastCycle = cycles[cycles.length - 1];
-                const resetSeen = await dataStorage.isCycleResetSeen(lastCycle.startDate);
-                if (!resetSeen) {
-                  setCycleResetData(lastCycle);
-                  setShowCycleResetCard(true);
-                }
+          // If a reset just happened, show the cycle reset card
+          if (didReset) {
+            const cycles = await dataStorage.loadCompletedCycles();
+            if (cycles.length > 0) {
+              const lastCycle = cycles[cycles.length - 1];
+              const resetSeen = await dataStorage.isCycleResetSeen(lastCycle.startDate);
+              if (!resetSeen) {
+                setCycleResetData(lastCycle);
+                setShowCycleResetCard(true);
               }
             }
-
-            // Calculate current cycle
-            const cycle = calculateCurrentCycle(updatedConfig || bankConfig, savedSummaries, savedGoalsData);
-            setCalorieBankCycle(cycle);
           }
-        } catch (err) {
-          if (__DEV__) console.error('Calorie bank init failed:', err);
+
+          // Calculate current cycle. The render gate (isPremium) decides visibility.
+          const cycle = calculateCurrentCycle(updatedConfig || bankConfig, savedSummaries, savedGoalsData);
+          setCalorieBankCycle(cycle);
         }
+      } catch (err) {
+        if (__DEV__) console.error('Calorie bank init failed:', err);
       }
 
     } catch (e) {
@@ -1122,18 +1124,30 @@ export const HomeScreen: React.FC = () => {
         setUserPlan(freshPlan);
         if (__DEV__) console.log(`[Auth] event=${event} -> refreshed context (email=${freshAccount?.email ? 'yes' : 'no'}) plan=${freshPlan}`);
 
-        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
-          // Cloud → local merge. loadMeals pulls fresh from Supabase when signed in.
-          // weightEntries are owned by UserContext and reloaded by its own auth listener.
-          const [meals, summaries, goals] = await Promise.all([
+        // INITIAL_SESSION fires on PWA cold open with a stored session — it is
+        // the ONLY auth event on cold open (SIGNED_IN does not fire). It must
+        // trigger the same hydration as a fresh sign-in, otherwise calories stay
+        // at the 1500 default and premium stays dark until a manual Settings poke.
+        if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED' || event === 'INITIAL_SESSION') {
+          // Cloud → local merge. loadMeals/loadGoals pull fresh from Supabase
+          // (getCachedAccountInfo now has a session fallback so these work even
+          // before the cache write-back lands).
+          const [meals, summaries, goals, bankConfig] = await Promise.all([
             dataStorage.loadMeals(),
             dataStorage.loadDailySummaries(),
             dataStorage.loadGoals(),
+            dataStorage.loadCalorieBankConfig(),
           ]);
           if (meals) setMealsByDate(meals);
           if (summaries) setSummariesByDate(summaries);
-          if (goals) setSavedGoals(goals);
-          if (__DEV__) console.log(`[Auth] post-signin reload: meals dates=${Object.keys(meals || {}).length}`);
+          if (goals) {
+            setSavedGoals(goals);
+            setDailyCalories(goals.calories);
+            setGoalsSet(true);
+          }
+          // Bank config is loaded unconditionally; the cycle effect re-gates on isPremium.
+          setCalorieBankConfig(bankConfig);
+          if (__DEV__) console.log(`[Auth] hydrate(${event}): meals dates=${Object.keys(meals || {}).length}, cal=${goals?.calories}`);
         }
       } catch (e) {
         if (__DEV__) console.error('Auth state refresh failed:', e);
@@ -1454,10 +1468,16 @@ export const HomeScreen: React.FC = () => {
 
         setMealsByDate((prev) => {
           const currentList = prev[currentDateKey] || [];
-          return {
-            ...prev,
-            [currentDateKey]: currentList.map(m => m.id === pendingId ? finalizedMeal : m),
-          };
+          // Upsert, not map-or-drop. If a wholesale reload (cold-open hydration,
+          // AppState foreground, auth listener) wiped the optimistic pending row
+          // while analysis was in flight, currentList no longer contains pendingId
+          // and a plain .map would silently drop the parsed food (the "stuck
+          // calculating, food never appears" bug). Append in that case.
+          const hasPending = currentList.some(m => m.id === pendingId);
+          const nextList = hasPending
+            ? currentList.map(m => m.id === pendingId ? finalizedMeal : m)
+            : [...currentList, finalizedMeal];
+          return { ...prev, [currentDateKey]: nextList };
         });
 
         // Count this new prompt as an entry

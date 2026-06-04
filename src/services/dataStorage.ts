@@ -678,13 +678,62 @@ function syncMealsToSupabase(date: string, meals: MealEntry[]): void {
   })();
 }
 
+// On PWA cold open the local ACCOUNT_INFO cache is often empty (iOS Safari ITP
+// eviction or a fresh storage partition) even though the Supabase session is
+// valid. Every gated remote read keys off getCachedAccountInfo().supabaseUserId,
+// so without a session fallback the app reads cold defaults (1500 cal, free plan)
+// until something manually rehydrates the cache. This fallback consults the live
+// session when the cache is empty and writes it back so subsequent reads are warm.
+//
+// The fallback is memoized for a short window so the ~40 callsites that fire
+// during a single cold-open loadAllData don't each spawn a getSession() +
+// AsyncStorage write (a write storm that would also race UserContext's own
+// rehydrate). The in-flight promise is shared; the result is cached briefly.
+let sessionAccountFallbackPromise: Promise<AccountInfo | null> | null = null;
+let sessionAccountFallbackAt = 0;
+const SESSION_FALLBACK_TTL_MS = 4000;
+
+const resolveAccountFromSession = async (): Promise<AccountInfo | null> => {
+  const now = Date.now();
+  if (sessionAccountFallbackPromise && now - sessionAccountFallbackAt < SESSION_FALLBACK_TTL_MS) {
+    return sessionAccountFallbackPromise;
+  }
+  sessionAccountFallbackAt = now;
+  sessionAccountFallbackPromise = (async () => {
+    try {
+      if (!isSupabaseConfigured() || !supabase) return null;
+      const { data } = await supabase.auth.getSession();
+      const user = data?.session?.user;
+      if (!user?.id || !user?.email) return null;
+      const rebuilt: AccountInfo = { email: user.email, supabaseUserId: user.id } as AccountInfo;
+      // Write back so warm reads (and other modules) see a consistent cache.
+      try {
+        const existingRaw = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
+        const existing = existingRaw ? JSON.parse(existingRaw) : {};
+        await AsyncStorage.setItem(
+          STORAGE_KEYS.ACCOUNT_INFO,
+          JSON.stringify({ ...existing, email: user.email, supabaseUserId: user.id })
+        );
+      } catch { /* best effort */ }
+      return rebuilt;
+    } catch {
+      return null;
+    }
+  })();
+  return sessionAccountFallbackPromise;
+};
+
 const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
   try {
     const data = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
-    return data ? JSON.parse(data) : null;
+    const cached = data ? JSON.parse(data) : null;
+    // If the cache has a usable identity, use it. Otherwise fall back to the
+    // live session (PWA cold-open recovery).
+    if (cached?.supabaseUserId || cached?.email) return cached;
+    return await resolveAccountFromSession();
   } catch (error) {
     console.error('Error reading cached account info:', error);
-    return null;
+    try { return await resolveAccountFromSession(); } catch { return null; }
   }
 };
 
@@ -1151,15 +1200,21 @@ export const dataStorage = {
   async saveDailyLog(date: string, meals: MealEntry[]): Promise<void> {
     return withWriteLock('log:' + date, async () => {
       try {
-        await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(meals));
+        // Never persist in-flight optimistic skeletons. A meal with isLoading
+        // (loadingState 'analyzing') is in-memory UX only. Persisting it lets a
+        // later reload bring it back as a permanently stuck "calculating" row.
+        const persistable = (meals || []).filter(
+          (m) => !(m as any).isLoading && (m as any).loadingState !== 'analyzing'
+        );
+        await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(persistable));
         invalidateMealsCache();
 
         // Update summary automatically
-        await this.updateSummaryForDate(date, meals);
+        await this.updateSummaryForDate(date, persistable);
 
         // Fire-and-forget cloud sync. Local write is done; never block UX
         // on the network. Falls back to the sync queue on failure.
-        syncMealsToSupabase(date, meals);
+        syncMealsToSupabase(date, persistable);
       } catch (error) {
         console.error(`Error saving daily log for ${date}:`, error);
       }
@@ -1784,6 +1839,19 @@ export const dataStorage = {
     } catch (error) {
       if (__DEV__) console.warn('loadAccountInfo: cache read failed', error);
       return null;
+    }
+
+    // PWA cold-open recovery: if the local cache has no identity, rebuild it
+    // from the live Supabase session before giving up. Without this, every
+    // caller of loadAccountInfo (greeting, plan, premium gates) sees null on
+    // a freshly-evicted cache even though the session is valid.
+    if (!cached?.email && !cached?.supabaseUserId) {
+      const fromSession = await resolveAccountFromSession();
+      if (fromSession?.email) {
+        cached = { ...(cached || {}), ...fromSession };
+      } else {
+        return cached;
+      }
     }
 
     if (cached?.email) {
@@ -2892,6 +2960,8 @@ export const dataStorage = {
   },
 
   saveMeal: async (date: string, meal: MealEntry): Promise<void> => {
+    // Never persist an optimistic skeleton (in-memory UX only).
+    if ((meal as any).isLoading || (meal as any).loadingState === 'analyzing') return;
     // Use per-date lock to serialize the read-modify-write cycle.
     // Writes directly to AsyncStorage + updates summary to avoid nested lock
     // with saveDailyLog (which holds the same per-date lock).
