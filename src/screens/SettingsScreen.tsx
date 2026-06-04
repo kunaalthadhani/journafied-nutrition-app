@@ -18,6 +18,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
+import { APP_VERSION } from '../constants/appVersion';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { featureFlags } from '../config/featureFlags';
 import { dataStorage } from '../services/dataStorage';
@@ -258,7 +259,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   const handleAbout = () => {
-    Alert.alert('About TrackKcal', 'Version 1.0.0\n\nA nutrition and fitness tracking app to help you achieve your health goals.', [{ text: 'OK' }]);
+    Alert.alert('About TrackKcal', `Version ${APP_VERSION}\n\nA nutrition and fitness tracking app to help you achieve your health goals.`, [{ text: 'OK' }]);
   };
 
   return (
@@ -517,6 +518,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             />
           </SettingSection>
         )}
+
+        <Text style={{ textAlign: 'center', color: theme.colors.textTertiary, fontSize: Typography.fontSize.xs, paddingVertical: 24 }}>
+          TrackKcal v{APP_VERSION}
+        </Text>
 
       </ScrollView>
 
