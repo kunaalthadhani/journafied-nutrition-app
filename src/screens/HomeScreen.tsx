@@ -113,6 +113,7 @@ export const HomeScreen: React.FC = () => {
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAccountWall, setShowAccountWall] = useState(false);
+  const [accountFromWall, setAccountFromWall] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -484,13 +485,17 @@ export const HomeScreen: React.FC = () => {
   const handleAccount = (mode?: 'signin' | 'signup') => {
     if (!canNavigate('account')) return;
     if (mode) setAccountInitialMode(mode);
+    setAccountFromWall(false);
     setMenuVisible(false);
     setShowSettings(false);
     setShowAccount(true);
   };
   const handleAccountBack = async () => {
     setShowAccount(false);
-    if (!showAccountWall) setShowSettings(true); // Go back to settings (unless coming from wall)
+    // Back to Settings only if we came from there. The post-onboarding wall opens
+    // this screen from Home, so it must return to Home, not dump them in Settings.
+    if (!accountFromWall) setShowSettings(true);
+    setAccountFromWall(false);
     // Reload account data to sync state after potential logout
     try {
       const accountInfo = await dataStorage.loadAccountInfo();
@@ -2375,6 +2380,10 @@ export const HomeScreen: React.FC = () => {
         logCount={entryCount}
         onDismiss={() => setShowAccountWall(false)}
         onContinueWithEmail={() => {
+          // The wall only ever shows for accountless users, so default to Create
+          // Account, and remember we came from the wall so back returns to Home.
+          setAccountInitialMode('signup');
+          setAccountFromWall(true);
           setShowAccountWall(false);
           setShowAccount(true);
         }}

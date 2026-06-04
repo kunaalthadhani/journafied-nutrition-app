@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect, useCallback, use
 import { AccountInfo, AdjustmentRecord, dataStorage, ExtendedGoalData, MealEntry, StreakFreezeData } from '../services/dataStorage';
 import { checkMissedDaysAndFreeze } from '../utils/streakLogic';
 import { subscribeMealsForUser, unsubscribeMeals } from '../services/realtimeMealsService';
+import { supabaseDataService } from '../services/supabaseDataService';
 import { authService } from '../services/authService';
 import { format } from 'date-fns';
 
@@ -183,12 +184,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     // Debounce slightly because realtime can deliver bursts (e.g. batch insert).
     const reloadTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
     useEffect(() => {
-        const userId = accountInfo?.supabaseUserId;
-        if (!userId) {
-            unsubscribeMeals();
-            return;
-        }
-        subscribeMealsForUser(userId, () => {
+        let cancelled = false;
+        const onChange = () => {
             if (reloadTimer.current) clearTimeout(reloadTimer.current);
             reloadTimer.current = setTimeout(async () => {
                 try {
@@ -199,12 +196,30 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     if (__DEV__) console.error('UserContext: realtime reload failed', e);
                 }
             }, 400);
-        });
+        };
+
+        (async () => {
+            // food_logs.user_id holds the app_users row id, not the auth uid, so the
+            // realtime filter must use appUserId. If it is not cached yet, resolve
+            // it from the email so realtime still works on this device.
+            let appUserId = accountInfo?.appUserId;
+            if (!appUserId && accountInfo?.email) {
+                try {
+                    const remote = await supabaseDataService.fetchAccountByEmail(accountInfo.email);
+                    appUserId = remote?.id;
+                } catch { /* best effort */ }
+            }
+            if (cancelled) return;
+            if (!appUserId) { unsubscribeMeals(); return; }
+            subscribeMealsForUser(appUserId, onChange);
+        })();
+
         return () => {
+            cancelled = true;
             if (reloadTimer.current) clearTimeout(reloadTimer.current);
             unsubscribeMeals();
         };
-    }, [accountInfo?.supabaseUserId]);
+    }, [accountInfo?.appUserId, accountInfo?.email]);
 
     // Actions
     const saveMeal = async (date: string, meal: MealEntry) => {

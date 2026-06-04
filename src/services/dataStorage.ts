@@ -171,7 +171,8 @@ export interface AccountInfo {
   name?: string;
   email?: string;
   phoneNumber?: string;
-  supabaseUserId?: string;
+  supabaseUserId?: string; // Supabase auth user id (auth.uid())
+  appUserId?: string; // app_users table row id — this is what food_logs.user_id holds
   passwordHash?: string; // Should be hashed, not plain text
   hasUsedReferralCode?: boolean; // Track if user has used a referral code
   premiumUntil?: string; // ISO date string for premium trial expiry
@@ -1832,7 +1833,8 @@ export const dataStorage = {
         if (remoteProfile?.id) {
           const merged: AccountInfo = {
             ...info,
-            supabaseUserId: info.supabaseUserId ?? remoteProfile.authUserId ?? remoteProfile.id,
+            supabaseUserId: info.supabaseUserId ?? remoteProfile.authUserId,
+            appUserId: info.appUserId ?? remoteProfile.id,
             email: remoteProfile.email ?? info.email,
             name: info.name ?? remoteProfile.displayName ?? undefined,
             phoneNumber: info.phoneNumber ?? remoteProfile.phoneNumber ?? undefined,
@@ -1881,7 +1883,8 @@ export const dataStorage = {
             email: remote.email ?? cached.email,
             name: remote.displayName ?? cached.name,
             phoneNumber: remote.phoneNumber ?? cached.phoneNumber,
-            supabaseUserId: remote.id,
+            supabaseUserId: cached.supabaseUserId ?? remote.authUserId,
+            appUserId: remote.id ?? cached.appUserId,
           };
           // Best-effort cache update. Failure here does not affect the return.
           AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify(merged)).catch(() => {});

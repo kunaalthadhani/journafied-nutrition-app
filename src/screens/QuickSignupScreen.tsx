@@ -80,20 +80,19 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
       }
 
       if (!data?.session) {
-        // Supabase has "Confirm email" enabled on this project. Auth user was
-        // created but cannot sign in until the email is verified. We agreed
-        // verification is OFF for launch — flag the project setting in dev
-        // but degrade gracefully by saving the email locally so the user can
-        // still finish onboarding without a hard block.
+        // No session means Supabase has "Confirm email" ON. Do NOT persist email
+        // as a signed-in identity: that marks the user signed in and premium with
+        // a random password they never saw and cannot recover (a ghost account).
+        // We agreed verification is OFF for launch, so this is a safety net. Keep
+        // just the name so onboarding survives, tell them to confirm, continue as
+        // a guest.
         if (__DEV__) console.warn('[QuickSignup] no session returned — check Supabase Auth > Providers > Email > Confirm email = OFF');
-        if (data?.user) {
-          await dataStorage.saveAccountInfo({
-            name: name.trim(),
-            email: cleanEmail,
-            phoneNumber: phone.trim() || undefined,
-            supabaseUserId: data.user.id,
-          });
-        }
+        await dataStorage.saveAccountInfo({ name: name.trim() });
+        setSubmitting(false);
+        Alert.alert(
+          'Confirm your email',
+          `We sent a confirmation link to ${cleanEmail}. Tap it, then sign in from Settings to finish creating your account.`
+        );
         onComplete();
         return;
       }

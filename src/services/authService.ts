@@ -1,4 +1,5 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
+import { Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { dataStorage } from './dataStorage';
 import { supabaseDataService } from './supabaseDataService';
@@ -64,9 +65,13 @@ export const authService = {
 
   async resetPasswordForEmail(email: string) {
     ensureClient();
-    return supabase!.auth.resetPasswordForEmail(email, {
-      redirectTo: 'io.supabase.trackkcal://reset-callback/', // deep link if needed
-    });
+    // On web the link must return to the PWA origin so the recovery token lands
+    // somewhere that can consume it (detectSessionInUrl is on for web). On native
+    // use the app deep link.
+    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
+      ? window.location.origin
+      : 'io.supabase.trackkcal://reset-callback/';
+    return supabase!.auth.resetPasswordForEmail(email, { redirectTo });
   },
 
   async signUp(email: string, password: string) {
