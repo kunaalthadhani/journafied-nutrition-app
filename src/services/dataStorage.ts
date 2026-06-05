@@ -655,26 +655,44 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
  * Fire-and-forget background sync. Local writes return immediately; cloud
  * sync runs out-of-band. Per CLAUDE.md: never block UX on a network call.
  */
-function syncMealsToSupabase(date: string, meals: MealEntry[]): void {
-  if (!meals || meals.length === 0) return;
+function syncMealsToSupabase(date: string, meals: MealEntry[], removedIds: string[] = []): void {
+  if ((!meals || meals.length === 0) && removedIds.length === 0) return;
   void (async () => {
     try {
       const accountInfo = await getCachedAccountInfo();
-      const payloads = meals.map((meal) => ({ meal, dateKey: date }));
+      const payloads = (meals || []).map((meal) => ({ meal, dateKey: date }));
 
       if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
         for (const payload of payloads) {
           await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
         }
+        for (const id of removedIds) {
+          await enqueueSyncOperation({ entity: 'meal', action: 'delete', payload: { id } });
+        }
         return;
       }
 
-      try {
-        await supabaseDataService.upsertMeals(accountInfo, payloads);
-      } catch (error) {
-        if (__DEV__) console.warn('[syncMealsToSupabase] direct push failed, queueing:', error);
-        for (const payload of payloads) {
-          await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+      if (payloads.length > 0) {
+        try {
+          await supabaseDataService.upsertMeals(accountInfo, payloads);
+        } catch (error) {
+          if (__DEV__) console.warn('[syncMealsToSupabase] upsert failed, queueing:', error);
+          for (const payload of payloads) {
+            await enqueueSyncOperation({ entity: 'meal', action: 'upsert', payload });
+          }
+        }
+      }
+
+      // Soft-delete meals removed from the list. Without this the remote copy
+      // survives and loadMeals merges a deleted meal right back in.
+      if (removedIds.length > 0) {
+        try {
+          await supabaseDataService.deleteMeals(accountInfo, removedIds);
+        } catch (error) {
+          if (__DEV__) console.warn('[syncMealsToSupabase] delete failed, queueing:', error);
+          for (const id of removedIds) {
+            await enqueueSyncOperation({ entity: 'meal', action: 'delete', payload: { id } });
+          }
         }
       }
     } catch (e) {
@@ -1226,6 +1244,17 @@ export const dataStorage = {
         const persistable = (meals || []).filter(
           (m) => !(m as any).isLoading && (m as any).loadingState !== 'analyzing'
         );
+
+        // Diff against what was previously persisted so meals removed from the
+        // list are soft-deleted in Supabase too, not just dropped locally.
+        let removedIds: string[] = [];
+        try {
+          const prevRaw = await AsyncStorage.getItem(STORAGE_KEYS.dailyLog(date));
+          const prev: MealEntry[] = prevRaw ? JSON.parse(prevRaw) : [];
+          const nextIds = new Set(persistable.map((m) => m.id));
+          removedIds = prev.filter((m) => m.id && !nextIds.has(m.id)).map((m) => m.id);
+        } catch { /* if prev is unreadable, skip the deletion diff */ }
+
         await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(persistable));
         invalidateMealsCache();
 
@@ -1234,7 +1263,7 @@ export const dataStorage = {
 
         // Fire-and-forget cloud sync. Local write is done; never block UX
         // on the network. Falls back to the sync queue on failure.
-        syncMealsToSupabase(date, persistable);
+        syncMealsToSupabase(date, persistable, removedIds);
       } catch (error) {
         console.error(`Error saving daily log for ${date}:`, error);
       }
