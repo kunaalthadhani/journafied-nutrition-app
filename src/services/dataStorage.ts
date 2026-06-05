@@ -1928,20 +1928,16 @@ export const dataStorage = {
   // Load preferences
   async loadPreferences(): Promise<Preferences | null> {
     try {
-      // Load from local storage first
       const localData = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
       const localPrefs: Preferences | null = localData ? JSON.parse(localData) : null;
 
-      // If user is logged in, fetch from Supabase
       const accountInfo = await getCachedAccountInfo();
       await processSyncQueue(accountInfo);
+
+      let remotePrefs: Preferences | null = null;
       if (accountInfo?.supabaseUserId) {
         try {
-          const remotePrefs = await supabaseDataService.fetchPreferences(accountInfo);
-          if (remotePrefs) {
-            await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(remotePrefs));
-            return remotePrefs;
-          }
+          remotePrefs = await supabaseDataService.fetchPreferences(accountInfo);
         } catch (error) {
           console.error('Error fetching preferences from Supabase:', error);
         }
@@ -1959,7 +1955,19 @@ export const dataStorage = {
         dynamicAdjustmentThreshold: 2, // Lower threshold to 2% for easier testing
       };
 
-      return localPrefs ? { ...defaults, ...localPrefs } : defaults;
+      // AsyncStorage-first: local is the source of truth. Remote only SEEDS local
+      // when there is none (fresh device or evicted cache); otherwise it just
+      // fills missing fields and local wins. Letting remote overwrite local was
+      // making interactive toggles (smart suggest, reminder mode) snap back to the
+      // stale cloud copy right after the user changed them.
+      if (!localPrefs) {
+        if (remotePrefs) {
+          await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(remotePrefs));
+          return { ...defaults, ...remotePrefs };
+        }
+        return defaults;
+      }
+      return { ...defaults, ...(remotePrefs || {}), ...localPrefs };
     } catch (error) {
       console.error('Error loading preferences:', error);
       return null;
