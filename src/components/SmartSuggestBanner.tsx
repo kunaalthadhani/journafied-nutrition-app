@@ -13,7 +13,7 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export interface SmartSuggestBannerProps {
     isPremium: boolean;
-    onLogSuggestion?: (suggestion: string) => void;
+    onLogSuggestion?: (suggestion: string) => void | Promise<void>;
 }
 
 export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremium, onLogSuggestion }) => {
@@ -23,6 +23,16 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
     const [expanded, setExpanded] = useState(false);
     const [suggestion, setSuggestion] = useState<{ displayText: string; loggableText: string; reasoning?: string } | null>(null);
     const [isDayComplete, setIsDayComplete] = useState(false);
+    const [logState, setLogState] = useState<'idle' | 'logging' | 'logged'>('idle');
+
+    const handleLog = async () => {
+        if (logState !== 'idle' || !suggestion?.loggableText?.trim()) return;
+        setLogState('logging');
+        try {
+            await onLogSuggestion?.(suggestion.loggableText);
+        } catch { /* parent handles errors; we just stop the button spinning */ }
+        setLogState('logged');
+    };
 
     useEffect(() => {
         const checkPref = async () => {
@@ -38,6 +48,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
 
     const fetchSuggestion = async (forceNew: boolean, forceHungry: boolean = false) => {
         setLoading(true);
+        setLogState('idle'); // a fresh suggestion is a new, loggable meal
         try {
             const ctx = await chatCoachService.buildContext({ minLoggedDays: 3, requireWeight: false });
 
@@ -189,11 +200,30 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                             </TouchableOpacity>
                         ) : (
                             <TouchableOpacity
-                                style={[styles.logButton, { backgroundColor: theme.colors.primary }]}
-                                onPress={() => onLogSuggestion?.(suggestion.loggableText)}
+                                style={[styles.logButton, {
+                                    backgroundColor: logState === 'logged' ? (theme.colors.success || '#10B981') : theme.colors.primary,
+                                    opacity: logState === 'logging' ? 0.75 : 1,
+                                }]}
+                                onPress={handleLog}
+                                disabled={logState !== 'idle'}
+                                activeOpacity={0.8}
                             >
-                                <Feather name="plus-circle" size={16} color="white" />
-                                <Text style={styles.logButtonText}>Log This Meal</Text>
+                                {logState === 'logging' ? (
+                                    <>
+                                        <ActivityIndicator size="small" color="white" />
+                                        <Text style={styles.logButtonText}>Logging...</Text>
+                                    </>
+                                ) : logState === 'logged' ? (
+                                    <>
+                                        <Feather name="check-circle" size={16} color="white" />
+                                        <Text style={styles.logButtonText}>Meal Logged</Text>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Feather name="plus-circle" size={16} color="white" />
+                                        <Text style={styles.logButtonText}>Log This Meal</Text>
+                                    </>
+                                )}
                             </TouchableOpacity>
                         )}
 

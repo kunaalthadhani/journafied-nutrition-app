@@ -2597,10 +2597,8 @@ export const HomeScreen: React.FC = () => {
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner
                 isPremium={isPremium}
-                onLogSuggestion={(text) => {
-                  if (text.trim()) {
-                    handleInputSubmit(text);
-                  }
+                onLogSuggestion={async (text) => {
+                  if (text.trim()) await handleInputSubmit(text);
                 }}
               />
             )}
