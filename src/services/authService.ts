@@ -96,7 +96,16 @@ export const authService = {
     // The user's meals, goals, weight history, plan, and feature state all stay on device.
     // When they sign back in, account info is restored and remote fetches re-merge with local.
     await dataStorage.clearAccountData();
-    return supabase!.auth.signOut();
+    // scope: 'local' clears the stored session and fires SIGNED_OUT without a
+    // network round-trip. The default global revoke can hang or fail on the PWA,
+    // and when it does the SIGNED_OUT event never fires, so the UI never updates
+    // and the user appears stuck signed in. The local session token is gone
+    // either way; the server session just expires on its own.
+    try {
+      await supabase!.auth.signOut({ scope: 'local' });
+    } catch (e) {
+      if (__DEV__) console.warn('signOut: local sign-out failed', e);
+    }
   },
 
   async deleteAccount() {

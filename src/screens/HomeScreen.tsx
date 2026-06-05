@@ -114,7 +114,6 @@ export const HomeScreen: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAccountWall, setShowAccountWall] = useState(false);
   const [accountFromWall, setAccountFromWall] = useState(false);
-  const [accountWallDismissed, setAccountWallDismissed] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -257,7 +256,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   React.useEffect(() => {
-    const t = setTimeout(() => setStatsShimmerTimedOut(true), 2500);
+    // Backstop only. The shimmer normally ends the instant goalsSet flips true.
+    // On a cold PWA open the real goals come from Supabase over the network, which
+    // can take a few seconds, so this must be longer than that fetch or the 1500
+    // default flashes through before the real number lands.
+    const t = setTimeout(() => setStatsShimmerTimedOut(true), 8000);
     return () => clearTimeout(t);
   }, []);
 
@@ -1361,9 +1364,9 @@ export const HomeScreen: React.FC = () => {
     try {
       await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(next));
       await dataStorage.saveEntryCount(next);
-      // Show account wall after 5 logs if user has no account. Once dismissed,
-      // do not nag again this session.
-      if (next >= 5 && !accountInfo?.email && !accountWallDismissed) {
+      // Nudge accountless users toward signup, but only every 5th log (5, 10,
+      // 15...) so dismissing it does not mean it pops on every single meal.
+      if (next >= 5 && next % 5 === 0 && !accountInfo?.email) {
         setTimeout(() => setShowAccountWall(true), 800);
       }
     } catch (error) {
@@ -2380,7 +2383,7 @@ export const HomeScreen: React.FC = () => {
       <AccountWallModal
         visible={showAccountWall}
         logCount={entryCount}
-        onDismiss={() => { setShowAccountWall(false); setAccountWallDismissed(true); }}
+        onDismiss={() => setShowAccountWall(false)}
         onContinueWithEmail={() => {
           // The wall only ever shows for accountless users, so default to Create
           // Account, and remember we came from the wall so back returns to Home.
