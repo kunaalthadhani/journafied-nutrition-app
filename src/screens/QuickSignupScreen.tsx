@@ -64,10 +64,9 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
     try {
       const { data, error: signUpError } = await authService.signUp(cleanEmail, password);
 
-      // Email already registered: try silent sign-in with the SAME password we
-      // just generated. This will fail (different password) and we tell the user
-      // to use the Sign In flow instead. We can't recover an existing account
-      // here without their password.
+      // Email already registered. There is no sign-in path on this onboarding
+      // screen, so we point them to Skip and sign in from Settings. We cannot
+      // recover their existing account here without their real password.
       if (signUpError) {
         const msg = signUpError.message || '';
         if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered')) {

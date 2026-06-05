@@ -180,8 +180,12 @@ export interface AccountInfo {
 
 // ... existing code ...
 
-// Helper to check premium status
-export const isUserPremium = (plan: string, premiumUntil?: string): boolean => {
+// Checks the stored PLAN string only. This is NOT an entitlement check: real
+// premium also requires a signed-in email and respects FREE_PREMIUM_LAUNCH.
+// Always wrap this with the account check (see smartReminderService) or use the
+// canonical isPremium in HomeScreen. Named isPlanPremium so nobody mistakes it
+// for the entitlement gate.
+export const isPlanPremium = (plan: string, premiumUntil?: string): boolean => {
   if (plan === 'premium') return true;
   if (!premiumUntil) return false;
   return new Date(premiumUntil) > new Date();

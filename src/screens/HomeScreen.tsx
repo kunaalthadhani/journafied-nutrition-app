@@ -114,6 +114,7 @@ export const HomeScreen: React.FC = () => {
   const [showCalendar, setShowCalendar] = useState(false);
   const [showAccountWall, setShowAccountWall] = useState(false);
   const [accountFromWall, setAccountFromWall] = useState(false);
+  const [accountWallDismissed, setAccountWallDismissed] = useState(false);
   const [dailyCalories, setDailyCalories] = useState(1500);
   const [savedGoals, setSavedGoals] = useState<ExtendedGoalData>({
     calories: 1500,
@@ -1360,8 +1361,9 @@ export const HomeScreen: React.FC = () => {
     try {
       await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(next));
       await dataStorage.saveEntryCount(next);
-      // Show account wall after 5 logs if user has no account
-      if (next >= 5 && !accountInfo?.email) {
+      // Show account wall after 5 logs if user has no account. Once dismissed,
+      // do not nag again this session.
+      if (next >= 5 && !accountInfo?.email && !accountWallDismissed) {
         setTimeout(() => setShowAccountWall(true), 800);
       }
     } catch (error) {
@@ -2378,7 +2380,7 @@ export const HomeScreen: React.FC = () => {
       <AccountWallModal
         visible={showAccountWall}
         logCount={entryCount}
-        onDismiss={() => setShowAccountWall(false)}
+        onDismiss={() => { setShowAccountWall(false); setAccountWallDismissed(true); }}
         onContinueWithEmail={() => {
           // The wall only ever shows for accountless users, so default to Create
           // Account, and remember we came from the wall so back returns to Home.

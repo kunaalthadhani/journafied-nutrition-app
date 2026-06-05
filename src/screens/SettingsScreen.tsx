@@ -561,7 +561,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
             {activeSlideUp === 'notifications' && (
               <NotificationSettingsScreen
                 onBack={closeSlideUp}
-                isPremium={plan === 'premium'}
                 initialPreferences={loadedPreferences}
               />
             )}

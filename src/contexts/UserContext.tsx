@@ -40,7 +40,13 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const [isLoading, setIsLoading] = useState(true);
     const [lastRefresh, setLastRefresh] = useState(Date.now());
 
+    const loadInFlightRef = useRef<Promise<void> | null>(null);
     const loadAllData = useCallback(async () => {
+        // Collapse concurrent loads. On startup both the initial-load effect and
+        // the INITIAL_SESSION auth event call loadAllData; without this they run
+        // twice and race each other's setState.
+        if (loadInFlightRef.current) return loadInFlightRef.current;
+        const run = (async () => {
         setIsLoading(true);
         try {
             // 1. Parallel fetch for speed
@@ -99,6 +105,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
         } finally {
             setIsLoading(false);
         }
+        })();
+        loadInFlightRef.current = run;
+        try { await run; } finally { loadInFlightRef.current = null; }
     }, []);
 
     // Initial Load
@@ -159,11 +168,14 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // by awaiting. The auth listener returning fast also matters
                 // because some screens re-mount on accountInfo change and would
                 // otherwise wait on these.
-                if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION') {
+                if (event === 'SIGNED_IN') {
+                    // First sign-in of a session: backfill local data up once, then pull.
                     void dataStorage.pushDerivedToSupabase().catch(() => { /* */ });
                     void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
                     await loadAllData();
-                } else if (event === 'TOKEN_REFRESHED') {
+                } else if (event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
+                    // Returning user on cold open or a token refresh: just pull. No
+                    // backfill push, which previously ran on every single launch.
                     void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
                     await loadAllData();
                 } else if (event === 'SIGNED_OUT') {

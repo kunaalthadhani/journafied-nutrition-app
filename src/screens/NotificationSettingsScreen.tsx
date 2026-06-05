@@ -11,7 +11,6 @@ import { dataStorage, Preferences, SmartReminderPreferences } from '../services/
 
 interface NotificationSettingsScreenProps {
     onBack: () => void;
-    isPremium?: boolean;
     initialPreferences?: any;
 }
 
@@ -27,7 +26,7 @@ const DEFAULT_SMART_PREFS: SmartReminderPreferences = {
     quietHoursEnd: 7,
 };
 
-export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, isPremium = false, initialPreferences }) => {
+export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, initialPreferences }) => {
     const theme = useTheme();
     const [loading, setLoading] = useState(!initialPreferences);
     const [preferences, setPreferences] = useState<Preferences | null>(initialPreferences ? {

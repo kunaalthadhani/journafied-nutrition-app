@@ -9,7 +9,7 @@ import {
   MealTimingPattern,
   ReminderPatternCache,
   ScheduledReminder,
-  isUserPremium,
+  isPlanPremium,
 } from './dataStorage';
 import { generateId } from '../utils/uuid';
 import { analyticsService } from './analyticsService';
@@ -320,7 +320,7 @@ export const smartReminderService = {
       // every signed-in user as premium; flip FREE_PREMIUM_LAUNCH off when paid tiers go live.
       const plan = await dataStorage.loadUserPlan();
       const accountInfo = await dataStorage.getAccountInfo();
-      const isPremium = !!accountInfo?.email && (FREE_PREMIUM_LAUNCH || isUserPremium(plan, accountInfo?.premiumUntil));
+      const isPremium = !!accountInfo?.email && (FREE_PREMIUM_LAUNCH || isPlanPremium(plan, accountInfo?.premiumUntil));
 
       // Load preferences
       const prefs = await dataStorage.loadPreferences();

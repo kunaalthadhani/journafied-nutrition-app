@@ -91,7 +91,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [isLoading, setIsLoading] = useState(!initialAccountInfo && initialAccountInfo !== null);
   const [authStatus, setAuthStatus] = useState<'idle' | 'sending' | 'verifying'>('idle');
   const [authMessage, setAuthMessage] = useState<string | null>(null);
-  const [otpSent, setOtpSent] = useState(false);
 
   // -- Form State --
   const [name, setName] = useState(initialAccountInfo?.name || '');
@@ -105,8 +104,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [referralCode, setReferralCode] = useState('');
   const [hasAcceptedTerms, setHasAcceptedTerms] = useState(false);
   const [authMode, setAuthMode] = useState<'signin' | 'signup'>(initialMode);
-  const [otpCode, setOtpCode] = useState('');
-  const [resendCountdown, setResendCountdown] = useState(0);
 
   const [selectedCountry, setSelectedCountry] = useState<Country>(_initialPhone.country);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
@@ -171,6 +168,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         if (data.session.user?.email) {
           setEmailInput(data.session.user.email);
         }
+      } else if (isMounted) {
+        // No real session: demote the optimistic fake session seeded from the
+        // cached email, so we never show a logged-in view that cannot sign out.
+        setAuthSession(null);
       }
       setIsLoading(false);
     };
@@ -193,21 +194,20 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     };
   }, []);
 
-  // -- Resend countdown timer --
+  // Keep the plan badge and the dynamic-adjustment gates in sync with the
+  // canonical entitlement passed from HomeScreen (respects sign-in and the
+  // launch flag), not the raw stored plan string.
   useEffect(() => {
-    if (resendCountdown <= 0) return;
-    const timer = setTimeout(() => setResendCountdown(resendCountdown - 1), 1000);
-    return () => clearTimeout(timer);
-  }, [resendCountdown]);
+    setPlan(initialPlan || 'free');
+  }, [initialPlan]);
 
   // -- Helpers --
 
   const loadLocalData = async () => {
     try {
       const info = await dataStorage.loadAccountInfo();
-      const [count, planValue, goalsData, weightEntries, streakData, prefs] = await Promise.all([
+      const [count, goalsData, weightEntries, streakData, prefs] = await Promise.all([
         dataStorage.loadEntryCount(),
-        dataStorage.loadUserPlan(),
         dataStorage.loadGoals(),
         dataStorage.loadWeightEntries(),
         dataStorage.loadStreakFreeze(),
@@ -229,7 +229,6 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       }
 
       setEntryCount(count);
-      setPlan(planValue);
       setGoals(goalsData);
       setStreakFreeze(streakData);
 
@@ -416,7 +415,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         await syncAccountInfoFromSession(data.session);
         await loadLocalData();
       } else if (data.user && !data.session) {
-        // Email confirmation is enabled in Supabase — user created but needs to confirm
+        // Email confirmation is enabled in Supabase — user created but needs to
+        // confirm. Persist just the name (not a signed-in identity) so the
+        // greeting survives the round trip after they confirm and sign in.
+        await dataStorage.saveAccountInfo({ name: name.trim() });
         Alert.alert(
           'Check your email',
           `We sent a confirmation link to ${emailInput.trim()}. Tap it to activate your account, then sign in.`,
