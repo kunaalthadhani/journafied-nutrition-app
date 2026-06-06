@@ -870,11 +870,8 @@ type SyncOperation =
   | { entity: 'entry_tasks'; action: 'upsert'; payload: EntryTasksStatus }
   | { entity: 'referral_code'; action: 'upsert'; payload: ReferralCode }
   | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
-  | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
   | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward }
   | { entity: 'streak_freeze'; action: 'upsert'; payload: StreakFreezeData }
-  | { entity: 'grocery_item'; action: 'upsert'; payload: GroceryItem }
-  | { entity: 'grocery_item'; action: 'delete'; payload: { id: string } }
   | { entity: 'analytics_event'; action: 'log'; payload: AnalyticsEvent };
 
 const readSyncQueue = async (): Promise<SyncOperation[]> => {
@@ -997,18 +994,14 @@ const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo)
         await supabaseDataService.upsertStreakFreeze(accountInfo, op.payload);
       }
       break;
-    case 'grocery_item':
-      if (op.action === 'upsert') {
-        await supabaseDataService.upsertGroceryItem(accountInfo, op.payload);
-      } else {
-        await supabaseDataService.deleteGroceryItem(accountInfo, op.payload.id);
-      }
-      break;
     case 'analytics_event':
-      // Fire and forget for analytics to avoid blocking sync? 
-      // Or await it. Usually fine to await.
       await supabaseDataService.logAnalyticsEvent(accountInfo, op.payload);
       break;
+    default:
+      // Never silently treat an op for an unhandled entity as synced and drop it.
+      // Throw so the queue retries it (then drops via the attempt cap) instead of
+      // losing it without a trace.
+      throw new Error(`Unhandled sync op entity: ${(op as any).entity}`);
   }
 };
 
@@ -1164,7 +1157,7 @@ const diffWeightEntries = (
       return;
     }
 
-    if (prev.weight !== entry.weight) {
+    if (prev.weight !== entry.weight || prev.date !== entry.date) {
       upserts.push({
         id,
         date: entry.date,

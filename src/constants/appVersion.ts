@@ -2,4 +2,4 @@
 // glance which build is on your PWA or APK. Deliberately separate from app.json
 // "version", which drives the EAS Update runtimeVersion and must stay stable or
 // OTA updates stop reaching installed builds.
-export const APP_VERSION = '1.2.1';
+export const APP_VERSION = '1.2.2';
