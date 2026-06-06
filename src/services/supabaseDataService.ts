@@ -216,7 +216,10 @@ function mealPayloadToRow(userId: string, payload: { meal: MealEntry; dateKey: s
     total_fat: sumNutrient(payload.meal.foods, 'fat'),
     created_at: new Date(payload.meal.timestamp).toISOString(),
     updated_at: payload.meal.updatedAt || new Date().toISOString(),
-    deleted_at: null,
+    // Intentionally omit deleted_at. Sending deleted_at:null here made an upsert
+    // (e.g. a date-switch re-upsert of the whole day) RESURRECT a meal that was
+    // soft-deleted on another device. Omitting it leaves deleted_at untouched on
+    // a conflicting row, and a brand-new row still defaults to null.
   };
 }
 
@@ -461,7 +464,8 @@ export const supabaseDataService = {
         logged_date: loggedDate,
         created_at: new Date(entry.timestamp).toISOString(),
         updated_at: new Date().toISOString(),
-        deleted_at: null,
+        // Omit deleted_at so re-upserting the full list never resurrects an
+        // exercise soft-deleted on another device (same fix as mealPayloadToRow).
       };
     });
 

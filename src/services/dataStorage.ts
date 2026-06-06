@@ -1464,6 +1464,10 @@ export const dataStorage = {
       const allDates = new Set<string>([...Object.keys(localByDate), ...Object.keys(remoteByDate)]);
       const merged: Record<string, MealEntry[]> = {};
       const datesToPersist = new Set<string>();
+      // Oldest still-pending (local-only, never-confirmed-in-remote) meal. We never
+      // advance LAST_MEALS_SYNC_AT past it, so a meal whose upsert has not landed yet
+      // is never mistaken for "deleted elsewhere" and dropped.
+      let minPendingTouch = Infinity;
 
       for (const date of allDates) {
         const local = localByDate[date] || [];
@@ -1478,20 +1482,30 @@ export const dataStorage = {
         // OR (b) IN remote (no-op since remote already added them, but harmless).
         // Local meals older than last sync that are NOT in remote = previously synced and now
         // deleted on remote. We drop them.
-        for (const localMeal of local) {
-          if (remoteIds.has(localMeal.id)) continue; // already in map from remote pass
+        const touchOf = (m: MealEntry) => Math.max(
+          typeof m.timestamp === 'number' ? m.timestamp : 0,
+          m.updatedAt ? new Date(m.updatedAt).getTime() : 0,
+        );
 
-          const localMealTime = typeof localMeal.timestamp === 'number' ? localMeal.timestamp : 0;
-          const updatedAtTime = localMeal.updatedAt ? new Date(localMeal.updatedAt).getTime() : 0;
-          const latestLocalTouch = Math.max(localMealTime, updatedAtTime);
+        for (const localMeal of local) {
+          const latestLocalTouch = touchOf(localMeal);
+
+          if (remoteIds.has(localMeal.id)) {
+            // In BOTH local and remote: keep the NEWER version. Do not blindly let
+            // remote win and discard a fresh local edit that has not synced yet.
+            const remoteMeal = byId.get(localMeal.id)!;
+            if (latestLocalTouch > touchOf(remoteMeal)) byId.set(localMeal.id, localMeal);
+            continue;
+          }
 
           if (lastSyncAt === 0 || latestLocalTouch > lastSyncAt) {
-            // First sync OR locally edited/created since last sync. Treat as pending. Keep it.
+            // Never confirmed in remote (or edited since last sync). Pending: keep it,
+            // and hold the watermark back so it can never be dropped while pending.
             byId.set(localMeal.id, localMeal);
+            if (latestLocalTouch < minPendingTouch) minPendingTouch = latestLocalTouch;
           } else {
-            // Previously synced, now missing on remote. Treat as deleted elsewhere.
+            // Previously synced, now missing on remote. Deleted elsewhere — drop.
             if (__DEV__) console.log(`[loadMeals] dropping locally-orphaned meal ${localMeal.id} on ${date}`);
-            // Do not add to merged.
           }
         }
 
@@ -1531,9 +1545,10 @@ export const dataStorage = {
         });
       }
 
-      // Record this sync. Subsequent loads use this to decide which local-only meals are
-      // pending sync vs. previously synced and now deleted.
-      await AsyncStorage.setItem(STORAGE_KEYS.LAST_MEALS_SYNC_AT, String(Date.now()));
+      // Record this sync, but NEVER advance past the oldest still-pending meal, so a
+      // meal whose upsert has not landed yet is never later mistaken for deleted.
+      const nextSyncAt = minPendingTouch === Infinity ? Date.now() : (minPendingTouch - 1);
+      await AsyncStorage.setItem(STORAGE_KEYS.LAST_MEALS_SYNC_AT, String(nextSyncAt));
 
       return merged;
     } catch (error) {
@@ -1545,22 +1560,44 @@ export const dataStorage = {
   // Save exercises by date
   async saveExercises(exercisesByDate: Record<string, ExerciseEntry[]>): Promise<void> {
     try {
+      // Diff against the previously persisted exercises so removed entries get
+      // soft-deleted in Supabase too. Without this, an exercise deletion never
+      // synced and the remote copy resurrected it on the next load.
+      let removedIds: string[] = [];
+      try {
+        const prevRaw = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
+        const prev: Record<string, ExerciseEntry[]> = prevRaw ? JSON.parse(prevRaw) : {};
+        const prevIds = new Set(Object.values(prev).flat().map((e) => e.id).filter(Boolean));
+        const nextIds = new Set(Object.values(exercisesByDate).flat().map((e) => e.id));
+        removedIds = ([...prevIds] as string[]).filter((id) => !nextIds.has(id));
+      } catch { /* if prev is unreadable, skip the deletion diff */ }
+
       await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesByDate));
 
-      // Sync to Supabase if user is logged in
       const accountInfo = await getCachedAccountInfo();
-      if (accountInfo?.supabaseUserId) {
+      const allExercises = Object.values(exercisesByDate).flat();
+
+      if (!accountInfo?.supabaseUserId) {
+        if (allExercises.length > 0) await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
+        if (removedIds.length > 0) await enqueueSyncOperation({ entity: 'exercise', action: 'delete', payload: { ids: removedIds } });
+        return;
+      }
+
+      if (allExercises.length > 0) {
         try {
-          const allExercises = Object.values(exercisesByDate).flat();
           await supabaseDataService.upsertExercises(accountInfo, allExercises);
         } catch (error) {
           console.error('Error syncing exercises to Supabase:', error);
-          const allExercises = Object.values(exercisesByDate).flat();
           await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
         }
-      } else {
-        const allExercises = Object.values(exercisesByDate).flat();
-        await enqueueSyncOperation({ entity: 'exercise', action: 'upsert', payload: allExercises });
+      }
+      if (removedIds.length > 0) {
+        try {
+          await supabaseDataService.deleteExercises(accountInfo, removedIds);
+        } catch (error) {
+          console.error('Error deleting exercises from Supabase:', error);
+          await enqueueSyncOperation({ entity: 'exercise', action: 'delete', payload: { ids: removedIds } });
+        }
       }
     } catch (error) {
       console.error('Error saving exercises:', error);
@@ -1581,11 +1618,17 @@ export const dataStorage = {
         try {
           const remoteExercises = await supabaseDataService.fetchExercises(accountInfo);
           if (remoteExercises && Object.keys(remoteExercises).length > 0) {
-            // Merge: remote takes precedence for dates that exist in both
-            const merged: Record<string, ExerciseEntry[]> = { ...localExercises };
-            Object.keys(remoteExercises).forEach((dateKey) => {
-              merged[dateKey] = remoteExercises[dateKey];
-            });
+            // Local-first union by id per date. Keep local edits and local-only
+            // (not-yet-synced) entries instead of letting remote replace the whole
+            // date, which used to clobber an unsynced local exercise.
+            const merged: Record<string, ExerciseEntry[]> = {};
+            const dates = new Set([...Object.keys(localExercises), ...Object.keys(remoteExercises)]);
+            for (const dateKey of dates) {
+              const byId = new Map<string, ExerciseEntry>();
+              (remoteExercises[dateKey] || []).forEach((e) => byId.set(e.id, e));
+              (localExercises[dateKey] || []).forEach((e) => byId.set(e.id, e)); // local wins
+              merged[dateKey] = Array.from(byId.values());
+            }
             await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(merged));
             return merged;
           }
