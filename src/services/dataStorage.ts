@@ -901,10 +901,16 @@ const writeSyncQueue = async (queue: SyncOperation[]): Promise<void> => {
   }
 };
 
+const MAX_SYNC_ATTEMPTS = 5;
+
+// All read-modify-write on the SYNC_QUEUE key goes through one lock so a flush
+// and an enqueue can never interleave and silently drop or double-run ops.
 const enqueueSyncOperation = async (op: SyncOperation): Promise<void> => {
-  const queue = await readSyncQueue();
-  queue.push(op);
-  await writeSyncQueue(queue);
+  await withWriteLock('syncQueue', async () => {
+    const queue = await readSyncQueue();
+    queue.push(op);
+    await writeSyncQueue(queue);
+  });
 };
 
 const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo) => {
@@ -1007,23 +1013,30 @@ const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo)
 };
 
 const processSyncQueue = async (accountInfo: AccountInfo | null): Promise<void> => {
-  if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
-  const queue = await readSyncQueue();
-  if (queue.length === 0) return;
+  if (!accountInfo || (!accountInfo.supabaseUserId && !accountInfo.email)) return;
+  const account = accountInfo; // non-null from here
+  await withWriteLock('syncQueue', async () => {
+    const queue = await readSyncQueue();
+    if (queue.length === 0) return;
 
-  const remaining: SyncOperation[] = [];
-  for (let i = 0; i < queue.length; i++) {
-    const op = queue[i];
-    try {
-      await executeSyncOperation(op, accountInfo);
-    } catch (error) {
-      console.error('Deferred sync operation failed:', error);
-      remaining.push(...queue.slice(i)); // include current + remaining ops
-      break;
+    const remaining: SyncOperation[] = [];
+    for (const op of queue) {
+      try {
+        await executeSyncOperation(op, account);
+      } catch (error) {
+        // Do NOT abort the whole queue on one bad op (head-of-line blocking).
+        // Retry this op up to a cap, then drop it so every later op still syncs.
+        const attempts = ((op as any)._attempts || 0) + 1;
+        if (attempts >= MAX_SYNC_ATTEMPTS) {
+          console.error(`Dropping sync op ${op.entity}/${op.action} after ${attempts} attempts:`, error);
+        } else {
+          remaining.push({ ...op, _attempts: attempts } as unknown as SyncOperation);
+        }
+      }
     }
-  }
 
-  await writeSyncQueue(remaining);
+    await writeSyncQueue(remaining);
+  });
 };
 
 const ensureMealMetadata = (mealsByDate: Record<string, MealEntry[]>) => {
@@ -1495,27 +1508,27 @@ export const dataStorage = {
         }
       }
 
-      // Persist merged shards back to local so subsequent reads are fast and offline-safe.
-      // Also remove shards for dates that are now empty (otherwise old data lingers).
-      const setPairs: [string, string][] = [];
-      const removeKeys: string[] = [];
+      // Persist merged shards back to local. Take the per-date write lock and
+      // re-read the shard inside it, so a meal saved during the network fetch above
+      // (which our pre-fetch snapshot never saw) is preserved instead of being
+      // clobbered by the stale merge. Deletions the merge made are still honored.
       for (const date of datesToPersist) {
-        const meals = merged[date];
-        if (meals.length === 0) {
-          removeKeys.push(STORAGE_KEYS.dailyLog(date));
-        } else {
-          setPairs.push([STORAGE_KEYS.dailyLog(date), JSON.stringify(meals)]);
-        }
-      }
-      if (setPairs.length > 0) {
-        try { await AsyncStorage.multiSet(setPairs); } catch {
-          for (const [k, v] of setPairs) { try { await AsyncStorage.setItem(k, v); } catch { /* best effort */ } }
-        }
-      }
-      if (removeKeys.length > 0) {
-        try { await AsyncStorage.multiRemove(removeKeys); } catch {
-          for (const k of removeKeys) { try { await AsyncStorage.removeItem(k); } catch { /* best effort */ } }
-        }
+        await withWriteLock('log:' + date, async () => {
+          const curRaw = await AsyncStorage.getItem(STORAGE_KEYS.dailyLog(date));
+          const current: MealEntry[] = curRaw ? JSON.parse(curRaw) : [];
+          const snapshotIds = new Set((localByDate[date] || []).map((m) => m.id));
+          const mergedIds = new Set(merged[date].map((m) => m.id));
+          // Keep meals added to disk AFTER our snapshot (a concurrent save). Do not
+          // resurrect snapshot meals the merge intentionally dropped.
+          const additions = current.filter((m) => !snapshotIds.has(m.id) && !mergedIds.has(m.id));
+          const finalDay = [...merged[date], ...additions].sort((a, b) => a.timestamp - b.timestamp);
+          merged[date] = finalDay; // reflect concurrent additions in the returned value too
+          if (finalDay.length === 0) {
+            await AsyncStorage.removeItem(STORAGE_KEYS.dailyLog(date));
+          } else {
+            await AsyncStorage.setItem(STORAGE_KEYS.dailyLog(date), JSON.stringify(finalDay));
+          }
+        });
       }
 
       // Record this sync. Subsequent loads use this to decide which local-only meals are
