@@ -528,11 +528,52 @@ export { invalidateMealsCache };
  * This function intentionally swallows errors. Meal saves succeed locally
  * regardless; sync is best-effort. Surface failures via Sentry if needed.
  */
+// ── Local-first merge helpers for the derived-state pull ──
+// AsyncStorage is the source of truth. The pull must NEVER overwrite a newer or
+// not-yet-synced local value with the cloud copy. These merge remote INTO local,
+// local winning on conflict.
+
+const unionById = <T>(remote: T[], local: T[], key: (x: T) => string): T[] => {
+  const byKey = new Map<string, T>();
+  for (const r of remote) byKey.set(key(r), r);
+  for (const l of local) byKey.set(key(l), l); // local wins on conflict
+  return Array.from(byKey.values());
+};
+
+const mergeSummariesByDate = (
+  remote: Record<string, DailySummary>,
+  local: Record<string, DailySummary>,
+): Record<string, DailySummary> => {
+  const out: Record<string, DailySummary> = { ...remote };
+  for (const [date, l] of Object.entries(local)) {
+    const r = out[date];
+    if (!r || (l.updatedAt || '') >= (r.updatedAt || '')) out[date] = l; // newer (or tie) local wins
+  }
+  return out;
+};
+
+const mergeUnlocks = (
+  remote: Record<string, { unlockedAt: string; seenAt?: string }>,
+  local: Record<string, { unlockedAt: string; seenAt?: string }>,
+): Record<string, { unlockedAt: string; seenAt?: string }> => {
+  const out: Record<string, { unlockedAt: string; seenAt?: string }> = { ...remote };
+  for (const [id, l] of Object.entries(local)) {
+    const r = out[id];
+    if (!r) { out[id] = l; continue; }
+    // Monotonic achievement: keep the earliest unlock and any 'seen' mark.
+    const unlockedAt = [r.unlockedAt, l.unlockedAt].filter(Boolean).sort()[0] || l.unlockedAt;
+    const seenAt = [r.seenAt, l.seenAt].filter(Boolean).sort().pop();
+    out[id] = seenAt ? { unlockedAt, seenAt } : { unlockedAt };
+  }
+  return out;
+};
+
 /**
  * Pull derived/settings state from Supabase into local AsyncStorage. Called from
- * the auth listener on SIGNED_IN so cross-device data follows the user. Each
- * entity overwrites local with whatever the cloud has — last-write-wins.
- * Best-effort: individual failures do not abort the pull.
+ * the auth listener so cross-device data follows the user. LOCAL-FIRST: remote is
+ * merged INTO local and local wins on conflict, so a not-yet-synced local edit is
+ * never reverted to the stale cloud copy. Best-effort; individual failures do not
+ * abort the pull.
  */
 async function pullDerivedFromSupabase(accountInfo: AccountInfo | null): Promise<void> {
   if (!accountInfo?.supabaseUserId) return;
@@ -547,14 +588,37 @@ async function pullDerivedFromSupabase(accountInfo: AccountInfo | null): Promise
       supabaseDataService.fetchCompletedCycles(accountInfo).catch(() => [] as CalorieBankCompletedCycle[]),
     ]);
 
+    const readLocal = async <T>(key: string, fallback: T): Promise<T> => {
+      try { const raw = await AsyncStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; }
+      catch { return fallback; }
+    };
+
     const writes: Array<[string, string]> = [];
-    if (insights.length > 0) writes.push([STORAGE_KEYS.INSIGHTS, JSON.stringify(insights)]);
-    if (patterns.length > 0) writes.push([STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(patterns)]);
-    if (plan) writes.push([STORAGE_KEYS.WEEKLY_ACTION_PLAN, JSON.stringify(plan)]);
-    if (Object.keys(unlocks).length > 0) writes.push([STORAGE_KEYS.INSIGHT_UNLOCKS, JSON.stringify(unlocks)]);
-    if (Object.keys(summaries).length > 0) writes.push([STORAGE_KEYS.SUMMARIES, JSON.stringify(summaries)]);
-    if (bankConfig) writes.push([STORAGE_KEYS.CALORIE_BANK_CONFIG, JSON.stringify(bankConfig)]);
-    if (cycles.length > 0) writes.push([STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, JSON.stringify(cycles)]);
+
+    const mergedInsights = unionById(insights, await readLocal<Insight[]>(STORAGE_KEYS.INSIGHTS, []), (x) => x.id);
+    if (mergedInsights.length > 0) writes.push([STORAGE_KEYS.INSIGHTS, JSON.stringify(mergedInsights)]);
+
+    const mergedPatterns = unionById(patterns, await readLocal<DetectedPattern[]>(STORAGE_KEYS.DETECTED_PATTERNS, []), (x) => x.id);
+    if (mergedPatterns.length > 0) writes.push([STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(mergedPatterns)]);
+
+    const mergedCycles = unionById(cycles, await readLocal<CalorieBankCompletedCycle[]>(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, []), (x) => x.startDate);
+    if (mergedCycles.length > 0) writes.push([STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES, JSON.stringify(mergedCycles)]);
+
+    const localPlan = await readLocal<WeeklyActionPlan | null>(STORAGE_KEYS.WEEKLY_ACTION_PLAN, null);
+    const mergedPlan = !localPlan ? plan : (!plan ? localPlan : ((localPlan.generatedAt || '') >= (plan.generatedAt || '') ? localPlan : plan));
+    if (mergedPlan) writes.push([STORAGE_KEYS.WEEKLY_ACTION_PLAN, JSON.stringify(mergedPlan)]);
+
+    const mergedUnlocks = mergeUnlocks(unlocks, await readLocal<Record<string, { unlockedAt: string; seenAt?: string }>>(STORAGE_KEYS.INSIGHT_UNLOCKS, {}));
+    if (Object.keys(mergedUnlocks).length > 0) writes.push([STORAGE_KEYS.INSIGHT_UNLOCKS, JSON.stringify(mergedUnlocks)]);
+
+    const mergedSummaries = mergeSummariesByDate(summaries, await readLocal<Record<string, DailySummary>>(STORAGE_KEYS.SUMMARIES, {}));
+    if (Object.keys(mergedSummaries).length > 0) writes.push([STORAGE_KEYS.SUMMARIES, JSON.stringify(mergedSummaries)]);
+
+    // Calorie bank config has no updatedAt and the user toggles it by hand, so it
+    // is SEED-ONLY: write the remote copy only when there is no local config at all
+    // (fresh device or evicted cache). Never overwrite an existing local config.
+    const localBankRaw = await AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CONFIG);
+    if (!localBankRaw && bankConfig) writes.push([STORAGE_KEYS.CALORIE_BANK_CONFIG, JSON.stringify(bankConfig)]);
 
     if (writes.length > 0) {
       await AsyncStorage.multiSet(writes);
@@ -1187,28 +1251,22 @@ export const dataStorage = {
       const localData = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
       const localGoals: ExtendedGoalData | null = localData ? JSON.parse(localData) : null;
 
-      // If user is logged in, fetch from Supabase and merge
+      // If user is logged in, fetch from Supabase. LOCAL-FIRST: local is the
+      // source of truth, remote only fills fields local is missing and seeds when
+      // there is no local at all. Letting remote win was reverting a goal the user
+      // just set offline / before the sync flushed (same class as loadPreferences).
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId) {
         try {
           const remoteGoals = await supabaseDataService.fetchNutritionGoals(accountInfo);
           if (remoteGoals) {
-            // Merge: remote takes precedence, but keep local if remote is missing fields
-            const merged: ExtendedGoalData = {
-              ...localGoals,
-              ...remoteGoals,
-              // Preserve local values if remote doesn't have them
-              calories: remoteGoals.calories || localGoals?.calories || 1500,
-              proteinPercentage: remoteGoals.proteinPercentage || localGoals?.proteinPercentage || 30,
-              carbsPercentage: remoteGoals.carbsPercentage || localGoals?.carbsPercentage || 45,
-              fatPercentage: remoteGoals.fatPercentage || localGoals?.fatPercentage || 25,
-              proteinGrams: remoteGoals.proteinGrams || localGoals?.proteinGrams || 0,
-              carbsGrams: remoteGoals.carbsGrams || localGoals?.carbsGrams || 0,
-              fatGrams: remoteGoals.fatGrams || localGoals?.fatGrams || 0,
-            };
-            // Save merged data back to local storage
-            await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(merged));
-            return merged;
+            if (!localGoals) {
+              // No local copy: seed from remote.
+              await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(remoteGoals));
+              return remoteGoals;
+            }
+            // Local wins every field it has; remote only fills gaps.
+            return { ...remoteGoals, ...localGoals };
           }
         } catch (error) {
           console.error('Error fetching goals from Supabase:', error);
