@@ -264,6 +264,18 @@ export const HomeScreen: React.FC = () => {
     return () => clearTimeout(t);
   }, []);
 
+  // Always-current selected date for async handlers. A logging handler captures
+  // the date at submit time in its closure; this ref lets it ask "is the user
+  // still on that day?" after an await, so a meal that finishes analyzing after a
+  // day switch is written to the right shard instead of clobbering the new one.
+  const selectedDateRef = useRef(selectedDate);
+  useEffect(() => { selectedDateRef.current = selectedDate; }, [selectedDate]);
+
+  // When loadDay hydrates state from storage we tag the exact object it set here.
+  // The persist effect skips saving that object so a pure date switch does not
+  // re-write and re-sync a shard that did not change (write amplification, #16).
+  const skipPersistRef = useRef<Record<string, Meal[]> | null>(null);
+
   // Load meals for selected date (Pagination/Sharding)
   React.useEffect(() => {
     let active = true;
@@ -271,7 +283,9 @@ export const HomeScreen: React.FC = () => {
       const key = getDateKey(selectedDate);
       const dailyMeals = await dataStorage.getDailyLog(key);
       if (active) {
-        setMealsByDate({ [key]: dailyMeals });
+        const hydrated = { [key]: dailyMeals };
+        skipPersistRef.current = hydrated;
+        setMealsByDate(hydrated);
       }
     };
     loadDay();
@@ -649,6 +663,13 @@ export const HomeScreen: React.FC = () => {
 
   // Persist meals whenever mealsByDate changes, AND update local summary state
   useEffect(() => {
+    // Skip the round trip when this state came straight from loadDay. Identity
+    // match is exact: any real mutation replaces the object, so a genuine edit
+    // never matches and still persists.
+    if (skipPersistRef.current === mealsByDate) {
+      skipPersistRef.current = null;
+      return;
+    }
     const persistAndSync = async () => {
       await dataStorage.saveMeals(mealsByDate);
       // Refresh summaries from storage to catch updates made by dataStorage.saveMeals
@@ -1381,6 +1402,37 @@ export const HomeScreen: React.FC = () => {
     return true;
   };
 
+  // Apply a real (persisted) meal-list change to a specific day. If the user is
+  // still viewing that day, update state and let the persist effect save it. If
+  // they have navigated away, that day is no longer in memory, so the change is
+  // merged straight into the stored shard. This is the fix for the data loss
+  // where a meal that finished analyzing after a day switch overwrote the
+  // original day with a single-meal slice and soft-deleted the rest.
+  const commitMealChange = async (
+    dateKey: string,
+    updater: (list: Meal[]) => Meal[]
+  ) => {
+    if (getDateKey(selectedDateRef.current) === dateKey) {
+      setMealsByDate(prev => ({ ...prev, [dateKey]: updater(prev[dateKey] || []) }));
+      return;
+    }
+    const persisted = await dataStorage.getDailyLog(dateKey);
+    await dataStorage.saveDailyLog(dateKey, updater(persisted));
+    const fresh = await dataStorage.loadDailySummaries();
+    setSummariesByDate(fresh);
+  };
+
+  // Remove an in-flight optimistic skeleton. It only ever lives in state and is
+  // never persisted, so if the user has left that day there is nothing to clean
+  // up and we must not touch the shard.
+  const removePendingMeal = (dateKey: string, pendingId: string) => {
+    if (getDateKey(selectedDateRef.current) !== dateKey) return;
+    setMealsByDate(prev => ({
+      ...prev,
+      [dateKey]: (prev[dateKey] || []).filter(m => m.id !== pendingId),
+    }));
+  };
+
   const handleInputSubmit = async (text: string) => {
     Keyboard.dismiss(); // Dismiss keyboard immediately
     if (__DEV__) console.log('Input submitted:', text);
@@ -1442,10 +1494,7 @@ export const HomeScreen: React.FC = () => {
         // Handle Clarification
         if (analysisResult.clarificationQuestion) {
           // Remove pending meal since we are aborting to ask question
-          setMealsByDate(prev => ({
-            ...prev,
-            [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
-          }));
+          removePendingMeal(currentDateKey, pendingId);
 
           setTranscribedText(trimmed); // Put text back
           setShouldFocusInput(true);
@@ -1462,10 +1511,7 @@ export const HomeScreen: React.FC = () => {
 
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
-          setMealsByDate(prev => ({
-            ...prev,
-            [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
-          }));
+          removePendingMeal(currentDateKey, pendingId);
           Alert.alert(
             'Food Analysis Not Configured',
             'Food analysis is not configured. Please contact support.'
@@ -1490,18 +1536,18 @@ export const HomeScreen: React.FC = () => {
           loadingState: 'done'
         };
 
-        setMealsByDate((prev) => {
-          const currentList = prev[currentDateKey] || [];
-          // Upsert, not map-or-drop. If a wholesale reload (cold-open hydration,
-          // AppState foreground, auth listener) wiped the optimistic pending row
-          // while analysis was in flight, currentList no longer contains pendingId
-          // and a plain .map would silently drop the parsed food (the "stuck
-          // calculating, food never appears" bug). Append in that case.
+        // Upsert, not map-or-drop. If a wholesale reload (cold-open hydration,
+        // AppState foreground, auth listener) wiped the optimistic pending row
+        // while analysis was in flight, the list no longer contains pendingId and
+        // a plain .map would silently drop the parsed food (the "stuck
+        // calculating, food never appears" bug). Append in that case. If the user
+        // switched days mid-analysis, commitMealChange merges into the original
+        // day's shard instead of overwriting the now-loaded day.
+        await commitMealChange(currentDateKey, (currentList) => {
           const hasPending = currentList.some(m => m.id === pendingId);
-          const nextList = hasPending
+          return hasPending
             ? currentList.map(m => m.id === pendingId ? finalizedMeal : m)
             : [...currentList, finalizedMeal];
-          return { ...prev, [currentDateKey]: nextList };
         });
 
         // Count this new prompt as an entry
@@ -1538,10 +1584,7 @@ export const HomeScreen: React.FC = () => {
 
       if (parsedExercises.length > 0) {
         // IT WAS EXERCISE: Remove Pending Meal, Add Exercise
-        setMealsByDate(prev => ({
-          ...prev,
-          [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
-        }));
+        removePendingMeal(currentDateKey, pendingId);
 
         const newExerciseEntry: ExerciseEntry = {
           id: generateId(),
@@ -1562,10 +1605,7 @@ export const HomeScreen: React.FC = () => {
 
       // NOTHING DETECTED
       if (__DEV__) console.log('No foods or exercises recognized:', trimmed);
-      setMealsByDate(prev => ({
-        ...prev,
-        [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
-      }));
+      removePendingMeal(currentDateKey, pendingId);
       Alert.alert(
         'No Entry Detected',
         'We couldn’t recognize any foods or exercises. Try adding more detail or separate your entries.',
@@ -1574,10 +1614,7 @@ export const HomeScreen: React.FC = () => {
     } catch (error) {
       if (__DEV__) console.error('Error processing food input:', error);
       // ERROR: Remove Pending Meal
-      setMealsByDate(prev => ({
-        ...prev,
-        [currentDateKey]: (prev[currentDateKey] || []).filter(m => m.id !== pendingId)
-      }));
+      removePendingMeal(currentDateKey, pendingId);
       Alert.alert(
         'Error',
         'Something went wrong while processing your log. Please try again.',
@@ -1664,19 +1701,15 @@ export const HomeScreen: React.FC = () => {
         return;
       }
 
-      // Update meal with new prompt and foods
-      setMealsByDate(prev => {
-        const currentMeals = prev[currentDateKey] || [];
-        const updatedMeals = currentMeals.map(meal =>
+      // Update meal with new prompt and foods. commitMealChange merges into the
+      // original day's shard if the user navigated away during re-analysis.
+      await commitMealChange(currentDateKey, (currentMeals) =>
+        currentMeals.map(meal =>
           meal.id === mealId
             ? { ...meal, prompt: newPrompt, foods: parsedFoods, updatedAt: new Date().toISOString() }
             : meal
-        );
-        return {
-          ...prev,
-          [currentDateKey]: updatedMeals,
-        };
-      });
+        )
+      );
 
       // Count this edit as an entry only after successful update
       await incrementEntryCount();
@@ -1977,11 +2010,10 @@ export const HomeScreen: React.FC = () => {
           updatedAt: new Date().toISOString()
         };
 
-        // Add meal to the current selected date
-        setMealsByDate(prev => ({
-          ...prev,
-          [dateKey]: [...(prev[dateKey] || []), newMeal]
-        }));
+        // Add meal to the date the photo was taken on. If the user switched days
+        // during upload/analysis, commitMealChange merges into that day's shard
+        // rather than overwriting whatever day is now loaded.
+        await commitMealChange(dateKey, (list) => [...list, newMeal]);
         await analyticsService.trackMealLogged(selectedDate);
         if (__DEV__) console.log('Meal added to date:', dateKey);
         resetUploadState();
