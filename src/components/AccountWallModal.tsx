@@ -49,7 +49,7 @@ export const AccountWallModal: React.FC<AccountWallModalProps> = ({
 
           {/* Headline */}
           <Text style={[st.title, { color: theme.colors.textPrimary }]}>
-            You've logged {logCount} meals!
+            You've logged {logCount} times!
           </Text>
           <Text style={[st.sub, { color: theme.colors.textSecondary }]}>
             Create an account to keep your data safe and unlock all features

@@ -104,7 +104,11 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   }, [currentMonth, mealsByDate, dailyCalorieTarget, summariesByDate]);
 
   const handlePreviousMonth = () => setCurrentMonth(subMonths(currentMonth, 1));
-  const handleNextMonth = () => setCurrentMonth(addMonths(currentMonth, 1));
+  // You cannot log on a future day, so do not let the user page past this month.
+  const isViewingCurrentMonth = isSameMonth(currentMonth, new Date());
+  const handleNextMonth = () => {
+    if (!isViewingCurrentMonth) setCurrentMonth(addMonths(currentMonth, 1));
+  };
 
   const closeWithAnimation = () => {
     Animated.timing(slideAnim, {
@@ -164,8 +168,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                 <TouchableOpacity onPress={handlePreviousMonth} style={styles.navButton}>
                   <ChevronLeft color={theme.colors.textPrimary} size={20} />
                 </TouchableOpacity>
-                <TouchableOpacity onPress={handleNextMonth} style={styles.navButton}>
-                  <ChevronRight color={theme.colors.textPrimary} size={20} />
+                <TouchableOpacity onPress={handleNextMonth} style={styles.navButton} disabled={isViewingCurrentMonth}>
+                  <ChevronRight color={isViewingCurrentMonth ? theme.colors.textTertiary : theme.colors.textPrimary} size={20} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -185,9 +189,12 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                 const isCurrentMonth = isSameMonth(dayData.date, currentMonth);
                 const isSelected = isSameDay(dayData.date, selectedDate);
                 const isToday = isSameDay(dayData.date, new Date());
+                // Future days cannot be logged on, so they are not selectable.
+                const isFuture = startOfDay(dayData.date) > startOfDay(new Date());
+                const isSelectable = isCurrentMonth && !isFuture;
 
                 // Styles
-                const textColor = isCurrentMonth
+                const textColor = isSelectable
                   ? (isSelected ? theme.colors.background : theme.colors.textPrimary)
                   : theme.colors.textTertiary;
 
@@ -207,8 +214,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                   <TouchableOpacity
                     key={index}
                     style={[styles.calendarDay, { backgroundColor }]}
-                    onPress={() => isCurrentMonth && handleDatePress(dayData.date)}
-                    disabled={!isCurrentMonth}
+                    onPress={() => isSelectable && handleDatePress(dayData.date)}
+                    disabled={!isSelectable}
                     activeOpacity={0.7}
                   >
                     <Text style={[

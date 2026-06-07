@@ -265,6 +265,14 @@ export const HomeScreen: React.FC = () => {
     return () => clearTimeout(t);
   }, []);
 
+  // The first-log quote is a one-time nudge. Auto-hide it so it does not stay
+  // pinned above the food list for the rest of the session.
+  useEffect(() => {
+    if (!showFirstLogMessage) return;
+    const t = setTimeout(() => setShowFirstLogMessage(false), 6000);
+    return () => clearTimeout(t);
+  }, [showFirstLogMessage]);
+
   // Always-current selected date for async handlers. A logging handler captures
   // the date at submit time in its closure; this ref lets it ask "is the user
   // still on that day?" after an await, so a meal that finishes analyzing after a
