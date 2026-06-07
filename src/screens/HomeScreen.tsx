@@ -2627,23 +2627,57 @@ export const HomeScreen: React.FC = () => {
             scrollEnabled={scrollEnabled}
             keyboardShouldPersistTaps="handled"
           >
-            {/* Stat Cards — scroll away as the food log scrolls up so the list gets the full height */}
-            <StatCardsSection
-              macrosData={macrosData}
-              macros2Data={macros2Data}
-              dailyCalories={bankAdjustedCalories}
-              onScrollEnable={setScrollEnabled}
-              calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
-              calorieBankBalance={calorieBankCycle?.bankBalance || 0}
-              todayCaloriesEaten={currentNutrition.totalCalories || 0}
-              adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
-              dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
-              weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
-              weeklyActual={calorieBankCycle?.weeklyActual || 0}
-              remainingDays={calorieBankCycle?.remainingDays || 0}
-              daysInCycle={calorieBankCycle?.daysInCycle || 7}
-              loading={statsLoading}
-            />
+            {/* Stat Cards — scroll away as the food log scrolls up so the list gets the full height.
+                When goals were never set, the stat cards would show the seeded defaults (1500 kcal,
+                169/113/42 g) as if they were real targets. Show a set-goals prompt instead. The 8s
+                shimmer backstop still runs first so a signed-in user whose goals arrive from the cloud
+                never flashes this prompt. */}
+            {!goalsSet && statsShimmerTimedOut ? (
+              <TouchableOpacity
+                onPress={handleSetGoals}
+                activeOpacity={0.85}
+                style={{
+                  marginHorizontal: 16,
+                  marginTop: 8,
+                  backgroundColor: theme.colors.card,
+                  borderColor: theme.colors.border,
+                  borderWidth: 1,
+                  borderRadius: 12,
+                  padding: 16,
+                  flexDirection: 'row',
+                  alignItems: 'center',
+                  gap: 12,
+                }}
+              >
+                <Feather name="target" size={20} color={theme.colors.primary} />
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary }}>
+                    Set your daily goal
+                  </Text>
+                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 }}>
+                    Add your target so we can track calories and macros.
+                  </Text>
+                </View>
+                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+              </TouchableOpacity>
+            ) : (
+              <StatCardsSection
+                macrosData={macrosData}
+                macros2Data={macros2Data}
+                dailyCalories={bankAdjustedCalories}
+                onScrollEnable={setScrollEnabled}
+                calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
+                calorieBankBalance={calorieBankCycle?.bankBalance || 0}
+                todayCaloriesEaten={currentNutrition.totalCalories || 0}
+                adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
+                dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
+                weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
+                weeklyActual={calorieBankCycle?.weeklyActual || 0}
+                remainingDays={calorieBankCycle?.remainingDays || 0}
+                daysInCycle={calorieBankCycle?.daysInCycle || 7}
+                loading={statsLoading}
+              />
+            )}
 
             {/* Daily AI Coach Card - Premium Only */}
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
