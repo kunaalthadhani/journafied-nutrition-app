@@ -1945,10 +1945,11 @@ export const HomeScreen: React.FC = () => {
     }
 
     try {
-      // Check Daily Limit
-      const dateKey = getDateKey(selectedDate);
-      const todayMeals = mealsByDate[dateKey] || [];
-      if (!isPremium && todayMeals.length >= 3) {
+      // Same entry gate as the text path. canAddEntry is the single source of
+      // truth for the free daily limit (disabled pre-launch). The photo path used
+      // to keep its own hardcoded 3-meal check, so a free user was capped on
+      // photos but not on text.
+      if (!canAddEntry()) {
         Alert.alert(
           "Daily Limit Reached",
           "Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!"
@@ -2014,7 +2015,26 @@ export const HomeScreen: React.FC = () => {
         // during upload/analysis, commitMealChange merges into that day's shard
         // rather than overwriting whatever day is now loaded.
         await commitMealChange(dateKey, (list) => [...list, newMeal]);
+
+        // Mirror the text path. The photo path used to skip this, so photo-only
+        // users never advanced the entry counter: the account-wall nag never
+        // fired and the first-log banner re-showed on every photo.
+        await incrementEntryCount();
         await analyticsService.trackMealLogged(selectedDate);
+
+        const accountInfo = await dataStorage.loadAccountInfo();
+        if (accountInfo?.email) {
+          const referralResult = await referralService.processMealLoggingProgress(accountInfo.email);
+          if (referralResult.rewardsAwarded && referralResult.entriesAwarded) {
+            Alert.alert(
+              '🎉 Referral Reward Earned!',
+              referralResult.message || `You've earned +${referralResult.entriesAwarded} free entries!`,
+              [{ text: 'Awesome!', style: 'default' }]
+            );
+            const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+            setTotalEarnedEntries(earned);
+          }
+        }
         if (__DEV__) console.log('Meal added to date:', dateKey);
         resetUploadState();
       } else {
