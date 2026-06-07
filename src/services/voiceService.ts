@@ -122,13 +122,16 @@ class VoiceService {
     }
   }
 
-  private async transcribeAudio(audioUri: string): Promise<string> {
+  private async transcribeAudio(audioUri: string): Promise<string | null> {
     try {
       console.log('Transcribing audio from URI:', audioUri);
       return await this.transcribeWithOpenAI(audioUri);
     } catch (error) {
+      // Return null, not a human-readable sentinel. The caller checks for a
+      // falsy result and shows its own error. Returning an apology sentence
+      // dropped that text into the meal input as if the user had dictated it.
       console.error('Transcription failed:', error);
-      return 'Sorry, I could not transcribe your audio. Please try typing instead.';
+      return null;
     }
   }
 

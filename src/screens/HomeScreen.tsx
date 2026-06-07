@@ -243,6 +243,7 @@ export const HomeScreen: React.FC = () => {
   const bankAdjustedCalories = isPremium && calorieBankCycle && calorieBankConfig?.enabled
     ? calorieBankCycle.adjustedTodayTarget
     : dailyCalories;
+  const calorieBankActive = !!(isPremium && calorieBankConfig?.enabled && calorieBankCycle);
 
   // Only show the calorie numbers once goals have actually hydrated. On cold
   // open (especially the PWA after cache eviction) this avoids the 1500 default
@@ -356,16 +357,18 @@ export const HomeScreen: React.FC = () => {
     }
   }, [showWeightTracker]);
 
-  // Calories card data (Food, Exercise, Remaining)
-  const effectiveDailyCalories = dailyCalories && dailyCalories > 0 ? dailyCalories : 1500;
+  // Calories card data (Food, Exercise, Remaining). Measure Remaining against the
+  // bank-adjusted target when the bank is on, so it agrees with the Banked and
+  // Surplus columns (which also use the adjusted target). In default mode let it
+  // go negative so overeating is visible; in bank mode the Surplus column already
+  // shows the overage, so Remaining floors at 0 there.
+  const effectiveDailyCalories = bankAdjustedCalories && bankAdjustedCalories > 0 ? bankAdjustedCalories : 1500;
   const totalExerciseCalories = currentDayExercises.reduce(
     (sum, entry) => sum + calculateExerciseCalories(entry.exercises),
     0
   );
-  const remainingCalories = Math.max(
-    0,
-    effectiveDailyCalories - currentNutrition.totalCalories + totalExerciseCalories
-  );
+  const remainingRaw = effectiveDailyCalories - currentNutrition.totalCalories + totalExerciseCalories;
+  const remainingCalories = calorieBankActive ? Math.max(0, remainingRaw) : remainingRaw;
   const macros2Data: MacroData = {
     carbs: { current: currentNutrition.totalCalories, target: 0, unit: 'cal' }, // Food calories
     protein: { current: totalExerciseCalories, target: 0, unit: 'cal' }, // Exercise calories
@@ -1570,7 +1573,7 @@ export const HomeScreen: React.FC = () => {
             setTotalEarnedEntries(earned);
           }
         }
-        return;
+        return true;
       }
 
       // If no foods were recognized, try interpreting as exercise
@@ -2666,7 +2669,7 @@ export const HomeScreen: React.FC = () => {
                 macros2Data={macros2Data}
                 dailyCalories={bankAdjustedCalories}
                 onScrollEnable={setScrollEnabled}
-                calorieBankActive={!!(isPremium && calorieBankConfig?.enabled && calorieBankCycle)}
+                calorieBankActive={calorieBankActive}
                 calorieBankBalance={calorieBankCycle?.bankBalance || 0}
                 todayCaloriesEaten={currentNutrition.totalCalories || 0}
                 adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
@@ -2684,7 +2687,8 @@ export const HomeScreen: React.FC = () => {
               <SmartSuggestBanner
                 isPremium={isPremium}
                 onLogSuggestion={async (text) => {
-                  if (text.trim()) await handleInputSubmit(text);
+                  if (!text.trim()) return false;
+                  return await handleInputSubmit(text);
                 }}
               />
             )}

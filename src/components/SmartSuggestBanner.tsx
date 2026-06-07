@@ -13,7 +13,9 @@ if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental
 
 export interface SmartSuggestBannerProps {
     isPremium: boolean;
-    onLogSuggestion?: (suggestion: string) => void | Promise<void>;
+    // Returns true only if a meal was actually logged. The button must not claim
+    // success when the log failed or was aborted (clarification, no food found).
+    onLogSuggestion?: (suggestion: string) => boolean | void | Promise<boolean | void>;
 }
 
 export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremium, onLogSuggestion }) => {
@@ -28,10 +30,11 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
     const handleLog = async () => {
         if (logState !== 'idle' || !suggestion?.loggableText?.trim()) return;
         setLogState('logging');
+        let logged = false;
         try {
-            await onLogSuggestion?.(suggestion.loggableText);
-        } catch { /* parent handles errors; we just stop the button spinning */ }
-        setLogState('logged');
+            logged = (await onLogSuggestion?.(suggestion.loggableText)) === true;
+        } catch { /* parent shows its own error; fall through to idle so the user can retry */ }
+        setLogState(logged ? 'logged' : 'idle');
     };
 
     useEffect(() => {
