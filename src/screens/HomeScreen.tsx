@@ -2691,6 +2691,23 @@ export const HomeScreen: React.FC = () => {
               />
             )}
 
+            {/* Use-it-before-you-lose-it nudge. Banked calories expire at cycle
+                reset, so when the bank is full and the week is nearly over, point
+                it out instead of letting it quietly expire. */}
+            {calorieBankActive && calorieBankCycle && isSameDay(selectedDate, new Date()) &&
+              calorieBankCycle.bankBalance >= 200 && calorieBankCycle.remainingDays >= 1 && calorieBankCycle.remainingDays <= 2 && (
+              <View style={{
+                marginHorizontal: 16, marginBottom: 16, padding: 14, borderRadius: 12,
+                backgroundColor: '#22C55E12', borderWidth: 1, borderColor: '#22C55E33',
+                flexDirection: 'row', alignItems: 'center', gap: 12,
+              }}>
+                <Feather name="gift" size={20} color="#16A34A" />
+                <Text style={{ flex: 1, fontSize: 13, color: theme.colors.textPrimary, lineHeight: 18 }}>
+                  You have {Math.round(calorieBankCycle.bankBalance).toLocaleString()} kcal banked and {calorieBankCycle.remainingDays === 1 ? 'today is the last day' : `${calorieBankCycle.remainingDays} days left`}. Enjoy a bigger meal before your week resets.
+                </Text>
+              </View>
+            )}
+
             {/* Daily AI Coach Card - Premium Only */}
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner

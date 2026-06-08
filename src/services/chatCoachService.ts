@@ -2,6 +2,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { dataStorage, UserMetricsSnapshot, Insight } from './dataStorage';
 import * as Notifications from 'expo-notifications';
 import { sanitizeObjectForAI } from '../utils/sanitizeAI';
+import { calculateCurrentCycle } from '../utils/calorieBankEngine';
 
 const STORAGE_KEYS = {
     COACH_USAGE: '@trackkal:coach_usage_v2',
@@ -64,6 +65,14 @@ export interface ChatCoachContext {
         carbs: number;
         fat: number;
     };
+    // Present only when the user runs the weekly calorie bank.
+    calorieBank?: {
+        adjustedTodayTarget: number; // today's budget after the bank's flex
+        bankBalance: number; // calories saved for the rest of the week
+        remainingDays: number; // days left in the cycle, including today
+        weeklyBudget: number;
+        remainingBudget: number;
+    };
 }
 
 export const COACH_SYSTEM_PROMPT = `
@@ -79,6 +88,7 @@ You will be provided with a JSON "Context" containing the user's stats, recent a
 - **Current Status:** Look at \`todaysLog\` to see what they have ALREADY eaten.
 - **Goal Gap:** Look at \`remainingMacros\` to see exactly what is left.
 - **The Menu:** \`topFoods\` is the list of foods the user actually eats.
+- **Calorie Bank:** If \`calorieBank\` is present, the user flexes calories across the week. \`remainingMacros.calories\` already reflects today's adjusted budget, so trust it. \`calorieBank.bankBalance\` is calories saved for the rest of the week and \`calorieBank.remainingDays\` is how many days are left. When they ask if they can afford something, answer against today's budget and mention banked headroom if it is relevant. Never tell them to eat below their target just because they banked.
 
 ### STRICT MENU-MATCHING PROTOCOL
 **CRITICAL RULE:** When suggesting specific food items, you must ONLY suggest foods found in the \`topFoods\` list.
@@ -221,6 +231,30 @@ export const chatCoachService = {
             };
         });
 
+        // 4b. Calorie bank context. When the bank is on, today's real budget is the
+        // adjusted target, so remaining calories should measure against that, not
+        // the base goal.
+        let calorieBank: ChatCoachContext['calorieBank'] = undefined;
+        let todayCalorieTarget = snapshot.userGoals.calories;
+        try {
+            const bankConfig = await dataStorage.loadCalorieBankConfig();
+            if (bankConfig?.enabled) {
+                const goals = await dataStorage.loadGoals();
+                const summaries = await dataStorage.loadDailySummaries();
+                if (goals) {
+                    const cycle = calculateCurrentCycle(bankConfig, summaries, goals);
+                    todayCalorieTarget = cycle.adjustedTodayTarget;
+                    calorieBank = {
+                        adjustedTodayTarget: Math.round(cycle.adjustedTodayTarget),
+                        bankBalance: Math.round(cycle.bankBalance),
+                        remainingDays: cycle.remainingDays,
+                        weeklyBudget: Math.round(cycle.weeklyBudget),
+                        remainingBudget: Math.round(cycle.remainingBudget),
+                    };
+                }
+            }
+        } catch { /* bank context is best-effort; never block the coach */ }
+
         // 5. Construct the full robust context
         return {
             userProfile: {
@@ -264,11 +298,12 @@ export const chatCoachService = {
                 meals: mealSummaries
             },
             remainingMacros: {
-                calories: Math.max(0, snapshot.userGoals.calories - todayCals),
+                calories: Math.max(0, todayCalorieTarget - todayCals),
                 protein: Math.max(0, snapshot.userGoals.protein - todayP),
                 carbs: Math.max(0, snapshot.userGoals.carbs - todayC),
                 fat: Math.max(0, snapshot.userGoals.fat - todayF)
-            }
+            },
+            calorieBank
         };
     },
 

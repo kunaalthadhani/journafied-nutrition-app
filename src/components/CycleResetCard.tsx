@@ -19,6 +19,16 @@ export const CycleResetCard: React.FC<CycleResetCardProps> = ({ cycle, onDismiss
   const overUnder = cycle.weeklyActual - cycle.weeklyBudget;
   const isOver = overUnder > 0;
 
+  // One forward-looking line keyed off how the week actually went, so the recap
+  // coaches the next cycle instead of only scoring the last one.
+  const coachLine = isOver
+    ? 'You ran over budget. Plan your heavier days earlier so the bank can absorb them.'
+    : cycle.bankUtilization < 30 && cycle.expiredCalories > 200
+      ? 'You banked plenty but barely spent it. Use that room next week, the flexibility is the point.'
+      : cycle.daysLogged < cycle.daysInCycle
+        ? 'A few days went unlogged. Logging every day makes the bank work for you.'
+        : 'Balanced week. Keep the rhythm going.';
+
   return (
     <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
       <View style={styles.headerRow}>
@@ -34,7 +44,7 @@ export const CycleResetCard: React.FC<CycleResetCardProps> = ({ cycle, onDismiss
 
       {cycle.expiredCalories > 0 && (
         <Text style={[styles.subStat, { color: theme.colors.textSecondary }]}>
-          {Math.round(cycle.expiredCalories).toLocaleString()} kcal expired unused
+          {Math.round(cycle.expiredCalories).toLocaleString()} kcal went unused
         </Text>
       )}
 
@@ -58,6 +68,10 @@ export const CycleResetCard: React.FC<CycleResetCardProps> = ({ cycle, onDismiss
           <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>Budget used</Text>
         </View>
       </View>
+
+      <Text style={[styles.coach, { color: theme.colors.textPrimary }]}>
+        {coachLine}
+      </Text>
 
       <Text style={[styles.footer, { color: theme.colors.textTertiary }]}>
         Your new cycle starts today
@@ -115,6 +129,12 @@ const styles = StyleSheet.create({
   detailLabel: {
     fontSize: 11,
     marginTop: 2,
+  },
+  coach: {
+    fontSize: 13,
+    fontWeight: '500',
+    lineHeight: 18,
+    marginBottom: 10,
   },
   footer: {
     fontSize: 12,
