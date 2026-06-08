@@ -3198,7 +3198,8 @@ export const dataStorage = {
       };
 
       let dayCount = 0;
-      let verifiedKeys: string[] = []; // for common foods scan
+      let verifiedKeys: string[] = []; // last 30 logged days, for the common-foods scan
+      const recentKeys = new Set<string>(); // last 7 logged days, for the averages
 
       // Calculate logged days from MEALS directly (source of truth)
       const allMeals = await this.loadMeals();
@@ -3217,6 +3218,7 @@ export const dataStorage = {
           totalF += s.totalFat;
           dayCount++;
           verifiedKeys.push(k);
+          recentKeys.add(k);
         }
       }
 
@@ -3254,7 +3256,9 @@ export const dataStorage = {
           if (diff / goals.calories <= 0.15) consistentDays++;
         }
       }
-      const consistencyScore = Math.round((consistentDays / 7) * 100);
+      // Consistency is the share of LOGGED days that hit target, not of a fixed 7.
+      // Dividing by 7 made a new user with 2 perfect days score 29%.
+      const consistencyScore = Math.round((consistentDays / Math.max(1, dayCount)) * 100);
 
       // 6. Common Foods & Micro Accumulation
       const foodStats: Record<string, { count: number, p: number, c: number, f: number, kcal: number, weight: number }> = {};
@@ -3262,6 +3266,9 @@ export const dataStorage = {
       for (const k of verifiedKeys) {
         try {
           const dailyMeals = await this.getDailyLog(k);
+          // Common foods scan the full 30-day window; micro averages only the last
+          // 7 days, matching the macro window and the dayCount they divide by.
+          const isRecent = recentKeys.has(k);
           dailyMeals.forEach(m => {
             m.foods.forEach(f => {
               // Stats for Common Foods
@@ -3279,7 +3286,9 @@ export const dataStorage = {
                 s.weight += (f.weight_g || 100);
               }
 
-              // Accumulate Daily Micros
+              if (!isRecent) return;
+
+              // Accumulate Daily Micros (last 7 logged days only)
               // Safe access with fallback 0
               if (f.dietary_fiber) microSums.dietary_fiber += f.dietary_fiber;
               else if ((f as any).fiber) microSums.dietary_fiber += (f as any).fiber; // legacy fallback
@@ -3391,7 +3400,7 @@ export const dataStorage = {
         currentStreak: streak,
         weakNutrients: weak,
         commonFoods,
-        recentDailySummaries: Object.values(summaries).filter(s => verifiedKeys.includes(s.date)),
+        recentDailySummaries: Object.values(summaries).filter(s => recentKeys.has(s.date)),
         loggedDaysCount,
       };
 

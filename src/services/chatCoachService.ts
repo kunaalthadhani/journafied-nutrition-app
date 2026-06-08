@@ -168,8 +168,12 @@ export const chatCoachService = {
         // 1. Get the latest snapshot
         let snapshot = await dataStorage.getUserMetricsSnapshot();
 
-        // Fallback: Generate if missing OR if strictly missing the new field we need
-        if (!snapshot || typeof snapshot.loggedDaysCount === 'undefined') {
+        // Regenerate if missing, schema-stale (missing loggedDaysCount), or built on
+        // a previous day. The day check keeps the coach on fresh numbers and also
+        // propagates engine fixes to existing users within a day.
+        const todayStr = new Date().toISOString().split('T')[0];
+        const isStaleDay = !!snapshot?.generatedAt && snapshot.generatedAt.split('T')[0] !== todayStr;
+        if (!snapshot || typeof snapshot.loggedDaysCount === 'undefined' || isStaleDay) {
             console.log("[ChatCoach] Snapshot stale or missing. Generating fresh metrics...");
             snapshot = await dataStorage.generateUserMetricsSnapshot();
         }
