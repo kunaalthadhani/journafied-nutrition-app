@@ -309,6 +309,7 @@ export function calculateCompletedCycle(
   summariesByDate: Record<string, DailySummary>,
   goals: ExtendedGoalData,
   cycleStart: Date,
+  settleThrough?: Date,
 ): CalorieBankCycle {
   const goalType = goals.goal || 'lose';
   const baseDailyTarget = goals.calories || 2000;
@@ -316,9 +317,12 @@ export function calculateCompletedCycle(
   const spendingCap = baseDailyTarget * (config.spendingCapPercent / 100);
 
   const cycleEnd = getCycleEndDate(cycleStart);
+  // For an in-progress cycle (start-day change) we only settle through a given
+  // day, never past the real cycle end.
+  const lastDay = settleThrough && isBefore(settleThrough, cycleEnd) ? settleThrough : cycleEnd;
   const enabledDate = startOfDay(parseISO(config.enabledDate));
   const effectiveStart = isAfter(enabledDate, cycleStart) ? enabledDate : cycleStart;
-  const daysInCycle = differenceInDays(cycleEnd, effectiveStart) + 1;
+  const daysInCycle = Math.max(0, differenceInDays(lastDay, effectiveStart) + 1);
 
   const perDayData: CalorieBankDayData[] = [];
   let totalBanked = 0;
@@ -359,7 +363,7 @@ export function calculateCompletedCycle(
 
   return {
     cycleStartDate: format(effectiveStart, 'yyyy-MM-dd'),
-    cycleEndDate: format(cycleEnd, 'yyyy-MM-dd'),
+    cycleEndDate: format(lastDay, 'yyyy-MM-dd'),
     baseDailyTarget,
     weeklyBudget,
     daysInCycle,

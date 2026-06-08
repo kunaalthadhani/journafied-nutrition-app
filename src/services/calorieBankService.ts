@@ -66,6 +66,21 @@ export async function checkAndResetCycle(
     didReset = true;
   }
 
+  // A cycle just rolled over, so promote any pending cap change to active. The
+  // completed cycles above were archived with the cap that was in force for them
+  // (the old active cap), which is correct.
+  if (didReset && (config.pendingDailyCapPercent !== undefined || config.pendingSpendingCapPercent !== undefined)) {
+    const promoted: CalorieBankConfig = {
+      ...config,
+      dailyCapPercent: config.pendingDailyCapPercent ?? config.dailyCapPercent,
+      spendingCapPercent: config.pendingSpendingCapPercent ?? config.spendingCapPercent,
+    };
+    delete promoted.pendingDailyCapPercent;
+    delete promoted.pendingSpendingCapPercent;
+    await dataStorage.saveCalorieBankConfig(promoted);
+    return { config: promoted, didReset };
+  }
+
   return { config, didReset };
 }
 
@@ -99,8 +114,10 @@ export async function disableCalorieBank(): Promise<void> {
 }
 
 /**
- * Update calorie bank settings (cap, cycle start day) without resetting the bank.
- * If cycleStartDay changes, that effectively resets the cycle boundaries.
+ * Update calorie bank settings. Cap changes are staged as pending and apply from
+ * the next cycle (never rewriting the current week). A cycle start day change
+ * restructures the cycle immediately; the caller should archive the in-progress
+ * week first via archiveInProgressCycle.
  */
 export async function updateCalorieBankSettings(
   updates: Partial<Pick<CalorieBankConfig, 'cycleStartDay' | 'dailyCapPercent' | 'spendingCapPercent'>>,
@@ -108,15 +125,75 @@ export async function updateCalorieBankSettings(
   const config = await dataStorage.loadCalorieBankConfig();
   if (!config) return null;
 
-  const updated: CalorieBankConfig = { ...config, ...updates };
+  const updated: CalorieBankConfig = { ...config };
 
-  // If cycle start day changed, reset enabledDate to today (new cycle starts now)
+  // Cap changes never rewrite a day that already settled. If the current cycle has
+  // no completed days yet (just enabled, or today is the start day), apply now;
+  // otherwise stage as pending so it takes effect at the next rollover.
+  const today = startOfDay(new Date());
+  const cycleStart = getCycleStartDate(config.cycleStartDay, today);
+  const enabledDate = startOfDay(parseISO(config.enabledDate));
+  const effectiveStart = isBefore(cycleStart, enabledDate) ? enabledDate : cycleStart;
+  const hasCompletedDays = isBefore(effectiveStart, today);
+
+  if (updates.dailyCapPercent !== undefined) {
+    if (hasCompletedDays) {
+      updated.pendingDailyCapPercent = updates.dailyCapPercent;
+    } else {
+      updated.dailyCapPercent = updates.dailyCapPercent;
+      delete updated.pendingDailyCapPercent;
+    }
+  }
+  if (updates.spendingCapPercent !== undefined) {
+    if (hasCompletedDays) {
+      updated.pendingSpendingCapPercent = updates.spendingCapPercent;
+    } else {
+      updated.spendingCapPercent = updates.spendingCapPercent;
+      delete updated.pendingSpendingCapPercent;
+    }
+  }
+
+  // A cycle start day change restructures the cycle now, starting fresh from
+  // today. Since there are no past days in the new cycle to rewrite, any pending
+  // cap can take effect immediately rather than waiting for a rollover.
   if (updates.cycleStartDay !== undefined && updates.cycleStartDay !== config.cycleStartDay) {
+    updated.cycleStartDay = updates.cycleStartDay;
     updated.enabledDate = format(startOfDay(new Date()), 'yyyy-MM-dd');
+    if (updated.pendingDailyCapPercent !== undefined) {
+      updated.dailyCapPercent = updated.pendingDailyCapPercent;
+      delete updated.pendingDailyCapPercent;
+    }
+    if (updated.pendingSpendingCapPercent !== undefined) {
+      updated.spendingCapPercent = updated.pendingSpendingCapPercent;
+      delete updated.pendingSpendingCapPercent;
+    }
   }
 
   await dataStorage.saveCalorieBankConfig(updated);
   return updated;
+}
+
+/**
+ * Archive the in-progress cycle's completed days (through yesterday) before the
+ * cycle is restructured by a start day change, so that week's banking is not
+ * lost. Today is live and is not settled.
+ */
+export async function archiveInProgressCycle(
+  summariesByDate: Record<string, DailySummary>,
+  goals: ExtendedGoalData,
+  now: Date = new Date(),
+): Promise<void> {
+  const config = await dataStorage.loadCalorieBankConfig();
+  if (!config || !config.enabled) return;
+
+  const today = startOfDay(now);
+  const currentCycleStart = getCycleStartDate(config.cycleStartDay, today);
+  const cycle = calculateCompletedCycle(config, summariesByDate, goals, currentCycleStart, addDays(today, -1));
+  if (cycle.daysInCycle <= 0) return; // no completed days yet this cycle
+
+  const completed = await dataStorage.loadCompletedCycles();
+  if (completed.some((c) => c.startDate === cycle.cycleStartDate)) return;
+  await dataStorage.saveCompletedCycle(buildCompletedCycleRecord(cycle) as CalorieBankCompletedCycle);
 }
 
 /**

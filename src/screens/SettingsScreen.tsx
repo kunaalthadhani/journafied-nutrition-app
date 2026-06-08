@@ -28,7 +28,7 @@ import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
 import { CalorieBankConfig } from '../services/dataStorage';
-import { enableCalorieBank, disableCalorieBank, updateCalorieBankSettings } from '../services/calorieBankService';
+import { enableCalorieBank, disableCalorieBank, updateCalorieBankSettings, archiveInProgressCycle } from '../services/calorieBankService';
 import { getDayName } from '../utils/calorieBankEngine';
 
 interface SettingsScreenProps {
@@ -81,6 +81,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
 
   // Calorie Bank
   const [calorieBankConfig, setCalorieBankConfig] = useState<CalorieBankConfig | null>(null);
+  // Base daily calorie goal, used to show the real kcal a cap percent works out to.
+  const [baseCalorieTarget, setBaseCalorieTarget] = useState(2000);
   const [bankExampleTab, setBankExampleTab] = useState<'lose' | 'maintain' | 'gain'>('lose');
 
   // Shared slide-up animation
@@ -192,6 +194,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       // Calorie Bank
       const bankConfig = await dataStorage.loadCalorieBankConfig();
       setCalorieBankConfig(bankConfig);
+      const goals = await dataStorage.loadGoals();
+      if (goals?.calories) setBaseCalorieTarget(goals.calories);
     } catch (e) {
       console.error("Error checking feature flags", e);
     }
@@ -1120,12 +1124,28 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {[1, 2, 3, 4, 5, 6, 0].map((day) => {
                             const isActive = calorieBankConfig.cycleStartDay === day;
+                            const applyStartDay = async () => {
+                              const [summaries, goals] = await Promise.all([
+                                dataStorage.loadDailySummaries(),
+                                dataStorage.loadGoals(),
+                              ]);
+                              if (goals) await archiveInProgressCycle(summaries, goals);
+                              const updated = await updateCalorieBankSettings({ cycleStartDay: day as CalorieBankConfig['cycleStartDay'] });
+                              if (updated) setCalorieBankConfig(updated);
+                            };
                             return (
                               <TouchableOpacity
                                 key={day}
-                                onPress={async () => {
-                                  const updated = await updateCalorieBankSettings({ cycleStartDay: day as CalorieBankConfig['cycleStartDay'] });
-                                  if (updated) setCalorieBankConfig(updated);
+                                onPress={() => {
+                                  if (isActive) return;
+                                  Alert.alert(
+                                    'Change start day?',
+                                    'This starts a new week today. The days so far this week are saved to your history.',
+                                    [
+                                      { text: 'Cancel', style: 'cancel' },
+                                      { text: 'Change', style: 'destructive', onPress: applyStartDay },
+                                    ]
+                                  );
                                 }}
                                 style={{
                                   paddingVertical: 10, paddingHorizontal: 14, borderRadius: 10,
@@ -1152,7 +1172,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                         <Text style={{ color: theme.colors.textPrimary, fontSize: 15, fontWeight: '600', marginBottom: 12 }}>Daily Banking Cap</Text>
                         <View style={{ flexDirection: 'row', gap: 10 }}>
                           {([15, 20, 25] as const).map((pct) => {
-                            const isActive = calorieBankConfig.dailyCapPercent === pct;
+                            // Show the user's chosen cap (pending if they just changed it),
+                            // not the active cap that is still running out the current week.
+                            const selectedCap = calorieBankConfig.pendingDailyCapPercent ?? calorieBankConfig.dailyCapPercent;
+                            const isActive = selectedCap === pct;
                             return (
                               <TouchableOpacity
                                 key={pct}
@@ -1175,11 +1198,17 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                                   fontSize: 11,
                                   color: isActive ? theme.colors.textSecondary : theme.colors.textTertiary,
                                   marginTop: 2,
-                                }}>~{Math.round(2000 * pct / 100)} kcal</Text>
+                                }}>~{Math.round(baseCalorieTarget * pct / 100)} kcal</Text>
                               </TouchableOpacity>
                             );
                           })}
                         </View>
+                        {calorieBankConfig.pendingDailyCapPercent !== undefined &&
+                          calorieBankConfig.pendingDailyCapPercent !== calorieBankConfig.dailyCapPercent && (
+                          <Text style={{ color: theme.colors.primary, fontSize: 12, marginTop: 8 }}>
+                            New cap applies from your next cycle ({getDayName(calorieBankConfig.cycleStartDay)}). This week keeps its current cap.
+                          </Text>
+                        )}
                         <Text style={{ color: theme.colors.textTertiary, fontSize: 12, marginTop: 8 }}>
                           The maximum you can bank or spend beyond your daily target in a single day. This prevents extreme restriction or overeating.
                         </Text>

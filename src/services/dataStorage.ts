@@ -41,6 +41,10 @@ export interface CalorieBankConfig {
   dailyCapPercent: 15 | 20 | 25; // max % of base daily target that can be banked per day
   spendingCapPercent: 15 | 20 | 25; // max % of base daily target that can be spent over per day
   enabledDate: string; // ISO date string — when feature was first turned on
+  // Cap changes apply from the next cycle, not retroactively. The pending value
+  // sits here until a cycle rollover promotes it to the active cap above.
+  pendingDailyCapPercent?: 15 | 20 | 25;
+  pendingSpendingCapPercent?: 15 | 20 | 25;
 }
 
 // Premium: Calorie Bank Completed Cycle (for analytics)
