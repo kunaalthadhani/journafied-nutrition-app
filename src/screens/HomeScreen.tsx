@@ -476,7 +476,11 @@ export const HomeScreen: React.FC = () => {
         setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
         setCalorieBankConfig(bankConfig);
 
-        const isFreshPremium = !!freshAccount?.email && freshPlan === 'premium';
+        const isFreshPremium = !!freshAccount?.email && (
+          FREE_PREMIUM_LAUNCH ||
+          freshPlan === 'premium' ||
+          (!!freshAccount?.premiumUntil && new Date(freshAccount.premiumUntil) > new Date())
+        );
         if (isFreshPremium && bankConfig?.enabled && savedGoals) {
           const summaries = await dataStorage.loadDailySummaries();
           setSummariesByDate(summaries);

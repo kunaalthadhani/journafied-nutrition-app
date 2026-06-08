@@ -41,7 +41,6 @@ export interface CalorieBankConfig {
   dailyCapPercent: 15 | 20 | 25; // max % of base daily target that can be banked per day
   spendingCapPercent: 15 | 20 | 25; // max % of base daily target that can be spent over per day
   enabledDate: string; // ISO date string — when feature was first turned on
-  onboardingSeen: boolean; // whether the user has seen the 3-card onboarding
 }
 
 // Premium: Calorie Bank Completed Cycle (for analytics)

@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { View, StyleSheet, Dimensions, PanResponder, Animated, Easing } from 'react-native';
 import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
@@ -49,6 +49,12 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   const cardOrder: CardType[] = calorieBankActive
     ? ['macros2', 'weekly', 'macros']
     : ['macros2', 'macros'];
+
+  // If the bank turns off while the Weekly card is showing, that card leaves the
+  // order and the area would render blank. Fall back to a card that still exists.
+  useEffect(() => {
+    if (!cardOrder.includes(currentCard)) setCurrentCard('macros2');
+  }, [calorieBankActive]);
 
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const slideAnim = useRef(new Animated.Value(0)).current;

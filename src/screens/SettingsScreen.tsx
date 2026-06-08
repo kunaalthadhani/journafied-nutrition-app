@@ -28,7 +28,7 @@ import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { NotificationSettingsScreen } from './NotificationSettingsScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
 import { CalorieBankConfig } from '../services/dataStorage';
-import { enableCalorieBank, disableCalorieBank, updateCalorieBankSettings, markOnboardingSeen } from '../services/calorieBankService';
+import { enableCalorieBank, disableCalorieBank, updateCalorieBankSettings } from '../services/calorieBankService';
 import { getDayName } from '../utils/calorieBankEngine';
 
 interface SettingsScreenProps {
@@ -1098,7 +1098,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           // Optimistic update first so Switch doesn't bounce back
                           setCalorieBankConfig(prev => prev
                             ? { ...prev, enabled: true }
-                            : { enabled: true, cycleStartDay: 1, dailyCapPercent: 20, spendingCapPercent: 20, enabledDate: new Date().toISOString().split('T')[0], onboardingSeen: false }
+                            : { enabled: true, cycleStartDay: 1, dailyCapPercent: 20, spendingCapPercent: 20, enabledDate: new Date().toISOString().split('T')[0] }
                           );
                           const config = await enableCalorieBank();
                           setCalorieBankConfig(config);

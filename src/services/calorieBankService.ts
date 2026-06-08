@@ -86,22 +86,20 @@ export async function checkAndResetCycle(
 }
 
 /**
- * Enable calorie banking with default or provided settings.
+ * Enable calorie banking. Re-enabling preserves the user's saved cycle start day
+ * and caps; only a brand-new config falls back to the defaults. Either way the
+ * cycle starts fresh from today, since the bank was off until now.
  */
 export async function enableCalorieBank(
   cycleStartDay: CalorieBankConfig['cycleStartDay'] = 1, // default Monday
   dailyCapPercent: CalorieBankConfig['dailyCapPercent'] = 20,
   spendingCapPercent: CalorieBankConfig['spendingCapPercent'] = 20,
 ): Promise<CalorieBankConfig> {
+  const existing = await dataStorage.loadCalorieBankConfig();
   const today = format(startOfDay(new Date()), 'yyyy-MM-dd');
-  const config: CalorieBankConfig = {
-    enabled: true,
-    cycleStartDay,
-    dailyCapPercent,
-    spendingCapPercent,
-    enabledDate: today,
-    onboardingSeen: false,
-  };
+  const config: CalorieBankConfig = existing
+    ? { ...existing, enabled: true, enabledDate: today }
+    : { enabled: true, cycleStartDay, dailyCapPercent, spendingCapPercent, enabledDate: today };
   await dataStorage.saveCalorieBankConfig(config);
   return config;
 }
@@ -151,13 +149,4 @@ export async function handlePlanChange(): Promise<void> {
     ...config,
     enabledDate: today,
   });
-}
-
-/**
- * Mark the onboarding as seen.
- */
-export async function markOnboardingSeen(): Promise<void> {
-  const config = await dataStorage.loadCalorieBankConfig();
-  if (!config) return;
-  await dataStorage.saveCalorieBankConfig({ ...config, onboardingSeen: true });
 }
