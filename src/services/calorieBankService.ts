@@ -8,8 +8,7 @@
 import { dataStorage, CalorieBankConfig, CalorieBankCompletedCycle, DailySummary, ExtendedGoalData } from './dataStorage';
 import {
   getCycleStartDate,
-  getCycleEndDate,
-  calculateCurrentCycle,
+  calculateCompletedCycle,
   buildCompletedCycleRecord,
 } from '../utils/calorieBankEngine';
 import { format, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
@@ -36,53 +35,38 @@ export async function checkAndResetCycle(
 
   const today = startOfDay(now);
   const currentCycleStart = getCycleStartDate(config.cycleStartDay, today);
-  const currentCycleStartStr = format(currentCycleStart, 'yyyy-MM-dd');
-
-  // Check if there are any completed cycles that haven't been archived yet.
-  // A cycle is "completed" if the current cycle start is AFTER the enabledDate's cycle start.
-  // We only need to archive the most recent previous cycle (not arbitrary old ones).
 
   const enabledDate = startOfDay(parseISO(config.enabledDate));
   const enabledCycleStart = getCycleStartDate(config.cycleStartDay, enabledDate);
 
-  // If the current cycle start is the same as or before the enabled cycle start,
-  // there's nothing to archive (we're still in the first cycle).
+  // Still inside the first cycle — nothing has completed yet.
   if (!isBefore(enabledCycleStart, currentCycleStart)) {
     return { config, didReset: false };
   }
 
-  // Check if we already archived for the previous cycle.
-  // The previous cycle started 7 days before the current cycle start.
-  const previousCycleStart = addDays(currentCycleStart, -7);
-  const previousCycleStartStr = format(previousCycleStart, 'yyyy-MM-dd');
-
   const completedCycles = await dataStorage.loadCompletedCycles();
-  const alreadyArchived = completedCycles.some(
-    (c) => c.startDate === previousCycleStartStr
-  );
+  const archived = new Set(completedCycles.map((c) => c.startDate));
 
-  if (alreadyArchived) {
-    return { config, didReset: false };
+  // Archive every cycle that completed since the bank was enabled, not just the
+  // most recent one — this catches cycles the app was closed through. Each cycle
+  // is settled across all its days; the live engine never settles today, which
+  // would otherwise drop the final day of every archived cycle.
+  let didReset = false;
+  for (
+    let cursor = enabledCycleStart;
+    isBefore(cursor, currentCycleStart);
+    cursor = addDays(cursor, 7)
+  ) {
+    const cycle = calculateCompletedCycle(config, summariesByDate, goals, cursor);
+    if (archived.has(cycle.cycleStartDate)) continue;
+    await dataStorage.saveCompletedCycle(
+      buildCompletedCycleRecord(cycle) as CalorieBankCompletedCycle,
+    );
+    archived.add(cycle.cycleStartDate);
+    didReset = true;
   }
 
-  // Archive the previous cycle.
-  // Build the cycle data for the previous week using the engine.
-  const previousCycleEnd = getCycleEndDate(previousCycleStart);
-  const previousCycleEndStr = format(previousCycleEnd, 'yyyy-MM-dd');
-
-  // Use the previous cycle's end date as "now" to get the full cycle calculation
-  const previousCycle = calculateCurrentCycle(
-    { ...config, enabledDate: config.enabledDate },
-    summariesByDate,
-    goals,
-    previousCycleEnd,
-  );
-
-  const record = buildCompletedCycleRecord(previousCycle);
-
-  await dataStorage.saveCompletedCycle(record as CalorieBankCompletedCycle);
-
-  return { config, didReset: true };
+  return { config, didReset };
 }
 
 /**

@@ -61,6 +61,48 @@ export function getCycleEndDate(cycleStartDate: Date): Date {
   return addDays(cycleStartDate, 6);
 }
 
+// ── Per-day settlement ──
+
+/**
+ * Settle a single completed day: how much it banks or spends against the base
+ * target, capped. Shared by the live engine (past days) and the archival path so
+ * the two can never drift. Gain flips the axis: eating over banks the surplus,
+ * eating under spends it.
+ */
+function settleDay(
+  baseDailyTarget: number,
+  actual: number,
+  goalType: 'lose' | 'gain' | 'maintain',
+  dailyCap: number,
+  spendingCap: number,
+): { banked: number; spent: number; capHit: boolean; spendCapHit: boolean } {
+  const difference = baseDailyTarget - actual;
+  let banked = 0;
+  let spent = 0;
+  let capHit = false;
+  let spendCapHit = false;
+
+  if (goalType === 'lose' || goalType === 'maintain') {
+    if (difference > 0) {
+      banked = Math.min(difference, dailyCap);
+      capHit = difference > dailyCap;
+    } else if (difference < 0) {
+      spent = Math.min(Math.abs(difference), spendingCap);
+      spendCapHit = Math.abs(difference) > spendingCap;
+    }
+  } else {
+    if (difference > 0) {
+      spent = Math.min(difference, spendingCap);
+      spendCapHit = difference > spendingCap;
+    } else if (difference < 0) {
+      banked = Math.min(Math.abs(difference), dailyCap);
+      capHit = Math.abs(difference) > dailyCap;
+    }
+  }
+
+  return { banked, spent, capHit, spendCapHit };
+}
+
 // ── Core Calculation ──
 
 /**
@@ -138,30 +180,11 @@ export function calculateCurrentCycle(
 
     // Only calculate banking/spending for PAST completed days (not today, not future)
     if (!isFuture && !isToday) {
-      const difference = baseDailyTarget - actual;
-
-      if (goalType === 'lose' || goalType === 'maintain') {
-        if (difference > 0) {
-          // Ate less than target — bank the difference (capped)
-          banked = Math.min(difference, dailyCap);
-          capHit = difference > dailyCap;
-        } else if (difference < 0) {
-          // Ate more than target — spend from bank (capped)
-          spent = Math.min(Math.abs(difference), spendingCap);
-          spendCapHit = Math.abs(difference) > spendingCap;
-        }
-      } else {
-        // Gain goal — logic flips
-        if (difference > 0) {
-          // Ate less than target — this is "spending" for gain (missed surplus)
-          spent = Math.min(difference, spendingCap);
-          spendCapHit = difference > spendingCap;
-        } else if (difference < 0) {
-          // Ate more than target — this is "banking" for gain (extra surplus)
-          banked = Math.min(Math.abs(difference), dailyCap);
-          capHit = Math.abs(difference) > dailyCap;
-        }
-      }
+      const settled = settleDay(baseDailyTarget, actual, goalType, dailyCap, spendingCap);
+      banked = settled.banked;
+      spent = settled.spent;
+      capHit = settled.capHit;
+      spendCapHit = settled.spendCapHit;
 
       totalBanked += banked;
       totalSpent += spent;
@@ -270,6 +293,87 @@ export function calculateCurrentCycle(
     weeklyActual,
     adjustedTodayTarget,
     todayMacros,
+    goalType,
+  };
+}
+
+/**
+ * Settle a full past cycle for archiving. Unlike calculateCurrentCycle, every day
+ * is treated as completed (none is "today"), so the final day of the cycle is
+ * banked or spent instead of being left live. cycleStart is the aligned start of
+ * the target week; the first cycle is clamped to enabledDate so days before the
+ * bank was on do not count.
+ */
+export function calculateCompletedCycle(
+  config: CalorieBankConfig,
+  summariesByDate: Record<string, DailySummary>,
+  goals: ExtendedGoalData,
+  cycleStart: Date,
+): CalorieBankCycle {
+  const goalType = goals.goal || 'lose';
+  const baseDailyTarget = goals.calories || 2000;
+  const dailyCap = baseDailyTarget * (config.dailyCapPercent / 100);
+  const spendingCap = baseDailyTarget * (config.spendingCapPercent / 100);
+
+  const cycleEnd = getCycleEndDate(cycleStart);
+  const enabledDate = startOfDay(parseISO(config.enabledDate));
+  const effectiveStart = isAfter(enabledDate, cycleStart) ? enabledDate : cycleStart;
+  const daysInCycle = differenceInDays(cycleEnd, effectiveStart) + 1;
+
+  const perDayData: CalorieBankDayData[] = [];
+  let totalBanked = 0;
+  let totalSpent = 0;
+  let weeklyActual = 0;
+
+  for (let i = 0; i < daysInCycle; i++) {
+    const dayDate = addDays(effectiveStart, i);
+    const dayStr = format(dayDate, 'yyyy-MM-dd');
+    const summary = summariesByDate[dayStr];
+    const logged = !!summary && (summary.entryCount > 0 || summary.totalCalories > 0);
+    // A day with no logs is assumed to have hit the base target (no bank, no
+    // penalty), same as the live engine.
+    const actual = logged ? (summary?.totalCalories || 0) : baseDailyTarget;
+    const settled = settleDay(baseDailyTarget, actual, goalType, dailyCap, spendingCap);
+    totalBanked += settled.banked;
+    totalSpent += settled.spent;
+    weeklyActual += actual;
+    perDayData.push({
+      date: dayStr,
+      baseTarget: baseDailyTarget,
+      adjustedTarget: baseDailyTarget,
+      actual,
+      banked: settled.banked,
+      spent: settled.spent,
+      logged,
+      isFuture: false,
+      isToday: false,
+      capHit: settled.capHit,
+      spendCapHit: settled.spendCapHit,
+    });
+  }
+
+  let bankBalance = totalBanked - totalSpent;
+  if (bankBalance < 0) bankBalance = 0;
+
+  const weeklyBudget = baseDailyTarget * daysInCycle;
+
+  return {
+    cycleStartDate: format(effectiveStart, 'yyyy-MM-dd'),
+    cycleEndDate: format(cycleEnd, 'yyyy-MM-dd'),
+    baseDailyTarget,
+    weeklyBudget,
+    daysInCycle,
+    perDayData,
+    bankBalance,
+    remainingBudget: Math.max(0, weeklyBudget - weeklyActual),
+    remainingDays: 0,
+    weeklyActual,
+    adjustedTodayTarget: baseDailyTarget,
+    todayMacros: {
+      protein: goals.proteinGrams || 0,
+      carbs: goals.carbsGrams || 0,
+      fat: goals.fatGrams || 0,
+    },
     goalType,
   };
 }
