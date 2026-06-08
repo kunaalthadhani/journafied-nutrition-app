@@ -47,7 +47,7 @@ import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSect
 import { CalorieBankCard } from '../components/CalorieBankCard';
 import { CycleResetCard } from '../components/CycleResetCard';
 import { CalorieBankConfig, CalorieBankCompletedCycle } from '../services/dataStorage';
-import { calculateCurrentCycle, CalorieBankCycle, getDayName } from '../utils/calorieBankEngine';
+import { calculateCurrentCycle, CalorieBankCycle, getDayName, calculateBankUtilization } from '../utils/calorieBankEngine';
 import { checkAndResetCycle } from '../services/calorieBankService';
 import { InsightUnlocks, InsightDefinition, InsightStats, InsightId, getUnlockedInsightIds, getNewlyUnlockedInsights, getFirstUnseenUnlock } from '../utils/insightUnlockEngine';
 import { InsightUnlockCard } from '../components/InsightUnlockCard';
@@ -3047,9 +3047,7 @@ export const HomeScreen: React.FC = () => {
               weeklyBudget: calorieBankCycle.weeklyBudget,
               weeklyActual: calorieBankCycle.weeklyActual,
               bankBalance: calorieBankCycle.bankBalance,
-              bankUtilization: calorieBankCycle.perDayData.reduce((s, d) => s + d.banked, 0) > 0
-                ? Math.round((calorieBankCycle.perDayData.reduce((s, d) => s + d.spent, 0) / calorieBankCycle.perDayData.reduce((s, d) => s + d.banked, 0)) * 100)
-                : 0,
+              bankUtilization: calculateBankUtilization(calorieBankCycle.perDayData),
               expiredCalories: 0,
               dailyCapPercent: calorieBankConfig.dailyCapPercent,
               cycleStartDay: getDayName(calorieBankConfig.cycleStartDay),

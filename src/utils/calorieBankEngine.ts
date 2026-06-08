@@ -213,12 +213,16 @@ export function calculateCurrentCycle(
         adjustmentPerDay = bankBalance / remainingDays;
       }
     } else {
-      // Gain goal: logic flips
+      // Gain goal: the goal is a weekly surplus, so leaning toward it mirrors the
+      // lose branch on the opposite axis.
       if (rawOverspend < 0) {
-        // Underate overall (bad for gain) → reduce future days
-        adjustmentPerDay = rawOverspend / remainingDays; // rawOverspend is negative, so this reduces
+        // Behind on surplus (ate under target) is the bad direction for gain. Raise
+        // the remaining targets by the FULL shortfall so the week still hits its
+        // surplus. rawOverspend is negative, so negate it to push targets up.
+        adjustmentPerDay = -rawOverspend / remainingDays;
       } else {
-        // Overate overall (good for gain = banked surplus) → increase flexibility
+        // Ahead on surplus (banked extra) is the good direction. Ease off the
+        // remaining days by the CAPPED bank, mirroring lose's underate reward.
         adjustmentPerDay = -bankBalance / remainingDays;
       }
     }
