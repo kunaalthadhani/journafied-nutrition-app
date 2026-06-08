@@ -2679,9 +2679,6 @@ export const HomeScreen: React.FC = () => {
                 onScrollEnable={setScrollEnabled}
                 calorieBankActive={calorieBankActive}
                 calorieBankBalance={calorieBankCycle?.bankBalance || 0}
-                todayCaloriesEaten={currentNutrition.totalCalories || 0}
-                adjustedDailyTarget={calorieBankCycle?.adjustedTodayTarget || bankAdjustedCalories}
-                dailyCapAmount={calorieBankConfig?.enabled ? (savedGoals.calories || 2000) * ((calorieBankConfig.dailyCapPercent || 20) / 100) : 0}
                 weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
                 weeklyActual={calorieBankCycle?.weeklyActual || 0}
                 remainingDays={calorieBankCycle?.remainingDays || 0}

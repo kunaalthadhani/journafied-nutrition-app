@@ -9,9 +9,6 @@ interface StatCardsSectionProps {
   onScrollEnable?: (enabled: boolean) => void;
   calorieBankActive?: boolean;
   calorieBankBalance?: number;
-  todayCaloriesEaten?: number;
-  adjustedDailyTarget?: number;
-  dailyCapAmount?: number;
   weeklyBudget?: number;
   weeklyActual?: number;
   remainingDays?: number;
@@ -26,9 +23,6 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
   onScrollEnable,
   calorieBankActive,
   calorieBankBalance,
-  todayCaloriesEaten,
-  adjustedDailyTarget,
-  dailyCapAmount,
   weeklyBudget,
   weeklyActual,
   remainingDays,
@@ -43,9 +37,6 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
       onScrollEnable={onScrollEnable}
       calorieBankActive={calorieBankActive}
       calorieBankBalance={calorieBankBalance}
-      todayCaloriesEaten={todayCaloriesEaten}
-      adjustedDailyTarget={adjustedDailyTarget}
-      dailyCapAmount={dailyCapAmount}
       weeklyBudget={weeklyBudget}
       weeklyActual={weeklyActual}
       remainingDays={remainingDays}

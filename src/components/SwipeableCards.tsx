@@ -16,9 +16,6 @@ interface SwipeableCardsProps {
   onScrollEnable?: (enabled: boolean) => void;
   calorieBankActive?: boolean;
   calorieBankBalance?: number;
-  todayCaloriesEaten?: number;
-  adjustedDailyTarget?: number;
-  dailyCapAmount?: number;
   weeklyBudget?: number;
   weeklyActual?: number;
   remainingDays?: number;
@@ -39,9 +36,6 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   onScrollEnable,
   calorieBankActive,
   calorieBankBalance,
-  todayCaloriesEaten,
-  adjustedDailyTarget,
-  dailyCapAmount,
   weeklyBudget,
   weeklyActual,
   remainingDays,
@@ -163,10 +157,6 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
               data={macros2Data}
               dailyCalories={dailyCalories}
               calorieBankActive={calorieBankActive}
-              calorieBankBalance={calorieBankBalance}
-              todayCaloriesEaten={todayCaloriesEaten}
-              adjustedDailyTarget={adjustedDailyTarget}
-              dailyCapAmount={dailyCapAmount}
             />
           )}
           {currentCard === 'weekly' && calorieBankActive && (
