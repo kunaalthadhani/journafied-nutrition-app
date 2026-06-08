@@ -1248,13 +1248,16 @@ export const HomeScreen: React.FC = () => {
         smartReminderService.scheduleAllReminders()
           .catch(err => console.error('Smart reminder scheduling failed:', err));
 
-        // Recalculate calorie bank on foreground (handles midnight crossing)
-        if (calorieBankConfig?.enabled && summaries && savedGoals) {
+        // Recalculate calorie bank on foreground (handles midnight crossing).
+        // Read config and goals fresh from storage. This AppState listener is
+        // registered once with [] deps, so closure state (calorieBankConfig,
+        // savedGoals) is stale and the block used to never run.
+        const freshBankCfg = await dataStorage.loadCalorieBankConfig();
+        const freshGoals = await dataStorage.loadGoals();
+        if (freshBankCfg?.enabled && summaries && freshGoals) {
           try {
-            const { didReset } = await checkAndResetCycle(summaries, savedGoals);
+            const { config: resetCfg, didReset } = await checkAndResetCycle(summaries, freshGoals);
             if (didReset) {
-              const bankCfg = await dataStorage.loadCalorieBankConfig();
-              if (bankCfg) setCalorieBankConfig(bankCfg);
               const cycles = await dataStorage.loadCompletedCycles();
               if (cycles.length > 0) {
                 const last = cycles[cycles.length - 1];
@@ -1265,9 +1268,10 @@ export const HomeScreen: React.FC = () => {
                 }
               }
             }
-            const bankCfg = await dataStorage.loadCalorieBankConfig();
-            if (bankCfg?.enabled) {
-              const cycle = calculateCurrentCycle(bankCfg, summaries, savedGoals);
+            const effectiveCfg = resetCfg || freshBankCfg;
+            if (effectiveCfg?.enabled) {
+              setCalorieBankConfig(effectiveCfg);
+              const cycle = calculateCurrentCycle(effectiveCfg, summaries, freshGoals);
               setCalorieBankCycle(cycle);
             }
           } catch {}
@@ -2684,7 +2688,7 @@ export const HomeScreen: React.FC = () => {
                 calorieBankActive={calorieBankActive}
                 calorieBankBalance={calorieBankCycle?.bankBalance || 0}
                 weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
-                weeklyActual={calorieBankCycle?.weeklyActual || 0}
+                weeklyActual={calorieBankCycle?.weeklyLoggedActual || 0}
                 remainingDays={calorieBankCycle?.remainingDays || 0}
                 daysInCycle={calorieBankCycle?.daysInCycle || 7}
                 loading={statsLoading}

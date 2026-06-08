@@ -34,7 +34,8 @@ export interface CalorieBankCycle {
   bankBalance: number; // running total of banked minus spent
   remainingBudget: number; // weeklyBudget minus all actual eaten so far
   remainingDays: number; // days from today to end (inclusive of today)
-  weeklyActual: number; // total eaten so far this cycle
+  weeklyActual: number; // total counted so far (assumes base for unlogged past days)
+  weeklyLoggedActual: number; // total actually logged (excludes assumed unlogged days)
   adjustedTodayTarget: number;
   todayMacros: { protein: number; carbs: number; fat: number };
   goalType: 'lose' | 'gain' | 'maintain';
@@ -152,6 +153,7 @@ export function calculateCurrentCycle(
   let totalBanked = 0;
   let totalSpent = 0;
   let weeklyActual = 0;
+  let weeklyLoggedActual = 0;
 
   for (let i = 0; i < daysInCycle; i++) {
     const dayDate = addDays(effectiveCycleStart, i);
@@ -193,6 +195,9 @@ export function calculateCurrentCycle(
     // Track weekly actual for all non-future days (including today)
     if (!isFuture) {
       weeklyActual += actual;
+      // "Used" for display only counts days the user actually logged, so an
+      // unlogged day's assumed base does not fill the bar.
+      if (logged) weeklyLoggedActual += actual;
     }
 
     perDayData.push({
@@ -291,6 +296,7 @@ export function calculateCurrentCycle(
     remainingBudget: Math.max(0, remainingBudget),
     remainingDays,
     weeklyActual,
+    weeklyLoggedActual,
     adjustedTodayTarget,
     todayMacros,
     goalType,
@@ -328,6 +334,7 @@ export function calculateCompletedCycle(
   let totalBanked = 0;
   let totalSpent = 0;
   let weeklyActual = 0;
+  let weeklyLoggedActual = 0;
 
   for (let i = 0; i < daysInCycle; i++) {
     const dayDate = addDays(effectiveStart, i);
@@ -341,6 +348,7 @@ export function calculateCompletedCycle(
     totalBanked += settled.banked;
     totalSpent += settled.spent;
     weeklyActual += actual;
+    if (logged) weeklyLoggedActual += actual;
     perDayData.push({
       date: dayStr,
       baseTarget: baseDailyTarget,
@@ -372,6 +380,7 @@ export function calculateCompletedCycle(
     remainingBudget: Math.max(0, weeklyBudget - weeklyActual),
     remainingDays: 0,
     weeklyActual,
+    weeklyLoggedActual,
     adjustedTodayTarget: baseDailyTarget,
     todayMacros: {
       protein: goals.proteinGrams || 0,

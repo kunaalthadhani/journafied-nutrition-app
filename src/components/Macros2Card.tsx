@@ -46,7 +46,7 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
       </View>
 
       <View style={styles.statsContainer}>
-        <View style={styles.statColumn}>
+        <View style={styles.statColumn} accessible accessibilityLabel={`Food, ${Math.round(data.carbs.current)} calories`}>
           <NumberTicker
             value={data.carbs.current}
             duration={800}
@@ -55,7 +55,7 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Food</Text>
         </View>
 
-        <View style={[styles.statColumn, styles.middleColumn]}>
+        <View style={[styles.statColumn, styles.middleColumn]} accessible accessibilityLabel={`Exercise, ${Math.round(data.protein.current)} calories`}>
           <NumberTicker
             value={data.protein.current}
             duration={800}
@@ -64,7 +64,11 @@ export const Macros2Card: React.FC<Macros2CardProps> = ({
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Exercise</Text>
         </View>
 
-        <View style={styles.statColumn}>
+        <View
+          style={styles.statColumn}
+          accessible
+          accessibilityLabel={`Remaining, ${Math.round(remainingVal)} calories${remainingVal <= 0 ? ', over budget' : ''}`}
+        >
           <NumberTicker
             value={data.fat.current}
             duration={800}

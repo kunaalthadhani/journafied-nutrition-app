@@ -48,7 +48,7 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
 
       {/* Three-column stats */}
       <View style={styles.statsContainer}>
-        <View style={styles.statColumn}>
+        <View style={styles.statColumn} accessible accessibilityLabel={`Used, ${Math.round(weeklyActual)} calories`}>
           <NumberTicker
             value={Math.round(weeklyActual)}
             duration={800}
@@ -57,7 +57,7 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Used</Text>
         </View>
 
-        <View style={[styles.statColumn, styles.middleColumn]}>
+        <View style={[styles.statColumn, styles.middleColumn]} accessible accessibilityLabel={`In bank, ${Math.round(bankBalance)} calories`}>
           <NumberTicker
             value={Math.round(bankBalance)}
             duration={800}
@@ -66,7 +66,11 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
           <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>In Bank</Text>
         </View>
 
-        <View style={styles.statColumn}>
+        <View
+          style={styles.statColumn}
+          accessible
+          accessibilityLabel={`${isOver ? 'Over budget by' : 'Left'}, ${Math.round(weeklyRemaining)} calories`}
+        >
           <NumberTicker
             value={Math.round(weeklyRemaining)}
             duration={800}
