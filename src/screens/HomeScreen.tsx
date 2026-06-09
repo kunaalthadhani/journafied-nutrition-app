@@ -755,6 +755,7 @@ export const HomeScreen: React.FC = () => {
 
       const weightEntries = await dataStorage.loadWeightEntries();
       const goals = await dataStorage.loadGoals();
+      const bankConfig = await dataStorage.loadCalorieBankConfig();
 
       // Calculate stats
       const loggedDays = Object.values(summaries).filter(s => s.entryCount > 0).length;
@@ -789,6 +790,7 @@ export const HomeScreen: React.FC = () => {
         hasHeight: !!(goals?.heightCm || goals?.heightFeet),
         calorieAndWeightDays: pairedDays,
         monthsWithWeightData: weightMonths.size,
+        calorieBankEnabled: !!bankConfig?.enabled,
       };
 
       const newlyUnlocked = getNewlyUnlockedInsights(stats, existingUnlocks);

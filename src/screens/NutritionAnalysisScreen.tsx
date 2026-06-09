@@ -116,6 +116,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   const isUnlocked = (id: InsightId) => isInsightUnlocked(id, insightUnlocks);
 
+  // Shown when an insight is unlocked but the user has not set goals, so it has
+  // targets to compare against. Without this the card renders an empty gap.
+  const NeedsGoalsCard = ({ name }: { name: string }) => (
+    <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.85} style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+        <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
+          <Feather name="target" size={14} color={theme.colors.primary} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>{name}</Text>
+          <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Set your goals to use this insight</Text>
+        </View>
+        <Feather name="chevron-right" size={16} color={theme.colors.textTertiary} />
+      </View>
+    </TouchableOpacity>
+  );
+
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
   const [showInfo, setShowInfo] = useState(false);
@@ -1816,7 +1833,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </InsightSlot>
 
                       {/* ── Calorie Bank Insights ── */}
-                      {calorieBankData?.enabled && isUnlocked('ai-weekly-insight') && (
+                      {calorieBankData?.enabled && (
+                        <InsightSlot id="calorie-bank">
+                          {!isUnlocked('calorie-bank') && <LockedInsightCard id="calorie-bank" />}
+                          {isUnlocked('calorie-bank') && (
                         <>
                           {/* Bank Utilization */}
                           <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
@@ -1920,11 +1940,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             </View>
                           )}
                         </>
+                          )}
+                        </InsightSlot>
                       )}
 
                       {/* ── Macro Adherence Rings ── */}
                       <InsightSlot id="goal-adherence">
                       {!isUnlocked('goal-adherence') && <LockedInsightCard id="goal-adherence" />}
+                      {isUnlocked('goal-adherence') && !(targetProtein || targetCarbs || targetFat) && <NeedsGoalsCard name="Goal Adherence" />}
                       {isUnlocked('goal-adherence') && (targetProtein || targetCarbs || targetFat) && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
@@ -2134,6 +2157,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Radar Chart ── */}
                       <InsightSlot id="nutrition-balance">
                       {!isUnlocked('nutrition-balance') && <LockedInsightCard id="nutrition-balance" />}
+                      {isUnlocked('nutrition-balance') && radarData.length === 0 && <NeedsGoalsCard name="Nutrition Balance" />}
                       {isUnlocked('nutrition-balance') && radarData.length > 0 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, alignItems: 'center' }]}>
                           <View style={{ width: '100%', marginBottom: 8 }}>
@@ -2351,6 +2375,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </InsightSlot>
 
                       {/* ── Sugar Load ── */}
+                      <InsightSlot id="sugar-load">
+                      {!isUnlocked('sugar-load') && <LockedInsightCard id="sugar-load" />}
+                      {isUnlocked('sugar-load') && (
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Sugar Load</Text>
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Natural vs. added sugars (daily avg)</Text>
@@ -2409,6 +2436,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           );
                         })()}
                       </View>
+                      )}
+                      </InsightSlot>
 
                     </View>
                   )}

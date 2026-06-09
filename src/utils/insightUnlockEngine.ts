@@ -15,6 +15,8 @@ export type InsightId =
   | 'weekly-pattern'
   | 'nutrition-balance'
   | 'micronutrient-balance'
+  | 'sugar-load'
+  | 'calorie-bank'
   | 'ai-weekly-insight'
   // Weight Tracker
   | 'bmi'
@@ -49,6 +51,7 @@ export interface InsightStats {
   hasHeight: boolean;
   calorieAndWeightDays: number; // days with both calorie + weight data
   monthsWithWeightData: number; // distinct months that have weight entries
+  calorieBankEnabled?: boolean; // whether the user runs the weekly calorie bank
 }
 
 export interface InsightUnlockRecord {
@@ -133,6 +136,24 @@ export const INSIGHT_DEFINITIONS: InsightDefinition[] = [
     icon: 'zap',
     requirementText: 'Log 5 days to unlock',
     check: (s) => s.loggedDays >= 5,
+  },
+  {
+    id: 'sugar-load',
+    name: 'Sugar Load',
+    description: 'Your added, natural, and total sugar intake',
+    screen: 'nutrition',
+    icon: 'droplet',
+    requirementText: 'Log 3 days to unlock',
+    check: (s) => s.loggedDays >= 3,
+  },
+  {
+    id: 'calorie-bank',
+    name: 'Calorie Bank',
+    description: 'Your weekly budget, banked calories, and bank utilization',
+    screen: 'nutrition',
+    icon: 'credit-card',
+    requirementText: 'Log 3 days with the calorie bank on',
+    check: (s) => s.loggedDays >= 3 && !!s.calorieBankEnabled,
   },
   {
     id: 'ai-weekly-insight',
