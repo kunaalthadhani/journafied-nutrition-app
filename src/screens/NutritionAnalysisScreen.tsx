@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
-import { format, subDays, addDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, startOfDay, isSameDay } from 'date-fns';
+import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, startOfDay, isSameDay } from 'date-fns';
 import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -165,6 +165,20 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     </TouchableOpacity>
   );
 
+  // Shown inside a tab when the user has data overall but none in the selected
+  // time range, so the chart would otherwise sit empty or imply a flat zero week.
+  const NoRangeDataCard = () => (
+    <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 28, alignItems: 'center' }]}>
+      <Feather name="bar-chart-2" size={28} color={theme.colors.textTertiary} style={{ marginBottom: 10 }} />
+      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 }}>
+        No meals logged in this range
+      </Text>
+      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center' }}>
+        Pick a wider range or log a meal to see your trend here.
+      </Text>
+    </View>
+  );
+
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
   const [showInfo, setShowInfo] = useState(false);
@@ -305,24 +319,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         rangeStart = subDays(now, 6);
     }
 
-    // Build a lookup from existing data by date key
-    const dataByDate = new Map<string, DailyNutrition>();
-    for (const entry of nutritionData) {
-      const key = format(entry.date, 'yyyy-MM-dd');
-      dataByDate.set(key, entry);
-    }
-
-    // Fill every day in the range so the graph scales correctly
-    const filled: DailyNutrition[] = [];
-    let cursor = startOfDay(rangeStart);
-    while (cursor <= now) {
-      const key = format(cursor, 'yyyy-MM-dd');
-      const existing = dataByDate.get(key);
-      filled.push(existing ?? { date: new Date(cursor), calories: 0, protein: 0, fat: 0, carbs: 0 });
-      cursor = addDays(cursor, 1);
-    }
-
-    return filled;
+    // Return only days the user actually logged inside the window. We deliberately
+    // do NOT zero-fill unlogged days: a missing day is not a zero-calorie day, and
+    // zero-filling was dragging the chart floor to 0, faking valleys in the line,
+    // and padding the history table and averages with days that never happened.
+    const start = startOfDay(rangeStart);
+    return nutritionData
+      .filter((entry) => {
+        const day = startOfDay(entry.date);
+        if (day < start || day > now) return false;
+        return entry.calories > 0 || entry.protein > 0 || entry.carbs > 0 || entry.fat > 0;
+      })
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
   };
 
   const graphData = useMemo(() => getFilteredData(), [nutritionData, timeRange]);
@@ -332,30 +340,35 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const targetCarbs = targetCarbsProp && targetCarbsProp > 0 ? targetCarbsProp : undefined;
   const targetFat = targetFatProp && targetFatProp > 0 ? targetFatProp : undefined;
 
-  // Only count days that actually have logged data (not zero-filled days)
-  const daysWithData = useMemo(() =>
-    graphData.filter(d => d.calories > 0 || d.protein > 0 || d.carbs > 0 || d.fat > 0),
-    [graphData]
+  // graphData is already logged-only. "Any data ever" drives the first-run empty
+  // state; "data in range" drives the per-range empty state. They differ: a user
+  // with three weeks of history viewing a 1D window has data, just not here.
+  const hasAnyData = nutritionData.length > 0;
+  const hasDataInRange = graphData.length > 0;
+
+  // Today is a partial, unsettled day. Averaging it in understates intake, so the
+  // averages run over completed days. When today is the only logged day in the
+  // window (day one, or a 1D view) fall back to it so the screen is not blank.
+  const todayKey = format(startOfDay(new Date()), 'yyyy-MM-dd');
+  const completedDays = useMemo(
+    () => graphData.filter(d => format(d.date, 'yyyy-MM-dd') !== todayKey),
+    [graphData, todayKey]
   );
-  const hasLoggedMeals = daysWithData.length > 0;
+  const averageBasis = completedDays.length > 0 ? completedDays : graphData;
+  const hasAverage = averageBasis.length > 0;
 
-  // Calculate averages (only from days with actual data)
-  const averageProtein = hasLoggedMeals
-    ? daysWithData.reduce((sum, entry) => sum + entry.protein, 0) / daysWithData.length
+  const averageProtein = hasAverage
+    ? averageBasis.reduce((sum, entry) => sum + entry.protein, 0) / averageBasis.length
     : null;
-  const averageCarbs = hasLoggedMeals
-    ? daysWithData.reduce((sum, entry) => sum + entry.carbs, 0) / daysWithData.length
+  const averageCarbs = hasAverage
+    ? averageBasis.reduce((sum, entry) => sum + entry.carbs, 0) / averageBasis.length
     : null;
-  const averageFat = hasLoggedMeals
-    ? daysWithData.reduce((sum, entry) => sum + entry.fat, 0) / daysWithData.length
+  const averageFat = hasAverage
+    ? averageBasis.reduce((sum, entry) => sum + entry.fat, 0) / averageBasis.length
     : null;
 
-  const averageCalories = hasLoggedMeals
-    ? Math.round(
-      daysWithData.reduce((sum, entry) => {
-        return sum + entry.calories;
-      }, 0) / daysWithData.length
-    )
+  const averageCalories = hasAverage
+    ? Math.round(averageBasis.reduce((sum, entry) => sum + entry.calories, 0) / averageBasis.length)
     : null;
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
   const hasTargetCalories = targetCalories !== undefined;
@@ -363,10 +376,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Week-over-week comparison (last 7 days vs previous 7 days)
   const weekOverWeek = useMemo(() => {
     const now = new Date();
+    const today = startOfDay(now);
     const thisWeekStart = subDays(now, 7);
     const lastWeekStart = subDays(now, 14);
 
-    const thisWeek = nutritionData.filter(d => d.date >= thisWeekStart);
+    // Exclude today's partial day so this-week's average is not understated.
+    const thisWeek = nutritionData.filter(d => d.date >= thisWeekStart && startOfDay(d.date).getTime() !== today.getTime());
     const lastWeek = nutritionData.filter(d => d.date >= lastWeekStart && d.date < thisWeekStart);
 
     if (thisWeek.length === 0 || lastWeek.length === 0) return null;
@@ -1025,7 +1040,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           showsVerticalScrollIndicator={false}
           removeClippedSubviews={false}
         >
-          {!hasLoggedMeals && (
+          {!hasAnyData && (
             <View
               style={[
                 styles.emptyStateContainer,
@@ -1087,7 +1102,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 </View>
 
                 {/* Deficit / Surplus Hero */}
-                {hasTargetCalories && averageCalories !== null && (() => {
+                {hasTargetCalories && averageCalories !== null && completedDays.length > 0 && (() => {
                   const diff = averageCalories - targetCalories!;
                   const isDeficit = diff < 0;
                   const isOnTrack = Math.abs(diff) <= 50;
@@ -1131,7 +1146,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             )}
           </View>
 
-          {hasLoggedMeals && (
+          {hasAnyData && (
             <React.Fragment>
               {/* Tab Navigation */}
               <View style={[styles.tabContainer, { backgroundColor: theme.colors.input }]}>
@@ -1196,6 +1211,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               {/* Calories Chart Section */}
               {activeTab === 'Calories' && (
                 <View style={styles.graphContainer}>
+                  {!hasDataInRange && <NoRangeDataCard />}
+                  {hasDataInRange && (
                   <View
                     style={[
                       styles.graphCard,
@@ -1392,6 +1409,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </Svg>
                     </Animated.View>
                   </View>
+                  )}
 
                   {/* Time Range Selector */}
                   {renderTimeRangePills()}
@@ -1453,6 +1471,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
               {activeTab === 'Macros' && (
                 <View style={styles.graphContainer}>
+                  {!hasDataInRange && <NoRangeDataCard />}
+                  {hasDataInRange && (<>
                   <Animated.View
                     style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: macrosChartOpacity }]}
                     {...graphPanResponder.panHandlers}
@@ -1658,6 +1678,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       </View>
                     ))}
                   </View>
+                  </>)}
 
                   {/* Time Range Selector */}
                   {renderTimeRangePills()}
