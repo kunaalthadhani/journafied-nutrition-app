@@ -3088,6 +3088,7 @@ export const HomeScreen: React.FC = () => {
               spendCapHitDays: calorieBankCycle.perDayData.filter(d => d.spendCapHit).length,
             } : null}
             insightUnlocks={insightUnlocks}
+            visible={showNutritionAnalysis}
             initialTab={openNutritionOnInsights ? 'Insights' : undefined}
             scrollToInsight={scrollToInsightId}
             onScrollToInsightConsumed={() => setScrollToInsightId(null)}
