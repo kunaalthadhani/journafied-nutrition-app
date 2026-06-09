@@ -22,7 +22,9 @@ import { Meal } from '../components/FoodLogSection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
-import { DailySummary } from '../services/dataStorage';
+import { dataStorage, DailySummary } from '../services/dataStorage';
+import { generateInsights, getActionForInsight } from '../services/insightService';
+import { patternDetectionService } from '../services/patternDetectionService';
 import { InsightUnlocks, isInsightUnlocked, getInsightDefinition, InsightId } from '../utils/insightUnlockEngine';
 import { MicronutrientCard } from '../components/MicronutrientCard';
 
@@ -61,6 +63,16 @@ interface NutritionAnalysisScreenProps {
 
 type TimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
 type TabType = 'Calories' | 'Macros' | 'Insights';
+
+interface TopPriorityItem {
+  kind: 'pattern' | 'warning' | 'pattern-rule' | 'suggestion' | 'achievement';
+  rank: number;
+  title: string;
+  description: string;
+  actionLabel: string | null;
+  actionText: string | null;
+  canLogMeal: boolean;
+}
 
 interface DailyNutrition {
   date: Date;
@@ -179,9 +191,52 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     </View>
   );
 
+  const toneForPriority = (kind: TopPriorityItem['kind']) => {
+    if (kind === 'pattern') return { color: theme.colors.primary, icon: 'zap', badge: 'PATTERN' };
+    if (kind === 'warning') return { color: '#EF4444', icon: 'alert-triangle', badge: 'PRIORITY' };
+    if (kind === 'pattern-rule') return { color: '#F59E0B', icon: 'trending-up', badge: 'PATTERN' };
+    if (kind === 'achievement') return { color: '#10B981', icon: 'award', badge: 'WIN' };
+    return { color: theme.colors.primary, icon: 'target', badge: 'SUGGESTED' };
+  };
+
+  // The headline card on the Insights tab: one thing to act on, with a concrete
+  // next step. Self-hides when no insight or pattern is firing.
+  const TopPriorityCard = () => {
+    if (!topPriority) return null;
+    const tone = toneForPriority(topPriority.kind);
+    return (
+      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 18, borderLeftWidth: 3, borderLeftColor: tone.color }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${tone.color}15`, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name={tone.icon as any} size={14} color={tone.color} />
+          </View>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, flex: 1 }}>{topPriority.title}</Text>
+          <View style={{ backgroundColor: `${tone.color}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
+            <Text style={{ fontSize: 10, fontWeight: '700', color: tone.color }}>{tone.badge}</Text>
+          </View>
+        </View>
+        <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 }}>{topPriority.description}</Text>
+        {topPriority.actionText && (
+          <View style={{ marginTop: 12, backgroundColor: theme.colors.input, borderRadius: 10, padding: 12 }}>
+            {topPriority.actionLabel && (
+              <Text style={{ fontSize: 12, fontWeight: '700', color: tone.color, marginBottom: 3 }}>{topPriority.actionLabel}</Text>
+            )}
+            <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{topPriority.actionText}</Text>
+          </View>
+        )}
+        {topPriority.canLogMeal && onRequestLogMeal && (
+          <TouchableOpacity onPress={onRequestLogMeal} activeOpacity={0.85} style={{ marginTop: 12, backgroundColor: tone.color, borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}>
+            <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Log a meal</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+    );
+  };
+
   const [activeTab, setActiveTab] = useState<TabType>(initialTab || 'Calories');
   const [timeRange, setTimeRange] = useState<TimeRange>('1W');
   const [showInfo, setShowInfo] = useState(false);
+  const [topPriority, setTopPriority] = useState<TopPriorityItem | null>(null);
 
   // The screen stays mounted inside a Modal across opens, so the initialTab in
   // useState only runs once. Reset the tab each time the modal opens so the last
@@ -225,6 +280,60 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     frame = requestAnimationFrame(tick);
     return () => { if (frame) cancelAnimationFrame(frame); };
   }, [scrollToInsight]);
+
+  // The single most important thing to act on right now, drawn from the AI
+  // pattern detector (premium, runs weekly) and the deterministic rule engine
+  // (free, instant). Both were dead on this screen: patterns only surfaced on
+  // Home and the rule engine was never called anywhere. Ranked so a high
+  // confidence AI pattern wins, then warnings, then rule patterns, then wins.
+  useEffect(() => {
+    if (activeTab !== 'Insights' || !isPremium) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const [patterns, cached] = await Promise.all([
+          patternDetectionService.getActivePatterns(),
+          dataStorage.getUserMetricsSnapshot(),
+        ]);
+        const snapshot = cached ?? (await dataStorage.generateUserMetricsSnapshot());
+        const items: TopPriorityItem[] = [];
+
+        for (const p of patterns) {
+          items.push({
+            kind: 'pattern',
+            rank: 1000 + (p.confidence || 0),
+            title: p.title,
+            description: p.description,
+            actionLabel: 'Try this',
+            actionText: p.fix ?? null,
+            canLogMeal: true,
+          });
+        }
+
+        if (snapshot) {
+          const typeRank: Record<string, number> = { warning: 500, pattern: 300, suggestion: 200, achievement: 100 };
+          for (const insight of generateInsights(snapshot)) {
+            const action = getActionForInsight(insight);
+            items.push({
+              kind: insight.type === 'pattern' ? 'pattern-rule' : insight.type,
+              rank: typeRank[insight.type] ?? 0,
+              title: insight.title,
+              description: insight.description,
+              actionLabel: action?.shortLabel ?? null,
+              actionText: action?.description ?? null,
+              canLogMeal: insight.type !== 'achievement' && insight.relatedMetric !== 'weight',
+            });
+          }
+        }
+
+        items.sort((a, b) => b.rank - a.rank);
+        if (!cancelled) setTopPriority(items[0] ?? null);
+      } catch {
+        if (!cancelled) setTopPriority(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [activeTab, isPremium, Object.keys(summariesByDate || {}).length]);
 
   const handleSetGoalPress = () => {
     if (onRequestSetGoals) {
@@ -1865,6 +1974,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                       {/* ── Time Range Selector ── */}
                       {renderTimeRangePills()}
+
+                      {/* ── Top Priority (deterministic insight + AI pattern) ── */}
+                      <TopPriorityCard />
 
                       {/* ── AI Weekly Insight (collapsible) ── */}
                       <InsightSlot id="ai-weekly-insight">
