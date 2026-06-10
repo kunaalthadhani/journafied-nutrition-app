@@ -1071,18 +1071,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     generateDeficitInsight();
   }, [weightEntries, dailySummaries, deficitInsightDate, goalType, isPremium, insightUnlocks]);
 
-  const renderLockedCard = (title: string, requirement: string) => (
-    <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A', opacity: 0.5 }]}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Text style={[styles.bmiTitle, { color: theme.colors.textTertiary }]}>{title}</Text>
-        <Feather name="lock" size={14} color={theme.colors.textTertiary} />
-      </View>
-      <Text style={{ fontSize: 12, color: theme.colors.textTertiary, marginTop: 4, lineHeight: 18 }}>
-        {requirement}
-      </Text>
-    </View>
-  );
-
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
@@ -2054,18 +2042,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   </View>
                 )}
                 </InsightSlot>
-
-                {/* ===== LOCKED CARDS (pushed to bottom) ===== */}
-                {!(goalProgressData && !goalProgressData.isMaintain) && renderLockedCard('Goal Progress', 'Requires a target weight and at least 1 weigh-in.')}
-                {!estimatedGoalData && renderLockedCard('Estimated Goal Date', 'Requires a target weight and at least 3 days of weigh-ins.')}
-                {!weeklyRateData && renderLockedCard('Weekly Rate of Change', 'Requires 2+ weigh-ins over at least 3 days.')}
-                {!(deficitInsight || deficitInsightLoading) && renderLockedCard('Deficit & Surplus Impact', 'Requires 7+ weigh-ins and 2 weeks of calorie tracking.')}
-                {!calorieCorrelation && renderLockedCard('Weight vs Calories', 'Requires 3+ days with both weight and calorie data logged.')}
-                {!(monthlyComparison && (monthlyComparison.thisChange !== null || monthlyComparison.lastChange !== null)) && renderLockedCard('Monthly Comparison', 'Requires 2+ weigh-ins in at least one month.')}
-                {!milestoneData && renderLockedCard('Milestones & Records', 'Requires at least 1 weigh-in.')}
-                {!fluctuationData && renderLockedCard('Weight Fluctuation', 'Requires 2+ weigh-ins within the last 7 days.')}
-                {!loggingConsistency && renderLockedCard('Logging Consistency', 'Requires at least 1 weigh-in.')}
-                {!bmiData && renderLockedCard('Body Mass Index', 'Requires weight and height set in goals.')}
               </View>
             )}
           </ScrollView>
