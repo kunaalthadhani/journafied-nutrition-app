@@ -13,6 +13,7 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  findNodeHandle,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -37,6 +38,7 @@ interface WeightTrackerScreenProps {
   onRequestSetGoals?: () => void;
   isPremium?: boolean;
   insightUnlocks?: InsightUnlocks;
+  visible?: boolean;
   initialTab?: 'Tracker' | 'Insights';
   scrollToInsight?: InsightId | null;
   onScrollToInsightConsumed?: () => void;
@@ -79,18 +81,48 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   onRequestSetGoals,
   isPremium = false,
   insightUnlocks = {},
+  visible = false,
   initialTab: initialTabProp,
   scrollToInsight = null,
   onScrollToInsightConsumed,
 }) => {
   const theme = useTheme();
   const insightsScrollRef = useRef<ScrollView>(null);
-  const insightPositions = useRef<Partial<Record<InsightId, number>>>({});
-  const registerInsightPosition = (id: InsightId) => (e: { nativeEvent: { layout: { y: number } } }) => {
-    insightPositions.current[id] = e.nativeEvent.layout.y;
+  const insightSlotRefs = useRef<Partial<Record<InsightId, View | null>>>({});
+  const pendingScrollRef = useRef<InsightId | null>(null);
+  const consumedCbRef = useRef(onScrollToInsightConsumed);
+  consumedCbRef.current = onScrollToInsightConsumed;
+
+  // Scrolls the Insights list so the target card sits near the top. Measures the
+  // card against the scroll content node, not its parent, because onLayout y is
+  // parent relative and was landing the scroll ~200px too high. Returns false if
+  // the card is not mounted yet so the caller can retry on the next frame.
+  const scrollToInsightCard = (id: InsightId): boolean => {
+    const slot = insightSlotRefs.current[id];
+    const sv = insightsScrollRef.current as any;
+    if (!slot || !sv) return false;
+    let handle: number | null = null;
+    if (typeof sv.getInnerViewNode === 'function') {
+      const node = sv.getInnerViewNode();
+      handle = typeof node === 'number' ? node : findNodeHandle(node);
+    }
+    if (handle == null && typeof sv.getScrollableNode === 'function') {
+      handle = findNodeHandle(sv.getScrollableNode());
+    }
+    if (handle == null) handle = findNodeHandle(sv);
+    if (handle == null) return false;
+    slot.measureLayout(
+      handle,
+      (_x: number, y: number) => {
+        insightsScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+      },
+      () => {},
+    );
+    return true;
   };
+
   const InsightSlot: React.FC<{ id: InsightId; children: React.ReactNode }> = ({ id, children }) => (
-    <View onLayout={registerInsightPosition(id)}>{children}</View>
+    <View ref={(node) => { insightSlotRefs.current[id] = node; }}>{children}</View>
   );
 
   const LockedInsightCard = ({ id }: { id: InsightId }) => {
@@ -130,17 +162,46 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const [showInfo, setShowInfo] = useState(false);
   const [activeTab, setActiveTab] = useState<TabType>(initialTabProp || 'Tracker');
 
+  // The screen stays mounted inside a Modal across opens, so the initialTab in
+  // useState only runs once. Reset the tab each time the modal opens so the last
+  // session's tab does not leak into the next open. A pending scroll target
+  // always means the Insights tab.
+  const prevVisibleRef = useRef(false);
+  useEffect(() => {
+    const wasVisible = prevVisibleRef.current;
+    prevVisibleRef.current = !!visible;
+    if (visible && !wasVisible) {
+      setActiveTab(scrollToInsight ? 'Insights' : initialTabProp || 'Tracker');
+    }
+  }, [visible, initialTabProp, scrollToInsight]);
+
   useEffect(() => {
     if (!scrollToInsight) return;
+    pendingScrollRef.current = scrollToInsight;
     setActiveTab('Insights');
-    const timer = setTimeout(() => {
-      const y = insightPositions.current[scrollToInsight];
-      if (y !== undefined && insightsScrollRef.current) {
-        insightsScrollRef.current.scrollTo({ y: Math.max(0, y - 16), animated: true });
+
+    // The card mounts a frame or two after the tab switch. Retry on each frame
+    // until it is measurable, then scroll. Give up after ~1s so an insight that
+    // is not rendered does not wedge the parent's scroll intent open forever.
+    let frame = 0;
+    let attempts = 0;
+    const tick = () => {
+      if (pendingScrollRef.current !== scrollToInsight) return;
+      attempts += 1;
+      if (scrollToInsightCard(scrollToInsight)) {
+        pendingScrollRef.current = null;
+        consumedCbRef.current?.();
+        return;
       }
-      onScrollToInsightConsumed?.();
-    }, 450);
-    return () => clearTimeout(timer);
+      if (attempts < 60) {
+        frame = requestAnimationFrame(tick);
+      } else {
+        pendingScrollRef.current = null;
+        consumedCbRef.current?.();
+      }
+    };
+    frame = requestAnimationFrame(tick);
+    return () => { if (frame) cancelAnimationFrame(frame); };
   }, [scrollToInsight]);
 
   const [heightCm, setHeightCm] = useState<number | null>(() => {

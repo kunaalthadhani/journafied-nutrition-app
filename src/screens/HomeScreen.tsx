@@ -3042,6 +3042,7 @@ export const HomeScreen: React.FC = () => {
             onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
             isPremium={isPremium}
             insightUnlocks={insightUnlocks}
+            visible={showWeightTracker}
             initialTab={openWeightOnInsights ? 'Insights' : undefined}
             scrollToInsight={scrollToInsightId}
             onScrollToInsightConsumed={() => setScrollToInsightId(null)}
