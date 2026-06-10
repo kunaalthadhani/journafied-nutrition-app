@@ -143,6 +143,21 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     );
   };
 
+  // Shown in the Tracker tab when the user has weigh-ins but none fall in the
+  // selected time range, so the chart would otherwise be blank or, worse, show
+  // the whole history while the range pills say something narrower.
+  const NoRangeDataCard = () => (
+    <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 28, alignItems: 'center' }]}>
+      <Feather name="bar-chart-2" size={28} color={theme.colors.textTertiary} style={{ marginBottom: 10 }} />
+      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 }}>
+        No weigh-ins in this range
+      </Text>
+      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center' }}>
+        Pick a wider range or log a weight to see your trend.
+      </Text>
+    </View>
+  );
+
   const isUnlocked = (id: InsightId) => isInsightUnlocked(id, insightUnlocks);
   const { convertWeightToDisplay, convertWeightFromDisplay, getWeightUnitLabel, weightUnit } = usePreferences();
   const { weightEntries: contextWeightEntries, goals: contextGoals } = useUser();
@@ -360,7 +375,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     return filtered;
   }, [timeRange, weightEntries]);
 
-  const graphData = filteredData.length > 0 ? filteredData : weightEntries;
+  // Do NOT fall back to all entries when the range is empty: that silently shows
+  // the full history while the range pills claim something narrower. An empty
+  // range renders a "no data in range" card instead (the pills stay reachable).
+  const graphData = filteredData;
   const hasGraphData = graphData.length > 0;
 
   // BMI calculation
@@ -1244,10 +1262,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
             {activeTab === 'Tracker' && (
             <>
-            {hasGraphData && (
+            {hasEntries && (
               <>
                 {/* Graph Section */}
                 <View style={styles.graphContainer}>
+                  {hasGraphData ? (
                   <View
                     style={[
                       styles.graphCard,
@@ -1410,6 +1429,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       </Svg>
                     </Animated.View>
                   </View>
+                  ) : (
+                  <NoRangeDataCard />
+                  )}
 
                   {/* Time Range Selector */}
                   <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4, alignSelf: 'center', marginBottom: 8 }}>
