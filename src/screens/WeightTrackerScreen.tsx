@@ -948,6 +948,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   // Deficit/Surplus Impact — AI-powered, refreshed every Monday
   useEffect(() => {
+    // This fires a paid OpenAI call, so never run it for non-premium users or
+    // before the insight is unlocked. The effect runs regardless of which tab is
+    // visible, so the render-time gate on the card is not enough to stop the cost.
+    if (!isPremium || !isUnlocked('deficit-surplus-ai')) return;
     if (weightEntries.length < 7 || Object.keys(dailySummaries).length === 0) return;
     const now = new Date();
     const dayOfWeek = now.getDay();
@@ -992,7 +996,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           temperature: 0.7,
           max_tokens: 100,
         });
-        const text = response.choices[0].message.content.trim();
+        const text = response?.choices?.[0]?.message?.content?.trim();
+        if (!text) return;
         setDeficitInsight(text);
         setDeficitInsightDate(currentWeekKey);
         AsyncStorage.setItem('@trackkal:deficitInsight', JSON.stringify({ insight: text, weekKey: currentWeekKey })).catch(() => {});
@@ -1003,7 +1008,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       }
     };
     generateDeficitInsight();
-  }, [weightEntries, dailySummaries, deficitInsightDate, goalType]);
+  }, [weightEntries, dailySummaries, deficitInsightDate, goalType, isPremium, insightUnlocks]);
 
   const renderLockedCard = (title: string, requirement: string) => (
     <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A', opacity: 0.5 }]}>
