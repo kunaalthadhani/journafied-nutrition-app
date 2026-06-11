@@ -15,7 +15,8 @@
       "Bash(grep -rn \"Referral\\\\|referral\\\\|ReferralScreen\" src/screens/*.tsx)",
       "Bash(grep -n \"activeTab === ''Insights''\" src/screens/NutritionAnalysisScreen.tsx)",
       "Bash(grep -n \"activeTab === ''Insights''\" src/screens/WeightTrackerScreen.tsx)",
-      "Bash(PG_URL=\"postgresql://postgres.oljzqoznxqbuocdykmpw:Trackkcal786!@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres\" node _dbq.cjs)"
+      "Bash(PG_URL=\"postgresql://postgres.oljzqoznxqbuocdykmpw:Trackkcal786!@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres\" node _dbq.cjs)",
+      "Bash(node -e ' *)"
     ]
   }
 }
