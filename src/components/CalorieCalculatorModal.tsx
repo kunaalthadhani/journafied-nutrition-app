@@ -77,6 +77,21 @@ const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
+// Weight is always stored in kg. These render it in, and convert between, the
+// unit the field is currently showing, so a pre-filled value is never the raw kg
+// number under a lbs label (which silently halved a returning lbs user's weight).
+const kgToDisplay = (kg: number, u: WeightUnit): string => {
+  const v = u === 'lbs' ? Math.round(kg / 0.453592) : Math.round(kg * 10) / 10;
+  return String(v);
+};
+const convertWeightField = (val: string, from: WeightUnit, to: WeightUnit): string => {
+  if (from === to) return val;
+  const n = parseFloat(val);
+  if (isNaN(n)) return val;
+  const kg = from === 'lbs' ? n * 0.453592 : n;
+  return kgToDisplay(kg, to);
+};
+
 // ── Scroll Picker ───────────────────────────────────────────────────
 const PICKER_ITEM_HEIGHT = 48;
 const PICKER_VISIBLE_ITEMS = 5;
@@ -225,11 +240,11 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [heightInVal, setHeightInVal] = useState(initialData?.heightInches != null ? initialData.heightInches : 8);
 
   const [weightUnit, setWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
-  const [weight, setWeight] = useState(initialData?.currentWeightKg ? String(initialData.currentWeightKg) : '');
+  const [weight, setWeight] = useState(initialData?.currentWeightKg ? kgToDisplay(initialData.currentWeightKg, preferredWeightUnit) : '');
   const [targetWeightUnit, setTargetWeightUnit] = useState<WeightUnit>(preferredWeightUnit);
-  const [targetWeight, setTargetWeight] = useState(initialData?.targetWeightKg ? String(initialData.targetWeightKg) : '');
-  const [selectedRate, setSelectedRate] = useState<number | null>(null);
-  const [activityLevel, setActivityLevel] = useState<string | null>(null);
+  const [targetWeight, setTargetWeight] = useState(initialData?.targetWeightKg ? kgToDisplay(initialData.targetWeightKg, preferredWeightUnit) : '');
+  const [selectedRate, setSelectedRate] = useState<number | null>(initialData?.activityRate ?? null);
+  const [activityLevel, setActivityLevel] = useState<string | null>(initialData?.activityLevel ?? null);
 
   // ── Macro state ─────────────────────────────────────────────────
   const [proteinPct, setProteinPct] = useState(initialData?.proteinPercentage || 30);
@@ -717,7 +732,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         {/* Unit toggle */}
         <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
           {(['kg', 'lbs'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeightUnit(u); setTargetWeightUnit(u); }}>
+            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); }}>
               <Text style={[st.togTxt, { color: weightUnit === u ? STEP_ACCENT.weight : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}

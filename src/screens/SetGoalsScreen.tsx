@@ -88,6 +88,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [goal, setGoal] = useState<'lose' | 'maintain' | 'gain' | undefined>(initialGoals?.goal);
   const [activityRate, setActivityRate] = useState<number | undefined>(initialGoals?.activityRate);
   const [name, setName] = useState<string | undefined>(initialGoals?.name);
+  const [dob, setDob] = useState<string | undefined>(initialGoals?.dob);
   const [trackingGoal, setTrackingGoal] = useState<string | undefined>(initialGoals?.trackingGoal);
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'very' | undefined>(initialGoals?.activityLevel);
 
@@ -117,6 +118,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.goal !== undefined) setGoal(result.goal);
     if (result.activityRate !== undefined) setActivityRate(result.activityRate);
     if (result.name !== undefined) setName(result.name);
+    if (result.dob !== undefined) setDob(result.dob);
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
 
@@ -187,7 +189,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       calories, proteinPercentage: normP, carbsPercentage: normC, fatPercentage: normF,
       proteinGrams, carbsGrams, fatGrams,
       currentWeightKg, targetWeightKg, age, gender, heightCm, heightFeet, heightInches,
-      goal, activityRate, name, trackingGoal, activityLevel,
+      goal, activityRate, name, dob, trackingGoal, activityLevel,
     });
     onBack();
   };
@@ -198,6 +200,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         onBack={handleCalculatorBack}
         onCalculated={handleCalculatedCalories}
         initialData={{
+          name, dob,
           currentWeightKg, targetWeightKg, age, gender,
           heightCm, heightFeet, heightInches,
           goal, activityRate, activityLevel,
