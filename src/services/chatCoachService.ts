@@ -14,6 +14,11 @@ export const COACH_LIMITS = {
     PREMIUM: 10
 };
 
+// The coach only answers once the user has this many logged days. The unlock
+// notification and the usable gate MUST share this number, or we promise an
+// unlock the coach then refuses to honor.
+export const COACH_MIN_LOGGED_DAYS = 14;
+
 export interface ChatCoachContext {
     userProfile: {
         name?: string;
@@ -74,6 +79,17 @@ export interface ChatCoachContext {
         remainingBudget: number;
     };
 }
+
+// The snapshot stores goal as 'lose' | 'maintain' | 'gain', but the coach
+// context (and the opening insight + starter questions that read it) key off
+// 'lose_weight' | 'gain_muscle' | 'maintain_weight'. Without this map the
+// context carried an undocumented value and all the tailored branches went dead.
+const mapGoalType = (g?: string): ChatCoachContext['userProfile']['goalType'] => {
+    if (g === 'lose') return 'lose_weight';
+    if (g === 'gain') return 'gain_muscle';
+    if (g === 'maintain') return 'maintain_weight';
+    return 'other';
+};
 
 export const COACH_SYSTEM_PROMPT = `
 You are the AI Nutrition Coach for the "TrackKcal" app.
@@ -137,7 +153,9 @@ export const chatCoachService = {
             let snapshot = await dataStorage.getUserMetricsSnapshot();
             if (!snapshot) return;
 
-            const hasFoodData = snapshot.commonFoods.length >= 5 || snapshot.consistencyScore > 10;
+            // Must match buildContext's gate exactly, or we notify "unlocked"
+            // before the coach will actually answer.
+            const hasFoodData = (snapshot.loggedDaysCount || 0) >= COACH_MIN_LOGGED_DAYS;
             const hasWeightData = snapshot.weightTrend.current !== null && snapshot.weightTrend.current > 0;
             const isSufficient = hasFoodData && hasWeightData;
 
@@ -162,7 +180,7 @@ export const chatCoachService = {
      * Builds the context object from recent user data.
      */
     buildContext: async (options?: { minLoggedDays?: number; requireWeight?: boolean }): Promise<ChatCoachContext> => {
-        const minDays = options?.minLoggedDays ?? 14;
+        const minDays = options?.minLoggedDays ?? COACH_MIN_LOGGED_DAYS;
         const requireWeight = options?.requireWeight ?? true;
 
         // 1. Get the latest snapshot
@@ -264,7 +282,7 @@ export const chatCoachService = {
             userProfile: {
                 weight: snapshot.weightTrend.current || 0,
                 goalWeight: snapshot.userGoals.goalType === 'lose_weight' ? (snapshot.weightTrend.current || 0) * 0.9 : undefined,
-                goalType: snapshot.userGoals.goalType as any,
+                goalType: mapGoalType(snapshot.userGoals.goalType),
             },
             recentPerformance: {
                 avgCalories: Math.round(snapshot.averages7Day.calories),
