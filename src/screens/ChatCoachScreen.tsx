@@ -285,6 +285,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                             onChangeText={setInputText}
                             onSubmitEditing={() => handleSend()}
                             returnKeyType="send"
+                            maxLength={500}
                         />
                         <TouchableOpacity
                             onPress={() => handleSend()}

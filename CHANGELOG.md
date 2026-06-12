@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## AI Coach
 
+**v1.4.9**
+Gave the coach a personality. It used to talk like a cold lab instrument. Now it is a tough-love coach: blunt, a bit of edge, pushes you, but on your side. Also moved it to a faster, far cheaper model that handles its short replies just as well, and capped how long a single question can be.
+
 **v1.4.8**
 Made the coach fair when something breaks. If a reply fails to come through or comes back empty, it no longer costs you one of your daily messages. You only get charged when it actually answers. A fast double tap can no longer fire off two messages at once either.
 

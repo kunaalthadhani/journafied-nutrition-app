@@ -785,7 +785,7 @@ export async function getCoachChatResponse(sessionMessages: { role: string; cont
     ];
 
     const data = await invokeAI({
-      model: 'gpt-4o',
+      model: 'gpt-4o-mini',
       messages: finalMessages,
       temperature: 0.7,
       max_tokens: 600,
