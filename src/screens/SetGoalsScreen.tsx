@@ -66,7 +66,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   initialGoals,
 }) => {
   const theme = useTheme();
-  const isFirstTime = !initialGoals?.goal;
+  // Frozen at mount. A background auth event can call setSavedGoals on Home and
+  // give initialGoals a goal field mid-flow; deriving this inline would then
+  // reroute a first-time user into the returning-user branch and drop the new
+  // plan they just entered.
+  const [isFirstTime] = useState(() => !initialGoals?.goal);
 
   const [calories, setCalories] = useState(initialGoals?.calories || 1500);
   const [proteinPercentage, setProteinPercentage] = useState(initialGoals?.proteinPercentage || 30);

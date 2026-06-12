@@ -245,6 +245,11 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [targetWeight, setTargetWeight] = useState(initialData?.targetWeightKg ? kgToDisplay(initialData.targetWeightKg, preferredWeightUnit) : '');
   const [selectedRate, setSelectedRate] = useState<number | null>(initialData?.activityRate ?? null);
   const [activityLevel, setActivityLevel] = useState<string | null>(initialData?.activityLevel ?? null);
+  // Force the user to actually set DOB and height instead of silently accepting
+  // the picker defaults (year 2000 -> age 26, 170cm), which fed a wrong BMR.
+  // Pre-touched when we already have the value (returning user or recalc).
+  const [dobTouched, setDobTouched] = useState(!!initialData?.dob);
+  const [heightTouched, setHeightTouched] = useState(initialData?.heightCm != null || initialData?.heightFeet != null);
 
   // ── Macro state ─────────────────────────────────────────────────
   const [proteinPct, setProteinPct] = useState(initialData?.proteinPercentage || 30);
@@ -429,9 +434,9 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       case 'name': return userName.trim() === '';
       case 'goal': return !goal;
       case 'sex': return !gender;
-      case 'dob': return false; // always has a value
-      case 'height': return false; // always has a value
-      case 'weight': return weight.trim() === '';
+      case 'dob': return !dobTouched;
+      case 'height': return !heightTouched;
+      case 'weight': return weight.trim() === '' || !(parseFloat(weight) > 0);
       case 'pace': return selectedRate === null;
       case 'activity': return !activityLevel;
       default: return false;
@@ -688,10 +693,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         <Text style={[st.title, { color: theme.colors.textPrimary }]}>Date of birth</Text>
         <Text style={[st.sub, { color: theme.colors.textSecondary }]}>We'll calculate your age automatically</Text>
         <View style={st.pickerRow}>
-          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => setDobMonth(v as number)} width={90} accent={accent} />
-          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => setDobDay(v as number)} width={60} accent={accent} />
-          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => setDobYear(v as number)} width={80} accent={accent} />
+          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => { setDobMonth(v as number); setDobTouched(true); }} width={90} accent={accent} />
+          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => { setDobDay(v as number); setDobTouched(true); }} width={60} accent={accent} />
+          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => { setDobYear(v as number); setDobTouched(true); }} width={80} accent={accent} />
         </View>
+        {!dobTouched && (
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: theme.colors.textTertiary }}>Scroll to set your date of birth</Text>
+        )}
       </View>
     );
   };
@@ -710,14 +718,17 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         </View>
         {heightUnit === 'cm' ? (
           <View style={st.pickerRow}>
-            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => setHeightCmVal(v as number)} width={100} accent={accent} />
+            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => { setHeightCmVal(v as number); setHeightTouched(true); }} width={100} accent={accent} />
             <Text style={[st.pickerUnit, { color: theme.colors.textSecondary }]}>cm</Text>
           </View>
         ) : (
           <View style={st.pickerRow}>
-            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => setHeightFtVal(v as number)} width={80} accent={accent} />
-            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => setHeightInVal(v as number)} width={80} accent={accent} />
+            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => { setHeightFtVal(v as number); setHeightTouched(true); }} width={80} accent={accent} />
+            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => { setHeightInVal(v as number); setHeightTouched(true); }} width={80} accent={accent} />
           </View>
+        )}
+        {!heightTouched && (
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: theme.colors.textTertiary }}>Scroll to set your height</Text>
         )}
       </View>
     );
@@ -857,7 +868,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             )}
             <TouchableOpacity
               style={[st.navBtn, st.nextBtn, { backgroundColor: isDisabled() ? theme.colors.border : stepAccent }, currentIdx === 0 && { flex: 1 }]}
-              onPress={goNext} disabled={currentStepId === 'weight' ? weight.trim() === '' : isDisabled()}
+              onPress={goNext} disabled={isDisabled()}
               activeOpacity={0.7}>
               <Text style={[st.navTxt, { color: isDisabled() ? theme.colors.textSecondary : '#fff', fontWeight: '600' }]}>{nextLabel}</Text>
             </TouchableOpacity>

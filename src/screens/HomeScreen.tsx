@@ -648,7 +648,11 @@ export const HomeScreen: React.FC = () => {
     // Save name to AccountInfo so greeting shows it
     if (goals.name) {
       const existing = await dataStorage.loadAccountInfo();
-      const updated = { ...existing, name: goals.name };
+      // Keep a name the user already set (e.g. edited in QuickSignup, which saves
+      // it just before this runs) instead of clobbering it with the stale
+      // calculator name carried on the staged goals.
+      const name = existing?.name && existing.name.trim() ? existing.name : goals.name;
+      const updated = { ...existing, name };
       await dataStorage.saveAccountInfo(updated);
     }
     // Tell UserContext to re-pull goals + accountInfo so every screen sees the

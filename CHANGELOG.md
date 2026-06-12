@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Goal setup
 
+**v1.4.13**
+Hardened the goal calculator so it stops producing a wrong target. The date-of-birth and height steps now make you actually set them instead of quietly using a default age of 26 and 170cm, which had been feeding a wrong calorie number for anyone who tapped through. A blank or zero weight is no longer accepted. The name you type on the save-your-plan screen now sticks instead of reverting to what you typed earlier. And a rare case where a brand-new user's plan could vanish mid sign-in is closed.
+
 **v1.4.12**
 Fixed a small mismatch where your saved macro grams could be off by about one percent from your saved macro percentages. The grams now match the percentages exactly.
 
