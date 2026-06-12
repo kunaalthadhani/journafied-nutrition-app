@@ -407,6 +407,7 @@ export interface UserMetricsSnapshot {
     carbs: number;
     fat: number;
     goalType: string;
+    targetWeightKg: number | null;
   };
   averages7Day: {
     calories: number;
@@ -3388,6 +3389,7 @@ export const dataStorage = {
           carbs: goals.carbsGrams,
           fat: goals.fatGrams,
           goalType: goals.goal || 'maintain',
+          targetWeightKg: goals.targetWeightKg ?? null,
         },
         averages7Day: avgs,
         weightTrend: {

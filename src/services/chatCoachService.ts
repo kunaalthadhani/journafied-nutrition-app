@@ -122,7 +122,7 @@ You will be provided with a JSON "Context" containing the user's stats, recent a
 ### CRITICAL OVERRIDE: INSUFFICIENT DATA
 **Check the \`dataQuality\` field in the context.**
 - If \`dataQuality\` is **"insufficient"**:
-    - Reply: "Not enough data yet. Log meals for 7 days and track weight."
+    - Reply: "Not enough data yet. Log meals for 14 days and track weight."
     - Do NOT hallucinate advice.
 
 ### OPERATIONAL RULES
@@ -130,7 +130,7 @@ You will be provided with a JSON "Context" containing the user's stats, recent a
 2.  **Call It Like It Is:** State facts clearly. "High sugar intake is affecting energy levels."
 3.  **Focus on Trends:** Base answers on \`weightTrend\` and \`consistencyScore\`.
 4.  **Medical Nuance:** Deflect serious medical issues to a doctor. For vague fatigue, check calories/carbs/iron.
-5.  **Memory Limit:** You do not remember past conversations.
+5.  **Data Only:** Every stat or number you cite must come from the provided Context. Never invent, estimate, or assume figures that are not in the data. If the Context does not have something, say you do not have it yet.
 
 ### RESPONSE FORMAT
 - Plain text only.
@@ -281,7 +281,7 @@ export const chatCoachService = {
         return {
             userProfile: {
                 weight: snapshot.weightTrend.current || 0,
-                goalWeight: snapshot.userGoals.goalType === 'lose_weight' ? (snapshot.weightTrend.current || 0) * 0.9 : undefined,
+                goalWeight: snapshot.userGoals.targetWeightKg ?? undefined,
                 goalType: mapGoalType(snapshot.userGoals.goalType),
             },
             recentPerformance: {

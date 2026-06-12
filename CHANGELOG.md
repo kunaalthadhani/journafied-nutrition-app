@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## AI Coach
 
+**v1.4.6**
+Cleaned up how the coach talks and what it knows. It used to say "I do not remember past conversations," which was cold and pointless, so that line is gone. It also told you to log 7 days when it really needs 14, now it says the right number. It can no longer make up figures, it has to answer only from your real logged data. And it now feeds on your real target weight instead of going in blind.
+
 **v1.4.5**
 Fixed the "AI Nutritionist Unlocked" notification that arrived way too early and then left you staring at a locked screen. The unlock now lines up with when the coach can actually help. Also fixed a mix-up that had stopped the coach tailoring its tips and its suggested starter questions to your goal, so weight-loss users get weight-loss prompts again.
 
