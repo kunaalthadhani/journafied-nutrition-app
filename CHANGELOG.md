@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Goal setup
 
+**v1.4.12**
+Fixed a small mismatch where your saved macro grams could be off by about one percent from your saved macro percentages. The grams now match the percentages exactly.
+
 **v1.4.11**
 Recalculating your plan no longer throws away macro changes. If you reopen the calculator and adjust your protein, carbs, or fat on the results screen, those tweaks now stick instead of silently reverting to your old split.
 

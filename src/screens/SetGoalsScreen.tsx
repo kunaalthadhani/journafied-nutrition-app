@@ -195,7 +195,9 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     }
     onSave({
       calories, proteinPercentage: normP, carbsPercentage: normC, fatPercentage: normF,
-      proteinGrams, carbsGrams, fatGrams,
+      proteinGrams: macroGrams(calories, normP, 4),
+      carbsGrams: macroGrams(calories, normC, 4),
+      fatGrams: macroGrams(calories, normF, 9),
       currentWeightKg, targetWeightKg, age, gender, heightCm, heightFeet, heightInches,
       goal, activityRate, name, dob, trackingGoal, activityLevel,
     });
