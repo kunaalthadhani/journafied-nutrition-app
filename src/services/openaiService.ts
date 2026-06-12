@@ -769,7 +769,7 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
   }
 }
 
-export async function getCoachChatResponse(sessionMessages: { role: string; content: string }[]): Promise<string> {
+export async function getCoachChatResponse(sessionMessages: { role: string; content: string }[]): Promise<{ ok: boolean; text: string }> {
   try {
     const systemMessageContent = await chatCoachService.generateSystemMessage();
 
@@ -791,10 +791,14 @@ export async function getCoachChatResponse(sessionMessages: { role: string; cont
       max_tokens: 600,
       call_type: 'coach-chat',
     });
-    return data.choices[0]?.message?.content || "I'm drawing a blank. Try again?";
+    const text = data.choices[0]?.message?.content?.trim();
+    // An empty completion is not a usable answer, so the caller must not charge
+    // a message for it.
+    if (!text) return { ok: false, text: "I'm drawing a blank. Try again?" };
+    return { ok: true, text };
 
   } catch (error) {
-    return "I'm having trouble connecting to the nutrition matrix. Try again in a bit.";
+    return { ok: false, text: "I'm having trouble connecting to the nutrition matrix. Try again in a bit." };
   }
 }
 

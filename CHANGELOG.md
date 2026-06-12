@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## AI Coach
 
+**v1.4.8**
+Made the coach fair when something breaks. If a reply fails to come through or comes back empty, it no longer costs you one of your daily messages. You only get charged when it actually answers. A fast double tap can no longer fire off two messages at once either.
+
 **v1.4.7**
 Fixed the coach reading the wrong day around midnight. It was working off UTC time instead of your actual local date, so for the first few hours after midnight it could pull yesterday's meals, and your daily message count reset at the wrong hour. It now uses your local day everywhere.
 

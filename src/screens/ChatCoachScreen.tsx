@@ -106,6 +106,10 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     const [limitStatus, setLimitStatus] = useState({ allowed: true, remaining: 3 });
     const [showInfo, setShowInfo] = useState(false);
     const flatListRef = useRef<FlatList>(null);
+    // Synchronous re-entry guard. `loading` is React state and updates a tick
+    // late, so a fast double tap (or a starter-question tap mid send) could fire
+    // two requests before the button disables. This blocks the second one.
+    const sendingRef = useRef(false);
 
     const starterQuestions = buildStarterQuestions(context);
     const showStarters = messages.length <= 1 && !loading && starterQuestions.length > 0;
@@ -138,37 +142,43 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     };
 
     const handleSend = async (overrideText?: string) => {
+        if (sendingRef.current) return;
         const textToSend = overrideText || inputText.trim();
         if (!textToSend) return;
 
-        const currentLimit = await chatCoachService.checkDailyLimit(isPremium);
-        if (!currentLimit.allowed) {
-            setLimitStatus(currentLimit);
-            return;
-        }
-
-        const userMsg: Message = { id: Date.now().toString(), role: 'user', content: textToSend, createdAt: Date.now() };
-        setMessages(prev => [...prev, userMsg]);
-        setInputText('');
-        setLoading(true);
-
+        sendingRef.current = true;
         try {
+            const currentLimit = await chatCoachService.checkDailyLimit(isPremium);
+            if (!currentLimit.allowed) {
+                setLimitStatus(currentLimit);
+                return;
+            }
+
+            const userMsg: Message = { id: Date.now().toString(), role: 'user', content: textToSend, createdAt: Date.now() };
+            setMessages(prev => [...prev, userMsg]);
+            setInputText('');
+            setLoading(true);
+
             const history = messages.slice(-6).map(m => ({ role: m.role, content: m.content }));
             history.push({ role: 'user', content: userMsg.content });
 
-            const aiText = await getCoachChatResponse(history);
+            const result = await getCoachChatResponse(history);
 
-            const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: aiText, createdAt: Date.now() };
+            const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: result.text, createdAt: Date.now() };
             setMessages(prev => [...prev, aiMsg]);
 
-            await chatCoachService.incrementUsage();
-            const newLimit = await chatCoachService.checkDailyLimit(isPremium);
-            setLimitStatus(newLimit);
-
+            // Only spend a message when the coach actually answered. A network
+            // failure or an empty completion shows the fallback for free.
+            if (result.ok) {
+                await chatCoachService.incrementUsage();
+                const newLimit = await chatCoachService.checkDailyLimit(isPremium);
+                setLimitStatus(newLimit);
+            }
         } catch (e) {
             Alert.alert("Connection Error", "AI Nutritionist is offline temporarily.");
         } finally {
             setLoading(false);
+            sendingRef.current = false;
         }
     };
 

@@ -380,20 +380,28 @@ ${JSON.stringify(safeContext, null, 2)}
             };
         } catch (e) {
             console.error(e);
-            return { allowed: true, remaining: 3 }; // Fail safe
+            // Fail open so a storage hiccup never bricks the coach, but stay
+            // conservative: allow this one message, do not hand out a full quota.
+            return { allowed: true, remaining: 1 };
         }
     },
 
     /**
-     * Increments the daily message count
+     * Increments the daily message count. Best effort: a storage failure must
+     * never throw into the send handler, or it would surface a false error after
+     * the answer already rendered.
      */
     incrementUsage: async () => {
-        const today = localDateKey();
-        const data = await AsyncStorage.getItem(STORAGE_KEYS.COACH_USAGE);
-        const parsed = data ? JSON.parse(data) : { date: today, count: 0 };
+        try {
+            const today = localDateKey();
+            const data = await AsyncStorage.getItem(STORAGE_KEYS.COACH_USAGE);
+            const parsed = data ? JSON.parse(data) : { date: today, count: 0 };
 
-        parsed.count += 1;
-        parsed.date = today; // Ensure date is current
-        await AsyncStorage.setItem(STORAGE_KEYS.COACH_USAGE, JSON.stringify(parsed));
+            parsed.count += 1;
+            parsed.date = today; // Ensure date is current
+            await AsyncStorage.setItem(STORAGE_KEYS.COACH_USAGE, JSON.stringify(parsed));
+        } catch (e) {
+            console.error('[ChatCoach] Failed to increment usage', e);
+        }
     }
 };
