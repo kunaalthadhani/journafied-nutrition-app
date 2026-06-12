@@ -9,6 +9,14 @@ const STORAGE_KEYS = {
     UNLOCK_NOTIFIED: '@trackkal:coach_unlock_notified',
 };
 
+// Local calendar date as YYYY-MM-DD. Meals, summaries, and the daily message
+// count are all keyed off the device's local date, so the coach must read
+// "today" the same way. The old toISOString approach used UTC, which read the
+// wrong day for anyone east or west of UTC and reset the message limit at the
+// wrong hour.
+const localDateKey = (d: Date = new Date()): string =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
 export const COACH_LIMITS = {
     FREE: 7,
     PREMIUM: 10
@@ -189,8 +197,8 @@ export const chatCoachService = {
         // Regenerate if missing, schema-stale (missing loggedDaysCount), or built on
         // a previous day. The day check keeps the coach on fresh numbers and also
         // propagates engine fixes to existing users within a day.
-        const todayStr = new Date().toISOString().split('T')[0];
-        const isStaleDay = !!snapshot?.generatedAt && snapshot.generatedAt.split('T')[0] !== todayStr;
+        const todayStr = localDateKey();
+        const isStaleDay = !!snapshot?.generatedAt && localDateKey(new Date(snapshot.generatedAt)) !== todayStr;
         if (!snapshot || typeof snapshot.loggedDaysCount === 'undefined' || isStaleDay) {
             console.log("[ChatCoach] Snapshot stale or missing. Generating fresh metrics...");
             snapshot = await dataStorage.generateUserMetricsSnapshot();
@@ -227,7 +235,7 @@ export const chatCoachService = {
         }
 
         // 4. Fetch TODAY'S Logs for Hyper-Personalization
-        const todayKey = new Date().toISOString().split('T')[0];
+        const todayKey = localDateKey();
         const todaysMeals = await dataStorage.getDailyLog(todayKey); // Assuming getDailyLog is public or specific method exists
 
         let todayCals = 0;
@@ -354,7 +362,7 @@ ${JSON.stringify(safeContext, null, 2)}
      */
     checkDailyLimit: async (isPremium: boolean): Promise<{ allowed: boolean, remaining: number }> => {
         try {
-            const today = new Date().toISOString().split('T')[0];
+            const today = localDateKey();
             const data = await AsyncStorage.getItem(STORAGE_KEYS.COACH_USAGE);
             const parsed = data ? JSON.parse(data) : { date: today, count: 0 };
 
@@ -380,7 +388,7 @@ ${JSON.stringify(safeContext, null, 2)}
      * Increments the daily message count
      */
     incrementUsage: async () => {
-        const today = new Date().toISOString().split('T')[0];
+        const today = localDateKey();
         const data = await AsyncStorage.getItem(STORAGE_KEYS.COACH_USAGE);
         const parsed = data ? JSON.parse(data) : { date: today, count: 0 };
 
