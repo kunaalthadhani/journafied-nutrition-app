@@ -121,6 +121,14 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.dob !== undefined) setDob(result.dob);
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
+    // Apply the macro split the user saw, and may have edited, on the calculator
+    // result screen. Without this a returning user's macro tweaks were silently
+    // dropped: the first-time path below stages them but the recalc path did not.
+    // The calculator is seeded with the current macros, so this is a no-op unless
+    // they actually changed something.
+    if (result.proteinPercentage !== undefined) setProteinPercentage(result.proteinPercentage);
+    if (result.carbsPercentage !== undefined) setCarbsPercentage(result.carbsPercentage);
+    if (result.fatPercentage !== undefined) setFatPercentage(result.fatPercentage);
 
     // First-time flow: calculator includes macros → stage the goal data and
     // show the signup screen. Goals are saved AFTER signup completes (or skip)
@@ -152,7 +160,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       return;
     }
 
-    // Returning user: just update calories, keep existing macros
+    // Returning user: every field above, macros included, is now applied.
     setShowCalculator(false);
   };
 
