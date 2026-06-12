@@ -640,6 +640,11 @@ export const HomeScreen: React.FC = () => {
     setSavedGoals(goals);
     setGoalsSet(true);
     await dataStorage.saveGoals(goals);
+    // A goal change moves the calories, macros, goal type, and target weight that
+    // the AI coach and Nutrition Analysis read from the metrics snapshot. Rebuild
+    // it now (local only, never throws) so they advise against the new plan right
+    // away instead of waiting for the snapshot to age out a day later.
+    await dataStorage.generateUserMetricsSnapshot();
     // Save name to AccountInfo so greeting shows it
     if (goals.name) {
       const existing = await dataStorage.loadAccountInfo();

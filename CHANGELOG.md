@@ -4,6 +4,14 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Goal setup
+
+**v1.4.10**
+When you change your goal, the app now updates your AI coach and Nutrition Analysis straight away. Before, they kept using your old calorie and macro targets until the next day, so right after you changed your plan they were quietly coaching you against the wrong numbers.
+
+**v1.4.4**
+Recalculating your plan used to forget half your profile. It re-asked your name, reset your birthday to a default (quietly making you 26), forgot your pace and activity, and if you use pounds it could even halve your weight. All of that is preserved correctly now.
+
 ## AI Coach
 
 **v1.4.9**
@@ -20,11 +28,6 @@ Cleaned up how the coach talks and what it knows. It used to say "I do not remem
 
 **v1.4.5**
 Fixed the "AI Nutritionist Unlocked" notification that arrived way too early and then left you staring at a locked screen. The unlock now lines up with when the coach can actually help. Also fixed a mix-up that had stopped the coach tailoring its tips and its suggested starter questions to your goal, so weight-loss users get weight-loss prompts again.
-
-## Goal setup
-
-**v1.4.4**
-Recalculating your plan used to forget half your profile. It re-asked your name, reset your birthday to a default (quietly making you 26), forgot your pace and activity, and if you use pounds it could even halve your weight. All of that is preserved correctly now.
 
 ## Weight tracker
 
