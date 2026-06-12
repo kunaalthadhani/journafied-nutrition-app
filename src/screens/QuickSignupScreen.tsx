@@ -150,6 +150,7 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
               placeholder="Your name"
               autoCapitalize="words"
               autoCorrect={false}
+              maxLength={30}
               theme={theme}
             />
             <Field
@@ -223,10 +224,11 @@ interface FieldProps {
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
   autoComplete?: 'email' | 'tel' | 'name' | 'off';
   autoCorrect?: boolean;
+  maxLength?: number;
   theme: ReturnType<typeof useTheme>;
 }
 
-const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, theme }) => (
+const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, maxLength, theme }) => (
   <View style={styles.fieldWrap}>
     <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
     <TextInput
@@ -246,6 +248,7 @@ const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, 
       keyboardType={keyboardType}
       autoComplete={autoComplete}
       autoCorrect={autoCorrect}
+      maxLength={maxLength}
     />
   </View>
 );

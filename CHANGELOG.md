@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Goal setup
 
+**v1.4.14**
+Cleaned up units for pounds users. Your pace now reads in lbs per week instead of kg, everywhere it shows, on the pace step, the results screen, and the goals screen. Switching your weight unit inside the calculator now carries over to the rest of the app instead of resetting. Also tightened the target-weight check and capped the signup name length to match the calculator.
+
 **v1.4.13**
 Hardened the goal calculator so it stops producing a wrong target. The date-of-birth and height steps now make you actually set them instead of quietly using a default age of 26 and 170cm, which had been feeding a wrong calorie number for anyone who tapped through. A blank or zero weight is no longer accepted. The name you type on the save-your-plan screen now sticks instead of reverting to what you typed earlier. And a rare case where a brand-new user's plan could vanish mid sign-in is closed.
 

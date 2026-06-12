@@ -16,6 +16,7 @@ import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
 import { QuickSignupScreen } from './QuickSignupScreen';
+import { usePreferences } from '../contexts/PreferencesContext';
 
 if (Platform.OS === 'android') {
   if (UIManager.setLayoutAnimationEnabledExperimental) {
@@ -60,12 +61,17 @@ const MACRO_COLORS = {
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
+const fmtPace = (kgPerWeek: number, unit: string): string => unit === 'lbs'
+  ? `${Math.round(kgPerWeek * 2.20462 * 10) / 10} lbs`
+  : `${kgPerWeek} kg`;
+
 export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
   onSave,
   initialGoals,
 }) => {
   const theme = useTheme();
+  const { weightUnit } = usePreferences();
   // Frozen at mount. A background auth event can call setSavedGoals on Home and
   // give initialGoals a goal field mid-flow; deriving this inline would then
   // reroute a first-time user into the returning-user branch and drop the new
@@ -263,7 +269,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         {/* Goal headline */}
         <Text style={[st.goalTitle, { color: theme.colors.textPrimary }]}>{goalLabel}</Text>
         <Text style={[st.goalSub, { color: theme.colors.textSecondary }]}>
-          {activityLabel}{activityRate ? ` · ${activityRate} kg/week` : ''}
+          {activityLabel}{activityRate ? ` · ${fmtPace(activityRate, weightUnit)}/week` : ''}
         </Text>
 
         {/* Calorie card */}

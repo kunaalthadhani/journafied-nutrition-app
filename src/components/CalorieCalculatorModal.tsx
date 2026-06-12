@@ -77,6 +77,12 @@ const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
+// Pace rate is stored in kg/week. Render it in the unit the user picked so an
+// lbs user does not see "kg/week".
+const fmtPace = (kgPerWeek: number, unit: WeightUnit): string => unit === 'lbs'
+  ? `${Math.round(kgPerWeek * 2.20462 * 10) / 10} lbs`
+  : `${kgPerWeek} kg`;
+
 // Weight is always stored in kg. These render it in, and convert between, the
 // unit the field is currently showing, so a pre-filled value is never the raw kg
 // number under a lbs label (which silently halved a returning lbs user's weight).
@@ -218,7 +224,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 }) => {
   const theme = useTheme();
   const insets = useSafeAreaInsets();
-  const { weightUnit: preferredWeightUnit } = usePreferences();
+  const { weightUnit: preferredWeightUnit, setWeightUnit: persistWeightUnit } = usePreferences();
 
   // ── Form state ──────────────────────────────────────────────────
   const [userName, setUserName] = useState(initialData?.name || '');
@@ -345,9 +351,9 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     const loss = goal === 'lose';
     const act = loss ? 'loss' : 'gain'; const verb = loss ? 'lose' : 'gain';
     return [
-      { rate: 0.25, label: `Mild weight ${act}`, sub: `${verb} 0.25 kg/week${targetWeight ? ' · ' + targetDate(0.25) : ''}` },
-      { rate: 0.5, label: `Weight ${act}`, sub: `${verb} 0.5 kg/week${targetWeight ? ' · ' + targetDate(0.5) : ''}` },
-      { rate: 1.0, label: `Fast weight ${act}`, sub: `${verb} 1.0 kg/week${targetWeight ? ' · ' + targetDate(1.0) : ''}` },
+      { rate: 0.25, label: `Mild weight ${act}`, sub: `${verb} ${fmtPace(0.25, weightUnit)}/week${targetWeight ? ' · ' + targetDate(0.25) : ''}` },
+      { rate: 0.5, label: `Weight ${act}`, sub: `${verb} ${fmtPace(0.5, weightUnit)}/week${targetWeight ? ' · ' + targetDate(0.5) : ''}` },
+      { rate: 1.0, label: `Fast weight ${act}`, sub: `${verb} ${fmtPace(1.0, weightUnit)}/week${targetWeight ? ' · ' + targetDate(1.0) : ''}` },
     ];
   };
 
@@ -372,8 +378,8 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const goNext = useCallback(() => {
     // Validate weight vs target weight on Next
     if (steps[currentIdx] === 'weight' && targetWeight.trim() !== '') {
-      const w = parseFloat(weight) || 0;
-      const t = parseFloat(targetWeight) || 0;
+      const w = toKg(weight, weightUnit);
+      const t = toKg(targetWeight, targetWeightUnit);
       if (goal === 'lose' && t >= w) {
         setWeightError('Target should be less than current weight');
         return;
@@ -384,7 +390,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       }
     }
     if (currentIdx < steps.length - 1) slide('fwd', () => setCurrentIdx(i => i + 1));
-  }, [currentIdx, steps, weight, targetWeight, goal, slide]);
+  }, [currentIdx, steps, weight, targetWeight, weightUnit, targetWeightUnit, goal, slide]);
 
   const goPrev = useCallback(() => {
     if (showResult) slide('back', () => setShowResult(false));
@@ -470,7 +476,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const renderResult = () => {
     const goalLabel = goal === 'lose' ? 'Lose weight' : goal === 'gain' ? 'Gain weight' : 'Maintain weight';
     const goalSub = goal === 'maintain' ? 'Stay at your current weight'
-      : `${selectedRate} kg/week · ${activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Light' : activityLevel === 'moderate' ? 'Moderate' : 'Very active'}`;
+      : `${fmtPace(selectedRate || 0, weightUnit)}/week · ${activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Light' : activityLevel === 'moderate' ? 'Moderate' : 'Very active'}`;
 
     const cal = calculatedCalories || 0;
     const pG = macroGrams(cal, proteinPct, 4);
@@ -482,7 +488,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       { label: 'Goal', value: goalLabel, icon: 'target' },
       { label: 'Activity', value: activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Lightly active' : activityLevel === 'moderate' ? 'Moderately active' : 'Very active', icon: 'activity' },
     ];
-    if (goal !== 'maintain' && selectedRate) chips.push({ label: 'Pace', value: `${selectedRate} kg/wk`, icon: 'trending-up' });
+    if (goal !== 'maintain' && selectedRate) chips.push({ label: 'Pace', value: `${fmtPace(selectedRate, weightUnit)}/wk`, icon: 'trending-up' });
     chips.push({ label: 'Age', value: age, icon: 'user' });
 
     const macros = [
@@ -743,7 +749,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         {/* Unit toggle */}
         <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
           {(['kg', 'lbs'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); }}>
+            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); persistWeightUnit(u).catch(() => {}); }}>
               <Text style={[st.togTxt, { color: weightUnit === u ? STEP_ACCENT.weight : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}
