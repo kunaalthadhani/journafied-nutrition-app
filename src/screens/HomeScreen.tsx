@@ -355,7 +355,7 @@ export const HomeScreen: React.FC = () => {
   useEffect(() => {
     if (!showWeightTracker) {
       const checkAdjustments = async () => {
-        const available = await dataStorage.checkAndGenerateAdjustment();
+        const available = await dataStorage.checkAndGenerateAdjustment(isPremium);
         if (available && available.status === 'pending') {
           setAdjustmentAvailable(available);
           // Also refresh history to update baseline if needed? No, baseline changes on Apply/Dismiss.
@@ -975,7 +975,7 @@ export const HomeScreen: React.FC = () => {
       const history = await dataStorage.loadAdjustmentHistory();
       setAdjustmentHistory(history);
 
-      const availableAdjustment = await dataStorage.checkAndGenerateAdjustment();
+      const availableAdjustment = await dataStorage.checkAndGenerateAdjustment(isPremium);
 
       if (availableAdjustment && availableAdjustment.status === 'pending') {
         setAdjustmentAvailable(availableAdjustment);
@@ -1103,7 +1103,7 @@ export const HomeScreen: React.FC = () => {
         const bankConfig = await dataStorage.loadCalorieBankConfig();
         setCalorieBankConfig(bankConfig);
         if (bankConfig && bankConfig.enabled && savedGoalsData) {
-          const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData);
+          const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData, isPremium);
           if (updatedConfig) setCalorieBankConfig(updatedConfig);
 
           // If a reset just happened, show the cycle reset card
@@ -1267,7 +1267,7 @@ export const HomeScreen: React.FC = () => {
         const freshGoals = await dataStorage.loadGoals();
         if (freshBankCfg?.enabled && summaries && freshGoals) {
           try {
-            const { config: resetCfg, didReset } = await checkAndResetCycle(summaries, freshGoals);
+            const { config: resetCfg, didReset } = await checkAndResetCycle(summaries, freshGoals, isPremium);
             if (didReset) {
               const cycles = await dataStorage.loadCompletedCycles();
               if (cycles.length > 0) {

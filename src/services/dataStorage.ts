@@ -6,6 +6,7 @@ import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
 import { calculateStreak } from '../utils/streakUtils';
 import { parseISO } from 'date-fns';
+import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 
 // --- Write serialization to prevent race conditions on rapid saves ---
 // Per-key promise chain: ensures read-modify-write operations for the same
@@ -192,6 +193,19 @@ export const isPlanPremium = (plan: string, premiumUntil?: string): boolean => {
   if (plan === 'premium') return true;
   if (!premiumUntil) return false;
   return new Date(premiumUntil) > new Date();
+};
+
+// Canonical premium entitlement. A feature is premium ONLY when the user is
+// signed in (has an email) and, once paid tiers ship (FREE_PREMIUM_LAUNCH off),
+// is actually on a premium plan. Mirrors the HomeScreen check. Gate the engines
+// with this so a stale stored flag can never keep a premium feature running for
+// a free or signed-out user.
+export const isPremiumEntitled = (accountInfo: AccountInfo | null, plan?: string): boolean => {
+  if (!accountInfo?.email) return false;
+  if (FREE_PREMIUM_LAUNCH) return true;
+  if (plan === 'premium') return true;
+  if (accountInfo.premiumUntil) return new Date(accountInfo.premiumUntil) > new Date();
+  return false;
 };
 
 export interface GroceryItem {
@@ -2969,8 +2983,10 @@ export const dataStorage = {
     return [];
   },
 
-  checkAndGenerateAdjustment: async (): Promise<AdjustmentRecord | null> => {
+  checkAndGenerateAdjustment: async (isPremium: boolean): Promise<AdjustmentRecord | null> => {
     try {
+      // Premium-only. Never run on a stale flag for a free or signed-out user.
+      if (!isPremium) return null;
       const prefs = await dataStorage.loadPreferences();
       if (!prefs || !prefs.dynamicAdjustmentEnabled) return null;
 

@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Settings
 
+**v1.4.17**
+Premium features now stop when you are no longer premium. The Dynamic Adjustment and Calorie Bank engines used to keep running off an old saved setting even after you signed out, so a signed-out user could still get paid behavior. They now check whether you are actually entitled before doing anything.
+
 **v1.4.16**
 Your settings toggles can no longer erase each other. Flipping two switches quickly used to let the second one quietly undo the first, because each one re-saved a stale copy of everything. Now each toggle saves one write at a time and only changes the exact setting you touched, so every switch sticks. This covers the dynamic adjustment, smart suggest, and notification toggles.
 

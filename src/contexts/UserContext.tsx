@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useState, useEffect, useCallback, useRef } from 'react';
-import { AccountInfo, AdjustmentRecord, dataStorage, ExtendedGoalData, MealEntry, StreakFreezeData } from '../services/dataStorage';
+import { AccountInfo, AdjustmentRecord, dataStorage, ExtendedGoalData, MealEntry, StreakFreezeData, isPremiumEntitled } from '../services/dataStorage';
 import { checkMissedDaysAndFreeze } from '../utils/streakLogic';
 import { subscribeMealsForUser, unsubscribeMeals } from '../services/realtimeMealsService';
 import { supabaseDataService } from '../services/supabaseDataService';
@@ -91,8 +91,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             setStreakFreeze(updatedFreeze);
 
             // Smart Adjustment Check
-            // We do this AFTER goals/weights are loaded
-            const adjustment = await dataStorage.checkAndGenerateAdjustment();
+            // We do this AFTER goals/weights are loaded. Gate on premium so the
+            // engine never runs on a stale flag for a free or signed-out user.
+            const adjustment = await dataStorage.checkAndGenerateAdjustment(isPremiumEntitled(loadedAccount));
             if (adjustment && adjustment.status === 'pending') {
                 setAdjustmentAvailable(adjustment);
             } else {

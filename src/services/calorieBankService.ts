@@ -26,10 +26,13 @@ import { format, addDays, isBefore, startOfDay, parseISO } from 'date-fns';
 export async function checkAndResetCycle(
   summariesByDate: Record<string, DailySummary>,
   goals: ExtendedGoalData,
+  isPremium: boolean,
   now: Date = new Date(),
 ): Promise<{ config: CalorieBankConfig | null; didReset: boolean }> {
   const config = await dataStorage.loadCalorieBankConfig();
-  if (!config || !config.enabled) {
+  // Premium-only. A stale enabled flag must not keep banking math running for a
+  // free or signed-out user.
+  if (!isPremium || !config || !config.enabled) {
     return { config, didReset: false };
   }
 
