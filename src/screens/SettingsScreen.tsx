@@ -32,6 +32,7 @@ import { IntegrationsScreen } from './IntegrationsScreen';
 import { CalorieBankConfig } from '../services/dataStorage';
 import { enableCalorieBank, disableCalorieBank, updateCalorieBankSettings, archiveInProgressCycle } from '../services/calorieBankService';
 import { getDayName } from '../utils/calorieBankEngine';
+import { format, startOfDay } from 'date-fns';
 
 interface SettingsScreenProps {
   onBack: () => void;
@@ -1112,7 +1113,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                           // Optimistic update first so Switch doesn't bounce back
                           setCalorieBankConfig(prev => prev
                             ? { ...prev, enabled: true }
-                            : { enabled: true, cycleStartDay: 1, dailyCapPercent: 20, spendingCapPercent: 20, enabledDate: new Date().toISOString().split('T')[0] }
+                            : { enabled: true, cycleStartDay: 1, dailyCapPercent: 20, spendingCapPercent: 20, enabledDate: format(startOfDay(new Date()), 'yyyy-MM-dd') }
                           );
                           const config = await enableCalorieBank();
                           setCalorieBankConfig(config);
@@ -1139,7 +1140,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                                 dataStorage.loadDailySummaries(),
                                 dataStorage.loadGoals(),
                               ]);
-                              if (goals) await archiveInProgressCycle(summaries, goals);
+                              // Archiving the in-progress week and restructuring the cycle
+                              // must be atomic. updateCalorieBankSettings resets enabledDate
+                              // to today, so if the plan fails to load or archiving throws we
+                              // must NOT proceed, or this week's banked calories are orphaned
+                              // with no history record.
+                              if (!goals) {
+                                Alert.alert('Could not change start day', 'Your plan failed to load. Please try again.');
+                                return;
+                              }
+                              try {
+                                await archiveInProgressCycle(summaries, goals);
+                              } catch (e) {
+                                Alert.alert('Could not change start day', 'Saving this week to your history failed. Nothing was changed, please try again.');
+                                return;
+                              }
                               const updated = await updateCalorieBankSettings({ cycleStartDay: day as CalorieBankConfig['cycleStartDay'] });
                               if (updated) setCalorieBankConfig(updated);
                             };

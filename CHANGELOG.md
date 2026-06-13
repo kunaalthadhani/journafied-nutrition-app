@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Settings
 
+**v1.4.18**
+Two calorie bank fixes. Changing your cycle start day no longer risks losing the calories you banked this week. If your plan cannot load at that moment, it now stops and tells you instead of resetting the week and dropping the history. And turning the bank on now stamps the start day in your own local time, so it can no longer be off by a day near midnight.
+
 **v1.4.17**
 Premium features now stop when you are no longer premium. The Dynamic Adjustment and Calorie Bank engines used to keep running off an old saved setting even after you signed out, so a signed-out user could still get paid behavior. They now check whether you are actually entitled before doing anything.
 
