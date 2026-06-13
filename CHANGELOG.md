@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Settings
+
+**v1.4.15**
+Fixed the risky actions in the Settings screen. Clear All Data now actually restarts the app instead of just claiming it would and leaving old data on screen. Delete Account no longer traps you behind a frozen "processing" popup, and it closes the settings screen once it finishes. And an internal "(Dev) Downgrade to Free" button that was showing to real premium users is now hidden.
+
 ## Goal setup
 
 **v1.4.14**

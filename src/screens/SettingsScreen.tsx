@@ -11,10 +11,12 @@ import {
   Animated,
   Dimensions,
   PanResponder,
+  Platform,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import * as Updates from 'expo-updates';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { useTheme } from '../constants/theme';
@@ -67,6 +69,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   // Slide-up panel state
   type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview' | 'grocery' | 'calorieBank';
   const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const activeSlideUpRef = useRef<SlideUpType | null>(null);
 
   // Feature flags & settings. Smart Suggest defaults OFF for new accounts.
@@ -229,9 +232,21 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           onPress: async () => {
             try {
               await AsyncStorage.clear();
-              Alert.alert('Data Cleared', 'All app data has been cleared successfully. The app will restart.');
             } catch (error) {
               Alert.alert('Error', 'Failed to clear data. Please try again.');
+              return;
+            }
+            // Actually restart so no context keeps re-persisting the state we
+            // just wiped. The old build only claimed it would restart and never
+            // did, leaving the app running on ghost data.
+            try {
+              if (Platform.OS === 'web') {
+                (globalThis as any).location?.reload();
+              } else {
+                await Updates.reloadAsync();
+              }
+            } catch {
+              Alert.alert('Data Cleared', 'All app data has been cleared. Please fully close and reopen the app.');
             }
           },
         },
@@ -249,12 +264,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           text: 'Delete Everything',
           style: 'destructive',
           onPress: async () => {
+            setIsDeleting(true);
             try {
-              Alert.alert('Processing...', 'Deleting your data... please wait.');
               await authService.deleteAccount();
-              Alert.alert('Account Deleted', 'Your account and data have been removed. You will be signed out.');
+              Alert.alert('Account Deleted', 'Your account and data have been removed. You have been signed out.', [{ text: 'OK', onPress: () => onBack() }]);
             } catch (error: any) {
               Alert.alert('Error', error?.message || 'Could not delete your account. Nothing was changed, please try again.');
+            } finally {
+              setIsDeleting(false);
             }
           }
         }
@@ -324,7 +341,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </View>
 
           {/* Dev Tools for Plan */}
-          {plan === 'premium' && (
+          {__DEV__ && plan === 'premium' && (
             <TouchableOpacity style={{ padding: 12, alignItems: 'center' }} onPress={onDowngradeToFree}>
               <Text style={{ color: theme.colors.textTertiary, fontSize: 11 }}>(Dev) Downgrade to Free</Text>
             </TouchableOpacity>
@@ -504,7 +521,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SettingItem
             icon="user-x"
             title="Delete Account"
-            subtitle="Permanently remove your account and data"
+            subtitle={isDeleting ? 'Deleting…' : 'Permanently remove your account and data'}
             onPress={handleDeleteAccount}
           />
         </SettingSection>
