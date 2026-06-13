@@ -115,6 +115,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
       onLogin?.();
       return;
     }
+    if (type === 'calorieBank') {
+      // Refresh in case the config or base target changed out of band (e.g. a
+      // sync from another device) since this screen mounted.
+      dataStorage.loadCalorieBankConfig().then(setCalorieBankConfig).catch(() => {});
+      dataStorage.loadGoals().then(g => { if (g?.calories) setBaseCalorieTarget(g.calories); }).catch(() => {});
+    }
     activeSlideUpRef.current = type;
     setActiveSlideUp(type);
     slideUpAnim.setValue(SCREEN_HEIGHT);
@@ -227,6 +233,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           text: 'Clear',
           style: 'destructive',
           onPress: async () => {
+            // Push any unsynced offline changes to the cloud first so a signed-in
+            // user does not lose edits that had not synced yet. Their cloud data is
+            // re-pulled after the reload below. Best effort: if offline, proceed.
+            try { await dataStorage.flushSyncQueue(); } catch { /* proceed regardless */ }
             try {
               await AsyncStorage.clear();
             } catch (error) {
@@ -398,7 +408,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                 icon="shopping-cart"
                 title="Grocery Suggestions"
                 subtitle={`${groceryProgress.loggedDays}/5 days · ${groceryProgress.uniqueFoods}/7 foods to unlock`}
-                onPress={() => {}}
+                onPress={() => Alert.alert('Grocery Suggestions', `Log 5 days and 7 unique foods to unlock AI grocery lists.\n\nYou have ${groceryProgress.loggedDays}/5 days and ${groceryProgress.uniqueFoods}/7 foods so far.`)}
                 rightElement={
                   <View style={{ backgroundColor: theme.colors.primary + '15', paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8 }}>
                     <Text style={{ fontSize: 10, fontWeight: '700', color: theme.colors.primary }}>{Math.round(((Math.min(groceryProgress.loggedDays, 5) + Math.min(groceryProgress.uniqueFoods, 7)) / 12) * 100)}%</Text>

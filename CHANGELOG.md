@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Settings
 
+**v1.4.19**
+Three smaller Settings fixes. Clearing all data now pushes anything you logged offline up to the cloud first, so a signed-in user does not lose recent edits that had not synced yet. The locked Grocery Suggestions row now explains how to unlock it when you tap it, instead of doing nothing. And the Calorie Bank panel refreshes its settings when you open it, so it can no longer show stale info.
+
 **v1.4.18**
 Two calorie bank fixes. Changing your cycle start day no longer risks losing the calories you banked this week. If your plan cannot load at that moment, it now stops and tells you instead of resetting the week and dropping the history. And turning the bank on now stamps the start day in your own local time, so it can no longer be off by a day near midnight.
 
