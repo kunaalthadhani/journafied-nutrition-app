@@ -283,44 +283,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const toggleDynamicAdjustment = async (newValue: boolean) => {
     if (plan !== 'premium') return;
     setDynamicEnabled(newValue);
-
-    const currentPrefs = await dataStorage.loadPreferences();
-    const updatedPrefs = {
-      ...(currentPrefs || {
-        weightUnit: 'kg',
-        notificationsEnabled: true,
-        mealReminders: {
-          breakfast: { enabled: false, hour: 8, minute: 0 },
-          lunch: { enabled: false, hour: 13, minute: 0 },
-          dinner: { enabled: false, hour: 19, minute: 0 }
-        }
-      }),
-      dynamicAdjustmentEnabled: newValue,
-      dynamicAdjustmentThreshold: dynamicThreshold,
-    };
-    // @ts-ignore
-    await dataStorage.savePreferences(updatedPrefs);
+    await dataStorage.savePreferences({ dynamicAdjustmentEnabled: newValue });
   };
 
   const updateDynamicThreshold = async (val: number) => {
     if (plan !== 'premium') return;
     setDynamicThreshold(val);
-    const currentPrefs = await dataStorage.loadPreferences();
-    const updatedPrefs = {
-      ...(currentPrefs || {
-        weightUnit: 'kg',
-        notificationsEnabled: true,
-        mealReminders: {
-          breakfast: { enabled: false, hour: 8, minute: 0 },
-          lunch: { enabled: false, hour: 13, minute: 0 },
-          dinner: { enabled: false, hour: 19, minute: 0 }
-        }
-      }),
-      dynamicAdjustmentEnabled: dynamicEnabled,
-      dynamicAdjustmentThreshold: val,
-    };
-    // @ts-ignore
-    await dataStorage.savePreferences(updatedPrefs);
+    await dataStorage.savePreferences({ dynamicAdjustmentThreshold: val });
   };
 
 

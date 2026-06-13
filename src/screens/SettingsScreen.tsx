@@ -207,17 +207,13 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   const toggleDynamicAdjustment = async (newValue: boolean) => {
     if (plan !== 'premium') return;
     setDynamicEnabled(newValue);
-    const currentPrefs = await dataStorage.loadPreferences() || {};
-    // @ts-ignore
-    await dataStorage.savePreferences({ ...currentPrefs, dynamicAdjustmentEnabled: newValue, dynamicAdjustmentThreshold: dynamicThreshold });
+    await dataStorage.savePreferences({ dynamicAdjustmentEnabled: newValue });
   };
 
   const updateDynamicThreshold = async (val: number) => {
     if (plan !== 'premium') return;
     setDynamicThreshold(val);
-    const currentPrefs = await dataStorage.loadPreferences() || {};
-    // @ts-ignore
-    await dataStorage.savePreferences({ ...currentPrefs, dynamicAdjustmentEnabled: dynamicEnabled, dynamicAdjustmentThreshold: val });
+    await dataStorage.savePreferences({ dynamicAdjustmentThreshold: val });
   };
 
   const handleClearCache = () => {
@@ -798,10 +794,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                       ios_backgroundColor={theme.colors.border}
                       onValueChange={(val) => {
                         setSmartSuggestEnabled(val);
-                        dataStorage.loadPreferences().then(current => {
-                          // @ts-ignore
-                          dataStorage.savePreferences({ ...(current || {}), smartSuggestEnabled: val });
-                        });
+                        dataStorage.savePreferences({ smartSuggestEnabled: val });
                       }}
                       value={smartSuggestEnabled}
                     />

@@ -223,6 +223,21 @@ export interface Preferences {
   smartReminderPreferences?: SmartReminderPreferences;
 }
 
+// Single source of truth for preference defaults. Used on load (to fill missing
+// fields) and on save (so a partial patch still produces a complete, race-safe
+// merged object).
+export const PREFERENCES_DEFAULTS: Preferences = {
+  weightUnit: 'kg',
+  notificationsEnabled: true,
+  mealReminders: {
+    breakfast: { enabled: false, hour: 8, minute: 0 },
+    lunch: { enabled: false, hour: 13, minute: 0 },
+    dinner: { enabled: false, hour: 19, minute: 0 },
+  },
+  dynamicAdjustmentEnabled: true,
+  dynamicAdjustmentThreshold: 2,
+};
+
 export interface AdjustmentRecord {
   id: string;
   date: string; // YYYY-MM-DD
@@ -1699,7 +1714,7 @@ export const dataStorage = {
         // User presumably reset their data. Reset smart adjustment baseline.
         const prefs = await this.loadPreferences();
         if (prefs && prefs.lastAdjustmentWeight) {
-          await this.savePreferences({ ...prefs, lastAdjustmentWeight: undefined });
+          await this.savePreferences({ lastAdjustmentWeight: undefined });
           console.log('Reset smart adjustment baseline due to weight history clear.');
         }
       }
@@ -2043,26 +2058,34 @@ export const dataStorage = {
     return cached;
   },
 
-  // Save preferences
-  async savePreferences(prefs: Preferences): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(prefs));
+  // Save preferences. Takes a PARTIAL patch and merges it over the latest
+  // persisted value inside a write lock, so two quick toggles can no longer read
+  // a stale copy and clobber each other (the rest of the storage layer already
+  // serializes writes this way). Callers pass only the field(s) they own.
+  async savePreferences(patch: Partial<Preferences>): Promise<void> {
+    return withWriteLock('preferences', async () => {
+      try {
+        const raw = await AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES);
+        const current: Partial<Preferences> = raw ? JSON.parse(raw) : {};
+        const merged: Preferences = { ...PREFERENCES_DEFAULTS, ...current, ...patch };
+        await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(merged));
 
-      // Sync to Supabase if user is logged in
-      const accountInfo = await getCachedAccountInfo();
-      if (accountInfo?.supabaseUserId) {
-        try {
-          await supabaseDataService.savePreferences(accountInfo, prefs);
-        } catch (error) {
-          console.error('Error syncing preferences to Supabase:', error);
-          await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
+        // Sync the full merged object to Supabase if signed in.
+        const accountInfo = await getCachedAccountInfo();
+        if (accountInfo?.supabaseUserId) {
+          try {
+            await supabaseDataService.savePreferences(accountInfo, merged);
+          } catch (error) {
+            console.error('Error syncing preferences to Supabase:', error);
+            await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: merged });
+          }
+        } else {
+          await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: merged });
         }
-      } else {
-        await enqueueSyncOperation({ entity: 'preferences', action: 'upsert', payload: prefs });
+      } catch (error) {
+        console.error('Error saving preferences:', error);
       }
-    } catch (error) {
-      console.error('Error saving preferences:', error);
-    }
+    });
   },
 
   // Load preferences
@@ -2083,17 +2106,7 @@ export const dataStorage = {
         }
       }
 
-      const defaults: Preferences = {
-        weightUnit: 'kg',
-        notificationsEnabled: true,
-        mealReminders: {
-          breakfast: { enabled: false, hour: 8, minute: 0 },
-          lunch: { enabled: false, hour: 13, minute: 0 },
-          dinner: { enabled: false, hour: 19, minute: 0 },
-        },
-        dynamicAdjustmentEnabled: true, // Enable by default for visibility
-        dynamicAdjustmentThreshold: 2, // Lower threshold to 2% for easier testing
-      };
+      const defaults: Preferences = PREFERENCES_DEFAULTS;
 
       // AsyncStorage-first: local is the source of truth. Remote only SEEDS local
       // when there is none (fresh device or evicted cache); otherwise it just
@@ -3077,10 +3090,7 @@ export const dataStorage = {
       // 2. Update Preferences (baseline)
       const prefs = await dataStorage.loadPreferences();
       if (prefs) {
-        await dataStorage.savePreferences({
-          ...prefs,
-          lastAdjustmentWeight: record.currentWeight
-        });
+        await dataStorage.savePreferences({ lastAdjustmentWeight: record.currentWeight });
       }
 
       // 3. Save to History
@@ -3107,10 +3117,7 @@ export const dataStorage = {
       // Update baseline to prevent immediate re-prompt
       const prefs = await dataStorage.loadPreferences();
       if (prefs) {
-        await dataStorage.savePreferences({
-          ...prefs,
-          lastAdjustmentWeight: record.currentWeight
-        });
+        await dataStorage.savePreferences({ lastAdjustmentWeight: record.currentWeight });
       }
     } catch (e) {
       console.error('Failed to dismiss adjustment', e);

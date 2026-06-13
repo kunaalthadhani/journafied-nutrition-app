@@ -71,10 +71,10 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         }
     };
 
-    const savePreferences = async (newPrefs: Preferences) => {
-        setPreferences(newPrefs);
+    const savePreferences = async (patch: Partial<Preferences>) => {
+        setPreferences(prev => (prev ? { ...prev, ...patch } : prev));
         try {
-            await dataStorage.savePreferences(newPrefs);
+            await dataStorage.savePreferences(patch);
         } catch (error) {
             console.error('Failed to save preferences', error);
         }
@@ -82,7 +82,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
     const handleGlobalToggle = (value: boolean) => {
         if (!preferences) return;
-        savePreferences({ ...preferences, notificationsEnabled: value });
+        savePreferences({ notificationsEnabled: value });
     };
 
     const handleMealReminderToggle = (mealType: MealType, enabled: boolean) => {
@@ -91,7 +91,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             ...preferences.mealReminders,
             [mealType]: { ...preferences.mealReminders[mealType], enabled }
         };
-        savePreferences({ ...preferences, mealReminders: newReminders });
+        savePreferences({ mealReminders: newReminders });
     };
 
     const handleTimeSelect = (mealType: MealType) => {
@@ -106,7 +106,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
             ...preferences.mealReminders,
             [selectedMealType]: { ...preferences.mealReminders[selectedMealType], hour, minute }
         };
-        savePreferences({ ...preferences, mealReminders: newReminders });
+        savePreferences({ mealReminders: newReminders });
         setSelectedMealType(null);
     };
 
@@ -126,7 +126,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     const updateSmartPrefs = (updates: Partial<SmartReminderPreferences>) => {
         if (!preferences) return;
         const newSmartPrefs = { ...smartPrefs, ...updates };
-        savePreferences({ ...preferences, smartReminderPreferences: newSmartPrefs });
+        savePreferences({ smartReminderPreferences: newSmartPrefs });
     };
 
     if (loading || !preferences) {
