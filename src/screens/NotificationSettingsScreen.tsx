@@ -265,7 +265,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                 <SettingItem
                                     icon="bar-chart-2"
                                     title="End-of-Day Summary"
-                                    subtitle="Get a daily nutrition wrap-up at 8:30 PM"
+                                    subtitle="A reminder at 8:30 PM to finish logging your day"
                                     rightElement={
                                         <Switch
                                             value={smartPrefs.endOfDaySummary}

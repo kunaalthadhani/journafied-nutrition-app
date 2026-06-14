@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Notifications
 
+**v1.4.23**
+Reworded the end-of-day reminder so it does not imply a premium feature. Everyone gets the nightly nudge to finish logging, and premium still gets the personalized calorie wrap-up.
+
 **v1.4.22**
 The reminder settings screen now uses the same defaults as what is actually saved, so the per-meal reminder toggles can no longer appear switched on while being off underneath.
 
