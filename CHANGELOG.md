@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Notifications
 
+**v1.4.22**
+The reminder settings screen now uses the same defaults as what is actually saved, so the per-meal reminder toggles can no longer appear switched on while being off underneath.
+
 **v1.4.21**
 Reminder settings now take effect right away. Turning a reminder off, changing a meal time, or switching reminder mode used to do nothing until you fully restarted the app. Now it applies when you leave Settings. Reminders also stop scheduling quietly when you have denied notification permission at the phone level, and premium reminders no longer keep firing after you sign out.
 

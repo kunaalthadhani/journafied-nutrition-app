@@ -7,7 +7,7 @@ import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { TimePickerModal } from '../components/TimePickerModal';
-import { dataStorage, Preferences, SmartReminderPreferences } from '../services/dataStorage';
+import { dataStorage, Preferences, SmartReminderPreferences, PREFERENCES_DEFAULTS } from '../services/dataStorage';
 
 interface NotificationSettingsScreenProps {
     onBack: () => void;
@@ -30,15 +30,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     const theme = useTheme();
     const [loading, setLoading] = useState(!initialPreferences);
     const [preferences, setPreferences] = useState<Preferences | null>(initialPreferences ? {
-        weightUnit: 'kg',
-        notificationsEnabled: true,
-        mealReminders: {
-            breakfast: { enabled: true, hour: 8, minute: 0 },
-            lunch: { enabled: true, hour: 12, minute: 30 },
-            dinner: { enabled: true, hour: 18, minute: 0 }
-        },
-        dynamicAdjustmentEnabled: false,
-        dynamicAdjustmentThreshold: 5,
+        ...PREFERENCES_DEFAULTS,
         ...initialPreferences,
     } : null);
 
@@ -53,17 +45,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
         try {
             setLoading(true);
             const prefs = await dataStorage.loadPreferences();
-            setPreferences(prefs || {
-                weightUnit: 'kg',
-                notificationsEnabled: true,
-                mealReminders: {
-                    breakfast: { enabled: true, hour: 8, minute: 0 },
-                    lunch: { enabled: true, hour: 12, minute: 30 },
-                    dinner: { enabled: true, hour: 18, minute: 0 }
-                },
-                dynamicAdjustmentEnabled: false,
-                dynamicAdjustmentThreshold: 5,
-            });
+            setPreferences(prefs || PREFERENCES_DEFAULTS);
         } catch (error) {
             console.error('Failed to load preferences', error);
         } finally {
