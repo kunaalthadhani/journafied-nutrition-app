@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Notifications
 
+**v1.4.21**
+Reminder settings now take effect right away. Turning a reminder off, changing a meal time, or switching reminder mode used to do nothing until you fully restarted the app. Now it applies when you leave Settings. Reminders also stop scheduling quietly when you have denied notification permission at the phone level, and premium reminders no longer keep firing after you sign out.
+
 **v1.4.20**
 Fixed wrong wording in reminders. The daily wrap-up used to congratulate you for hitting your target even when you had gone well over it, and the calorie heads-up could show a negative "calories left." Both now read correctly when you are over your goal. Also fixed a quiet-hours bug so a same-day quiet window like 2pm to 4pm silences reminders only in that window instead of all day.
 

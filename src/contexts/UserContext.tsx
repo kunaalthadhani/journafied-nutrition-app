@@ -4,6 +4,7 @@ import { checkMissedDaysAndFreeze } from '../utils/streakLogic';
 import { subscribeMealsForUser, unsubscribeMeals } from '../services/realtimeMealsService';
 import { supabaseDataService } from '../services/supabaseDataService';
 import { authService } from '../services/authService';
+import { smartReminderService } from '../services/smartReminderService';
 import { format } from 'date-fns';
 
 interface UserContextType {
@@ -181,6 +182,9 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                     await loadAllData();
                 } else if (event === 'SIGNED_OUT') {
                     await loadAllData();
+                    // Entitlement just dropped. Rebuild reminders so premium ones
+                    // (smart timing, macro pacing) stop firing for a signed-out user.
+                    smartReminderService.scheduleAllReminders().catch(() => {});
                 }
             } catch (e) {
                 if (__DEV__) console.error('UserContext: auth refresh failed', e);

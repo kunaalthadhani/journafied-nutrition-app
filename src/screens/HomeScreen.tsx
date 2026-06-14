@@ -489,6 +489,12 @@ export const HomeScreen: React.FC = () => {
         } else {
           setCalorieBankCycle(null);
         }
+
+        // Apply any reminder/notification setting changes now. scheduleAllReminders
+        // cancels the old batch and rebuilds from the freshly saved prefs, so a
+        // disabled reminder stops and a new meal time takes effect without waiting
+        // for the next cold start.
+        smartReminderService.scheduleAllReminders().catch(() => {});
       } catch (e) {
         if (__DEV__) console.error('Settings back refresh failed:', e);
       }
@@ -2373,6 +2379,8 @@ export const HomeScreen: React.FC = () => {
   const handleDowngradeToFree = async () => {
     setUserPlan('free');
     await dataStorage.saveUserPlan('free');
+    // Rebuild reminders under the new (free) entitlement so premium ones stop.
+    smartReminderService.scheduleAllReminders().catch(() => {});
     Alert.alert('Plan Reset', 'You are now on the Free plan.');
   };
 

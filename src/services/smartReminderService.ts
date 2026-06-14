@@ -345,6 +345,16 @@ export const smartReminderService = {
         return [];
       }
 
+      // Respect the OS-level permission. If the user denied notifications, the
+      // in-app toggle being on does not matter — scheduling silently no-ops at
+      // the OS layer, so bail and clear any stale batch instead of logging
+      // "scheduled" for reminders that will never fire.
+      const perm = await Notifications.getPermissionsAsync();
+      if (!perm.granted) {
+        await cancelAllSmartReminders();
+        return [];
+      }
+
       // Cancel previous batch
       await cancelAllSmartReminders();
 
