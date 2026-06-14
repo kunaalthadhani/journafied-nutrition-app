@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Grocery list
+
+**v1.4.24**
+Rebuilt the grocery list screen and fixed the bugs under it. It is a clean shopping list first now. Tap any food to see its calories and why it is on the list, check things off as you shop, and your checkmarks stick if you close and reopen. Dropped a misleading "expected weight loss" number and a made-up "junk swapped" stat that were never real. And if your logged foods are mostly processed so a proper list cannot be built, you now get a real screen that explains it and offers a healthy starter template, instead of a blank page.
+
 ## Notifications
 
 **v1.4.23**

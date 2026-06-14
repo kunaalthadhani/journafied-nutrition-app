@@ -15,11 +15,15 @@ export interface GrocerySuggestionResult {
     primaryFocus: string;
     summary: {
         weeklyTotal: { p: number; c: number; f: number; kcal: number };
-        replacedJunkCalories: number;
-        projectedWeightLossKg: number;
-        maintenanceCalibration: number; // TDEE used
     };
 }
+
+// Single source of truth for category ordering across the list, the screen, and
+// the PDF. Protein first (most goal-relevant), then fiber/greens, carbs, fats,
+// micros.
+export const CATEGORY_PRIORITY: Record<GroceryItem['category'], number> = {
+    protein: 0, fiber: 1, carbs: 2, fats: 3, micronutrients: 4,
+};
 
 // --- Mapping Tables ---
 
@@ -230,11 +234,9 @@ export const generateGrocerySuggestions = (
     // 6. Caloric Scaling (The "Junk Food Replacement" Logic)
     const weeklyTargetKcal = snapshot.userGoals.calories * 7;
     const threshold = weeklyTargetKcal * 0.8; // Use 80% as safe buffer
-    let replacedJunkCalories = 0;
 
     if (currentListKcal < threshold) {
         const deficit = threshold - currentListKcal;
-        replacedJunkCalories = deficit; // Rough proxy for "calories missing from the diet that need filling"
 
         // Dynamic Distribution Strategy based on User Goals
         const g = snapshot.userGoals;
@@ -283,10 +285,8 @@ export const generateGrocerySuggestions = (
         const fiberItems = potentialItems.filter(i => i.category === 'fiber');
         fiberItems.forEach(item => {
             if (item.baseQuantity) item.baseQuantity = Math.round((item.baseQuantity * 1.2) * 10) / 10;
-            // Don't strictly need to scale macros for fiber veg as they are negligible but technically should. 
+            // Don't strictly need to scale macros for fiber veg as they are negligible but technically should.
         });
-
-        focusMessage = "Replaced Empty Calories with Nutrient-Dense Staples";
     }
 
     // 7. De-duplicate and Final Polish
@@ -314,32 +314,47 @@ export const generateGrocerySuggestions = (
         }
     }
 
-    // Weight Loss Projection
-    // 7700 kcal deficit = 1kg loss.
-    // Maintenance approx = Goal + 500 (if cut) or Goal (if maintain).
-    // Let's assume User Goal *is* the plan.
-    // But list *meets* User Goal (because we scaled it up/down to match target).
-    // So if User Goal is 2000 (Deficit), and Maintenance is 2500.
-    // List provides 14000/week (2000/day).
-    // Weekly Deficit = (2500*7) - 14000 = 3500.
-    // Loss = 3500 / 7700 = 0.45 kg.
-
-    // We need TDEE estimate. simplified:
-    let tdee = snapshot.userGoals.calories;
-    if (snapshot.userGoals.goalType === 'lose') tdee += 500;
-    if (snapshot.userGoals.goalType === 'gain') tdee -= 500;
-
-    const projectedWeightLossKg = ((tdee * 7) - weeklyTotal.kcal) / 7700;
-
-    const priorityOrder = { 'protein': 0, 'fiber': 1, 'carbs': 2, 'fats': 3, 'micronutrients': 4 };
     return {
-        items: uniqueItems.sort((a, b) => priorityOrder[a.category] - priorityOrder[b.category]),
+        items: uniqueItems.sort((a, b) => CATEGORY_PRIORITY[a.category] - CATEGORY_PRIORITY[b.category]),
         primaryFocus: focusMessage,
-        summary: {
-            weeklyTotal,
-            replacedJunkCalories: Math.max(0, replacedJunkCalories),
-            projectedWeightLossKg,
-            maintenanceCalibration: tdee
+        summary: { weeklyTotal },
+    };
+};
+
+// Fallback used when the user's logged foods do not yield a usable list (e.g.
+// they have only logged processed foods). Builds a short list of healthy staples
+// from DEFAULT_FOODS so a premium user never hits a dead end.
+export const generateStarterGrocerySuggestions = (): GrocerySuggestionResult => {
+    const categories: GroceryItem['category'][] = ['protein', 'fiber', 'carbs', 'fats', 'micronutrients'];
+    const items: GroceryItem[] = [];
+
+    categories.forEach(category => {
+        (DEFAULT_FOODS[category] || []).slice(0, 3).forEach(name => {
+            const stats = getEstimatedStats(name, category);
+            items.push({
+                name,
+                category,
+                reason: 'staple',
+                baseQuantity: stats.q,
+                unit: stats.u,
+                macros: { p: stats.p, c: stats.c, f: stats.f, kcal: stats.kcal },
+            });
+        });
+    });
+
+    const weeklyTotal = { p: 0, c: 0, f: 0, kcal: 0 };
+    items.forEach(i => {
+        if (i.macros) {
+            weeklyTotal.p += i.macros.p;
+            weeklyTotal.c += i.macros.c;
+            weeklyTotal.f += i.macros.f;
+            weeklyTotal.kcal += i.macros.kcal;
         }
+    });
+
+    return {
+        items: items.sort((a, b) => CATEGORY_PRIORITY[a.category] - CATEGORY_PRIORITY[b.category]),
+        primaryFocus: 'Healthy staples to get you started',
+        summary: { weeklyTotal },
     };
 };
