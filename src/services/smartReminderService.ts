@@ -66,7 +66,8 @@ function formatTimeAmPm(hour: number, minute: number): string {
 
 function isWithinQuietHours(hour: number, quietStart: number, quietEnd: number): boolean {
   if (quietStart <= quietEnd) {
-    return hour >= quietStart || hour < quietEnd;
+    // Same-day window, e.g. 14:00 - 16:00.
+    return hour >= quietStart && hour < quietEnd;
   }
   // Wraps midnight (e.g., 22:00 - 07:00)
   return hour >= quietStart || hour < quietEnd;
@@ -207,10 +208,16 @@ function generateMacroPacingContent(params: {
   const calorieRatio = calorieTarget > 0 ? currentCalories / calorieTarget : 0;
   if (calorieRatio > 0.8 && calorieTarget > 0) {
     const remaining = Math.round(calorieTarget - currentCalories);
-    return {
-      title: 'Calorie heads up',
-      body: `You've used ${Math.round(calorieRatio * 100)}% of your daily calories. ${remaining} cal left for the rest of the day.`,
-    };
+    const pct = Math.round(calorieRatio * 100);
+    return remaining >= 0
+      ? {
+          title: 'Calorie heads up',
+          body: `You've used ${pct}% of your daily calories. ${remaining} cal left for the rest of the day.`,
+        }
+      : {
+          title: 'Calorie heads up',
+          body: `You're ${Math.abs(remaining)} cal over your target today (${pct}%). Ease up on the rest of the day.`,
+        };
   }
 
   return null;
@@ -236,9 +243,16 @@ function generateEndOfDaySummary(params: {
     };
   }
 
+  if (remaining < 0) {
+    return {
+      title: 'Daily wrap-up',
+      body: `You've logged ${Math.round(params.currentCalories).toLocaleString()} of ${params.goals.calories.toLocaleString()} cal today, ${Math.abs(remaining).toLocaleString()} over your target.`,
+    };
+  }
+
   return {
     title: 'Daily wrap-up',
-    body: `You've hit your ${params.goals.calories.toLocaleString()} cal target for today. Nice work!`,
+    body: `You hit your ${params.goals.calories.toLocaleString()} cal target exactly today. Nice work!`,
   };
 }
 
