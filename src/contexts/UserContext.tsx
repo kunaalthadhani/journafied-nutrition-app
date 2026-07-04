@@ -171,6 +171,11 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // because some screens re-mount on accountInfo change and would
                 // otherwise wait on these.
                 if (event === 'SIGNED_IN') {
+                    // Shared-device guard: if a different account owned this device,
+                    // wipe its content BEFORE the backfill push so the previous
+                    // user's meals/weights/insights never upload into this account.
+                    // Awaited so the push below sees the wiped state.
+                    await dataStorage.wipeLocalContentIfAccountChanged(fresh);
                     // First sign-in of a session: backfill local data up once, then pull.
                     void dataStorage.pushDerivedToSupabase().catch(() => { /* */ });
                     void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });

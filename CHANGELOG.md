@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Security and privacy
+
+**v1.4.25**
+Two safety fixes under the hood. On a shared device, signing in with a different account now wipes the previous person's meals, weights, and history off the phone before anything syncs. Your data can no longer land in someone else's account. And the AI service behind food analysis, the coach, and voice logging is locked down. It only runs the models the app actually uses, with size and rate caps, so it cannot be abused to run up a bill.
+
 ## Grocery list
 
 **v1.4.24**

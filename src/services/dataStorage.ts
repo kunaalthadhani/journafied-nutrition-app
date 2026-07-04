@@ -99,6 +99,9 @@ const STORAGE_KEYS = {
   USER_PLAN: '@trackkal:userPlan',
   DEVICE_INFO: '@trackkal:deviceInfo',
   ACCOUNT_INFO: '@trackkal:accountInfo',
+  // The last account that owned the content on this device. Survives sign-out so
+  // the next sign-in can detect a different user and wipe before any upload.
+  LAST_CONTENT_OWNER: '@trackkal:lastContentOwner',
   PREFERENCES: '@trackkal:preferences',
   PUSH_TOKENS: '@trackkal:pushTokens',
   PUSH_HISTORY: '@trackkal:pushHistory',
@@ -1249,6 +1252,46 @@ export const dataStorage = {
   async pushDerivedToSupabase(): Promise<void> {
     const accountInfo = await getCachedAccountInfo();
     await pushDerivedToSupabase(accountInfo);
+  },
+
+  // Shared-device guard. On sign-out we deliberately keep local content so the
+  // SAME user re-signs in fast. But if a DIFFERENT account signs in, that content
+  // belongs to the previous user and must never reach the new account. Call this
+  // BEFORE pushDerivedToSupabase: it compares the signing-in identity to the last
+  // owner and, when they differ, wipes every local content key first. Returns true
+  // if it wiped. Pass the freshly resolved account so the decision does not depend
+  // on a possibly stale ACCOUNT_INFO cache.
+  async wipeLocalContentIfAccountChanged(accountInfo?: AccountInfo | null): Promise<boolean> {
+    try {
+      const account = accountInfo ?? (await getCachedAccountInfo());
+      const identity = account?.supabaseUserId || account?.email;
+      if (!identity) return false;
+
+      const prevOwner = await AsyncStorage.getItem(STORAGE_KEYS.LAST_CONTENT_OWNER);
+      if (prevOwner && prevOwner !== identity) {
+        const preserve = new Set<string>([
+          STORAGE_KEYS.ACCOUNT_INFO,
+          STORAGE_KEYS.DEVICE_INFO,
+          STORAGE_KEYS.LAST_CONTENT_OWNER,
+        ]);
+        const allKeys = await AsyncStorage.getAllKeys();
+        const toRemove = allKeys.filter((k) => !preserve.has(k));
+        if (toRemove.length > 0) await AsyncStorage.multiRemove(toRemove);
+        invalidateMealsCache();
+        await AsyncStorage.setItem(STORAGE_KEYS.LAST_CONTENT_OWNER, identity);
+        return true;
+      }
+
+      // Same user, or the first account to ever own this device (local data
+      // pre-dates the account and is intentionally backfilled). Claim ownership.
+      if (prevOwner !== identity) {
+        await AsyncStorage.setItem(STORAGE_KEYS.LAST_CONTENT_OWNER, identity);
+      }
+      return false;
+    } catch (e) {
+      if (__DEV__) console.warn('[wipeLocalContentIfAccountChanged] failed:', e);
+      return false;
+    }
   },
 
   // Flush any queued sync ops to Supabase. Called from AppState foreground hook
