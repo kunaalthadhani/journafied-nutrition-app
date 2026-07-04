@@ -170,12 +170,18 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 // by awaiting. The auth listener returning fast also matters
                 // because some screens re-mount on accountInfo change and would
                 // otherwise wait on these.
-                if (event === 'SIGNED_IN') {
-                    // Shared-device guard: if a different account owned this device,
-                    // wipe its content BEFORE the backfill push so the previous
-                    // user's meals/weights/insights never upload into this account.
-                    // Awaited so the push below sees the wiped state.
+                // Shared-device guard on EVERY signed-in entry point, not just a
+                // fresh sign-in. A returning user arrives via INITIAL_SESSION, so if
+                // ownership were only claimed on SIGNED_IN the marker would never be
+                // set and the NEXT account switch would go undetected and bleed. This
+                // wipes local content if a different account now owns the device, or
+                // just claims ownership otherwise. Awaited so any push below sees the
+                // wiped state.
+                if (event === 'SIGNED_IN' || event === 'INITIAL_SESSION' || event === 'TOKEN_REFRESHED') {
                     await dataStorage.wipeLocalContentIfAccountChanged(fresh);
+                }
+
+                if (event === 'SIGNED_IN') {
                     // First sign-in of a session: backfill local data up once, then pull.
                     void dataStorage.pushDerivedToSupabase().catch(() => { /* */ });
                     void dataStorage.pullDerivedFromSupabase().catch(() => { /* */ });
