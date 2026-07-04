@@ -850,13 +850,6 @@ export const HomeScreen: React.FC = () => {
       updatedAt: timestamp,
     };
   };
-  const persistSavedPrompts = async (prompts: SavedPrompt[]) => {
-    try {
-      await dataStorage.saveSavedPrompts(prompts);
-    } catch (error) {
-      if (__DEV__) console.error('Error persisting saved prompts:', error);
-    }
-  };
 
 
   // Logic to handle missed days and auto-freeze
@@ -1828,7 +1821,9 @@ export const HomeScreen: React.FC = () => {
     if (existing) {
       const updated = savedPrompts.filter(prompt => prompt.id !== existing.id);
       setSavedPrompts(updated);
-      await persistSavedPrompts(updated);
+      // Sync-aware writer: persists locally AND deletes the cloud row. The old
+      // local-only save left the saved_prompts table permanently empty.
+      await dataStorage.removeSavedPrompt(existing.id);
       return;
     }
 
@@ -1838,7 +1833,13 @@ export const HomeScreen: React.FC = () => {
     const newPrompt = createSavedPrompt(trimmedPrompt);
     const updated = [newPrompt, ...sanitized].slice(0, MAX_SAVED_PROMPTS);
     setSavedPrompts(updated);
-    await persistSavedPrompts(updated);
+    await dataStorage.addSavedPrompt(newPrompt);
+    // Items pushed past the cap must also leave the cloud, or they resurrect on
+    // the next cross-device load.
+    const evicted = sanitized.slice(MAX_SAVED_PROMPTS - 1);
+    for (const prompt of evicted) {
+      await dataStorage.removeSavedPrompt(prompt.id);
+    }
     await analyticsService.trackSavedPromptAdded();
   };
 
@@ -1852,7 +1853,7 @@ export const HomeScreen: React.FC = () => {
   const handleRemoveSavedPrompt = async (id: string) => {
     const updated = savedPrompts.filter(prompt => prompt.id !== id);
     setSavedPrompts(updated);
-    await persistSavedPrompts(updated);
+    await dataStorage.removeSavedPrompt(id);
   };
 
   const handlePlusPress = () => {

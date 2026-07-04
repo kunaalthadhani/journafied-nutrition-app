@@ -353,9 +353,16 @@ export const supabaseDataService = {
   },
 
   async saveNutritionGoals(accountInfo: AccountInfo | null, goals: ExtendedGoalData): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase) return;
+    // Accept email-only accounts like upsertMeals does. During sign-up there is a
+    // window where the cache has the email but not the uid yet; goals are written
+    // exactly once at onboarding, so rejecting that window loses the only write.
+    if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw instead of silently resolving. A silent no-op here reads as success to
+    // the sync queue, which dequeues the op forever. Throwing lets callers enqueue
+    // and the queue retry.
+    if (!user) throw new Error('saveNutritionGoals: could not resolve app user');
 
     // First, deactivate all existing active goals for this user
     const { error: deactivateError } = await supabase
@@ -743,9 +750,10 @@ export const supabaseDataService = {
 
   // Preferences
   async savePreferences(accountInfo: AccountInfo | null, prefs: Preferences): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase) return;
+    if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    if (!user) throw new Error('savePreferences: could not resolve app user');
 
     const { error } = await supabase
       .from('user_preferences')

@@ -690,6 +690,8 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
       bankConfigRaw,
       cyclesRaw,
       weightsRaw,
+      goalsRaw,
+      prefsRaw,
       mealPairs,
     ] = await Promise.all([
       AsyncStorage.getItem(STORAGE_KEYS.INSIGHTS),
@@ -700,6 +702,8 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
       AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CONFIG),
       AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_COMPLETED_CYCLES),
       AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES),
+      AsyncStorage.getItem(STORAGE_KEYS.GOALS),
+      AsyncStorage.getItem(STORAGE_KEYS.PREFERENCES),
       shardKeys.length > 0
         ? AsyncStorage.multiGet(shardKeys)
         : Promise.resolve([] as [string, string | null][]),
@@ -707,6 +711,8 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
 
     const insights: Insight[] = insightsRaw ? JSON.parse(insightsRaw) : [];
     const patterns: DetectedPattern[] = patternsRaw ? JSON.parse(patternsRaw) : [];
+    const localGoals: ExtendedGoalData | null = goalsRaw ? JSON.parse(goalsRaw) : null;
+    const localPrefs: Preferences | null = prefsRaw ? JSON.parse(prefsRaw) : null;
     const plan: WeeklyActionPlan | null = planRaw ? JSON.parse(planRaw) : null;
     const unlocks: Record<string, { unlockedAt: string; seenAt?: string }> = unlocksRaw
       ? JSON.parse(unlocksRaw)
@@ -745,6 +751,18 @@ async function pushDerivedToSupabase(accountInfo: AccountInfo | null): Promise<v
       cycles.length > 0 ? supabaseDataService.upsertCompletedCycles(accountInfo, cycles) : Promise.resolve(),
       mealPayloads.length > 0 ? supabaseDataService.upsertMeals(accountInfo, mealPayloads) : Promise.resolve(),
       weightPayloads.length > 0 ? supabaseDataService.upsertWeightEntries(accountInfo, weightPayloads) : Promise.resolve(),
+      // Goals write a NEW row each save (history table), so only backfill when the
+      // cloud has none for this account. Prevents a duplicate active-goal row from
+      // piling up on every sign-in.
+      localGoals
+        ? supabaseDataService.fetchNutritionGoals(accountInfo).then((remote) =>
+            remote ? undefined : supabaseDataService.saveNutritionGoals(accountInfo, localGoals)
+          )
+        : Promise.resolve(),
+      // Preferences upsert on user_id, idempotent.
+      localPrefs
+        ? supabaseDataService.savePreferences(accountInfo, { ...PREFERENCES_DEFAULTS, ...localPrefs })
+        : Promise.resolve(),
     ]);
   } catch (e) {
     if (__DEV__) console.warn('[pushDerivedToSupabase] failed:', e);
@@ -1307,9 +1325,10 @@ export const dataStorage = {
     try {
       await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
 
-      // Sync to Supabase if user is logged in
+      // Sync to Supabase if user is logged in. Email-only counts: the writer can
+      // resolve the app user from the live session during the sign-up window.
       const accountInfo = await getCachedAccountInfo();
-      if (accountInfo?.supabaseUserId) {
+      if (accountInfo?.supabaseUserId || accountInfo?.email) {
         try {
           await supabaseDataService.saveNutritionGoals(accountInfo, goals);
         } catch (error) {
@@ -1349,6 +1368,14 @@ export const dataStorage = {
             }
             // Local wins every field it has; remote only fills gaps.
             return { ...remoteGoals, ...localGoals };
+          }
+          if (localGoals) {
+            // Read-repair: signed in, cloud has no goals, local does. The one-shot
+            // write at onboarding was missed. Push local up in the background so
+            // the account heals without waiting for a sign-out/sign-in.
+            void supabaseDataService.saveNutritionGoals(accountInfo, localGoals).catch((e) => {
+              if (__DEV__) console.warn('loadGoals read-repair failed:', e);
+            });
           }
         } catch (error) {
           console.error('Error fetching goals from Supabase:', error);
@@ -2127,9 +2154,10 @@ export const dataStorage = {
         const merged: Preferences = { ...PREFERENCES_DEFAULTS, ...current, ...patch };
         await AsyncStorage.setItem(STORAGE_KEYS.PREFERENCES, JSON.stringify(merged));
 
-        // Sync the full merged object to Supabase if signed in.
+        // Sync the full merged object to Supabase if signed in. Email-only counts:
+        // the writer resolves the app user from the live session.
         const accountInfo = await getCachedAccountInfo();
-        if (accountInfo?.supabaseUserId) {
+        if (accountInfo?.supabaseUserId || accountInfo?.email) {
           try {
             await supabaseDataService.savePreferences(accountInfo, merged);
           } catch (error) {
@@ -2176,6 +2204,13 @@ export const dataStorage = {
           return { ...defaults, ...remotePrefs };
         }
         return defaults;
+      }
+      if (!remotePrefs && accountInfo?.supabaseUserId) {
+        // Read-repair: signed in, cloud has no preferences row, local does. Push
+        // the merged local copy up in the background so the account heals.
+        void supabaseDataService.savePreferences(accountInfo, { ...defaults, ...localPrefs }).catch((e) => {
+          if (__DEV__) console.warn('loadPreferences read-repair failed:', e);
+        });
       }
       return { ...defaults, ...(remotePrefs || {}), ...localPrefs };
     } catch (error) {

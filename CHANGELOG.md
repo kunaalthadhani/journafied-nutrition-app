@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Cloud sync
+
+**v1.4.27**
+Your goal plan and preferences now actually reach the cloud. Both had a silent failure mode where the app believed the sync succeeded when nothing was written, and your plan was only ever sent once, at onboarding, so one miss meant it lived on your phone forever. Now a failed write reports itself and retries, signing in backfills anything missing, and the app self-heals on open: if you are signed in and the cloud copy of your plan or preferences is missing, it quietly uploads yours. Bookmarked meals also sync now instead of staying phone-only.
+
 ## Security and privacy
 
 **v1.4.26**
