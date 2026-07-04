@@ -59,27 +59,6 @@ CREATE POLICY "food_logs_delete_own"
   USING (user_id = my_app_user_id());
 
 -- ============================================================
--- 3. food_items (linked via food_log_id)
--- ============================================================
-ALTER TABLE food_items ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "food_items_select_own"
-  ON food_items FOR SELECT
-  USING (food_log_id IN (SELECT id FROM food_logs WHERE user_id = my_app_user_id()));
-
-CREATE POLICY "food_items_insert_own"
-  ON food_items FOR INSERT
-  WITH CHECK (food_log_id IN (SELECT id FROM food_logs WHERE user_id = my_app_user_id()));
-
-CREATE POLICY "food_items_update_own"
-  ON food_items FOR UPDATE
-  USING (food_log_id IN (SELECT id FROM food_logs WHERE user_id = my_app_user_id()));
-
-CREATE POLICY "food_items_delete_own"
-  ON food_items FOR DELETE
-  USING (food_log_id IN (SELECT id FROM food_logs WHERE user_id = my_app_user_id()));
-
--- ============================================================
 -- 4. exercise_logs
 -- ============================================================
 ALTER TABLE exercise_logs ENABLE ROW LEVEL SECURITY;
@@ -140,32 +119,6 @@ CREATE POLICY "nutrition_goals_update_own"
 
 CREATE POLICY "nutrition_goals_delete_own"
   ON nutrition_goals FOR DELETE
-  USING (user_id = my_app_user_id());
-
--- ============================================================
--- 7. engagement_tasks (shared reference data — read-only for all authenticated)
--- ============================================================
-ALTER TABLE engagement_tasks ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "engagement_tasks_select_all"
-  ON engagement_tasks FOR SELECT
-  USING (auth.role() = 'authenticated');
-
--- ============================================================
--- 8. user_task_status
--- ============================================================
-ALTER TABLE user_task_status ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "user_task_status_select_own"
-  ON user_task_status FOR SELECT
-  USING (user_id = my_app_user_id());
-
-CREATE POLICY "user_task_status_insert_own"
-  ON user_task_status FOR INSERT
-  WITH CHECK (user_id = my_app_user_id());
-
-CREATE POLICY "user_task_status_update_own"
-  ON user_task_status FOR UPDATE
   USING (user_id = my_app_user_id());
 
 -- ============================================================
@@ -258,23 +211,6 @@ CREATE POLICY "user_settings_update_own"
   USING (user_id = my_app_user_id());
 
 -- ============================================================
--- 14. entry_tasks
--- ============================================================
-ALTER TABLE entry_tasks ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "entry_tasks_select_own"
-  ON entry_tasks FOR SELECT
-  USING (user_id = my_app_user_id());
-
-CREATE POLICY "entry_tasks_insert_own"
-  ON entry_tasks FOR INSERT
-  WITH CHECK (user_id = my_app_user_id());
-
-CREATE POLICY "entry_tasks_update_own"
-  ON entry_tasks FOR UPDATE
-  USING (user_id = my_app_user_id());
-
--- ============================================================
 -- 15. referral_codes
 -- Readable by all authenticated users (to validate codes),
 -- but only the owner can insert/update.
@@ -342,27 +278,6 @@ CREATE POLICY "streak_freezes_update_own"
   USING (user_id = my_app_user_id());
 
 -- ============================================================
--- 19. grocery_items
--- ============================================================
-ALTER TABLE grocery_items ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "grocery_items_select_own"
-  ON grocery_items FOR SELECT
-  USING (user_id = my_app_user_id());
-
-CREATE POLICY "grocery_items_insert_own"
-  ON grocery_items FOR INSERT
-  WITH CHECK (user_id = my_app_user_id());
-
-CREATE POLICY "grocery_items_update_own"
-  ON grocery_items FOR UPDATE
-  USING (user_id = my_app_user_id());
-
-CREATE POLICY "grocery_items_delete_own"
-  ON grocery_items FOR DELETE
-  USING (user_id = my_app_user_id());
-
--- ============================================================
 -- 20. analytics_events
 -- ============================================================
 ALTER TABLE analytics_events ENABLE ROW LEVEL SECURITY;
@@ -374,40 +289,6 @@ CREATE POLICY "analytics_events_select_own"
 CREATE POLICY "analytics_events_insert_own"
   ON analytics_events FOR INSERT
   WITH CHECK (user_id = my_app_user_id());
-
--- ============================================================
--- 21. nutrition_library (shared — all authenticated can read/write)
--- ============================================================
-ALTER TABLE nutrition_library ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "nutrition_library_select_all"
-  ON nutrition_library FOR SELECT
-  USING (auth.role() = 'authenticated');
-
-CREATE POLICY "nutrition_library_insert_all"
-  ON nutrition_library FOR INSERT
-  WITH CHECK (auth.role() = 'authenticated');
-
-CREATE POLICY "nutrition_library_update_all"
-  ON nutrition_library FOR UPDATE
-  USING (auth.role() = 'authenticated');
-
--- ============================================================
--- 22. daily_user_metrics
--- ============================================================
-ALTER TABLE daily_user_metrics ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "daily_user_metrics_select_own"
-  ON daily_user_metrics FOR SELECT
-  USING (user_id = my_app_user_id());
-
-CREATE POLICY "daily_user_metrics_insert_own"
-  ON daily_user_metrics FOR INSERT
-  WITH CHECK (user_id = my_app_user_id());
-
-CREATE POLICY "daily_user_metrics_update_own"
-  ON daily_user_metrics FOR UPDATE
-  USING (user_id = my_app_user_id());
 
 -- ============================================================
 -- 23. waitlist (public — anyone can sign up from landing page)

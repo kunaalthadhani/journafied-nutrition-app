@@ -8,16 +8,12 @@ import type {
   Preferences,
   PushBroadcastRecord,
   SavedPrompt,
-  EntryTasksStatus,
   ReferralRedemption,
   ReferralReward,
   MealEntry,
-  NutritionLibraryItem,
   ReferralCode,
   StreakFreezeData,
-  GroceryItem,
   AnalyticsEvent,
-  DailyUserMetric,
   Insight,
   DetectedPattern,
   WeeklyActionPlan,
@@ -261,7 +257,9 @@ export const supabaseDataService = {
   async upsertMeals(accountInfo: AccountInfo | null, payloads: MealSyncPayload[]): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || payloads.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const rows = payloads.map((payload) => mealPayloadToRow(user.id, payload));
     const { error } = await supabase.from('food_logs').upsert(rows, { onConflict: 'id' });
@@ -273,7 +271,9 @@ export const supabaseDataService = {
   async deleteMeals(accountInfo: AccountInfo | null, mealIds: string[]): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || mealIds.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('food_logs')
@@ -309,7 +309,9 @@ export const supabaseDataService = {
   async upsertWeightEntries(accountInfo: AccountInfo | null, payloads: WeightSyncPayload[]): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || payloads.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const rows = payloads.map((payload) => weightPayloadToRow(user.id, payload));
     const { error } = await supabase.from('weight_entries').upsert(rows, { onConflict: 'id' });
@@ -321,7 +323,9 @@ export const supabaseDataService = {
   async deleteWeightEntries(accountInfo: AccountInfo | null, ids: string[]): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || ids.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const { error } = await supabase
       .from('weight_entries')
       .update({ deleted_at: new Date().toISOString() })
@@ -407,7 +411,7 @@ export const supabaseDataService = {
   },
 
   async fetchNutritionGoals(accountInfo: AccountInfo | null): Promise<ExtendedGoalData | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return null;
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
 
@@ -453,9 +457,11 @@ export const supabaseDataService = {
 
   // Exercises
   async upsertExercises(accountInfo: AccountInfo | null, exercises: ExerciseEntry[]): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || exercises.length === 0) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || exercises.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const rows = exercises.map((entry) => {
       const loggedDate = new Date(entry.timestamp).toISOString().slice(0, 10);
@@ -486,9 +492,11 @@ export const supabaseDataService = {
   },
 
   async deleteExercises(accountInfo: AccountInfo | null, ids: string[]): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || ids.length === 0) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || ids.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('exercise_logs')
@@ -503,7 +511,7 @@ export const supabaseDataService = {
   },
 
   async fetchExercises(accountInfo: AccountInfo | null): Promise<Record<string, ExerciseEntry[]>> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return {};
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return {};
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};
 
@@ -539,9 +547,11 @@ export const supabaseDataService = {
 
   // Push Tokens
   async upsertPushToken(accountInfo: AccountInfo | null, token: string, deviceInfo?: any): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || !token) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || !token) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('push_tokens')
@@ -562,9 +572,11 @@ export const supabaseDataService = {
   },
 
   async revokePushToken(accountInfo: AccountInfo | null, token: string): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || !token) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || !token) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('push_tokens')
@@ -579,7 +591,7 @@ export const supabaseDataService = {
   },
 
   async fetchPushTokens(accountInfo: AccountInfo | null): Promise<string[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
 
@@ -599,9 +611,11 @@ export const supabaseDataService = {
 
   // Push History
   async savePushHistory(accountInfo: AccountInfo | null, record: PushBroadcastRecord): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase.from('push_history').insert({
       id: record.id,
@@ -624,9 +638,11 @@ export const supabaseDataService = {
   },
 
   async updatePushHistoryClick(accountInfo: AccountInfo | null, id: string): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     // Note: Supabase doesn't support raw SQL in update, so we fetch, increment, and update
     const { data: existing } = await supabase
@@ -655,7 +671,7 @@ export const supabaseDataService = {
   },
 
   async fetchPushHistory(accountInfo: AccountInfo | null): Promise<PushBroadcastRecord[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
 
@@ -686,9 +702,11 @@ export const supabaseDataService = {
 
   // Saved Prompts
   async upsertSavedPrompt(accountInfo: AccountInfo | null, prompt: SavedPrompt): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('saved_prompts')
@@ -710,9 +728,11 @@ export const supabaseDataService = {
   },
 
   async deleteSavedPrompt(accountInfo: AccountInfo | null, id: string): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase.from('saved_prompts').delete().eq('id', id).eq('user_id', user.id);
 
@@ -723,7 +743,7 @@ export const supabaseDataService = {
   },
 
   async fetchSavedPrompts(accountInfo: AccountInfo | null): Promise<SavedPrompt[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
 
@@ -774,7 +794,7 @@ export const supabaseDataService = {
   },
 
   async fetchPreferences(accountInfo: AccountInfo | null): Promise<Preferences | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return null;
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
 
@@ -809,9 +829,11 @@ export const supabaseDataService = {
     accountInfo: AccountInfo | null,
     settings: { entryCount?: number; userPlan?: 'free' | 'premium'; deviceInfo?: any }
   ): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const updateData: any = {};
     if (settings.entryCount !== undefined) updateData.entry_count = settings.entryCount;
@@ -839,7 +861,7 @@ export const supabaseDataService = {
     userPlan: 'free' | 'premium';
     deviceInfo: any;
   } | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return null;
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
 
@@ -863,59 +885,13 @@ export const supabaseDataService = {
     };
   },
 
-  // Entry Tasks
-  async saveEntryTasks(accountInfo: AccountInfo | null, tasks: EntryTasksStatus): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
-    const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
-
-    const { error } = await supabase
-      .from('entry_tasks')
-      .upsert(
-        {
-          user_id: user.id,
-          custom_plan_completed: tasks.customPlanCompleted,
-          registration_completed: tasks.registrationCompleted,
-          completed_at: tasks.customPlanCompleted || tasks.registrationCompleted ? new Date().toISOString() : null,
-        },
-        { onConflict: 'user_id' }
-      );
-
-    if (error) {
-      console.error('Error saving entry tasks to Supabase:', error);
-      throw error;
-    }
-  },
-
-  async fetchEntryTasks(accountInfo: AccountInfo | null): Promise<EntryTasksStatus | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
-    const user = await getOrCreateUser(accountInfo);
-    if (!user) return null;
-
-    const { data, error } = await supabase
-      .from('entry_tasks')
-      .select('*')
-      .eq('user_id', user.id)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching entry tasks from Supabase:', error);
-      return null;
-    }
-
-    if (!data) return null;
-
-    return {
-      customPlanCompleted: data.custom_plan_completed || false,
-      registrationCompleted: data.registration_completed || false,
-    };
-  },
-
   // Referral Codes
   async saveReferralCode(accountInfo: AccountInfo | null, code: ReferralCode): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
       .from('referral_codes')
@@ -991,7 +967,7 @@ export const supabaseDataService = {
 
   // Referral Redemptions
   async saveReferralRedemption(accountInfo: AccountInfo | null, redemption: ReferralRedemption): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
 
     const { error } = await supabase.from('referral_redemptions').insert({
       id: redemption.id,
@@ -1050,9 +1026,11 @@ export const supabaseDataService = {
 
   // Referral Rewards
   async saveReferralReward(accountInfo: AccountInfo | null, reward: ReferralReward): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase.from('referral_rewards').insert({
       id: reward.id,
@@ -1095,128 +1073,13 @@ export const supabaseDataService = {
     );
   },
 
-  // Nutrition Library (Deterministic Engine)
-  async fetchNutritionFromLibrary(foodName: string): Promise<NutritionLibraryItem | null> {
-    if (!isSupabaseConfigured() || !supabase) return null;
-
-    // Normalize name for lookup (lowercase, trimmed)
-    const normalizedName = foodName.toLowerCase().trim();
-
-    const { data, error } = await supabase
-      .from('nutrition_library')
-      .select('*')
-      .eq('name', normalizedName)
-      .maybeSingle();
-
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error fetching from nutrition_library:', error);
-      return null;
-    }
-
-    if (!data) return null;
-
-    return {
-      id: data.id,
-      name: data.name,
-      calories_per_100g: data.calories_per_100g,
-      protein_per_100g: data.protein_per_100g,
-      carbs_per_100g: data.carbs_per_100g,
-      fat_per_100g: data.fat_per_100g,
-
-      // Extended
-      dietary_fiber_per_100g: data.dietary_fiber_per_100g ?? data.fiber_per_100g,
-      sugar_per_100g: data.sugar_per_100g,
-      added_sugars_per_100g: data.added_sugars_per_100g,
-      sugar_alcohols_per_100g: data.sugar_alcohols_per_100g,
-      net_carbs_per_100g: data.net_carbs_per_100g,
-
-      saturated_fat_per_100g: data.saturated_fat_per_100g,
-      trans_fat_per_100g: data.trans_fat_per_100g,
-      polyunsaturated_fat_per_100g: data.polyunsaturated_fat_per_100g,
-      monounsaturated_fat_per_100g: data.monounsaturated_fat_per_100g,
-
-      sodium_mg_per_100g: data.sodium_mg_per_100g,
-      potassium_mg_per_100g: data.potassium_mg_per_100g,
-      cholesterol_mg_per_100g: data.cholesterol_mg_per_100g,
-      calcium_mg_per_100g: data.calcium_mg_per_100g,
-      iron_mg_per_100g: data.iron_mg_per_100g,
-
-      vitamin_a_mcg_per_100g: data.vitamin_a_mcg_per_100g,
-      vitamin_c_mg_per_100g: data.vitamin_c_mg_per_100g,
-      vitamin_d_mcg_per_100g: data.vitamin_d_mcg_per_100g,
-      vitamin_e_mg_per_100g: data.vitamin_e_mg_per_100g,
-      vitamin_k_mcg_per_100g: data.vitamin_k_mcg_per_100g,
-      vitamin_b12_mcg_per_100g: data.vitamin_b12_mcg_per_100g,
-
-      standard_serving_weight_g: data.standard_serving_weight_g,
-      standard_unit: data.standard_unit,
-    };
-  },
-
-  async saveNutritionToLibrary(item: NutritionLibraryItem): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase) return;
-
-    // Normalize name
-    const normalizedName = item.name.toLowerCase().trim();
-
-    try {
-      const { error } = await supabase.from('nutrition_library').upsert(
-        {
-          name: normalizedName,
-          calories_per_100g: item.calories_per_100g,
-          protein_per_100g: item.protein_per_100g,
-          carbs_per_100g: item.carbs_per_100g,
-          fat_per_100g: item.fat_per_100g,
-
-          // Micros
-          dietary_fiber_per_100g: item.dietary_fiber_per_100g,
-          sugar_per_100g: item.sugar_per_100g,
-          added_sugars_per_100g: item.added_sugars_per_100g,
-          sugar_alcohols_per_100g: item.sugar_alcohols_per_100g,
-          net_carbs_per_100g: item.net_carbs_per_100g,
-
-          saturated_fat_per_100g: item.saturated_fat_per_100g,
-          trans_fat_per_100g: item.trans_fat_per_100g,
-          polyunsaturated_fat_per_100g: item.polyunsaturated_fat_per_100g,
-          monounsaturated_fat_per_100g: item.monounsaturated_fat_per_100g,
-
-          sodium_mg_per_100g: item.sodium_mg_per_100g,
-          potassium_mg_per_100g: item.potassium_mg_per_100g,
-          cholesterol_mg_per_100g: item.cholesterol_mg_per_100g,
-          calcium_mg_per_100g: item.calcium_mg_per_100g,
-          iron_mg_per_100g: item.iron_mg_per_100g,
-
-          vitamin_a_mcg_per_100g: item.vitamin_a_mcg_per_100g,
-          vitamin_c_mg_per_100g: item.vitamin_c_mg_per_100g,
-          vitamin_d_mcg_per_100g: item.vitamin_d_mcg_per_100g,
-          vitamin_e_mg_per_100g: item.vitamin_e_mg_per_100g,
-          vitamin_k_mcg_per_100g: item.vitamin_k_mcg_per_100g,
-          vitamin_b12_mcg_per_100g: item.vitamin_b12_mcg_per_100g,
-
-          standard_serving_weight_g: item.standard_serving_weight_g,
-          standard_unit: item.standard_unit,
-        },
-        { onConflict: 'name' }
-      );
-
-      if (error) {
-        // Ignore "relation not found" error to prevent crash if table missing
-        if (error.code === 'PGRST205' || error.message?.includes('does not exist')) {
-          console.warn('Supabase table "nutrition_library" missing. Auto-save skipped.');
-          return;
-        }
-        console.error('Error saving to nutrition_library:', error);
-      }
-    } catch (e) {
-      console.error('Exception saving to nutrition_library:', e);
-    }
-  },
-
   // Streak Freeze
   async upsertStreakFreeze(accountInfo: AccountInfo | null, freeze: StreakFreezeData): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     try {
       const { error } = await supabase.from('streak_freezes').upsert(
@@ -1235,9 +1098,11 @@ export const supabaseDataService = {
 
   // Analytics
   async logAnalyticsEvent(accountInfo: AccountInfo | null, event: AnalyticsEvent): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     try {
       const { error } = await supabase.from('analytics_events').insert({
@@ -1250,68 +1115,13 @@ export const supabaseDataService = {
     } catch (e) { }
   },
 
-  // Daily User Metrics
-  async saveDailyUserMetric(accountInfo: AccountInfo | null, metric: DailyUserMetric): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
-    const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
-
-    try {
-      const { error } = await supabase.from('daily_user_metrics').upsert({
-        user_id: user.id,
-        metric_date: metric.date,
-        meals_logged: metric.mealsLogged,
-        exercise_logged: metric.exerciseLogged,
-        calories_logged: metric.caloriesLogged,
-        push_received: metric.pushReceived,
-        push_clicked: metric.pushClicked,
-        streak_active: metric.streakActive,
-      }, { onConflict: 'user_id,metric_date' });
-
-      if (error) console.error('Error saving daily user metric:', error);
-    } catch (e) {
-      console.error('Exception saving daily user metric:', e);
-    }
-  },
-
-  async fetchDailyUserMetrics(accountInfo: AccountInfo | null, limit = 30): Promise<DailyUserMetric[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
-    const user = await getOrCreateUser(accountInfo);
-    if (!user) return [];
-
-    try {
-      const { data, error } = await supabase
-        .from('daily_user_metrics')
-        .select('*')
-        .eq('user_id', user.id)
-        .order('metric_date', { ascending: false })
-        .limit(limit);
-
-      if (error) {
-        console.error('Error fetching daily user metrics:', error);
-        return [];
-      }
-
-      return data?.map(row => ({
-        date: row.metric_date,
-        mealsLogged: row.meals_logged || 0,
-        exerciseLogged: row.exercise_logged || 0,
-        caloriesLogged: row.calories_logged || 0,
-        pushReceived: row.push_received || 0,
-        pushClicked: row.push_clicked || 0,
-        streakActive: row.streak_active || false,
-        createdAt: row.created_at
-      })) || [];
-    } catch (e) {
-      console.error('Exception fetching daily user metrics:', e);
-      return [];
-    }
-  },
   // Insights
   async upsertInsights(accountInfo: AccountInfo | null, insights: Insight[]): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || insights.length === 0) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || insights.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const rows = insights.map((i) => ({
       id: i.id,
       user_id: user.id,
@@ -1323,7 +1133,7 @@ export const supabaseDataService = {
   },
 
   async fetchInsights(accountInfo: AccountInfo | null): Promise<Insight[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
@@ -1338,9 +1148,11 @@ export const supabaseDataService = {
 
   // Detected Patterns (single jsonb per user — array of patterns)
   async upsertDetectedPatterns(accountInfo: AccountInfo | null, patterns: DetectedPattern[]): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const { error } = await supabase.from('detected_patterns').upsert(
       {
         user_id: user.id,
@@ -1354,7 +1166,7 @@ export const supabaseDataService = {
   },
 
   async fetchDetectedPatterns(accountInfo: AccountInfo | null): Promise<DetectedPattern[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
@@ -1369,9 +1181,11 @@ export const supabaseDataService = {
 
   // Weekly Action Plan (single per user)
   async upsertWeeklyActionPlan(accountInfo: AccountInfo | null, plan: WeeklyActionPlan): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const { error } = await supabase.from('weekly_action_plans').upsert(
       {
         user_id: user.id,
@@ -1385,7 +1199,7 @@ export const supabaseDataService = {
   },
 
   async fetchWeeklyActionPlan(accountInfo: AccountInfo | null): Promise<WeeklyActionPlan | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return null;
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
     const { data, error } = await supabase
@@ -1402,9 +1216,11 @@ export const supabaseDataService = {
     accountInfo: AccountInfo | null,
     unlocks: Record<string, { unlockedAt: string; seenAt?: string }>,
   ): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const rows = Object.entries(unlocks).map(([insightId, value]) => ({
       user_id: user.id,
       insight_id: insightId,
@@ -1422,7 +1238,7 @@ export const supabaseDataService = {
   async fetchInsightUnlocks(
     accountInfo: AccountInfo | null,
   ): Promise<Record<string, { unlockedAt: string; seenAt?: string }>> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return {};
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return {};
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};
     const { data, error } = await supabase
@@ -1445,9 +1261,11 @@ export const supabaseDataService = {
     accountInfo: AccountInfo | null,
     summaries: Record<string, DailySummary>,
   ): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const rows = Object.entries(summaries).map(([dateKey, summary]) => ({
       user_id: user.id,
       summary_date: dateKey,
@@ -1464,7 +1282,7 @@ export const supabaseDataService = {
   async fetchDailySummaries(
     accountInfo: AccountInfo | null,
   ): Promise<Record<string, DailySummary>> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return {};
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return {};
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};
     const { data, error } = await supabase
@@ -1484,9 +1302,11 @@ export const supabaseDataService = {
     accountInfo: AccountInfo | null,
     config: CalorieBankConfig,
   ): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const { error } = await supabase
       .from('user_settings')
       .upsert(
@@ -1499,7 +1319,7 @@ export const supabaseDataService = {
   async fetchCalorieBankConfig(
     accountInfo: AccountInfo | null,
   ): Promise<CalorieBankConfig | null> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return null;
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
     const { data, error } = await supabase
@@ -1516,9 +1336,11 @@ export const supabaseDataService = {
     accountInfo: AccountInfo | null,
     cycles: CalorieBankCompletedCycle[],
   ): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId || cycles.length === 0) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email) || cycles.length === 0) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
     const rows = cycles.map((cycle) => ({
       id: (cycle as any).id || `${cycle.startDate}_${cycle.endDate}`,
       user_id: user.id,
@@ -1534,7 +1356,7 @@ export const supabaseDataService = {
   async fetchCompletedCycles(
     accountInfo: AccountInfo | null,
   ): Promise<CalorieBankCompletedCycle[]> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return [];
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
@@ -1547,9 +1369,11 @@ export const supabaseDataService = {
   },
 
   async deleteAllUserData(accountInfo: AccountInfo | null): Promise<void> {
-    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return;
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) return;
+    // Throw, never silently no-op: the sync queue reads a resolved promise as
+    // success and dequeues the op forever. See the goals-sync postmortem.
+    if (!user) throw new Error('could not resolve app user for cloud write');
 
     try {
       // Delete from all tables where user_id is the foreign key
@@ -1562,11 +1386,9 @@ export const supabaseDataService = {
         'push_history',
         'saved_prompts',
         'user_preferences',
-        'entry_tasks',
         'referral_codes',
         'referral_redemptions',
         'referral_rewards',
-        'grocery_items',
         'streak_freezes',
         'analytics_events'
       ];

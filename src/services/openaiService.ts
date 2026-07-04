@@ -4,7 +4,6 @@ import { invokeAI } from './aiProxyService';
 import * as FileSystem from 'expo-file-system/legacy';
 import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
-import { NutritionLibraryItem } from './dataStorage';
 import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
 import { hashPrompt } from '../utils/promptVersion';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -63,44 +62,6 @@ export async function updateFoodCache(prompt: string, foods: ParsedFood[], summa
 
 
 
-const NUTRITION_ESTIMATION_PROMPT = `
-You are an expert food scientist. Given a food name, provide the standard nutritional values per 100g.
-Return ONLY a valid JSON object with no explanations.
-
-Required JSON structure:
-{
-  "name": "Standard food name",
-  "calories_per_100g": number,
-  "protein_per_100g": number,
-  "carbs_per_100g": number,
-  "fat_per_100g": number,
-  "fiber_per_100g": number,
-  "sugar_per_100g": number,
-  "added_sugars_per_100g": number,
-  "sugar_alcohols_per_100g": number,
-  "net_carbs_per_100g": number,
-  "saturated_fat_per_100g": number,
-  "trans_fat_per_100g": number,
-  "polyunsaturated_fat_per_100g": number,
-  "monounsaturated_fat_per_100g": number,
-  "sodium_mg_per_100g": number,
-  "potassium_mg_per_100g": number,
-  "cholesterol_mg_per_100g": number,
-  "calcium_mg_per_100g": number,
-  "iron_mg_per_100g": number,
-  "magnesium_mg_per_100g": number,
-  "zinc_mg_per_100g": number,
-  "omega_3_g_per_100g": number,
-  "vitamin_a_mcg_per_100g": number,
-  "vitamin_c_mg_per_100g": number,
-  "vitamin_d_mcg_per_100g": number,
-  "vitamin_e_mg_per_100g": number,
-  "vitamin_k_mcg_per_100g": number,
-  "vitamin_b12_mcg_per_100g": number,
-  "standard_unit": "e.g., cup, slice, piece",
-  "standard_serving_weight_g": number
-}
-`;
 
 const AGENTIC_ANALYSIS_PROMPT = `
 You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutritionist. Your goal is to provide the most accurate nutritional tracking possible by "thinking" through the dish composition.
@@ -561,96 +522,6 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     // Fallback to local parsing
     const { parseFoodInput } = require('../utils/foodNutrition');
     return { foods: parseFoodInput(foodInput) };
-  }
-}
-
-const NUTRITION_FACTORS_PER_100G_FIELDS = [
-  'calories_per_100g', 'protein_per_100g', 'carbs_per_100g', 'fat_per_100g',
-  'fiber_per_100g', 'sugar_per_100g', 'added_sugars_per_100g', 'sugar_alcohols_per_100g',
-  'net_carbs_per_100g',
-  'saturated_fat_per_100g', 'trans_fat_per_100g', 'polyunsaturated_fat_per_100g', 'monounsaturated_fat_per_100g',
-  'sodium_mg_per_100g', 'potassium_mg_per_100g', 'cholesterol_mg_per_100g',
-  'calcium_mg_per_100g', 'iron_mg_per_100g',
-  'magnesium_mg_per_100g', 'zinc_mg_per_100g', 'omega_3_g_per_100g',
-  'vitamin_a_mcg_per_100g', 'vitamin_c_mg_per_100g', 'vitamin_d_mcg_per_100g',
-  'vitamin_e_mg_per_100g', 'vitamin_k_mcg_per_100g', 'vitamin_b12_mcg_per_100g',
-] as const;
-
-const NUTRITION_FACTORS_SCHEMA = {
-  type: 'object',
-  properties: {
-    name: { type: 'string' },
-    ...Object.fromEntries(
-      NUTRITION_FACTORS_PER_100G_FIELDS.map((key) => [key, { type: 'number' as const }]),
-    ),
-    standard_unit: { type: 'string' },
-    standard_serving_weight_g: { type: 'number' },
-  },
-  required: ['name', ...NUTRITION_FACTORS_PER_100G_FIELDS, 'standard_unit', 'standard_serving_weight_g'],
-  additionalProperties: false,
-};
-
-// Helper to fetch deterministic factors for the library
-async function fetchNutritionFactors(foodName: string): Promise<NutritionLibraryItem | null> {
-  try {
-    const data = await invokeAI({
-      model: 'gpt-4o-mini',
-      messages: [
-        { role: 'system', content: NUTRITION_ESTIMATION_PROMPT },
-        { role: 'user', content: sanitizeForAI(foodName, 500) }
-      ],
-      temperature: 0.2,
-      response_format: {
-        type: 'json_schema',
-        json_schema: { name: 'nutrition_factors', strict: true, schema: NUTRITION_FACTORS_SCHEMA },
-      },
-      call_type: 'nutrition-factors',
-    });
-    const content = data.choices[0]?.message?.content;
-    if (!content) return null;
-
-    const result = JSON.parse(content);
-    return {
-      name: result.name || foodName,
-      calories_per_100g: result.calories_per_100g || 0,
-      protein_per_100g: result.protein_per_100g || 0,
-      carbs_per_100g: result.carbs_per_100g || 0,
-      fat_per_100g: result.fat_per_100g || 0,
-
-      // Extended Macros
-      dietary_fiber_per_100g: result.dietary_fiber_per_100g ?? result.fiber_per_100g, // Fallback for legacy prop
-      sugar_per_100g: result.sugar_per_100g,
-      added_sugars_per_100g: result.added_sugars_per_100g,
-      sugar_alcohols_per_100g: result.sugar_alcohols_per_100g,
-      net_carbs_per_100g: result.net_carbs_per_100g,
-
-      saturated_fat_per_100g: result.saturated_fat_per_100g,
-      trans_fat_per_100g: result.trans_fat_per_100g,
-      polyunsaturated_fat_per_100g: result.polyunsaturated_fat_per_100g,
-      monounsaturated_fat_per_100g: result.monounsaturated_fat_per_100g,
-
-      sodium_mg_per_100g: result.sodium_mg_per_100g,
-      potassium_mg_per_100g: result.potassium_mg_per_100g,
-      cholesterol_mg_per_100g: result.cholesterol_mg_per_100g,
-      calcium_mg_per_100g: result.calcium_mg_per_100g,
-      iron_mg_per_100g: result.iron_mg_per_100g,
-      magnesium_mg_per_100g: result.magnesium_mg_per_100g,
-      zinc_mg_per_100g: result.zinc_mg_per_100g,
-      omega_3_g_per_100g: result.omega_3_g_per_100g,
-
-      vitamin_a_mcg_per_100g: result.vitamin_a_mcg_per_100g,
-      vitamin_c_mg_per_100g: result.vitamin_c_mg_per_100g,
-      vitamin_d_mcg_per_100g: result.vitamin_d_mcg_per_100g,
-      vitamin_e_mg_per_100g: result.vitamin_e_mg_per_100g,
-      vitamin_k_mcg_per_100g: result.vitamin_k_mcg_per_100g,
-      vitamin_b12_mcg_per_100g: result.vitamin_b12_mcg_per_100g,
-
-      standard_unit: result.standard_unit || 'serving',
-      standard_serving_weight_g: result.standard_serving_weight_g || 100,
-    };
-  } catch (e) {
-    console.error('Failed to fetch nutrition factors', e);
-    return null;
   }
 }
 

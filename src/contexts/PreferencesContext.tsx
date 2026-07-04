@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { dataStorage } from '../services/dataStorage';
 
 export type WeightUnit = 'kg' | 'lbs';
 
@@ -28,6 +29,18 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
       const savedUnit = await AsyncStorage.getItem(WEIGHT_UNIT_KEY);
       if (savedUnit === 'kg' || savedUnit === 'lbs') {
         setWeightUnitState(savedUnit);
+        return;
+      }
+      // No local key (fresh device or evicted cache): fall back to the synced
+      // preferences blob so the unit follows the user across devices.
+      const prefs = await dataStorage.loadPreferences();
+      // The fetch can take seconds. If the user picked a unit meanwhile, that
+      // choice wins; do not clobber it with the fetched (possibly default) value.
+      const nowSet = await AsyncStorage.getItem(WEIGHT_UNIT_KEY);
+      if (nowSet === 'kg' || nowSet === 'lbs') return;
+      if (prefs?.weightUnit === 'kg' || prefs?.weightUnit === 'lbs') {
+        setWeightUnitState(prefs.weightUnit);
+        await AsyncStorage.setItem(WEIGHT_UNIT_KEY, prefs.weightUnit);
       }
     } catch (error) {
       console.error('Error loading preferences:', error);
@@ -38,6 +51,9 @@ export const PreferencesProvider: React.FC<{ children: ReactNode }> = ({ childre
     try {
       await AsyncStorage.setItem(WEIGHT_UNIT_KEY, unit);
       setWeightUnitState(unit);
+      // Mirror into the synced preferences blob so the unit reaches the cloud.
+      // The fast local key above stays the render-path source of truth.
+      dataStorage.savePreferences({ weightUnit: unit }).catch(() => {});
     } catch (error) {
       console.error('Error saving weight unit:', error);
     }

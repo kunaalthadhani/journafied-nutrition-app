@@ -50,18 +50,6 @@ create trigger trg_food_logs_updated
 before update on food_logs
 for each row execute function set_updated_at();
 
--- Food items (optional per-ingredient detail)
-create table if not exists food_items (
-  id uuid primary key default uuid_generate_v4(),
-  food_log_id uuid references food_logs(id) on delete cascade,
-  name text,
-  quantity text,
-  calories numeric,
-  protein numeric,
-  carbs numeric,
-  fat numeric
-);
-
 -- Exercise logs
 create table if not exists exercise_logs (
   id uuid primary key default uuid_generate_v4(),
@@ -131,24 +119,6 @@ drop trigger if exists trg_nutrition_goals_updated on nutrition_goals;
 create trigger trg_nutrition_goals_updated
 before update on nutrition_goals
 for each row execute function set_updated_at();
-
--- Engagement / bonus tasks
-create table if not exists engagement_tasks (
-  id uuid primary key default uuid_generate_v4(),
-  code text unique not null,
-  title text,
-  description text,
-  reward_entries integer default 0
-);
-
-create table if not exists user_task_status (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references app_users(id) on delete cascade,
-  task_id uuid references engagement_tasks(id) on delete cascade,
-  completed boolean default false,
-  completed_at timestamptz,
-  unique (user_id, task_id)
-);
 
 -- Push notification tokens
 create table if not exists push_tokens (
@@ -233,22 +203,6 @@ create trigger trg_user_settings_updated
 before update on user_settings
 for each row execute function set_updated_at();
 
--- Entry tasks (custom plan completion, registration)
-create table if not exists entry_tasks (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references app_users(id) on delete cascade unique,
-  custom_plan_completed boolean default false,
-  registration_completed boolean default false,
-  completed_at timestamptz,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-drop trigger if exists trg_entry_tasks_updated on entry_tasks;
-create trigger trg_entry_tasks_updated
-before update on entry_tasks
-for each row execute function set_updated_at();
-
 -- Referral codes
 create table if not exists referral_codes (
   id uuid primary key default uuid_generate_v4(),
@@ -323,22 +277,6 @@ create trigger trg_streak_freezes_updated
 before update on streak_freezes
 for each row execute function set_updated_at();
 
--- Grocery List Items
-create table if not exists grocery_items (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references app_users(id) on delete cascade,
-  name text not null,
-  category text,
-  is_checked boolean default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-drop trigger if exists trg_grocery_items_updated on grocery_items;
-create trigger trg_grocery_items_updated
-before update on grocery_items
-for each row execute function set_updated_at();
-
 -- Analytics Events
 create table if not exists analytics_events (
   id uuid primary key default uuid_generate_v4(),
@@ -352,52 +290,6 @@ create table if not exists analytics_events (
 create index if not exists idx_analytics_events_user_id on analytics_events(user_id);
 create index if not exists idx_analytics_events_name on analytics_events(event_name);
 create index if not exists idx_analytics_events_timestamp on analytics_events(timestamp);
-
--- Nutrition Library (cached nutrition data per food name)
-create table if not exists nutrition_library (
-  id uuid primary key default uuid_generate_v4(),
-  name text unique not null,
-  calories_per_100g numeric,
-  protein_per_100g numeric,
-  carbs_per_100g numeric,
-  fat_per_100g numeric,
-  fiber_per_100g numeric,
-  sugar_per_100g numeric,
-  serving_size_g numeric,
-  source text, -- 'ai' | 'usda' | 'manual'
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now()
-);
-
-create index if not exists idx_nutrition_library_name on nutrition_library (name);
-
-drop trigger if exists trg_nutrition_library_updated on nutrition_library;
-create trigger trg_nutrition_library_updated
-before update on nutrition_library
-for each row execute function set_updated_at();
-
--- Daily User Metrics (one row per user per day — engagement tracking)
-create table if not exists daily_user_metrics (
-  id uuid primary key default uuid_generate_v4(),
-  user_id uuid references app_users(id) on delete cascade,
-  metric_date date not null,
-  meals_logged integer default 0,
-  exercise_logged boolean default false,
-  calories_logged numeric default 0,
-  push_received boolean default false,
-  push_clicked boolean default false,
-  streak_active boolean default false,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (user_id, metric_date)
-);
-
-create index if not exists idx_daily_user_metrics_user_date on daily_user_metrics (user_id, metric_date);
-
-drop trigger if exists trg_daily_user_metrics_updated on daily_user_metrics;
-create trigger trg_daily_user_metrics_updated
-before update on daily_user_metrics
-for each row execute function set_updated_at();
 
 -- Waitlist (landing page signups)
 create table if not exists waitlist (

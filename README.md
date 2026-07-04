@@ -130,7 +130,6 @@ src/
 - **Nutrition Goals**: Custom plan data (calories, macros, and profile information like name, age, gender, height, weight, goals, activity level) is synced to the `nutrition_goals` table. Only one active goal per user is maintained.
 - **User Preferences**: Weight unit, notification settings, meal reminders synced to `user_preferences` table.
 - **User Settings**: Entry count, user plan (free/premium), device info synced to `user_settings` table.
-- **Entry Tasks**: Custom plan and registration completion status synced to `entry_tasks` table.
 - **Push Tokens & History**: Notification tokens and broadcast history synced to `push_tokens` and `push_history` tables.
 - **Saved Prompts**: User's saved meal prompts synced to `saved_prompts` table.
 - **Referral System**: Codes, redemptions, and rewards all synced to respective tables (`referral_codes`, `referral_redemptions`, `referral_rewards`).

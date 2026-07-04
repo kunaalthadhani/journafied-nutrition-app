@@ -109,7 +109,6 @@ const STORAGE_KEYS = {
   REFERRAL_REDEMPTIONS: '@trackkal:referralRedemptions',
   REFERRAL_REWARDS: '@trackkal:referralRewards',
   SAVED_PROMPTS: '@trackkal:savedPrompts',
-  ENTRY_TASKS: '@trackkal:entryTasks',
   SYNC_QUEUE: '@trackkal:syncQueue',
   STREAK_FREEZE: '@trackkal:streakFreeze',
   ADJUSTMENT_HISTORY: '@trackkal:adjustmentHistory',
@@ -210,14 +209,6 @@ export const isPremiumEntitled = (accountInfo: AccountInfo | null, plan?: string
   if (accountInfo.premiumUntil) return new Date(accountInfo.premiumUntil) > new Date();
   return false;
 };
-
-export interface GroceryItem {
-  id: string;
-  name: string;
-  category?: string;
-  isChecked: boolean;
-  updatedAt?: string;
-}
 
 export interface AnalyticsEvent {
   eventName: string;
@@ -324,12 +315,6 @@ export interface SavedPrompt {
   updatedAt: string;
 }
 
-export type EntryTaskType = 'customPlan' | 'registration';
-
-export interface EntryTasksStatus {
-  customPlanCompleted: boolean;
-  registrationCompleted: boolean;
-}
 export interface StreakFreezeData {
   freezesAvailable: number; // 0-2
   lastResetDate: string; // ISO date string of start of current month
@@ -420,17 +405,6 @@ export interface AnalyticsFeedback {
   rating?: number;
 }
 
-export interface DailyUserMetric {
-  date: string; // YYYY-MM-DD
-  mealsLogged: number;
-  exerciseLogged: number;
-  caloriesLogged: number;
-  pushReceived: number;
-  pushClicked: number;
-  streakActive: boolean;
-  createdAt?: string;
-}
-
 export interface UserMetricsSnapshot {
   generatedAt: string;
   userGoals: {
@@ -500,46 +474,6 @@ export interface Insight {
   isDismissed?: boolean;
 }
 
-export interface NutritionLibraryItem {
-  name: string;
-  calories_per_100g: number;
-  protein_per_100g: number;
-  carbs_per_100g: number;
-  fat_per_100g: number;
-
-  dietary_fiber_per_100g?: number;
-  sugar_per_100g?: number;
-  added_sugars_per_100g?: number;
-  sugar_alcohols_per_100g?: number;
-  net_carbs_per_100g?: number;
-
-  saturated_fat_per_100g?: number;
-  trans_fat_per_100g?: number;
-  polyunsaturated_fat_per_100g?: number;
-  monounsaturated_fat_per_100g?: number;
-
-  cholesterol_mg_per_100g?: number;
-  sodium_mg_per_100g?: number;
-  potassium_mg_per_100g?: number;
-  calcium_mg_per_100g?: number;
-  iron_mg_per_100g?: number;
-  magnesium_mg_per_100g?: number;
-  zinc_mg_per_100g?: number;
-  omega_3_g_per_100g?: number;
-
-  vitamin_a_mcg_per_100g?: number;
-  vitamin_c_mg_per_100g?: number;
-  vitamin_d_mcg_per_100g?: number;
-  vitamin_e_mg_per_100g?: number;
-  vitamin_k_mcg_per_100g?: number;
-  vitamin_b12_mcg_per_100g?: number;
-
-  standard_unit: string;
-  standard_serving_weight_g: number;
-  id?: string;
-  // Previously used fields for backward compatibility mapping if needed (optional)
-  fiber_per_100g?: number;
-}
 
 // In-memory cache + in-flight dedupe for loadMeals.
 // Many call sites (UserContext startup, HomeScreen AppState 'active', stats calc, migration)
@@ -921,7 +855,6 @@ type SyncOperation =
   | { entity: 'saved_prompt'; action: 'delete'; payload: { id: string } }
   | { entity: 'preferences'; action: 'upsert'; payload: Preferences }
   | { entity: 'settings'; action: 'upsert'; payload: { entryCount?: number; userPlan?: 'free' | 'premium'; deviceInfo?: any } }
-  | { entity: 'entry_tasks'; action: 'upsert'; payload: EntryTasksStatus }
   | { entity: 'referral_code'; action: 'upsert'; payload: ReferralCode }
   | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
   | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward }
@@ -1021,11 +954,6 @@ const executeSyncOperation = async (op: SyncOperation, accountInfo: AccountInfo)
     case 'settings':
       if (op.action === 'upsert') {
         await supabaseDataService.saveUserSettings(accountInfo, op.payload);
-      }
-      break;
-    case 'entry_tasks':
-      if (op.action === 'upsert') {
-        await supabaseDataService.saveEntryTasks(accountInfo, op.payload);
       }
       break;
     case 'referral_code':
@@ -2521,85 +2449,6 @@ export const dataStorage = {
     } catch (error) {
       console.error('Error removing saved prompt:', error);
     }
-  },
-
-  // Entry task reward helpers
-  async loadEntryTasks(): Promise<EntryTasksStatus> {
-    try {
-      // Load from local storage first
-      const localData = await AsyncStorage.getItem(STORAGE_KEYS.ENTRY_TASKS);
-      const localTasks: EntryTasksStatus = localData
-        ? JSON.parse(localData)
-        : { customPlanCompleted: false, registrationCompleted: false };
-
-      // If user is logged in, fetch from Supabase
-      const accountInfo = await getCachedAccountInfo();
-      await processSyncQueue(accountInfo);
-      if (accountInfo?.supabaseUserId) {
-        try {
-          const remoteTasks = await supabaseDataService.fetchEntryTasks(accountInfo);
-          if (remoteTasks) {
-            await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(remoteTasks));
-            return remoteTasks;
-          }
-        } catch (error) {
-          console.error('Error fetching entry tasks from Supabase:', error);
-        }
-      }
-
-      return localTasks;
-    } catch (error) {
-      console.error('Error loading entry tasks:', error);
-      return { customPlanCompleted: false, registrationCompleted: false };
-    }
-  },
-
-  async saveEntryTasks(status: EntryTasksStatus): Promise<void> {
-    try {
-      await AsyncStorage.setItem(STORAGE_KEYS.ENTRY_TASKS, JSON.stringify(status));
-
-      // Sync to Supabase if user is logged in
-      const accountInfo = await getCachedAccountInfo();
-      if (accountInfo?.supabaseUserId) {
-        try {
-          await supabaseDataService.saveEntryTasks(accountInfo, status);
-        } catch (error) {
-          console.error('Error syncing entry tasks to Supabase:', error);
-          await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: status });
-        }
-      } else {
-        await enqueueSyncOperation({ entity: 'entry_tasks', action: 'upsert', payload: status });
-      }
-    } catch (error) {
-      console.error('Error saving entry tasks:', error);
-    }
-  },
-
-  async completeEntryTask(task: EntryTaskType): Promise<{ status: EntryTasksStatus; awarded: boolean }> {
-    try {
-      const current = await this.loadEntryTasks();
-      const taskKey =
-        task === 'customPlan' ? 'customPlanCompleted' : 'registrationCompleted';
-      if (current[taskKey]) {
-        return { status: current, awarded: false };
-      }
-      const updated: EntryTasksStatus = { ...current, [taskKey]: true };
-      await this.saveEntryTasks(updated);
-      return { status: updated, awarded: true };
-    } catch (error) {
-      console.error('Error completing entry task:', error);
-      return {
-        status: { customPlanCompleted: false, registrationCompleted: false },
-        awarded: false,
-      };
-    }
-  },
-
-  getEntryTaskBonus(status?: EntryTasksStatus): number {
-    const resolved = status || { customPlanCompleted: false, registrationCompleted: false };
-    const bonusPerTask = 5;
-    return (resolved.customPlanCompleted ? bonusPerTask : 0) +
-      (resolved.registrationCompleted ? bonusPerTask : 0);
   },
 
   // Referral code storage methods
