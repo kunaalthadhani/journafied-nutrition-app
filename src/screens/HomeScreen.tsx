@@ -42,7 +42,7 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
 import { FoodLogSection } from '../components/FoodLogSection';
-import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary } from '../services/dataStorage';
+import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary, isPremiumEntitled } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { CalorieBankCard } from '../components/CalorieBankCard';
 import { CycleResetCard } from '../components/CycleResetCard';
@@ -200,7 +200,9 @@ export const HomeScreen: React.FC = () => {
 
   // Streak Freeze State
   const [streakFreeze, setStreakFreeze] = useState<StreakFreezeData | null>(null);
-  const [justFrozeToday, setJustFrozeToday] = useState(false);
+  // Holds the DATE a recovery day was just spent on (yyyy-MM-dd), so the banner
+  // can say which day it saved instead of a vague "recovery day was used".
+  const [justFrozeDate, setJustFrozeDate] = useState<string | null>(null);
   const [showStreakWidget, setShowStreakWidget] = useState(false);
 
 
@@ -855,11 +857,13 @@ export const HomeScreen: React.FC = () => {
   // Logic to handle missed days and auto-freeze
   const checkMissedDaysAndFreeze = async (
     summaries: Record<string, DailySummary>,
-    freezeData: StreakFreezeData | null,
-    plan: 'free' | 'premium'
+    freezeData: StreakFreezeData | null
   ): Promise<StreakFreezeData | null> => {
-    // Only for premium users and if freeze data exists
-    if (!freezeData || plan !== 'premium') return freezeData;
+    if (!freezeData) return freezeData;
+    // Premium check on the real entitlement, not the cached plan alone: a
+    // signed-out device with a stale premium plan must not spend freezes.
+    const account = await dataStorage.getAccountInfo();
+    if (!isPremiumEntitled(account)) return freezeData;
 
     const today = new Date();
     const yesterday = subDays(today, 1);
@@ -893,7 +897,7 @@ export const HomeScreen: React.FC = () => {
 
           // Save and notify
           await dataStorage.saveStreakFreeze(newData);
-          setJustFrozeToday(true); // Signal to show alert
+          setJustFrozeDate(yesterdayKey); // Signal to show the banner, with the saved date
           return newData;
         } else {
           // Streak broken :( 
@@ -967,7 +971,7 @@ export const HomeScreen: React.FC = () => {
 
       // Check for missed days to auto-freeze
       // Use summaries
-      const updatedFreezeData = await checkMissedDaysAndFreeze(savedSummaries, freezeData, plan);
+      const updatedFreezeData = await checkMissedDaysAndFreeze(savedSummaries, freezeData);
       setStreakFreeze(updatedFreezeData);
 
       // Check for Smart Adjustments
@@ -1236,16 +1240,21 @@ export const HomeScreen: React.FC = () => {
         analyticsService.trackAppOpen();
 
         // Refresh checks on foreground
-        // Refresh checks on foreground
         const summaries = await dataStorage.loadDailySummaries();
         const meals = await dataStorage.loadMeals();
-        const plan = await dataStorage.loadUserPlan();
         const freeze = await dataStorage.loadStreakFreeze();
 
-        if (summaries && plan && freeze) {
-          const updated = await checkMissedDaysAndFreeze(summaries, freeze, plan);
+        if (summaries && freeze) {
+          const updated = await checkMissedDaysAndFreeze(summaries, freeze);
           setStreakFreeze(updated);
         }
+
+        // The recovery banner and snowflake latch on when a freeze fires. A JS
+        // context can survive across midnights in the background, so clear the
+        // latch once the frozen day is no longer yesterday. Functional update:
+        // this listener registers once and its closure would see a stale value.
+        const yesterdayKeyNow = format(subDays(new Date(), 1), 'yyyy-MM-dd');
+        setJustFrozeDate(prev => (prev && prev !== yesterdayKeyNow ? null : prev));
 
         if (meals) {
           setMealsByDate(meals);
@@ -2574,7 +2583,11 @@ export const HomeScreen: React.FC = () => {
           onNutritionAnalysisPress={handleNutritionAnalysis}
           onStreakPress={handleStreakPress}
           streak={currentStreak}
-          frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday} // Pass frozen state to TopBar
+          // Snowflake only while a recovery day is actively protecting the streak
+          // (yesterday frozen, or one fired this session). Keying it to the
+          // SELECTED date made swiping to an old frozen day repaint the whole top
+          // bar as "recovery" even though today's streak was fine.
+          frozen={(streakFreeze?.usedOnDates.includes(format(subDays(new Date(), 1), 'yyyy-MM-dd')) ?? false) || justFrozeDate !== null}
         />
 
         <SmartAdjustmentBanner
@@ -2612,7 +2625,7 @@ export const HomeScreen: React.FC = () => {
         )}
 
         {/* Just Frozen Alert / Greeting Replacement */}
-        {justFrozeToday ? (
+        {justFrozeDate ? (
           <View style={{ paddingHorizontal: 16, paddingTop: 16, paddingBottom: 8 }}>
             <View style={{
               backgroundColor: 'rgba(56, 189, 248, 0.1)',
@@ -2634,7 +2647,7 @@ export const HomeScreen: React.FC = () => {
                 color: theme.colors.textSecondary,
                 lineHeight: 20
               }}>
-                We've got you covered. A recovery day was used to save your streak. Reset and ready when you are.
+                You didn't log on {format(new Date(justFrozeDate + 'T12:00:00'), 'EEEE, d MMM')}, so a recovery day covered it and your streak is safe. {streakFreeze ? `${streakFreeze.freezesAvailable} left this month.` : ''}
               </Text>
             </View>
           </View>
@@ -3139,7 +3152,7 @@ export const HomeScreen: React.FC = () => {
           visible={showStreakWidget}
           onClose={() => setShowStreakWidget(false)}
           streak={currentStreak}
-          frozen={streakFreeze?.usedOnDates.includes(currentDateKey) || justFrozeToday}
+          frozen={(streakFreeze?.usedOnDates.includes(format(subDays(new Date(), 1), 'yyyy-MM-dd')) ?? false) || justFrozeDate !== null}
           caloriesConsumed={currentNutrition.totalCalories}
           caloriesTarget={effectiveDailyCalories}
           summariesByDate={summariesByDate}

@@ -1,8 +1,10 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
+import { format } from 'date-fns';
 import { useTheme } from '../constants/theme';
 import { dataStorage, DailySummary } from '../services/dataStorage';
+import { ChartRange, getRangeWindow, rangeLabel } from '../utils/chartRange';
 import {
   getMicroTargets,
   MicroTargetSet,
@@ -12,11 +14,9 @@ import {
   statusFor,
 } from '../utils/microTargets';
 
-export type MicroTimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
-
 interface MicronutrientCardProps {
   summariesByDate: Record<string, DailySummary>;
-  timeRange: MicroTimeRange;
+  timeRange: ChartRange;
 }
 
 interface Row {
@@ -58,20 +58,6 @@ const ORDER: Array<{ key: keyof MicroTargetSet; label: string; summaryKey: keyof
   { key: 'vitamin_b12_mcg', label: 'Vitamin B12', summaryKey: 'totalVitaminB12' },
 ];
 
-const RANGE_DAYS: Record<MicroTimeRange, number> = {
-  '1D': 1, '1W': 7, '1M': 30, '3M': 90, '6M': 180, '1Y': 365, '2Y': 730,
-};
-
-const RANGE_LABEL: Record<MicroTimeRange, string> = {
-  '1D': 'today',
-  '1W': 'past 7 days',
-  '1M': 'past 30 days',
-  '3M': 'past 90 days',
-  '6M': 'past 6 months',
-  '1Y': 'past year',
-  '2Y': 'past 2 years',
-};
-
 function formatValue(value: number, unit: MicroTarget['unit']): string {
   if (unit === 'g') return value < 10 ? value.toFixed(1) : Math.round(value).toString();
   return Math.round(value).toString();
@@ -99,39 +85,26 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
   const { rows, loggedDaysInRange } = useMemo<{ rows: Row[]; loggedDaysInRange: number }>(() => {
     if (!targets) return { rows: [], loggedDaysInRange: 0 };
 
-    const today = new Date();
-    const todayKey = today.toISOString().split('T')[0];
-    const rangeDays = RANGE_DAYS[timeRange];
+    // Same shared window as every other chart on the screen, with LOCAL day
+    // keys. The old UTC keys made "today" resolve to yesterday before 4am in
+    // UAE and skewed the averages.
+    const window = getRangeWindow(timeRange);
+    const dates: string[] = [];
+    for (let d = new Date(window.start); d <= window.end; d.setDate(d.getDate() + 1)) {
+      dates.push(format(d, 'yyyy-MM-dd'));
+    }
+    const daysWithData = dates.filter(k => summariesByDate[k] && (summariesByDate[k].entryCount || 0) > 0);
+    const daysCounted = daysWithData.length;
+    const denom = Math.max(1, daysWithData.length);
 
     const values: Partial<Record<keyof DailySummary, number>> = {};
-    let daysCounted = 0;
-
-    if (timeRange === '1D') {
-      const s = summariesByDate[todayKey];
-      const hasData = !!s && (s.entryCount || 0) > 0;
-      daysCounted = hasData ? 1 : 0;
-      ORDER.forEach(o => {
-        values[o.summaryKey] = (s?.[o.summaryKey] as number) || 0;
-      });
-    } else {
-      const dates: string[] = [];
-      for (let i = 0; i < rangeDays; i++) {
-        const d = new Date(today);
-        d.setDate(today.getDate() - i);
-        dates.push(d.toISOString().split('T')[0]);
-      }
-      const daysWithData = dates.filter(k => summariesByDate[k] && (summariesByDate[k].entryCount || 0) > 0);
-      daysCounted = daysWithData.length;
-      const denom = Math.max(1, daysWithData.length);
-
-      ORDER.forEach(o => {
-        const sum = daysWithData.reduce(
-          (acc, k) => acc + ((summariesByDate[k]?.[o.summaryKey] as number) || 0),
-          0,
-        );
-        values[o.summaryKey] = sum / denom;
-      });
-    }
+    ORDER.forEach(o => {
+      const sum = daysWithData.reduce(
+        (acc, k) => acc + ((summariesByDate[k]?.[o.summaryKey] as number) || 0),
+        0,
+      );
+      values[o.summaryKey] = sum / denom;
+    });
 
     const computedRows = ORDER.map(o => {
       const actual = values[o.summaryKey] || 0;
@@ -147,24 +120,18 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
   const handleInfo = () => {
     Alert.alert(
       'Micronutrients',
-      'Tracks vitamins, minerals, fiber, and omega-3 from your food logs against personalized daily targets based on your age and sex.\n\nGreen means you are on track. Yellow means you are trending off. Red means deficient or way over a limit.\n\nThe range follows the filter at the top of the screen. For 1D, this shows today\'s intake. For longer ranges, it shows your daily average across the logged days in that window.\n\nThese are estimates from AI analysis of your meals. For medical concerns, see a doctor.',
+      'Tracks vitamins, minerals, fiber, and omega-3 from your food logs against personalized daily targets based on your age and sex.\n\nGreen means you are on track. Yellow means you are trending off. Red means deficient or way over a limit.\n\nThe range follows the filter at the top of the screen and shows your daily average across the logged days in that window.\n\nThese are estimates from AI analysis of your meals. For medical concerns, see a doctor.',
     );
   };
 
   if (!targets) return null;
 
   // Subtitle copy that reflects the actual time window and data availability.
-  const expectedDays = RANGE_DAYS[timeRange];
-  const sparse = timeRange !== '1D' && loggedDaysInRange > 0 && loggedDaysInRange < expectedDays;
   let subtitle = '';
-  if (timeRange === '1D') {
-    subtitle = "Today's intake vs your targets";
-  } else if (loggedDaysInRange === 0) {
-    subtitle = `No food logged in the ${RANGE_LABEL[timeRange]} yet`;
-  } else if (sparse) {
-    subtitle = `Daily average across your ${loggedDaysInRange} logged ${loggedDaysInRange === 1 ? 'day' : 'days'} in the ${RANGE_LABEL[timeRange]}`;
+  if (loggedDaysInRange === 0) {
+    subtitle = `No food logged in the ${rangeLabel(timeRange)} yet`;
   } else {
-    subtitle = `Daily average across the ${RANGE_LABEL[timeRange]}`;
+    subtitle = `Daily average across your ${loggedDaysInRange} logged ${loggedDaysInRange === 1 ? 'day' : 'days'} in the ${rangeLabel(timeRange)}`;
   }
 
   return (

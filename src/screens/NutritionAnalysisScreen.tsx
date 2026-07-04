@@ -26,6 +26,7 @@ import { dataStorage, DailySummary } from '../services/dataStorage';
 import { generateInsights, getActionForInsight } from '../services/insightService';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { InsightUnlocks, isInsightUnlocked, getInsightDefinition, InsightId } from '../utils/insightUnlockEngine';
+import { ChartRange, CHART_RANGES, getRangeWindow, getPreviousWindow, isInRange, rangeLabel, previousRangeLabel } from '../utils/chartRange';
 import { MicronutrientCard } from '../components/MicronutrientCard';
 
 interface NutritionAnalysisScreenProps {
@@ -61,7 +62,10 @@ interface NutritionAnalysisScreenProps {
   onScrollToInsightConsumed?: () => void;
 }
 
-type TimeRange = '1D' | '1W' | '1M' | '3M' | '6M' | '1Y' | '2Y';
+// One shared meaning for every range pill in the app. 1D is gone on purpose: a
+// single dot is not a trend, and its old window was off by one anyway. 2Y was
+// defined but never rendered as a button.
+type TimeRange = ChartRange;
 type TabType = 'Calories' | 'Macros' | 'Insights';
 
 interface TopPriorityItem {
@@ -397,46 +401,19 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     return dailyData.sort((a, b) => a.date.getTime() - b.date.getTime());
   }, [mealsByDate, summariesByDate]);
 
-  // Filter data based on time range
+  // Filter data based on time range. Window math lives in one shared helper so
+  // every chart and card on this screen (and the weight screen) agrees on what a
+  // pill means.
   const getFilteredData = () => {
-    const now = startOfDay(new Date());
-    let rangeStart: Date;
-
-    switch (timeRange) {
-      case '1D':
-        rangeStart = subDays(now, 1);
-        break;
-      case '1W':
-        rangeStart = subDays(now, 6);
-        break;
-      case '1M':
-        rangeStart = subMonths(now, 1);
-        break;
-      case '3M':
-        rangeStart = subMonths(now, 3);
-        break;
-      case '6M':
-        rangeStart = subMonths(now, 6);
-        break;
-      case '1Y':
-        rangeStart = subYears(now, 1);
-        break;
-      case '2Y':
-        rangeStart = subYears(now, 2);
-        break;
-      default:
-        rangeStart = subDays(now, 6);
-    }
+    const window = getRangeWindow(timeRange);
 
     // Return only days the user actually logged inside the window. We deliberately
     // do NOT zero-fill unlogged days: a missing day is not a zero-calorie day, and
     // zero-filling was dragging the chart floor to 0, faking valleys in the line,
     // and padding the history table and averages with days that never happened.
-    const start = startOfDay(rangeStart);
     return nutritionData
       .filter((entry) => {
-        const day = startOfDay(entry.date);
-        if (day < start || day > now) return false;
+        if (!isInRange(entry.date, window)) return false;
         return entry.calories > 0 || entry.protein > 0 || entry.carbs > 0 || entry.fat > 0;
       })
       .sort((a, b) => a.date.getTime() - b.date.getTime());
@@ -465,6 +442,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   );
   const averageBasis = completedDays.length > 0 ? completedDays : graphData;
   const hasAverage = averageBasis.length > 0;
+  // When today is the only logged day, the "average" is really just today so far.
+  // Surface that instead of letting the fallback silently change the meaning.
+  const averageIsTodayOnly = completedDays.length === 0 && graphData.length > 0;
 
   const averageProtein = hasAverage
     ? averageBasis.reduce((sum, entry) => sum + entry.protein, 0) / averageBasis.length
@@ -482,41 +462,38 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const targetCalories = targetCaloriesProp && targetCaloriesProp > 0 ? targetCaloriesProp : undefined;
   const hasTargetCalories = targetCalories !== undefined;
 
-  // Week-over-week comparison (last 7 days vs previous 7 days)
-  const weekOverWeek = useMemo(() => {
-    const now = new Date();
-    const today = startOfDay(now);
-    const thisWeekStart = subDays(now, 7);
-    const lastWeekStart = subDays(now, 14);
+  // Selected window vs the equal-length window before it. The old chip compared
+  // last-7-vs-prior-7 no matter which range was selected, which made the number
+  // meaningless on 1M/1Y views.
+  const periodComparison = useMemo(() => {
+    const today = startOfDay(new Date());
+    const current = getRangeWindow(timeRange);
+    const previous = getPreviousWindow(timeRange);
 
-    // Exclude today's partial day so this-week's average is not understated.
-    const thisWeek = nutritionData.filter(d => d.date >= thisWeekStart && startOfDay(d.date).getTime() !== today.getTime());
-    const lastWeek = nutritionData.filter(d => d.date >= lastWeekStart && d.date < thisWeekStart);
+    // Same logged-day rule as the chart, so the chip and the hero agree on
+    // which days exist. Exclude today's partial day so the current average is
+    // not understated.
+    const isLogged = (d: DailyNutrition) => d.calories > 0 || d.protein > 0 || d.carbs > 0 || d.fat > 0;
+    const currDays = nutritionData.filter(d =>
+      isInRange(d.date, current) && startOfDay(d.date).getTime() !== today.getTime() && isLogged(d)
+    );
+    const prevDays = nutritionData.filter(d => isInRange(d.date, previous) && isLogged(d));
 
-    if (thisWeek.length === 0 || lastWeek.length === 0) return null;
+    if (currDays.length === 0 || prevDays.length === 0) return null;
 
     const avg = (arr: DailyNutrition[], key: keyof Omit<DailyNutrition, 'date'>) =>
       arr.reduce((s, d) => s + d[key], 0) / arr.length;
-
-    const thisCalories = avg(thisWeek, 'calories');
-    const lastCalories = avg(lastWeek, 'calories');
-    const thisProtein = avg(thisWeek, 'protein');
-    const lastProtein = avg(lastWeek, 'protein');
-    const thisCarbs = avg(thisWeek, 'carbs');
-    const lastCarbs = avg(lastWeek, 'carbs');
-    const thisFat = avg(thisWeek, 'fat');
-    const lastFat = avg(lastWeek, 'fat');
 
     const pctChange = (curr: number, prev: number) =>
       prev > 0 ? Math.round(((curr - prev) / prev) * 100) : 0;
 
     return {
-      calories: pctChange(thisCalories, lastCalories),
-      protein: pctChange(thisProtein, lastProtein),
-      carbs: pctChange(thisCarbs, lastCarbs),
-      fat: pctChange(thisFat, lastFat),
+      calories: pctChange(avg(currDays, 'calories'), avg(prevDays, 'calories')),
+      protein: pctChange(avg(currDays, 'protein'), avg(prevDays, 'protein')),
+      carbs: pctChange(avg(currDays, 'carbs'), avg(prevDays, 'carbs')),
+      fat: pctChange(avg(currDays, 'fat'), avg(prevDays, 'fat')),
     };
-  }, [nutritionData]);
+  }, [nutritionData, timeRange]);
 
   // Calculate graph dimensions
   const screenWidth = Dimensions.get('window').width;
@@ -542,7 +519,6 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   // Format date label based on time range
   const formatXLabel = (date: Date): string => {
-    if (timeRange === '1D') return format(date, 'ha'); // "9AM"
     if (timeRange === '1W') return format(date, 'EEE'); // "Mon"
     if (timeRange === '1M') return format(date, 'd MMM'); // "5 Feb"
     if (timeRange === '3M' || timeRange === '6M') return format(date, 'd MMM'); // "5 Feb"
@@ -706,7 +682,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     setTimeRange(range);
   };
 
-  const timeRanges: TimeRange[] = ['1D', '1W', '1M', '3M', '6M', '1Y'];
+  const timeRanges: TimeRange[] = [...CHART_RANGES];
 
   // Pill-style time range selector used across all tabs
   const renderTimeRangePills = () => (
@@ -1186,7 +1162,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
               <>
                 {/* Average Calories Hero */}
                 <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>AVERAGE</Text>
+                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>
+                    {averageIsTodayOnly ? 'TODAY SO FAR' : 'AVG / DAY'}
+                  </Text>
                   <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
                     {averageCalories !== null ? `${averageCalories}` : '--'}
                   </Text>
@@ -1528,13 +1506,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     {getDateRange()}
                   </Text>
 
-                  {/* Week-over-Week Comparison */}
-                  {weekOverWeek && (
+                  {/* What the numbers mean. This one line was the whole "numbers
+                      change but I don't know what's shown" complaint. */}
+                  {hasDataInRange && (
+                    <Text style={{ fontSize: 12, color: theme.colors.textTertiary, textAlign: 'center', paddingTop: 2 }}>
+                      {averageIsTodayOnly
+                        ? 'Only today is logged so far. Averages start tomorrow.'
+                        : `Average of ${completedDays.length} logged ${completedDays.length === 1 ? 'day' : 'days'} in the ${rangeLabel(timeRange)}. Today counts once complete.`}
+                    </Text>
+                  )}
+
+                  {/* Selected period vs the equal period before it */}
+                  {periodComparison && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 }}>
                       <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
-                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs last week:</Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
                       {(() => {
-                        const val = weekOverWeek.calories;
+                        const val = periodComparison.calories;
                         const color = val === 0 ? theme.colors.textSecondary : val > 0 ? '#EF4444' : '#10B981';
                         const sign = val > 0 ? '+' : '';
                         return (
@@ -1797,15 +1785,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     {getDateRange()}
                   </Text>
 
-                  {/* Week-over-Week Macro Comparison */}
-                  {weekOverWeek && (
+                  {/* Selected period vs the equal period before it (macros) */}
+                  {periodComparison && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, flexWrap: 'wrap' }}>
                       <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
-                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs last week:</Text>
+                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
                       {([
-                        { label: 'P', val: weekOverWeek.protein, color: '#3B82F6' },
-                        { label: 'C', val: weekOverWeek.carbs, color: '#F59E0B' },
-                        { label: 'F', val: weekOverWeek.fat, color: '#8B5CF6' },
+                        { label: 'P', val: periodComparison.protein, color: '#3B82F6' },
+                        { label: 'C', val: periodComparison.carbs, color: '#F59E0B' },
+                        { label: 'F', val: periodComparison.fat, color: '#8B5CF6' },
                       ] as const).map((m) => {
                         const chipColor = m.val === 0 ? theme.colors.textSecondary : m.val > 0 ? m.color : '#10B981';
                         const sign = m.val > 0 ? '+' : '';
@@ -2095,7 +2083,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               {calorieBankData.perDayBreakdown.map((day, i) => {
                                 const dayDate = new Date(day.day + 'T12:00:00');
                                 const dayLabel = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayDate.getDay()];
-                                const isToday = day.day === new Date().toISOString().split('T')[0];
+                                const isToday = day.day === format(new Date(), 'yyyy-MM-dd');
                                 const maxBar = calorieBankData.dailyCapPercent / 100 * day.base;
                                 const bankedPct = maxBar > 0 ? Math.min(1, day.banked / maxBar) : 0;
                                 const spentPct = maxBar > 0 ? Math.min(1, day.spent / maxBar) : 0;
@@ -2444,19 +2432,20 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <Feather name="info" size={13} color={theme.colors.textTertiary} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>When are you eating?</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>When are you eating? · {rangeLabel(timeRange)}</Text>
                         {(() => {
                           const buckets = { Morning: { cals: 0, count: 0 }, Afternoon: { cals: 0, count: 0 }, Evening: { cals: 0, count: 0 } };
-                          const now = new Date();
-                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
-                          const cutoff = subDays(now, rangeDays);
+                          // Same window as the chart, and LOCAL day keys — the old
+                          // UTC keys split one local day into two, inflating the
+                          // day count and understating the daily average.
+                          const window = getRangeWindow(timeRange);
                           let totalRangeCals = 0;
                           let totalDaysWithData = new Set<string>();
 
                           Object.values(mealsByDate).flat().forEach(meal => {
                             const d = new Date(meal.timestamp);
-                            if (d < cutoff) return;
-                            totalDaysWithData.add(d.toISOString().split('T')[0]);
+                            if (!isInRange(d, window)) return;
+                            totalDaysWithData.add(format(d, 'yyyy-MM-dd'));
                             const h = d.getHours();
                             let bucket: keyof typeof buckets = 'Evening';
                             if (h >= 4 && h < 12) bucket = 'Morning';
@@ -2519,16 +2508,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <Feather name="info" size={13} color={theme.colors.textTertiary} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items · {rangeLabel(timeRange)}</Text>
                         {(() => {
-                          const now = new Date();
-                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
-                          const cutoff = subDays(now, rangeDays);
+                          const window = getRangeWindow(timeRange);
 
                           const foodCounts: Record<string, { count: number; cals: number }> = {};
                           Object.values(mealsByDate).flat().forEach(meal => {
                             const d = new Date(meal.timestamp);
-                            if (d < cutoff) return;
+                            if (!isInRange(d, window)) return;
                             meal.foods.forEach(f => {
                               const name = f.name?.toLowerCase().trim();
                               if (!name) return;
@@ -2575,19 +2562,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {isUnlocked('sugar-load') && (
                       <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                         <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Sugar Load</Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Natural vs. added sugars (daily avg)</Text>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Natural vs. added sugars, daily average · {rangeLabel(timeRange)}</Text>
                         {(() => {
                           let totalSugar = 0;
                           let addedSugar = 0;
                           let daysWithData = new Set<string>();
-                          const now = new Date();
-                          const rangeDays = timeRange === '1D' ? 1 : timeRange === '1W' ? 7 : timeRange === '1M' ? 30 : timeRange === '3M' ? 90 : timeRange === '6M' ? 180 : 365;
-                          const cutoff = subDays(now, rangeDays);
+                          // Same window as the chart, LOCAL day keys (see Meal Timing).
+                          const window = getRangeWindow(timeRange);
 
                           Object.values(mealsByDate).flat().forEach(meal => {
                             const d = new Date(meal.timestamp);
-                            if (d < cutoff) return;
-                            daysWithData.add(d.toISOString().split('T')[0]);
+                            if (!isInRange(d, window)) return;
+                            daysWithData.add(format(d, 'yyyy-MM-dd'));
                             meal.foods.forEach(f => {
                               totalSugar += (f.sugar || 0);
                               addedSugar += (f.added_sugars || 0);

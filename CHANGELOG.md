@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Charts and streak
+
+**v1.4.29**
+Rebuilt the chart logic end to end. Every range pill now means exactly one thing across the whole app, where before the same "1W" was 7 days on one screen and 8 on another, and one screen used three different windows at once. The confusing 1D option is gone. Every number now says what it is and what period it covers: the calorie hero reads "avg per day" with a line explaining how many logged days it averages and that today counts once complete, the comparison chip compares your selected period against the equal period before it instead of always last week, and the weight charts tell you how many weigh-ins you are looking at. The weekly rate is now a proper trend fit over your selected range so one odd weigh-in cannot swing it, and your estimated goal date is anchored to your last 3 months so flipping the chart view cannot move it. Micronutrients now use the same window and local dates as everything else. Also fixed the streak display: the snowflake only shows while a recovery day is actually protecting your streak, and the recovery banner now names the day it saved and how many recovery days you have left.
+
 ## Cloud sync
 
 **v1.4.28**

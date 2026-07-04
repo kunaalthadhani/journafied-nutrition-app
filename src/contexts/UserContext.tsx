@@ -87,8 +87,12 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 await dataStorage.saveStreakFreeze(currentFreeze);
             }
 
-            // Check for retroactive freezes logic
-            const updatedFreeze = await checkMissedDaysAndFreeze(loadedMeals, currentFreeze, loadedGoals);
+            // Check for retroactive freezes logic. Premium-gated on the real
+            // entitlement: streak freezes are a premium feature and the engine
+            // must not spend tokens for signed-out or free users.
+            const updatedFreeze = isPremiumEntitled(loadedAccount)
+                ? await checkMissedDaysAndFreeze(loadedMeals, currentFreeze, loadedGoals)
+                : currentFreeze;
             setStreakFreeze(updatedFreeze);
 
             // Smart Adjustment Check
