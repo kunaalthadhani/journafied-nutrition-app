@@ -5,7 +5,7 @@ import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
 import { calculateStreak } from '../utils/streakUtils';
-import { parseISO } from 'date-fns';
+import { parseISO, format } from 'date-fns';
 import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 
 // --- Write serialization to prevent race conditions on rapid saves ---
@@ -3156,11 +3156,15 @@ export const dataStorage = {
       const allMeals = await this.loadMeals();
       const loggedDaysCount = Object.values(allMeals).filter(meals => meals && meals.length > 0).length;
 
-      // Stats loop (keep 7 days for averages, but we'll use more for foods)
-      for (let i = 0; i < 7; i++) {
+      // Stats loop: the last 7 COMPLETED days. Summaries are keyed by LOCAL day
+      // (format, not toISOString — UTC keys shifted the whole window for UAE
+      // users at night), and today's partial day is excluded so a half-logged
+      // day does not read as undereating in the averages the coach and the Top
+      // Priority rules consume.
+      for (let i = 1; i <= 7; i++) {
         const d = new Date();
         d.setDate(today.getDate() - i);
-        const k = d.toISOString().split('T')[0];
+        const k = format(d, 'yyyy-MM-dd');
         const s = summaries[k];
         if (s && s.entryCount > 0) {
           totalCals += s.totalCalories;
@@ -3177,7 +3181,7 @@ export const dataStorage = {
       for (let i = 0; i < 30; i++) {
         const d = new Date();
         d.setDate(today.getDate() - i);
-        const k = d.toISOString().split('T')[0];
+        const k = format(d, 'yyyy-MM-dd');
         const s = summaries[k];
         if (s && s.entryCount > 0 && !verifiedKeys.includes(k)) {
           verifiedKeys.push(k);
@@ -3192,15 +3196,16 @@ export const dataStorage = {
       const currentW = sortedWeights.length > 0 ? sortedWeights[0].weight : null;
       const twoWeeksAgo = new Date();
       twoWeeksAgo.setDate(today.getDate() - 14);
-      const pastWEntry = sortedWeights.find(w => w.date <= twoWeeksAgo.toISOString().split('T')[0]);
+      const pastWEntry = sortedWeights.find(w => w.date <= format(twoWeeksAgo, 'yyyy-MM-dd'));
       const startW = pastWEntry ? pastWEntry.weight : (sortedWeights.length > 0 ? sortedWeights[sortedWeights.length - 1].weight : null);
 
-      // 4. Consistency Score
+      // 4. Consistency Score. Same window as the averages: local keys, last 7
+      // completed days, today excluded (a half-logged today is not a miss).
       let consistentDays = 0;
-      for (let i = 0; i < 7; i++) {
+      for (let i = 1; i <= 7; i++) {
         const d = new Date();
         d.setDate(today.getDate() - i);
-        const k = d.toISOString().split('T')[0];
+        const k = format(d, 'yyyy-MM-dd');
         const s = summaries[k];
         if (s && s.entryCount > 0) {
           const diff = Math.abs(s.totalCalories - goals.calories);

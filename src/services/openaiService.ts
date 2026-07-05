@@ -525,7 +525,9 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
   }
 }
 
-export async function generateWeeklyInsights(weeklyData: any): Promise<string> {
+// Returns null on failure so the caller can skip caching. Returning apologetic
+// filler here used to get cached for a whole week as if it were the insight.
+export async function generateWeeklyInsights(weeklyData: any): Promise<string | null> {
   try {
     const data = await invokeAI({
       model: 'gpt-4o-mini',
@@ -561,10 +563,10 @@ Tone: Like a nutritionist reviewing your food diary face-to-face. Specific, hone
       max_tokens: 600,
       call_type: 'weekly-insights',
     });
-    return data.choices[0]?.message?.content || "Log a few more days this week and we'll have enough data for real insights.";
+    return data.choices[0]?.message?.content || null;
   } catch (error) {
     if (__DEV__) console.error('Error generating insights:', error);
-    return "We need a bit more data to generate your weekly insight. Keep logging!";
+    return null;
   }
 }
 

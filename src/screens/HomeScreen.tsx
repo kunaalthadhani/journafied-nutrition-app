@@ -3101,7 +3101,10 @@ export const HomeScreen: React.FC = () => {
             calorieBankData={calorieBankCycle && calorieBankConfig?.enabled ? {
               enabled: true,
               weeklyBudget: calorieBankCycle.weeklyBudget,
-              weeklyActual: calorieBankCycle.weeklyActual,
+              // Logged total, same as the home bank card. weeklyActual silently
+              // adds the full base target for every unlogged past day, so the
+              // two screens showed different "used" numbers for the same week.
+              weeklyActual: calorieBankCycle.weeklyLoggedActual,
               bankBalance: calorieBankCycle.bankBalance,
               bankUtilization: calculateBankUtilization(calorieBankCycle.perDayData),
               expiredCalories: 0,

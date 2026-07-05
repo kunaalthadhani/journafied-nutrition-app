@@ -220,6 +220,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           </View>
         </View>
         <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 }}>{topPriority.description}</Text>
+        {/* Fixed window, unlike the range-driven cards below it. Saying so stops
+            it reading as a summary of whatever range pill is selected. */}
+        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 6 }}>
+          Based on your last 7 logged days
+        </Text>
         {topPriority.actionText && (
           <View style={{ marginTop: 12, backgroundColor: theme.colors.input, borderRadius: 10, padding: 12 }}>
             {topPriority.actionLabel && (
@@ -299,7 +304,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           patternDetectionService.getActivePatterns(),
           dataStorage.getUserMetricsSnapshot(),
         ]);
-        const snapshot = cached ?? (await dataStorage.generateUserMetricsSnapshot());
+        // Same-day freshness check, mirroring the coach. Without it a cached
+        // week-old snapshot kept feeding "last 7 days" claims from stale data
+        // unless the user happened to open the coach.
+        const cachedIsFresh =
+          cached && format(new Date(cached.generatedAt), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+        const snapshot = cachedIsFresh ? cached : (await dataStorage.generateUserMetricsSnapshot());
         const items: TopPriorityItem[] = [];
 
         for (const p of patterns) {
@@ -446,6 +456,17 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Surface that instead of letting the fallback silently change the meaning.
   const averageIsTodayOnly = completedDays.length === 0 && graphData.length > 0;
 
+  // Every range-driven insight card states its window through this one helper,
+  // and guards its no-data state with this one note, so a new card cannot ship
+  // unlabeled or rendering zeros for missing data.
+  const rangeSubtitle = (text: string) =>
+    averageIsTodayOnly ? `${text} · today so far` : `${text} · ${rangeLabel(timeRange)}`;
+  const CardEmptyNote = () => (
+    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 16 }}>
+      No logged days in the {rangeLabel(timeRange)}. Pick a wider range.
+    </Text>
+  );
+
   const averageProtein = hasAverage
     ? averageBasis.reduce((sum, entry) => sum + entry.protein, 0) / averageBasis.length
     : null;
@@ -484,8 +505,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const avg = (arr: DailyNutrition[], key: keyof Omit<DailyNutrition, 'date'>) =>
       arr.reduce((s, d) => s + d[key], 0) / arr.length;
 
-    const pctChange = (curr: number, prev: number) =>
-      prev > 0 ? Math.round(((curr - prev) / prev) * 100) : 0;
+    // null, not 0: a previous window with none of this macro is "no comparison",
+    // and rendering it as 0% claimed nothing changed.
+    const pctChange = (curr: number, prev: number): number | null =>
+      prev > 0 ? Math.round(((curr - prev) / prev) * 100) : null;
 
     return {
       calories: pctChange(avg(currDays, 'calories'), avg(prevDays, 'calories')),
@@ -888,8 +911,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   };
 
   useEffect(() => {
-    if (activeTab !== 'Insights' || !isPremium || insightRequestInFlight.current || graphData.length === 0) return;
+    // isUnlocked matters: this fires a PAID call, so a locked card must never
+    // generate. The card gate alone does not stop the effect.
+    if (activeTab !== 'Insights' || !isPremium || !isUnlocked('ai-weekly-insight') || insightRequestInFlight.current) return;
     if (insightText) return; // Already loaded this session
+
+    // The card says WEEKLY, so feed the AI a fixed week: the last completed
+    // logged days regardless of which range pill is selected, with today's
+    // partial day excluded so a half-logged day does not read as undereating.
+    const completedLogged = nutritionData
+      .filter(d =>
+        (d.calories > 0 || d.protein > 0 || d.carbs > 0 || d.fat > 0) &&
+        format(d.date, 'yyyy-MM-dd') !== todayKey
+      )
+      .sort((a, b) => a.date.getTime() - b.date.getTime());
+    if (completedLogged.length === 0) return;
 
     insightRequestInFlight.current = true;
 
@@ -915,11 +951,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
       // Generate new insight
       setIsGeneratingInsight(true);
       try {
-        // Day-of-week breakdown
+        const lastWeek = completedLogged.slice(-7);
+        const lastTwoWeeks = completedLogged.slice(-14);
+
+        // Day-of-week breakdown over the last two completed weeks
         const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
         const dayBuckets: Record<string, { cals: number[]; protein: number[] }> = {};
         dayNames.forEach(d => { dayBuckets[d] = { cals: [], protein: [] }; });
-        graphData.slice(-14).forEach(entry => {
+        lastTwoWeeks.forEach(entry => {
           const day = dayNames[entry.date.getDay()];
           dayBuckets[day].cals.push(Math.round(entry.calories));
           dayBuckets[day].protein.push(Math.round(entry.protein));
@@ -936,7 +975,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
         // Meal timing from raw meals
         const timingBuckets = { morning: 0, afternoon: 0, evening: 0 };
-        const last7 = graphData.slice(-7).map(d => format(d.date, 'yyyy-MM-dd'));
+        const last7 = lastWeek.map(d => format(d.date, 'yyyy-MM-dd'));
         Object.entries(mealsByDate).forEach(([dateKey, meals]) => {
           if (!last7.includes(dateKey)) return;
           meals.forEach(meal => {
@@ -958,27 +997,29 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         });
         const topFoods = Object.entries(foodCounts).sort((a, b) => b[1] - a[1]).slice(0, 5).map(([name, count]) => `${name} (${count}x)`);
 
-        // Daily breakdown for last 7 days
-        const dailyBreakdown = graphData.slice(-7).map(d => ({
+        // Daily breakdown and averages over the fixed week, not the range pills
+        const dailyBreakdown = lastWeek.map(d => ({
           day: format(d.date, 'EEE'),
           cal: Math.round(d.calories),
           protein: Math.round(d.protein),
           carbs: Math.round(d.carbs),
           fat: Math.round(d.fat),
         }));
+        const weekAvg = (key: 'calories' | 'protein' | 'carbs' | 'fat') =>
+          Math.round(lastWeek.reduce((s, d) => s + d[key], 0) / lastWeek.length);
 
         const weeklySummary = {
-          averageCalories,
-          averageProtein: averageProtein !== null ? Math.round(averageProtein) : null,
-          averageCarbs: averageCarbs !== null ? Math.round(averageCarbs) : null,
-          averageFat: averageFat !== null ? Math.round(averageFat) : null,
+          averageCalories: weekAvg('calories'),
+          averageProtein: weekAvg('protein'),
+          averageCarbs: weekAvg('carbs'),
+          averageFat: weekAvg('fat'),
           targets: {
             calories: targetCalories ?? null,
             proteinG: targetProtein ?? null,
             carbsG: targetCarbs ?? null,
             fatG: targetFat ?? null,
           },
-          totalDaysLogged: graphData.length,
+          totalDaysLogged: lastWeek.length,
           dailyBreakdown,
           dayOfWeekAvg,
           mealTimingDistribution: timingBuckets,
@@ -987,11 +1028,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         };
 
         const text = await generateWeeklyInsights(weeklySummary);
-        setInsightText(text);
-        setInsightIsNew(true);
-
-        // Cache with week key
-        await AsyncStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ weekKey, text, generatedAt: new Date().toISOString() }));
+        // null = the call failed. Do not cache failure text for a week; leave
+        // the card empty so the next visit retries.
+        if (text) {
+          setInsightText(text);
+          setInsightIsNew(true);
+          await AsyncStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ weekKey, text, generatedAt: new Date().toISOString() }));
+        }
       } catch (err) {
         console.error(err);
       } finally {
@@ -1001,7 +1044,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     };
 
     loadOrGenerate();
-  }, [activeTab, isPremium, graphData]);
+  }, [activeTab, isPremium, insightUnlocks, nutritionData]);
 
   // Radar Chart Data Calculation
   const radarData = useMemo(() => {
@@ -1038,8 +1081,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
     const points = radarData.map((d, i) => {
       const angle = i * angleStep - Math.PI / 2; // Start at top
-      // value is 0-1+
-      const r = Math.min(d.value, 1.1) * radius;
+      // value is 0-1.2, matching the data cap so the overshoot band is drawable
+      const r = Math.min(d.value, 1.2) * radius;
       const x = center + r * Math.cos(angle);
       const y = center + r * Math.sin(angle);
       return `${x},${y}`;
@@ -1226,7 +1269,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
                       {macro.value !== null ? macro.value.toFixed(0) : '--'}
                     </Text>
-                    <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>g</Text>
+                    <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>
+                      {averageIsTodayOnly ? 'g · today so far' : 'g · avg/day'}
+                    </Text>
                   </View>
                 ))}
               </>
@@ -1517,12 +1562,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   )}
 
                   {/* Selected period vs the equal period before it */}
-                  {periodComparison && (
+                  {periodComparison && periodComparison.calories !== null && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 }}>
                       <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
                       <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
                       {(() => {
-                        const val = periodComparison.calories;
+                        const val = periodComparison.calories ?? 0;
                         const color = val === 0 ? theme.colors.textSecondary : val > 0 ? '#EF4444' : '#10B981';
                         const sign = val > 0 ? '+' : '';
                         return (
@@ -1774,6 +1819,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{item.label}</Text>
                       </View>
                     ))}
+                    {targetProtein !== undefined && (
+                      // The dashed protein-target line otherwise reads as a second
+                      // protein series.
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                        <View style={{ flexDirection: 'row', gap: 2 }}>
+                          {[0, 1, 2].map(i => (
+                            <View key={i} style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#3B82F6', opacity: 0.6 }} />
+                          ))}
+                        </View>
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Protein target</Text>
+                      </View>
+                    )}
                   </View>
                   </>)}
 
@@ -1785,16 +1842,25 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     {getDateRange()}
                   </Text>
 
+                  {/* Same context line as the Calories tab */}
+                  {hasDataInRange && (
+                    <Text style={{ fontSize: 12, color: theme.colors.textTertiary, textAlign: 'center', paddingTop: 2 }}>
+                      {averageIsTodayOnly
+                        ? 'Only today is logged so far. Averages start tomorrow.'
+                        : `Average of ${completedDays.length} logged ${completedDays.length === 1 ? 'day' : 'days'} in the ${rangeLabel(timeRange)}. Today counts once complete.`}
+                    </Text>
+                  )}
+
                   {/* Selected period vs the equal period before it (macros) */}
                   {periodComparison && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, flexWrap: 'wrap' }}>
                       <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
                       <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
-                      {([
+                      {[
                         { label: 'P', val: periodComparison.protein, color: '#3B82F6' },
                         { label: 'C', val: periodComparison.carbs, color: '#F59E0B' },
                         { label: 'F', val: periodComparison.fat, color: '#8B5CF6' },
-                      ] as const).map((m) => {
+                      ].filter((m): m is { label: string; val: number; color: string } => m.val !== null).map((m) => {
                         const chipColor = m.val === 0 ? theme.colors.textSecondary : m.val > 0 ? m.color : '#10B981';
                         const sign = m.val > 0 ? '+' : '';
                         return (
@@ -1826,6 +1892,19 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       );
                     }
 
+                    // A partial today must not be scored against full-day targets:
+                    // half a day of eating always reads as "way below target".
+                    if (averageIsTodayOnly) {
+                      return (
+                        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+                          <Feather name="clock" size={18} color={theme.colors.textSecondary} />
+                          <Text style={[styles.infoText, { color: theme.colors.textSecondary, flex: 1 }]}>
+                            Today is still in progress. Macro insights compare completed days against your targets.
+                          </Text>
+                        </View>
+                      );
+                    }
+
                     // Compare each macro against its target
                     const insights: { macro: string; color: string; pct: number; status: 'low' | 'high' | 'on_track' }[] = [];
 
@@ -1852,7 +1931,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     if (allOnTrack) {
                       icon = 'check-circle';
                       iconColor = '#10B981';
-                      message = "All macros are within target range. You're nailing your nutrition goals — keep it up!";
+                      message = `All macros are within target range over the ${rangeLabel(timeRange)}. You're nailing your nutrition goals — keep it up!`;
                     } else if (offTrack.length > 0) {
                       // Pick the most off-track macro
                       const worst = offTrack.sort((a, b) => Math.abs(b.pct) - Math.abs(a.pct))[0];
@@ -1862,21 +1941,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         icon = 'arrow-down-circle';
                         const deficit = Math.abs(Math.round(worst.pct));
                         if (worst.macro === 'Protein') {
-                          message = `Protein is ${deficit}% below target. Try adding eggs, Greek yogurt, or chicken to close the gap.`;
+                          message = `Protein is ${deficit}% below target over the ${rangeLabel(timeRange)}. Try adding eggs, Greek yogurt, or chicken to close the gap.`;
                         } else if (worst.macro === 'Carbs') {
-                          message = `Carbs are ${deficit}% below target. Add whole grains, fruit, or oats to fuel your energy levels.`;
+                          message = `Carbs are ${deficit}% below target over the ${rangeLabel(timeRange)}. Add whole grains, fruit, or oats to fuel your energy levels.`;
                         } else {
-                          message = `Fat is ${deficit}% below target. Nuts, avocado, or olive oil are great healthy fat sources.`;
+                          message = `Fat is ${deficit}% below target over the ${rangeLabel(timeRange)}. Nuts, avocado, or olive oil are great healthy fat sources.`;
                         }
                       } else {
                         icon = 'arrow-up-circle';
                         const surplus = Math.round(worst.pct);
                         if (worst.macro === 'Protein') {
-                          message = `Protein is ${surplus}% above target. Consider balancing portions with more vegetables and complex carbs.`;
+                          message = `Protein is ${surplus}% above target over the ${rangeLabel(timeRange)}. Consider balancing portions with more vegetables and complex carbs.`;
                         } else if (worst.macro === 'Carbs') {
-                          message = `Carbs are ${surplus}% over target. Try swapping refined carbs for vegetables or reducing portion sizes.`;
+                          message = `Carbs are ${surplus}% over target over the ${rangeLabel(timeRange)}. Try swapping refined carbs for vegetables or reducing portion sizes.`;
                         } else {
-                          message = `Fat is ${surplus}% over target. Watch for hidden fats in sauces, fried food, and processed snacks.`;
+                          message = `Fat is ${surplus}% over target over the ${rangeLabel(timeRange)}. Watch for hidden fats in sauces, fried food, and processed snacks.`;
                         }
                       }
                     } else {
@@ -2028,7 +2107,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <Feather name="credit-card" size={14} color="#22C55E" />
                               </View>
                               <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Bank</Text>
-                              <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Bank', 'Shows your weekly calorie budget progress, how much you have banked, and your bank utilization. Utilization tells you what percentage of your banked calories you actually used. A low number means you are saving calories but not spending them, which could mean your daily target is higher than you need.')}>
+                              <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Bank', 'Shows your weekly calorie budget progress, how much you have banked, and your bank utilization. The budget number counts only days you logged. Utilization tells you what percentage of your banked calories you actually used. Cap days counts the days you saved the maximum your daily cap allows.')}>
                                 <Feather name="info" size={13} color={theme.colors.textTertiary} />
                               </TouchableOpacity>
                               <View style={{ backgroundColor: '#22C55E20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' }}>
@@ -2079,33 +2158,40 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   <Feather name="info" size={13} color={theme.colors.textTertiary} />
                                 </TouchableOpacity>
                               </View>
-                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Daily banking and spending this cycle</Text>
+                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Daily banking and spending this cycle · "skipped" = day not logged</Text>
                               {calorieBankData.perDayBreakdown.map((day, i) => {
                                 const dayDate = new Date(day.day + 'T12:00:00');
                                 const dayLabel = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayDate.getDay()];
-                                const isToday = day.day === format(new Date(), 'yyyy-MM-dd');
+                                const todayStr = format(new Date(), 'yyyy-MM-dd');
+                                const isToday = day.day === todayStr;
                                 const maxBar = calorieBankData.dailyCapPercent / 100 * day.base;
                                 const bankedPct = maxBar > 0 ? Math.min(1, day.banked / maxBar) : 0;
                                 const spentPct = maxBar > 0 ? Math.min(1, day.spent / maxBar) : 0;
-                                const isFuture = day.actual === 0 && !isToday;
+                                // By date, not by actual===0: a past day where the user
+                                // logged only zero-calorie items is not "future".
+                                const isFuture = day.day > todayStr;
+                                // A skipped day must not render like a perfect on-target
+                                // day. The engine assumes base for unlogged past days,
+                                // which made both show as "0".
+                                const isSkipped = !isFuture && !isToday && (summariesByDate?.[day.day]?.entryCount ?? 0) === 0;
 
                                 return (
-                                  <View key={day.day} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                                  <View key={day.day} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, opacity: isSkipped ? 0.55 : 1 }}>
                                     <Text style={{
                                       width: 32, fontSize: 12,
                                       fontWeight: isToday ? '700' : '400',
                                       color: isToday ? theme.colors.textPrimary : theme.colors.textSecondary,
                                     }}>{dayLabel}</Text>
                                     <View style={{ flex: 1, height: 16, borderRadius: 4, backgroundColor: theme.colors.input, overflow: 'hidden', flexDirection: 'row' }}>
-                                      {!isFuture && day.banked > 0 && (
+                                      {!isFuture && !isSkipped && day.banked > 0 && (
                                         <View style={{ width: `${bankedPct * 100}%`, height: '100%', backgroundColor: '#22C55E', borderRadius: 4 }} />
                                       )}
-                                      {!isFuture && day.spent > 0 && (
+                                      {!isFuture && !isSkipped && day.spent > 0 && (
                                         <View style={{ width: `${spentPct * 100}%`, height: '100%', backgroundColor: '#F59E0B', borderRadius: 4 }} />
                                       )}
                                     </View>
-                                    <Text style={{ width: 50, textAlign: 'right', fontSize: 11, color: isFuture ? theme.colors.textTertiary : theme.colors.textSecondary }}>
-                                      {isFuture ? '—' : day.banked > 0 ? `+${Math.round(day.banked)}` : day.spent > 0 ? `-${Math.round(day.spent)}` : '0'}
+                                    <Text style={{ width: 50, textAlign: 'right', fontSize: 11, color: isFuture || isSkipped ? theme.colors.textTertiary : theme.colors.textSecondary }}>
+                                      {isFuture ? '—' : isSkipped ? 'skipped' : day.banked > 0 ? `+${Math.round(day.banked)}` : day.spent > 0 ? `-${Math.round(day.spent)}` : '0'}
                                     </Text>
                                   </View>
                                 );
@@ -2139,7 +2225,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               <Feather name="info" size={13} color={theme.colors.textTertiary} />
                             </TouchableOpacity>
                           </View>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average vs. target</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>{rangeSubtitle('Average vs. target')}</Text>
+                          {!hasAverage ? <CardEmptyNote /> : (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                             {[
                               { label: 'Protein', avg: averageProtein ?? 0, target: targetProtein, color: '#3B82F6' },
@@ -2147,7 +2234,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               { label: 'Fat', avg: averageFat ?? 0, target: targetFat, color: '#8B5CF6' },
                               ...(targetCalories ? [{ label: 'Calories', avg: averageCalories ?? 0, target: targetCalories, color: theme.colors.primary }] : []),
                             ].filter(m => m.target).map((macro) => {
-                              const pct = Math.min(1, macro.avg / (macro.target! || 1));
+                              // The number tells the truth (140% is 140%); only the
+                              // ring is capped at a full circle. Clamping both hid
+                              // every overshoot as a perfect 100%.
+                              const rawPct = macro.avg / (macro.target! || 1);
+                              const ringPct = Math.min(1, rawPct);
                               const circumference = 2 * Math.PI * 32;
                               return (
                                 <View key={macro.label} style={{ alignItems: 'center' }}>
@@ -2160,14 +2251,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                         strokeWidth="6"
                                         fill="transparent"
                                         strokeDasharray={`${circumference}`}
-                                        strokeDashoffset={`${circumference * (1 - pct)}`}
+                                        strokeDashoffset={`${circumference * (1 - ringPct)}`}
                                         strokeLinecap="round"
                                         transform="rotate(-90, 40, 40)"
                                       />
                                     </Svg>
                                     <View style={{ position: 'absolute' }}>
                                       <Text style={{ fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, textAlign: 'center' }}>
-                                        {Math.round(pct * 100)}%
+                                        {Math.round(rawPct * 100)}%
                                       </Text>
                                     </View>
                                   </View>
@@ -2177,6 +2268,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               );
                             })}
                           </View>
+                          )}
                         </View>
                       )}
                       </InsightSlot>
@@ -2194,15 +2286,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   <Feather name="info" size={13} color={theme.colors.textTertiary} />
                                 </TouchableOpacity>
                               </View>
-                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Daily intake over time</Text>
+                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{rangeSubtitle('Daily intake')}</Text>
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
                               <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{averageCalories ?? 0}</Text>
-                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>avg Kcal/day</Text>
+                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>avg Kcal / logged day</Text>
                             </View>
                           </View>
                           {(() => {
-                            const cW = graphWidth - 36; // card padding
+                            // graphWidth assumes graphCard's 18px padding; this card pads 20
+                            const cW = graphWidth - 4;
                             const cH = 140;
                             const cPadL = 35;
                             const cPadR = 10;
@@ -2280,15 +2373,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <Feather name="info" size={13} color={theme.colors.textTertiary} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average daily ratio</Text>
-                        {(() => {
+                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>{rangeSubtitle('Average daily ratio')}</Text>
+                        {!hasAverage ? <CardEmptyNote /> : (() => {
                           const p = averageProtein ?? 0;
                           const c = averageCarbs ?? 0;
                           const f = averageFat ?? 0;
-                          const totalG = p + c + f || 1;
-                          const pPct = (p / totalG) * 100;
-                          const cPct = (c / totalG) * 100;
-                          const fPct = (f / totalG) * 100;
                           // Calorie-based ratio
                           const pCal = p * 4;
                           const cCal = c * 4;
@@ -2350,9 +2439,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <Feather name="info" size={13} color={theme.colors.textTertiary} />
                               </TouchableOpacity>
                             </View>
-                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Target vs. actual performance</Text>
+                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{rangeSubtitle('Target vs. your average per logged day')}</Text>
                           </View>
-                          {renderRadarChart()}
+                          {hasAverage ? renderRadarChart() : <CardEmptyNote />}
                         </View>
                       )}
                       </InsightSlot>
@@ -2360,7 +2449,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Day-of-Week Activity ── */}
                       <InsightSlot id="weekly-pattern">
                       {!isUnlocked('weekly-pattern') && <LockedInsightCard id="weekly-pattern" />}
-                      {isUnlocked('weekly-pattern') && graphData.length >= 3 && (
+                      {isUnlocked('weekly-pattern') && completedDays.length >= 3 && (
                         <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
                             <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Weekly Pattern</Text>
@@ -2368,13 +2457,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               <Feather name="info" size={13} color={theme.colors.textTertiary} />
                             </TouchableOpacity>
                           </View>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average calories by day of week</Text>
+                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average calories by day of week · {rangeLabel(timeRange)}</Text>
                           {(() => {
                             const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                             const dayBuckets: Record<string, { total: number; count: number }> = {};
                             dayNames.forEach(d => { dayBuckets[d] = { total: 0, count: 0 }; });
 
-                            graphData.forEach(entry => {
+                            // Completed days only: today's half-logged calories would
+                            // drag its weekday bar down, breaking the screen rule
+                            // that today never enters an average.
+                            completedDays.forEach(entry => {
                               const dayIdx = entry.date.getDay(); // 0=Sun
                               const dayName = dayNames[dayIdx === 0 ? 6 : dayIdx - 1]; // Mon=0
                               dayBuckets[dayName].total += entry.calories;
@@ -2387,7 +2479,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             }));
                             const maxDayAvg = Math.max(...dayAvgs.map(d => d.avg), 1);
 
-                            const barChartW = graphWidth - 36;
+                            // graphWidth assumes graphCard's 18px padding; this card pads 20
+                            const barChartW = graphWidth - 4;
                             const barChartH = 120;
                             const barGap = 6;
                             const barW = (barChartW - barGap * 6) / 7;

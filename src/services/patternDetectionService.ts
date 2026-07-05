@@ -2,6 +2,7 @@ import { dataStorage, DetectedPattern } from './dataStorage';
 import { generateId } from '../utils/uuid';
 import { invokeAI } from './aiProxyService';
 import { sanitizeObjectForAI } from '../utils/sanitizeAI';
+import { format } from 'date-fns';
 
 /**
  * Pattern Detection Service
@@ -93,7 +94,9 @@ export const patternDetectionService = {
             for (let i = 0; i < 21; i++) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - i);
-                const dateKey = date.toISOString().split('T')[0];
+                // LOCAL day key, matching how daily logs are stored. The UTC key
+                // shifted the whole 21-day AI window near midnight.
+                const dateKey = format(date, 'yyyy-MM-dd');
 
                 const meals = await dataStorage.getDailyLog(dateKey);
 

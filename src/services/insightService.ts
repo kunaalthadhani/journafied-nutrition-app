@@ -1,6 +1,6 @@
 import { Insight, UserMetricsSnapshot } from './dataStorage';
 import { generateId } from '../utils/uuid';
-import { isWeekend } from 'date-fns';
+import { isWeekend, parseISO, format } from 'date-fns';
 
 export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights: Insight[] = []): Insight[] => {
     if (!snapshot.recentDailySummaries || snapshot.recentDailySummaries.length === 0) {
@@ -9,7 +9,7 @@ export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights
 
     const { userGoals, averages7Day, weakNutrients, weightTrend, consistencyScore } = snapshot;
     const insights: Insight[] = [];
-    const today = new Date().toISOString().split('T')[0];
+    const today = format(new Date(), 'yyyy-MM-dd');
 
     // RULE 1: Protein < Target for 5 of last 7 days (Warning)
     const lowProteinDays = snapshot.recentDailySummaries.filter(
@@ -31,7 +31,10 @@ export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights
 
     // RULE 2: Calories > Goal on Weekends (Pattern)
     const weekendDays = snapshot.recentDailySummaries.filter((s) => {
-        const d = new Date(s.date);
+        // parseISO reads the local-day key as local midnight. new Date(key)
+        // reads it as UTC midnight, which shifts the weekday for anyone west
+        // of UTC and made Saturday overeating check Sunday and Monday.
+        const d = parseISO(s.date);
         return isWeekend(d) && s.totalCalories > userGoals.calories * 1.15;
     });
 
@@ -84,14 +87,16 @@ export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights
         });
     }
 
-    // RULE 5: High Consistency Achievement
-    if (consistencyScore > 90) {
+    // RULE 5: High Consistency Achievement. Needs a real sample: consistencyScore
+    // is the share of LOGGED days, so one perfect day used to score 100 and fire
+    // this on day one.
+    if (consistencyScore > 90 && snapshot.recentDailySummaries.length >= 5) {
         insights.push({
             id: generateId(),
             date: today,
             type: 'achievement',
             title: 'Rock Solid Consistency',
-            description: 'You hit your calorie targets over 90% of the time this week. Great discipline!',
+            description: `You hit your calorie target on over 90% of your ${snapshot.recentDailySummaries.length} logged days this week. Great discipline!`,
             confidence: 0.95,
             relatedMetric: 'calories',
             isDismissed: false,
@@ -103,7 +108,7 @@ export const generateInsights = (snapshot: UserMetricsSnapshot, existingInsights
     // We treat 'pastInsights' as all historical insights passed in
     const sevenDaysAgo = new Date();
     sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const sevenDaysAgoStr = sevenDaysAgo.toISOString().split('T')[0];
+    const sevenDaysAgoStr = format(sevenDaysAgo, 'yyyy-MM-dd');
 
     // Get titles of insights generated/shown in last 7 days
     const recentTitles = new Set(
