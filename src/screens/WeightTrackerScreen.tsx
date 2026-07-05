@@ -23,7 +23,7 @@ import { Spacing } from '../constants/spacing';
 import { useTheme } from '../constants/theme';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { useUser } from '../contexts/UserContext';
-import { format, subDays, subMonths, subYears, startOfDay } from 'date-fns';
+import { format, subDays, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { ChartRange, CHART_RANGES, getRangeWindow, isInRange, rangeLabel, weeklyTrendSlope } from '../utils/chartRange';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
 import { dataStorage, DailySummary } from '../services/dataStorage';
@@ -161,6 +161,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     </View>
   );
 
+  // An unlocked insight card whose data source is empty must say WHY instead of
+  // silently vanishing: unlocks are all-time, card data is recent-window, so
+  // "unlocked but dataless" is a normal state, not an error.
+  const EmptyInsightCard = ({ title, hint }: { title: string; hint: string }) => (
+    <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
+      <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>{title}</Text>
+      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 6, lineHeight: 19 }}>{hint}</Text>
+    </View>
+  );
+
   const isUnlocked = (id: InsightId) => isInsightUnlocked(id, insightUnlocks);
   const { convertWeightToDisplay, convertWeightFromDisplay, getWeightUnitLabel, weightUnit } = usePreferences();
   const { weightEntries: contextWeightEntries, goals: contextGoals } = useUser();
@@ -229,6 +239,17 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     return null;
   });
 
+  // The screen stays mounted across modal opens, so a height change delivered
+  // through context (background goal sync, another device) must flow into BMI.
+  // The lazy initializer above only ever runs once.
+  useEffect(() => {
+    if (contextGoals?.heightCm && contextGoals.heightCm > 0) {
+      setHeightCm(contextGoals.heightCm);
+    } else if (contextGoals?.heightFeet && contextGoals.heightFeet > 0) {
+      setHeightCm(((contextGoals.heightFeet * 12) + (contextGoals.heightInches || 0)) * 2.54);
+    }
+  }, [contextGoals?.heightCm, contextGoals?.heightFeet, contextGoals?.heightInches]);
+
   // Initialize from UserContext (already loaded) — no async delay
   const [weightEntries, setWeightEntries] = useState<WeightEntry[]>(() => {
     if (contextWeightEntries.length > 0) {
@@ -255,6 +276,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const currentWeight = weightEntries.length > 0 ? weightEntries[weightEntries.length - 1].weight : null;
   const targetWeightValue = targetWeight ?? 0;
   const hasMultipleEntries = weightEntries.length >= 2;
+  // Real weigh-ins only. The seeded onboarding weight is display-only and must
+  // not count in consistency, fluctuation, monthly comparison, or records.
+  const realEntries = useMemo(() => weightEntries.filter(e => !e.seeded), [weightEntries]);
   const startingWeight = weightEntries.length > 0 ? weightEntries[0].weight : null;
   const weightChangeFromStart =
     hasMultipleEntries && startingWeight !== null && currentWeight !== null
@@ -377,23 +401,31 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const isGain = goalType === 'gain';
     const totalRequired = Math.abs(targetWeight - startingWeight);
     if (totalRequired === 0) return null;
+    // Signed: negative means moved AWAY from the goal. Math.abs here used to
+    // render a 2 kg regression as "Lost so far: 2.0 kg".
     const achieved = isGain ? currentWeight - startingWeight : startingWeight - currentWeight;
     const remaining = isGain ? targetWeight - currentWeight : currentWeight - targetWeight;
     const ratio = Math.max(0, Math.min(1, achieved / totalRequired));
-    const percentage = Math.round(ratio * 100);
+    // Bar clamps, number tells the truth (overshoot shows >100%).
+    const percentage = Math.round((achieved / totalRequired) * 100);
     const goalReached = remaining <= 0;
-    const movingRight = achieved > 0;
-    const status = goalReached ? 'Goal Reached' : movingRight ? 'On Track' : 'Off Track';
-    const statusColor = goalReached ? '#10B981' : movingRight ? '#10B981' : '#F59E0B';
-    return { percentage, progressRatio: ratio, achieved: Math.abs(achieved), remaining: Math.max(0, remaining), status, statusColor, isGain, isMaintain: false };
+    // Status names what it measures: net change since the first weigh-in, not a
+    // trend. "On Track" from an all-time sign contradicted the trend cards.
+    const status = goalReached ? 'Goal Reached' : achieved > 0 ? 'Net progress' : achieved === 0 ? 'No net change' : 'Below start';
+    const statusColor = goalReached ? '#10B981' : achieved > 0 ? '#10B981' : achieved === 0 ? '#71717A' : '#F59E0B';
+    return { percentage: Math.max(0, percentage), progressRatio: ratio, achieved, remaining: Math.max(0, remaining), status, statusColor, isGain, isMaintain: false };
   }, [currentWeight, targetWeight, startingWeight, goalType]);
 
-  // Weekly rate of change over the SELECTED range, so the card answers the lens
-  // the user picked instead of silently using all-time history. Least-squares fit
-  // instead of first-vs-last endpoints, so one noisy weigh-in cannot swing it.
+  // Weekly rate of change over a FIXED last-3-months window. This card lives on
+  // the Insights tab where the range pills do not render, so following the
+  // Tracker tab's invisible pill selection made the number change for no visible
+  // reason. Fixed window also matches the goal-date projection below it.
+  // Least-squares fit, so one noisy weigh-in cannot swing it.
   const weeklyRateData = useMemo(() => {
-    if (graphData.length < 2) return null;
-    const sorted = [...graphData].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    const window3M = getRangeWindow('3M');
+    const inWindow = realEntries.filter(e => isInRange(new Date(e.date), window3M));
+    if (inWindow.length < 2) return null;
+    const sorted = [...inWindow].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const firstDate = new Date(sorted[0].date).getTime();
     const lastDate = new Date(sorted[sorted.length - 1].date).getTime();
     const daysDiff = (lastDate - firstDate) / (1000 * 60 * 60 * 24);
@@ -414,7 +446,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       statusColor = weeklyRate > 0 ? '#3B82F6' : '#F59E0B';
     }
     return { weeklyRate, absRate, direction, statusColor, totalWeeks: weeks, totalChange, entryCount: sorted.length };
-  }, [graphData, goalType]);
+  }, [realEntries, goalType]);
 
   // Trend rate over a FIXED last-3-months window, independent of the chart
   // pills. The goal-date projection must not swing because the user toggled the
@@ -457,7 +489,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   // Logging consistency (this week)
   const loggingConsistency = useMemo(() => {
-    if (weightEntries.length === 0) return null;
+    if (realEntries.length === 0) return null;
     const now = new Date();
     const dayOfWeek = now.getDay(); // 0=Sun
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -465,9 +497,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     weekStart.setHours(0, 0, 0, 0);
     const daysInWeekSoFar = mondayOffset + 1; // how many days have passed this week (including today)
     const loggedDays = new Set<string>();
-    weightEntries.forEach(e => {
+    realEntries.forEach(e => {
       const d = new Date(e.date);
-      if (d >= weekStart) {
+      if (d >= weekStart && d <= endOfDay(now)) {
         loggedDays.add(`${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`);
       }
     });
@@ -476,14 +508,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const statusColor = ratio >= 0.8 ? '#10B981' : ratio >= 0.5 ? '#F59E0B' : '#EF4444';
     const message = count === 7 ? 'Perfect week!' : count === daysInWeekSoFar ? 'On track for a perfect week!' : count === 0 ? 'No weigh-ins yet this week.' : null;
     return { count, total: 7, daysInWeekSoFar, ratio, statusColor, message };
-  }, [weightEntries]);
+  }, [realEntries]);
 
   // Weight Fluctuation Range (last 7 days)
   const fluctuationData = useMemo(() => {
-    if (weightEntries.length < 2) return null;
+    if (realEntries.length < 2) return null;
     // 7 calendar days including today, same convention as the shared 1W window.
-    const sevenDayStart = getRangeWindow('1W').start;
-    const recent = weightEntries.filter(e => new Date(e.date) >= sevenDayStart);
+    const week = getRangeWindow('1W');
+    const recent = realEntries.filter(e => isInRange(new Date(e.date), week));
     if (recent.length < 2) return null;
     const weights = recent.map(e => e.weight);
     const min = Math.min(...weights);
@@ -491,16 +523,17 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const range = max - min;
     const isNormal = range < 2; // <2kg is normal daily fluctuation
     return { min, max, range, isNormal, entryCount: recent.length };
-  }, [weightEntries]);
+  }, [realEntries]);
 
   // Monthly Comparison
   const monthlyComparison = useMemo(() => {
-    if (weightEntries.length < 2) return null;
+    if (realEntries.length < 2) return null;
     const now = new Date();
+    const endOfToday = endOfDay(now);
     const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-    const thisMonth = weightEntries.filter(e => new Date(e.date) >= thisMonthStart);
-    const lastMonth = weightEntries.filter(e => { const d = new Date(e.date); return d >= lastMonthStart && d < thisMonthStart; });
+    const thisMonth = realEntries.filter(e => { const d = new Date(e.date); return d >= thisMonthStart && d <= endOfToday; });
+    const lastMonth = realEntries.filter(e => { const d = new Date(e.date); return d >= lastMonthStart && d < thisMonthStart; });
     const calcChange = (entries: typeof weightEntries) => {
       if (entries.length < 2) return null;
       const sorted = [...entries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -511,18 +544,19 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const thisMonthName = now.toLocaleDateString('en-US', { month: 'long' });
     const lastMonthName = new Date(now.getFullYear(), now.getMonth() - 1, 1).toLocaleDateString('en-US', { month: 'long' });
     return { thisChange, lastChange, thisMonthName, lastMonthName };
-  }, [weightEntries]);
+  }, [realEntries]);
 
   // Milestones / Records
   const milestoneData = useMemo(() => {
-    if (weightEntries.length === 0) return null;
-    const sorted = [...weightEntries].sort((a, b) => a.weight - b.weight);
+    if (realEntries.length === 0) return null;
+    const sorted = [...realEntries].sort((a, b) => a.weight - b.weight);
     const lowestEntry = sorted[0];
     const highestEntry = sorted[sorted.length - 1];
     const totalChange = startingWeight && currentWeight ? Math.abs(currentWeight - startingWeight) : null;
-    // Milestone thresholds
+    // Milestone thresholds. Maintain goals hardcode percentage 100, which was
+    // granting "You reached your goal!" to users 5 kg off target.
     const milestones: string[] = [];
-    if (goalProgressData) {
+    if (goalProgressData && !goalProgressData.isMaintain) {
       const pct = goalProgressData.percentage;
       if (pct >= 100) milestones.push('You reached your goal!');
       else if (pct >= 75) milestones.push("You're 75% of the way there!");
@@ -536,13 +570,14 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       totalChange,
       milestones,
     };
-  }, [weightEntries, startingWeight, currentWeight, goalProgressData, convertWeightToDisplay, getWeightUnitLabel]);
+  }, [realEntries, startingWeight, currentWeight, goalProgressData, convertWeightToDisplay, getWeightUnitLabel]);
 
   // Calorie data for Weight vs Calories and Deficit/Surplus cards
   const [dailySummaries, setDailySummaries] = useState<Record<string, DailySummary>>({});
   const [deficitInsight, setDeficitInsight] = useState<string>('');
   const [deficitInsightDate, setDeficitInsightDate] = useState<string | null>(null);
   const [deficitInsightLoading, setDeficitInsightLoading] = useState(false);
+  const deficitInFlightRef = useRef(false);
 
   // Calculate graph dimensions and points
   const screenWidth = Dimensions.get('window').width;
@@ -568,7 +603,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   const slideAnim = useRef(new Animated.Value(0)).current;
 
   const handleClose = () => {
-    dataStorage.saveWeightEntries(weightEntries);
+    // Never persist the seeded onboarding weight: the persist effect filters it
+    // for exactly the reason documented there, and this direct save was the one
+    // path that leaked it into storage as a real weigh-in.
+    dataStorage.saveWeightEntries(weightEntries.filter(e => !e.seeded));
     onBack();
   };
 
@@ -968,10 +1006,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     if (weightEntries.length < 3 || Object.keys(dailySummaries).length === 0) return null;
     const now = new Date();
     const days: { date: string; weight: number; calories: number }[] = [];
-    for (let i = 13; i >= 0; i--) {
+    // Last 14 COMPLETED days: today is live and unsettled, and a 300 kcal
+    // morning charted as a full day dragged the whole correlation.
+    for (let i = 14; i >= 1; i--) {
       const d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i);
       const dateKey = format(d, 'yyyy-MM-dd');
-      const entry = weightEntries.find(e => format(new Date(e.date), 'yyyy-MM-dd') === dateKey);
+      const entry = realEntries.find(e => format(new Date(e.date), 'yyyy-MM-dd') === dateKey);
       const summary = dailySummaries[dateKey];
       if (entry && summary && summary.totalCalories > 0) {
         days.push({ date: dateKey, weight: entry.weight, calories: summary.totalCalories });
@@ -985,7 +1025,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     const maxWeight = Math.max(...days.map(d => d.weight));
     const minWeight = Math.min(...days.map(d => d.weight));
     return { days, avgCalories, avgWeight, maxCalories, minCalories, maxWeight, minWeight };
-  }, [weightEntries, dailySummaries]);
+  }, [realEntries, dailySummaries]);
 
   // Deficit/Surplus Impact — AI-powered, refreshed every Monday
   useEffect(() => {
@@ -993,7 +1033,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     // before the insight is unlocked. The effect runs regardless of which tab is
     // visible, so the render-time gate on the card is not enough to stop the cost.
     if (!isPremium || !isUnlocked('deficit-surplus-ai')) return;
-    if (weightEntries.length < 7 || Object.keys(dailySummaries).length === 0) return;
+    // Wait for the cache read on mount: dailySummaries lands before the cached
+    // weekKey does, and firing in that gap re-bought the insight every launch.
+    if (!isReady) return;
+    // One call at a time. Without this, every dep change during a pending or
+    // failed call fired another paid request.
+    if (deficitInFlightRef.current) return;
+    if (realEntries.length < 7 || Object.keys(dailySummaries).length === 0) return;
     const now = new Date();
     const dayOfWeek = now.getDay();
     const mondayOffset = dayOfWeek === 0 ? 6 : dayOfWeek - 1;
@@ -1002,14 +1048,15 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     if (deficitInsightDate === currentWeekKey) return; // already generated this week
 
     const generateDeficitInsight = async () => {
+      deficitInFlightRef.current = true;
       setDeficitInsightLoading(true);
       try {
         // Collect last 4 weeks of data
-        const weeklyData: { week: string; avgCalories: number; weightChange: number }[] = [];
+        const weeklyData: { week: string; avgCalories: number; weightChange: number; daysLogged: number }[] = [];
         for (let w = 0; w < 4; w++) {
           const weekStart = new Date(monday.getFullYear(), monday.getMonth(), monday.getDate() - (w + 1) * 7);
           const weekEnd = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7);
-          const weekEntries = weightEntries.filter(e => { const d = new Date(e.date); return d >= weekStart && d < weekEnd; });
+          const weekEntries = realEntries.filter(e => { const d = new Date(e.date); return d >= weekStart && d < weekEnd; });
           if (weekEntries.length < 2) continue;
           const sorted = [...weekEntries].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
           const wChange = sorted[sorted.length - 1].weight - sorted[0].weight;
@@ -1023,19 +1070,20 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
             }
           }
           if (calCount > 0) {
-            weeklyData.push({ week: format(weekStart, 'MMM d'), avgCalories: Math.round(calTotal / calCount), weightChange: wChange });
+            weeklyData.push({ week: format(weekStart, 'MMM d'), avgCalories: Math.round(calTotal / calCount), weightChange: wChange, daysLogged: calCount });
           }
         }
-        if (weeklyData.length < 2) { setDeficitInsightLoading(false); return; }
+        if (weeklyData.length < 2) { setDeficitInsightLoading(false); deficitInFlightRef.current = false; return; }
 
         const response = await invokeAI({
           model: 'gpt-4o-mini',
           messages: [
-            { role: 'system', content: 'You are a concise nutrition coach. Analyze the weekly calorie and weight data. Give ONE short insight (2 sentences max) about the relationship between calorie intake and weight change. Be encouraging. Use specific numbers from the data. Do not use emojis.' },
-            { role: 'user', content: `Weekly data (most recent first):\n${weeklyData.map(w => `${w.week}: avg ${w.avgCalories} kcal/day, weight ${w.weightChange > 0 ? '+' : ''}${w.weightChange.toFixed(1)}kg`).join('\n')}\n\nGoal: ${goalType || 'not set'}` },
+            { role: 'system', content: 'You are a concise nutrition coach. Analyze the weekly calorie and weight data. Give ONE short insight (2 sentences max) about the relationship between calorie intake and weight change. Be encouraging. Use specific numbers from the data. Weeks with few logged days are unreliable averages, treat them with caution. Do not use emojis.' },
+            { role: 'user', content: `Weekly data (most recent first):\n${weeklyData.map(w => `${w.week}: avg ${w.avgCalories} kcal/day (${w.daysLogged} of 7 days logged), weight ${w.weightChange > 0 ? '+' : ''}${w.weightChange.toFixed(1)}kg`).join('\n')}\n\nGoal: ${goalType || 'not set'}` },
           ],
           temperature: 0.7,
           max_tokens: 100,
+          call_type: 'deficit-surplus-insight',
         });
         const text = response?.choices?.[0]?.message?.content?.trim();
         if (!text) return;
@@ -1046,10 +1094,11 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
         // Silently fail
       } finally {
         setDeficitInsightLoading(false);
+        deficitInFlightRef.current = false;
       }
     };
     generateDeficitInsight();
-  }, [weightEntries, dailySummaries, deficitInsightDate, goalType, isPremium, insightUnlocks]);
+  }, [isReady, realEntries, dailySummaries, deficitInsightDate, goalType, isPremium, insightUnlocks]);
 
   return (
     <SafeAreaView
@@ -1593,11 +1642,15 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                     <View style={styles.goalStatsRow}>
                       <View style={styles.goalStatItem}>
+                        {/* achieved is signed: negative = moved away from the goal,
+                            so the label flips instead of lying. */}
                         <Text style={[styles.goalStatLabel, { color: theme.colors.textTertiary }]}>
-                          {goalProgressData.isGain ? 'Gained so far' : 'Lost so far'}
+                          {goalProgressData.achieved >= 0
+                            ? (goalProgressData.isGain ? 'Gained so far' : 'Lost so far')
+                            : (goalProgressData.isGain ? 'Lost so far' : 'Gained so far')}
                         </Text>
-                        <Text style={[styles.goalStatValue, { color: theme.colors.textPrimary }]}>
-                          {convertWeightToDisplay(goalProgressData.achieved).toFixed(1)} {getWeightUnitLabel()}
+                        <Text style={[styles.goalStatValue, { color: goalProgressData.achieved < 0 ? '#F59E0B' : theme.colors.textPrimary }]}>
+                          {convertWeightToDisplay(Math.abs(goalProgressData.achieved)).toFixed(1)} {getWeightUnitLabel()}
                         </Text>
                       </View>
                       <View style={[styles.goalStatItem, { alignItems: 'flex-end' }]}>
@@ -1679,12 +1732,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       <View>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                           <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weekly Rate of Change</Text>
-                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weekly Rate of Change', 'Shows how much weight you are losing or gaining per week, fitted across every weigh-in in the selected chart range so one odd weigh-in cannot distort it. A healthy rate for weight loss is 0.5 to 1 kg per week. Faster than that usually means muscle loss. Slower is fine but may need patience. This number helps you decide if your calorie target needs adjustment.')}>
+                          <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weekly Rate of Change', 'Shows how much weight you are losing or gaining per week, fitted across every weigh-in from your last 3 months so one odd weigh-in cannot distort it. A healthy rate for weight loss is 0.5 to 1 kg per week. Faster than that usually means muscle loss. Slower is fine but may need patience. This number helps you decide if your calorie target needs adjustment.')}>
                             <Feather name="info" size={13} color={theme.colors.textTertiary} />
                           </TouchableOpacity>
                         </View>
                         <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 1 }}>
-                          Trend across {weeklyRateData.entryCount} weigh-ins · {rangeLabel(timeRange)}
+                          Trend across {weeklyRateData.entryCount} weigh-ins · last 3 months
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
                           <Text style={[styles.bmiGaugeValue, { color: weeklyRateData.statusColor }]}>
@@ -1724,6 +1777,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 4. Deficit/Surplus Impact (AI) */}
                 <InsightSlot id="deficit-surplus-ai">
                 {!isUnlocked('deficit-surplus-ai') && <LockedInsightCard id="deficit-surplus-ai" />}
+                {isUnlocked('deficit-surplus-ai') && !deficitInsight && !deficitInsightLoading && (
+                  <EmptyInsightCard
+                    title="Deficit & Surplus Impact"
+                    hint="Needs two recent weeks that each have 2+ weigh-ins and logged meals. Keep logging both and the AI analysis appears here."
+                  />
+                )}
                 {isUnlocked('deficit-surplus-ai') && (deficitInsight || deficitInsightLoading) && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -1756,6 +1815,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 5. Weight vs Calories */}
                 <InsightSlot id="weight-vs-calories">
                 {!isUnlocked('weight-vs-calories') && <LockedInsightCard id="weight-vs-calories" />}
+                {isUnlocked('weight-vs-calories') && !calorieCorrelation && (
+                  <EmptyInsightCard
+                    title="Weight vs Calories"
+                    hint="Needs 3 days in the last 14 with both a weigh-in and logged food. Today does not count until it is complete."
+                  />
+                )}
                 {isUnlocked('weight-vs-calories') && calorieCorrelation && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -1765,7 +1830,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                       </TouchableOpacity>
                     </View>
                     <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2, marginBottom: 12 }}>
-                      Last {calorieCorrelation.days.length} days with both weight & calorie data
+                      {calorieCorrelation.days.length} {calorieCorrelation.days.length === 1 ? 'day' : 'days'} with both a weigh-in and logged food in the last 14 days · today excluded
                     </Text>
                     <View style={{ height: 120 }}>
                       <Svg width="100%" height="120">
@@ -1787,7 +1852,9 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         {calorieCorrelation.days.length > 1 && (
                           <Path
                             d={calorieCorrelation.days.map((d, i) => {
-                              const x = (i / (calorieCorrelation.days.length - 1)) * 100;
+                              // Bar-center positions so each day's weight dot sits
+                              // over that day's calorie bar.
+                              const x = ((i + 0.5) / calorieCorrelation.days.length) * 100;
                               const wRange = calorieCorrelation.maxWeight - calorieCorrelation.minWeight || 1;
                               const y = 100 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 80 - 5;
                               return `${i === 0 ? 'M' : 'L'}${x}%,${y}`;
@@ -1798,7 +1865,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           />
                         )}
                         {calorieCorrelation.days.map((d, i) => {
-                          const x = calorieCorrelation.days.length > 1 ? (i / (calorieCorrelation.days.length - 1)) * 100 : 50;
+                          const x = ((i + 0.5) / calorieCorrelation.days.length) * 100;
                           const wRange = calorieCorrelation.maxWeight - calorieCorrelation.minWeight || 1;
                           const y = 100 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 80 - 5;
                           return <Circle key={`dot-${i}`} cx={`${x}%`} cy={y} r={3} fill="#10B981" />;
@@ -1836,7 +1903,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         <Text style={{ fontWeight: '700', color: theme.colors.textPrimary }}>
                           {convertWeightToDisplay(Math.abs(monthlyComparison.thisChange)).toFixed(1)} {getWeightUnitLabel()}
                         </Text>
-                        {' '}in {monthlyComparison.thisMonthName} vs{' '}
+                        {' '}in {monthlyComparison.thisMonthName} so far vs{' '}
                         <Text style={{ fontWeight: '700', color: theme.colors.textPrimary }}>
                           {convertWeightToDisplay(Math.abs(monthlyComparison.lastChange)).toFixed(1)} {getWeightUnitLabel()}
                         </Text>
@@ -1845,7 +1912,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     ) : null}
                     <View style={[styles.goalStatsRow, { marginTop: 16 }]}>
                       <View style={styles.goalStatItem}>
-                        <Text style={[styles.goalStatLabel, { color: theme.colors.textTertiary }]}>{monthlyComparison.thisMonthName}</Text>
+                        <Text style={[styles.goalStatLabel, { color: theme.colors.textTertiary }]}>{monthlyComparison.thisMonthName} (so far)</Text>
                         <Text style={[styles.goalStatValue, { color: monthlyComparison.thisChange !== null ? (monthlyComparison.thisChange < 0 ? '#10B981' : '#3B82F6') : theme.colors.textTertiary }]}>
                           {monthlyComparison.thisChange !== null ? `${monthlyComparison.thisChange > 0 ? '+' : ''}${convertWeightToDisplay(monthlyComparison.thisChange).toFixed(1)} ${getWeightUnitLabel()}` : 'Not enough data'}
                         </Text>
@@ -1915,7 +1982,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: theme.colors.textPrimary }]}>Weight Fluctuation</Text>
-                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight Fluctuation', 'Shows how much your weight varied over the past 7 days. A range of 1 to 2 kg is completely normal and caused by water, sodium, and digestion. If the fluctuation is larger, it does not necessarily mean fat gain. Tracking this over time helps you stop reacting emotionally to daily scale changes.')}>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight Fluctuation', `Shows how much your weight varied over the past 7 days. A range of up to ${convertWeightToDisplay(2).toFixed(0)} ${getWeightUnitLabel()} is completely normal and caused by water, sodium, and digestion. If the fluctuation is larger, it does not necessarily mean fat gain. Tracking this over time helps you stop reacting emotionally to daily scale changes.`)}>
                         <Feather name="info" size={13} color={theme.colors.textTertiary} />
                       </TouchableOpacity>
                     </View>
@@ -2001,6 +2068,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                 {/* 10. BMI */}
                 <InsightSlot id="bmi">
                 {!isUnlocked('bmi') && <LockedInsightCard id="bmi" />}
+                {isUnlocked('bmi') && !bmiData && (
+                  <EmptyInsightCard
+                    title="BMI"
+                    hint="Needs a current weight and your height. Log a weigh-in, and set your height in your goal plan if it is missing."
+                  />
+                )}
                 {isUnlocked('bmi') && bmiData && (
                   <View style={[styles.bmiCard, { backgroundColor: theme.colors.card, shadowColor: '#0F172A' }]}>
                     <View style={styles.bmiHeaderRow}>
@@ -2026,7 +2099,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginBottom: 1 }}>Weight</Text>
                         <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>{convertWeightToDisplay(currentWeight!).toFixed(1)} {getWeightUnitLabel()}</Text>
                         <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 6, marginBottom: 1 }}>Height</Text>
-                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>{heightCm! >= 100 ? `${(heightCm! / 100).toFixed(2)} m` : `${Math.round(heightCm!)} cm`}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>
+                          {/* Show height in the unit the user entered it in */}
+                          {contextGoals?.heightFeet && contextGoals.heightFeet > 0 && !(contextGoals?.heightCm && contextGoals.heightCm > 0)
+                            ? `${contextGoals.heightFeet}'${contextGoals.heightInches || 0}"`
+                            : heightCm! >= 100 ? `${(heightCm! / 100).toFixed(2)} m` : `${Math.round(heightCm!)} cm`}
+                        </Text>
                       </View>
                     </View>
                     <View style={styles.bmiBarSection}>
