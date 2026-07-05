@@ -1588,13 +1588,23 @@ export const dataStorage = {
       // soft-deleted in Supabase too. Without this, an exercise deletion never
       // synced and the remote copy resurrected it on the next load.
       let removedIds: string[] = [];
+      let prevCount = 0;
       try {
         const prevRaw = await AsyncStorage.getItem(STORAGE_KEYS.EXERCISES);
         const prev: Record<string, ExerciseEntry[]> = prevRaw ? JSON.parse(prevRaw) : {};
         const prevIds = new Set(Object.values(prev).flat().map((e) => e.id).filter(Boolean));
+        prevCount = prevIds.size;
         const nextIds = new Set(Object.values(exercisesByDate).flat().map((e) => e.id));
         removedIds = ([...prevIds] as string[]).filter((id) => !nextIds.has(id));
       } catch { /* if prev is unreadable, skip the deletion diff */ }
+
+      // Safety valve (same class that wiped weight history): an empty map on top
+      // of existing exercises is a reset race, not a save. Bail rather than let
+      // the deletion diff soft-delete everything.
+      if (Object.values(exercisesByDate).flat().length === 0 && prevCount > 0) {
+        if (__DEV__) console.warn('saveExercises: refused to overwrite existing exercises with an empty map');
+        return;
+      }
 
       await AsyncStorage.setItem(STORAGE_KEYS.EXERCISES, JSON.stringify(exercisesByDate));
 
@@ -1669,69 +1679,75 @@ export const dataStorage = {
   },
 
   // Save weight entries
+  // UPSERT-ONLY. This never deletes. A shorter list (a re-init to empty, a stale
+  // context on a web modal remount) must never be read as "the user deleted
+  // these": that diff-delete once soft-wiped a user's entire logged weight
+  // history two minutes after they typed it. Deletions are now explicit, through
+  // deleteWeightEntry.
   async saveWeightEntries(entries: Array<{ date: Date; weight: number }>): Promise<void> {
     try {
       const normalized = entries.map(normalizeWeightEntry);
       const prevSerialized = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
       const previous: WeightEntry[] = prevSerialized ? JSON.parse(prevSerialized) : [];
+
+      // Safety valve: an empty list on top of existing data is a reset race, not
+      // a save. Bail rather than overwrite local or touch the cloud. Clearing
+      // everything goes through clearAllData; single deletes through
+      // deleteWeightEntry, so this path never legitimately empties anything.
+      if (normalized.length === 0 && previous.length > 0) {
+        if (__DEV__) console.warn('saveWeightEntries: refused to overwrite existing entries with an empty list');
+        return;
+      }
+
       await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(normalized));
       const accountInfo = await getCachedAccountInfo();
       try { await processSyncQueue(accountInfo); } catch { /* don't let queue failure block save */ }
 
-      const { upserts, deletions } = diffWeightEntries(previous, normalized);
+      // Only upserts. Deletions are never inferred from absence.
+      const { upserts } = diffWeightEntries(previous, normalized);
+      if (upserts.length === 0) return;
 
-      // If signed out, queue everything for after sign-in. Without this the
-      // upserts get dropped silently, which is exactly why weight_entries was
-      // empty in Supabase for every user.
       if (!accountInfo?.supabaseUserId && !accountInfo?.email) {
-        if (upserts.length > 0) {
-          await Promise.all(
-            upserts.map((payload) => enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload }))
-          );
-        }
-        if (deletions.length > 0) {
-          await Promise.all(
-            deletions.map((id) => enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } }))
-          );
-        }
+        await Promise.all(
+          upserts.map((payload) => enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload }))
+        );
         return;
       }
 
-      if (upserts.length > 0) {
-        try {
-          await supabaseDataService.upsertWeightEntries(accountInfo, upserts);
-        } catch (error) {
-          console.error('Error syncing weight entries to Supabase:', error);
-          await Promise.all(
-            upserts.map((payload) =>
-              enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload })
-            )
-          );
-        }
-      }
-
-      if (deletions.length > 0) {
-        try {
-          await supabaseDataService.deleteWeightEntries(accountInfo, deletions);
-        } catch (error) {
-          console.error('Error deleting weight entries from Supabase:', error);
-          await Promise.all(
-            deletions.map((id) =>
-              enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } })
-            )
-          );
-        }
-      }
-      if (normalized.length <= 1) {
-        // User presumably reset their data. Reset smart adjustment baseline.
-        const prefs = await this.loadPreferences();
-        if (prefs && prefs.lastAdjustmentWeight) {
-          await this.savePreferences({ lastAdjustmentWeight: undefined });
-          console.log('Reset smart adjustment baseline due to weight history clear.');
-        }
+      try {
+        await supabaseDataService.upsertWeightEntries(accountInfo, upserts);
+      } catch (error) {
+        console.error('Error syncing weight entries to Supabase:', error);
+        await Promise.all(
+          upserts.map((payload) => enqueueSyncOperation({ entity: 'weight', action: 'upsert', payload }))
+        );
       }
     } catch (error) {
       console.error('Error saving weight entries:', error);
+    }
+  },
+
+  // The only way a weigh-in leaves the record: an explicit, id-targeted soft
+  // delete. Removes it locally and in the cloud (queued if offline).
+  async deleteWeightEntry(id: string): Promise<void> {
+    if (!id) return;
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
+      const list: WeightEntry[] = raw ? JSON.parse(raw) : [];
+      await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(list.filter((e) => e.id !== id)));
+
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId || accountInfo?.email) {
+        try {
+          await supabaseDataService.deleteWeightEntries(accountInfo, [id]);
+        } catch (error) {
+          await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } });
+        }
+      } else {
+        await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } });
+      }
+    } catch (error) {
+      if (__DEV__) console.warn('deleteWeightEntry failed', error);
     }
   },
 

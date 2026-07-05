@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Data safety
+
+**v1.4.32**
+Fixed a serious bug that could delete your weight history. The tracker worked out deletions by noticing what was missing from a list, so if the screen ever handed over an empty list, which happened when the web app reopened the tracker, it read that as "delete everything" and wiped your logged weigh-ins. Deletions are now explicit. Only the entry you actually delete is removed, and the app flat out refuses to erase your history from an empty reload. The exact same protection was added to exercise logs, which had the identical flaw.
+
 ## Charts and streak
 
 **v1.4.31**

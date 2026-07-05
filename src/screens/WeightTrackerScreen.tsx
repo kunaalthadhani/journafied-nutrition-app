@@ -338,7 +338,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   useEffect(() => {
     if (!dataLoaded.current) return; // don't overwrite storage before load completes
     const real = weightEntries.filter(e => !e.seeded);
-    if (real.length === 0 && weightEntries.some(e => e.seeded)) return; // seed only, nothing to persist
+    // Never auto-persist an empty set. An empty state here is a re-init or reset
+    // race, not a user action, and the storage layer would otherwise have had to
+    // decide whether to wipe. Real deletions go through handleDeleteEntry.
+    if (real.length === 0) return;
     dataStorage.saveWeightEntries(real);
   }, [weightEntries]);
 
@@ -920,6 +923,10 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           style: 'destructive',
           onPress: () => {
             setWeightEntries(prev => prev.filter(e => e !== entry));
+            // Explicit soft delete by id. Removing it from state alone used to
+            // rely on the save-diff to infer the deletion, the same mechanism
+            // that could wipe everything.
+            if ((entry as any).id) dataStorage.deleteWeightEntry((entry as any).id);
             if (editingEntryIndex === index) {
               handleCancelEditEntry();
             }
