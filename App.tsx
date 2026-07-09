@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { StatusBar } from 'expo-status-bar';
 import { AppState, AppStateStatus, Platform, StyleSheet } from 'react-native';
+import { useFonts, Fraunces_600SemiBold, Fraunces_600SemiBold_Italic } from '@expo-google-fonts/fraunces';
 import './src/utils/webAlertShim';
 import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -66,6 +67,10 @@ function useSyncQueueOnForeground() {
 
 export default Sentry.wrap(function App() {
   useSyncQueueOnForeground();
+  // The redesign's serif. Do NOT gate rendering on it: a font must never delay
+  // or break startup. Until it loads, redesigned screens fall back to the
+  // system serif for a frame or two.
+  useFonts({ Fraunces_600SemiBold, Fraunces_600SemiBold_Italic });
   return (
     <SafeAreaProvider>
       <ThemeProvider>

@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Redesign
+
+**v1.4.33**
+First screen of the new look. The sign-in and create-account screen now wears the app's new identity: deep moss ink, one acid-lime accent, a serif headline, and inputs that are clean underlines instead of boxes. The pilot also brings the redesign's foundations into the codebase, the color tokens and the bundled Fraunces serif, which every screen after this will reuse. Everything still works exactly as before, only the look changed.
+
 ## Data safety
 
 **v1.4.32**

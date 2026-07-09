@@ -23,6 +23,7 @@ import * as Clipboard from 'expo-clipboard';
 import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
+import { Acid } from '../constants/acid';
 import { dataStorage, AccountInfo, ExtendedGoalData, StreakFreezeData } from '../services/dataStorage';
 import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
@@ -108,6 +109,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const [selectedCountry, setSelectedCountry] = useState<Country>(_initialPhone.country);
   const [showCountryPicker, setShowCountryPicker] = useState(false);
   const [countrySearchQuery, setCountrySearchQuery] = useState('');
+  // Which underline input has focus — its hairline turns lime.
+  const [focusedField, setFocusedField] = useState<'name' | 'email' | 'password' | null>(null);
 
   // -- Forgot Password State --
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
@@ -443,150 +446,169 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   // -- Renderers --
 
+  // Acid on Moss underline input — no boxes, a hairline that turns lime on focus.
+  const acidField = (opts: { key: 'name' | 'email' | 'password'; error?: boolean }) => ({
+    borderBottomWidth: 1.5,
+    borderBottomColor: opts.error ? Acid.error : focusedField === opts.key ? Acid.lime : Acid.hair2,
+  });
+
   const renderNotLoggedIn = () => (
     <KeyboardAvoidingView
       style={{ flex: 1 }}
       behavior={Platform.OS === 'ios' ? 'padding' : undefined}
       keyboardVerticalOffset={Platform.OS === 'ios' ? 20 : 0}
     >
-      <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} keyboardShouldPersistTaps="handled">
-        <View style={[styles.formCard, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingHorizontal: 28, paddingTop: 8, paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+      >
+        {/* Brand */}
+        <Text style={{ fontSize: 12, letterSpacing: 4, fontWeight: '700', color: Acid.tx2 }}>
+          TRACK<Text style={{ color: Acid.lime }}>KCAL</Text>
+        </Text>
 
-          {/* Toggle Tabs */}
-          <View style={{ flexDirection: 'row', marginBottom: 20, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}>
-            <TouchableOpacity
-              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signin' ? 2 : 0, borderBottomColor: theme.colors.primary }}
-              onPress={() => {
-                setAuthMode('signin');
-                setAuthMessage(null);
-                setPassword('');
-                setNameError(false);
-                setEmailError(false);
-              }}
-            >
-              <Text style={{ fontWeight: '600', fontSize: 15, color: authMode === 'signin' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Sign In</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={{ flex: 1, paddingVertical: 12, alignItems: 'center', borderBottomWidth: authMode === 'signup' ? 2 : 0, borderBottomColor: theme.colors.primary }}
-              onPress={() => {
-                setAuthMode('signup');
-                setAuthMessage(null);
-                setPassword('');
-              }}
-            >
-              <Text style={{ fontWeight: 'bold', color: authMode === 'signup' ? theme.colors.textPrimary : theme.colors.textTertiary }}>Create Account</Text>
-            </TouchableOpacity>
-          </View>
-
-          <Text style={{ color: theme.colors.textSecondary, fontSize: 14, marginBottom: 20, lineHeight: 20 }}>
-            {authMode === 'signup'
-              ? "Create an account to back up your data and sync across devices."
-              : "Welcome back! Sign in to access your data."}
-          </Text>
-
-          {/* Name Input (SignUp Only) */}
-          {authMode === 'signup' && (
-            <>
-              <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Name</Text>
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: nameError ? theme.colors.error : theme.colors.border
-                }]}
-                placeholder="Your name"
-                placeholderTextColor={'#A1A1AA'}
-                value={name}
-                onChangeText={(t) => { setName(t); setNameError(false); }}
-                autoCapitalize="words"
-                textContentType="name"
-                autoComplete="name"
-              />
-            </>
+        {/* Headline — the serif voice */}
+        <Text style={{
+          fontFamily: Acid.serifItalic,
+          fontSize: 34,
+          lineHeight: 41,
+          color: Acid.tx,
+          marginTop: 22,
+        }}>
+          {authMode === 'signup' ? (
+            <>Every meal, <Text style={{ color: Acid.lime, fontFamily: Acid.serif }}>understood.</Text></>
+          ) : (
+            <>Welcome <Text style={{ color: Acid.lime, fontFamily: Acid.serif }}>back.</Text></>
           )}
+        </Text>
 
-          {/* Email Input */}
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Email</Text>
+        <Text style={{ color: Acid.tx2, fontSize: 13, lineHeight: 20, marginTop: 12, marginBottom: 30 }}>
+          {authMode === 'signup'
+            ? 'One account backs up your data and follows you across devices.'
+            : 'Sign in and your meals, weights, and plan come with you.'}
+        </Text>
+
+        {/* Name (signup only) */}
+        {authMode === 'signup' && (
+          <View style={{ marginBottom: 22 }}>
+            <Text style={{ fontSize: 10, letterSpacing: 2, color: Acid.tx3, textTransform: 'uppercase' }}>Name</Text>
+            <TextInput
+              style={[{ color: Acid.tx, fontSize: 16, paddingVertical: 10, paddingHorizontal: 0 }, acidField({ key: 'name', error: nameError })]}
+              placeholder="Your name"
+              placeholderTextColor={Acid.tx3}
+              value={name}
+              onChangeText={(t) => { setName(t); setNameError(false); }}
+              onFocus={() => setFocusedField('name')}
+              onBlur={() => setFocusedField(null)}
+              autoCapitalize="words"
+              textContentType="name"
+              autoComplete="name"
+            />
+          </View>
+        )}
+
+        {/* Email */}
+        <View style={{ marginBottom: 22 }}>
+          <Text style={{ fontSize: 10, letterSpacing: 2, color: Acid.tx3, textTransform: 'uppercase' }}>Email</Text>
           <TextInput
-            style={[styles.input, {
-              backgroundColor: theme.colors.input,
-              color: theme.colors.textPrimary,
-              borderColor: emailError ? theme.colors.error : theme.colors.border
-            }]}
+            style={[{ color: Acid.tx, fontSize: 16, paddingVertical: 10, paddingHorizontal: 0 }, acidField({ key: 'email', error: emailError })]}
             placeholder="you@example.com"
-            placeholderTextColor={'#A1A1AA'}
+            placeholderTextColor={Acid.tx3}
             value={emailInput}
             onChangeText={(t) => { setEmailInput(t); setEmailError(false); }}
+            onFocus={() => setFocusedField('email')}
+            onBlur={() => setFocusedField(null)}
             keyboardType="email-address"
             autoCapitalize="none"
             textContentType="emailAddress"
             autoComplete="email"
           />
+        </View>
 
-          {/* Password Input */}
-          <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Password</Text>
+        {/* Password */}
+        <View style={{ marginBottom: 8 }}>
+          <Text style={{ fontSize: 10, letterSpacing: 2, color: Acid.tx3, textTransform: 'uppercase' }}>Password</Text>
           <View style={{ position: 'relative' }}>
             <TextInput
-              style={[styles.input, {
-                backgroundColor: theme.colors.input,
-                color: theme.colors.textPrimary,
-                borderColor: theme.colors.border,
-                paddingRight: 44,
-              }]}
+              style={[{ color: Acid.tx, fontSize: 16, paddingVertical: 10, paddingHorizontal: 0, paddingRight: 40 }, acidField({ key: 'password' })]}
               placeholder="Min. 6 characters"
-              placeholderTextColor={'#A1A1AA'}
+              placeholderTextColor={Acid.tx3}
               value={password}
               onChangeText={setPassword}
+              onFocus={() => setFocusedField('password')}
+              onBlur={() => setFocusedField(null)}
               secureTextEntry={!showPassword}
               textContentType={authMode === 'signup' ? 'newPassword' : 'password'}
               autoComplete={authMode === 'signup' ? 'new-password' : 'current-password'}
             />
             <TouchableOpacity
               onPress={() => setShowPassword(!showPassword)}
-              style={{ position: 'absolute', right: 12, top: 0, bottom: 0, justifyContent: 'center' }}
+              style={{ position: 'absolute', right: 0, top: 0, bottom: 0, justifyContent: 'center' }}
               hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
             >
-              <Feather name={showPassword ? 'eye' : 'eye-off'} size={18} color={theme.colors.textTertiary} />
+              <Feather name={showPassword ? 'eye' : 'eye-off'} size={17} color={Acid.tx3} />
             </TouchableOpacity>
           </View>
+        </View>
 
-          {authMode === 'signin' && (
-            <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 8, marginBottom: 4, paddingVertical: 4 }}>
-              <Text style={{ color: theme.colors.primary, fontSize: 13, fontWeight: '500' }}>Forgot password?</Text>
-            </TouchableOpacity>
-          )}
-
-          {/* Auth Message */}
-          {authMessage && (
-            <View style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              backgroundColor: 'rgba(239, 68, 68, 0.08)',
-              borderWidth: 1,
-              borderColor: 'rgba(239, 68, 68, 0.2)',
-              borderRadius: 10,
-              padding: 12,
-              marginTop: 12,
-              gap: 8,
-            }}>
-              <Feather name="alert-circle" size={16} color="#EF4444" />
-              <Text style={{ color: '#EF4444', fontSize: 13, flex: 1 }}>{authMessage}</Text>
-            </View>
-          )}
-
-          <TouchableOpacity
-            style={[styles.primaryButton, { marginTop: 16 }]}
-            disabled={authStatus !== 'idle'}
-            onPress={authMode === 'signup' ? handleSignUp : handleSignIn}
-          >
-            {authStatus !== 'idle' ? (
-              <ActivityIndicator color="white" />
-            ) : (
-              <Text style={styles.primaryButtonText}>
-                {authMode === 'signup' ? 'Create Account' : 'Sign In'}
-              </Text>
-            )}
+        {authMode === 'signin' && (
+          <TouchableOpacity onPress={() => setForgotPasswordVisible(true)} style={{ alignSelf: 'flex-end', marginTop: 6, paddingVertical: 4 }}>
+            <Text style={{ color: Acid.lime, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textTransform: 'uppercase' }}>Forgot password?</Text>
           </TouchableOpacity>
+        )}
+
+        {/* Auth error — plain text, no box */}
+        {authMessage && (
+          <Text style={{ color: Acid.error, fontSize: 13, lineHeight: 19, marginTop: 14 }}>
+            {authMessage}
+          </Text>
+        )}
+
+        <TouchableOpacity
+          style={{
+            backgroundColor: Acid.lime,
+            borderRadius: 999,
+            paddingVertical: 16,
+            alignItems: 'center',
+            marginTop: 28,
+            shadowColor: Acid.lime,
+            shadowOpacity: 0.35,
+            shadowRadius: 16,
+            shadowOffset: { width: 0, height: 0 },
+            elevation: 6,
+            opacity: authStatus !== 'idle' ? 0.7 : 1,
+          }}
+          disabled={authStatus !== 'idle'}
+          onPress={authMode === 'signup' ? handleSignUp : handleSignIn}
+        >
+          {authStatus !== 'idle' ? (
+            <ActivityIndicator color={Acid.moss} />
+          ) : (
+            <Text style={{ color: Acid.moss, fontSize: 15, fontWeight: '800' }}>
+              {authMode === 'signup' ? 'Create account' : 'Sign in'}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Mode switch — a sentence, not tabs */}
+        <TouchableOpacity
+          onPress={() => {
+            setAuthMode(authMode === 'signin' ? 'signup' : 'signin');
+            setAuthMessage(null);
+            setPassword('');
+            setNameError(false);
+            setEmailError(false);
+          }}
+          style={{ alignSelf: 'center', marginTop: 22, paddingVertical: 6 }}
+        >
+          <Text style={{ color: Acid.tx2, fontSize: 13 }}>
+            {authMode === 'signin' ? 'New here? ' : 'Already have an account? '}
+            <Text style={{ color: Acid.lime, fontWeight: '700' }}>
+              {authMode === 'signin' ? 'Create account' : 'Sign in'}
+            </Text>
+          </Text>
+        </TouchableOpacity>
 
           {/* Reset All Data */}
           <TouchableOpacity
@@ -616,11 +638,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 ],
               );
             }}
-            style={{ alignSelf: 'center', marginTop: 24, paddingVertical: 8 }}
+            style={{ alignSelf: 'center', marginTop: 26, paddingVertical: 8 }}
           >
-            <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Reset all app data</Text>
+            <Text style={{ color: Acid.tx3, fontSize: 11, letterSpacing: 0.5 }}>Reset all app data</Text>
           </TouchableOpacity>
-        </View>
       </ScrollView>
     </KeyboardAvoidingView>
   );
@@ -748,15 +769,19 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     </ScrollView>
   );
 
+  // The signed-out view is the first screen living fully in the Acid on Moss
+  // redesign; the signed-in account view keeps the legacy theme until its turn.
+  const isAcid = !authSession && !isLoading;
+
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: isAcid ? Acid.moss : theme.colors.background }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: isAcid ? 'transparent' : theme.colors.border }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={isAcid ? Acid.tx2 : theme.colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
-          {authSession ? 'My Account' : 'Login'}
+          {authSession ? 'My Account' : ''}
         </Text>
         <View style={{ width: 40 }} />
       </View>
