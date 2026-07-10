@@ -14,7 +14,7 @@ import {
     Modal,
     ScrollView,
 } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Feather } from '@expo/vector-icons';
 import { chatCoachService, ChatCoachContext } from '../services/chatCoachService';
 import { getCoachChatResponse } from '../services/openaiService';
@@ -98,7 +98,6 @@ function buildStarterQuestions(ctx: ChatCoachContext | null): string[] {
 }
 
 export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPremium = false }) => {
-    const theme = useTheme();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
@@ -185,20 +184,20 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     const isInsufficient = context?.dataQuality === 'insufficient';
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
                 <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
-                    <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                    <Feather name="chevron-down" size={24} color={Acid.tx2} />
                 </TouchableOpacity>
                 <View>
-                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>AI Nutritionist</Text>
-                    <Text style={[styles.headerSubtitle, { color: theme.colors.textSecondary }]}>
+                    <Text style={styles.headerTitle}>AI Nutritionist</Text>
+                    <Text style={styles.headerSubtitle}>
                         {limitStatus.remaining} messages left
                     </Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerBtn}>
-                    <Feather name="info" size={20} color={theme.colors.textSecondary} />
+                    <Feather name="info" size={20} color={Acid.tx3} />
                 </TouchableOpacity>
             </View>
 
@@ -219,68 +218,61 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                             {starterQuestions.map((q, i) => (
                                 <TouchableOpacity
                                     key={i}
-                                    style={[styles.starterChip, { borderColor: theme.colors.border, backgroundColor: theme.colors.card }]}
+                                    style={styles.starterChip}
                                     onPress={() => handleSend(q)}
                                     activeOpacity={0.7}
                                 >
-                                    <Text style={[styles.starterText, { color: theme.colors.textPrimary }]}>{q}</Text>
-                                    <Feather name="arrow-up-right" size={14} color={theme.colors.textTertiary} />
+                                    <Text style={styles.starterText}>{q}</Text>
+                                    <Feather name="arrow-up-right" size={14} color={Acid.lime} />
                                 </TouchableOpacity>
                             ))}
                         </View>
                     ) : null}
                     renderItem={({ item }) => (
-                        <View style={[
-                            styles.bubble,
-                            item.role === 'user'
-                                ? { alignSelf: 'flex-end', backgroundColor: theme.colors.primary }
-                                : { alignSelf: 'flex-start', backgroundColor: theme.colors.secondaryBg }
-                        ]}>
-                            <Text style={[
-                                styles.msgText,
-                                item.role === 'user'
-                                    ? { color: theme.colors.primaryForeground }
-                                    : { color: theme.colors.textPrimary }
-                            ]}>
-                                {item.content}
-                            </Text>
-                        </View>
+                        // The coach speaks in the serif voice, no bubbles. The user's
+                        // words sit right-aligned in the accent.
+                        item.role === 'user' ? (
+                            <View style={styles.userMsg}>
+                                <Text style={styles.userText}>{item.content}</Text>
+                            </View>
+                        ) : (
+                            <View style={styles.coachMsg}>
+                                <Text style={styles.coachText}>{item.content}</Text>
+                            </View>
+                        )
                     )}
                 />
 
                 {loading && (
                     <View style={{ padding: 10, alignItems: 'center' }}>
-                        <ActivityIndicator color={theme.colors.primary} />
+                        <ActivityIndicator color={Acid.lime} />
                     </View>
                 )}
 
                 {/* Input Area or Lock State */}
                 {isInsufficient ? (
-                    <View style={[styles.lockContainer, { backgroundColor: theme.colors.secondaryBg, borderTopColor: theme.colors.border }]}>
-                        <Feather name="lock" size={20} color={theme.colors.textSecondary} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.lockTitle, { color: theme.colors.textPrimary }]}>AI Nutritionist Locked</Text>
-                        <Text style={[styles.lockSub, { color: theme.colors.textSecondary }]}>
+                    <View style={styles.lockContainer}>
+                        <Feather name="lock" size={20} color={Acid.tx3} style={{ marginBottom: 8 }} />
+                        <Text style={styles.lockTitle}>AI Nutritionist Locked</Text>
+                        <Text style={styles.lockSub}>
                             Log meals for 14 days and track your weight to unlock the AI Nutritionist. The more data you log, the smarter it gets.
                         </Text>
                     </View>
                 ) : !limitStatus.allowed ? (
-                    <View style={[styles.lockContainer, { backgroundColor: theme.colors.secondaryBg, borderTopColor: theme.colors.border }]}>
-                        <Feather name="moon" size={20} color={theme.colors.textSecondary} style={{ marginBottom: 8 }} />
-                        <Text style={[styles.lockTitle, { color: theme.colors.textPrimary }]}>Daily Limit Reached</Text>
-                        <Text style={[styles.lockSub, { color: theme.colors.textSecondary }]}>
+                    <View style={styles.lockContainer}>
+                        <Feather name="moon" size={20} color={Acid.tx3} style={{ marginBottom: 8 }} />
+                        <Text style={styles.lockTitle}>Daily Limit Reached</Text>
+                        <Text style={styles.lockSub}>
                             Refresh tomorrow for more wisdom.
                         </Text>
                     </View>
                 ) : (
-                    <View style={[styles.inputContainer, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                    <View style={styles.inputContainer}>
                         <TextInput
-                            style={[styles.input, {
-                                backgroundColor: theme.colors.background,
-                                borderColor: theme.colors.border,
-                                color: theme.colors.textPrimary
-                            }]}
+                            style={styles.input}
                             placeholder="Ask about your nutrition..."
-                            placeholderTextColor={theme.colors.textTertiary}
+                            placeholderTextColor={Acid.tx3}
+                            selectionColor={Acid.lime}
                             value={inputText}
                             onChangeText={setInputText}
                             onSubmitEditing={() => handleSend()}
@@ -292,10 +284,10 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                             disabled={loading || !inputText.trim()}
                             style={[
                                 styles.sendBtn,
-                                { backgroundColor: (loading || !inputText.trim()) ? theme.colors.border : theme.colors.primary }
+                                { backgroundColor: (loading || !inputText.trim()) ? Acid.hair2 : Acid.lime }
                             ]}
                         >
-                            <Feather name="arrow-up" size={20} color={theme.colors.primaryForeground} />
+                            <Feather name="arrow-up" size={20} color={(loading || !inputText.trim()) ? Acid.tx3 : Acid.moss} />
                         </TouchableOpacity>
                     </View>
                 )}
@@ -308,36 +300,36 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                 presentationStyle="pageSheet"
                 onRequestClose={() => setShowInfo(false)}
             >
-                <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-                    <View style={[styles.infoHeader, { borderBottomColor: theme.colors.border }]}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }}>
+                    <View style={[styles.infoHeader, { borderBottomColor: Acid.hair }]}>
                         <View style={styles.headerBtn} />
-                        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About AI Nutritionist</Text>
+                        <Text style={styles.headerTitle}>About AI Nutritionist</Text>
                         <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.headerBtn}>
-                            <Feather name="x" size={22} color={theme.colors.textPrimary} />
+                            <Feather name="x" size={22} color={Acid.tx2} />
                         </TouchableOpacity>
                     </View>
                     <ScrollView contentContainerStyle={styles.infoContent}>
-                        <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>What is the AI Nutritionist?</Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoSectionTitle}>What is the AI Nutritionist?</Text>
+                        <Text style={styles.infoBody}>
                             The AI Nutritionist is your personal AI nutrition assistant. It reads your logged meals, weight trend, macro averages, and the foods you actually eat to give you advice that is specific to you, not generic tips you could find anywhere online.
                         </Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoBody}>
                             You can ask it things like "Am I eating enough protein?", "What should I have for dinner?", or "Why is my weight not changing?" and it will answer using your real data. It will only suggest foods it has seen in your meal history, so you will never get recommendations for things you do not eat.
                         </Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoBody}>
                             The more consistently you log, the better it gets. It uses your last 14 days of data to understand your patterns, which is why it requires 14 days of logging before it unlocks.
                         </Text>
 
-                        <View style={[styles.infoDivider, { backgroundColor: theme.colors.border }]} />
+                        <View style={styles.infoDivider} />
 
-                        <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Important Disclaimer</Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoSectionTitle}>Important Disclaimer</Text>
+                        <Text style={styles.infoBody}>
                             The AI Nutritionist is powered by AI and its responses are estimates based on the data you provide. It is not always 100% accurate.
                         </Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoBody}>
                             It does not currently account for food allergies, intolerances, or medical conditions. If you have specific dietary restrictions or health concerns, please consult a qualified healthcare professional or registered dietitian before making changes to your diet.
                         </Text>
-                        <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.infoBody}>
                             This feature is not a substitute for professional medical or nutritional advice.
                         </Text>
                     </ScrollView>
@@ -363,57 +355,70 @@ const styles = StyleSheet.create({
         justifyContent: 'center',
     },
     headerTitle: {
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.semiBold,
+        fontFamily: Acid.serifItalic,
+        fontSize: 19,
+        color: Acid.tx,
         textAlign: 'center'
     },
     headerSubtitle: {
         fontSize: Typography.fontSize.xs,
+        color: Acid.tx3,
         textAlign: 'center'
     },
     starterContainer: {
-        gap: Spacing.sm,
         marginTop: Spacing.md,
     },
     starterChip: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: Spacing.md,
-        paddingVertical: Spacing.md,
-        borderRadius: 12,
-        borderWidth: 1,
+        paddingVertical: 14,
+        borderBottomWidth: 1,
+        borderBottomColor: Acid.hair,
     },
     starterText: {
         fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.medium,
+        color: Acid.tx2,
         flex: 1,
         marginRight: Spacing.sm,
     },
-    bubble: {
-        maxWidth: '80%',
-        padding: 12,
-        borderRadius: 16,
-        marginBottom: 12,
+    coachMsg: {
+        maxWidth: '92%',
+        alignSelf: 'flex-start',
+        marginBottom: 20,
     },
-    msgText: {
+    coachText: {
+        fontFamily: Acid.serifItalic,
+        fontSize: 17,
+        lineHeight: 26,
+        color: Acid.tx,
+    },
+    userMsg: {
+        maxWidth: '80%',
+        alignSelf: 'flex-end',
+        marginBottom: 20,
+    },
+    userText: {
         fontSize: 15,
         lineHeight: 22,
+        color: Acid.lime,
+        textAlign: 'right',
     },
     inputContainer: {
         flexDirection: 'row',
         padding: 12,
         alignItems: 'center',
         borderTopWidth: 1,
+        borderTopColor: Acid.hair,
+        backgroundColor: Acid.moss,
     },
     input: {
         flex: 1,
         height: 44,
-        borderRadius: 22,
-        borderWidth: 1,
-        paddingHorizontal: 16,
+        paddingHorizontal: 8,
         marginRight: 8,
         fontSize: 15,
+        color: Acid.tx,
     },
     sendBtn: {
         width: 40,
@@ -426,16 +431,19 @@ const styles = StyleSheet.create({
         padding: 24,
         alignItems: 'center',
         borderTopWidth: 1,
+        borderTopColor: Acid.hair,
         minHeight: 120,
         justifyContent: 'center'
     },
     lockTitle: {
         fontSize: Typography.fontSize.sm,
         fontWeight: Typography.fontWeight.semiBold,
+        color: Acid.tx,
         marginBottom: 4
     },
     lockSub: {
         fontSize: Typography.fontSize.sm,
+        color: Acid.tx2,
         textAlign: 'center',
         maxWidth: '80%'
     },
@@ -455,15 +463,18 @@ const styles = StyleSheet.create({
     infoSectionTitle: {
         fontSize: Typography.fontSize.md,
         fontWeight: Typography.fontWeight.semiBold,
+        color: Acid.tx,
         marginBottom: Spacing.sm,
     },
     infoBody: {
         fontSize: Typography.fontSize.sm,
         lineHeight: Typography.fontSize.sm * 1.6,
+        color: Acid.tx2,
         marginBottom: Spacing.md,
     },
     infoDivider: {
         height: 1,
+        backgroundColor: Acid.hair,
         marginVertical: Spacing.lg,
     },
 });

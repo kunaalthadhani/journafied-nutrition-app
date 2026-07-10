@@ -12,8 +12,8 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
+import { Acid } from '../constants/acid';
 import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
 import { QuickSignupScreen } from './QuickSignupScreen';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -54,9 +54,9 @@ interface GoalData {
 }
 
 const MACRO_COLORS = {
-  protein: '#3B82F6',
-  carbs: '#F59E0B',
-  fat: '#8B5CF6',
+  protein: Acid.protein,
+  carbs: Acid.carbs,
+  fat: Acid.fat,
 };
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
@@ -70,7 +70,6 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onSave,
   initialGoals,
 }) => {
-  const theme = useTheme();
   const { weightUnit } = usePreferences();
   // Frozen at mount. A background auth event can call setSavedGoals on Home and
   // give initialGoals a goal field mid-flow; deriving this inline would then
@@ -254,44 +253,44 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   ];
 
   return (
-    <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[st.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[st.header, { borderBottomColor: Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={st.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={Acid.tx2} />
         </TouchableOpacity>
-        <Text style={[st.headerTitle, { color: theme.colors.textPrimary }]}>Nutrition Goals</Text>
+        <Text style={st.headerTitle}>Nutrition Goals</Text>
         <View style={{ width: 32 }} />
       </View>
 
       <ScrollView style={st.content} contentContainerStyle={st.contentInner} showsVerticalScrollIndicator={false}>
 
         {/* Goal headline */}
-        <Text style={[st.goalTitle, { color: theme.colors.textPrimary }]}>{goalLabel}</Text>
-        <Text style={[st.goalSub, { color: theme.colors.textSecondary }]}>
+        <Text style={st.goalTitle}>{goalLabel}</Text>
+        <Text style={st.goalSub}>
           {activityLabel}{activityRate ? ` · ${fmtPace(activityRate, weightUnit)}/week` : ''}
         </Text>
 
-        {/* Calorie card */}
-        <View style={[st.calCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        {/* Calorie hero */}
+        <View style={st.calCard}>
           <View style={st.calRow}>
-            <Text style={[st.calNum, { color: theme.colors.textPrimary }]}>{calories}</Text>
-            <Text style={[st.calUnit, { color: theme.colors.textSecondary }]}>kcal/day</Text>
+            <Text style={st.calNum}>{calories}</Text>
+            <Text style={st.calUnit}>kcal/day</Text>
           </View>
-          <TouchableOpacity style={[st.recalcBtn, { backgroundColor: theme.colors.secondaryBg }]} onPress={() => setShowCalculator(true)}>
-            <Feather name="refresh-cw" size={14} color={theme.colors.textSecondary} />
-            <Text style={[st.recalcTxt, { color: theme.colors.textSecondary }]}>Recalculate</Text>
+          <TouchableOpacity style={st.recalcBtn} onPress={() => setShowCalculator(true)}>
+            <Feather name="refresh-cw" size={14} color={Acid.lime} />
+            <Text style={st.recalcTxt}>Recalculate</Text>
           </TouchableOpacity>
         </View>
 
         {/* Macro section */}
-        <Text style={[st.sectionLabel, { color: theme.colors.textSecondary }]}>MACRO SPLIT</Text>
+        <Text style={st.sectionLabel}>MACRO SPLIT</Text>
 
         {/* Stacked bar */}
-        <View style={[st.macroBar, { backgroundColor: theme.colors.border }]}>
-          <View style={[st.macroSeg, { flex: proteinPercentage, backgroundColor: MACRO_COLORS.protein, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }]} />
+        <View style={st.macroBar}>
+          <View style={[st.macroSeg, { flex: proteinPercentage, backgroundColor: MACRO_COLORS.protein }]} />
           <View style={[st.macroSeg, { flex: carbsPercentage, backgroundColor: MACRO_COLORS.carbs }]} />
-          <View style={[st.macroSeg, { flex: fatPercentage, backgroundColor: MACRO_COLORS.fat, borderTopRightRadius: 6, borderBottomRightRadius: 6 }]} />
+          <View style={[st.macroSeg, { flex: fatPercentage, backgroundColor: MACRO_COLORS.fat }]} />
         </View>
 
         {/* Macro rows */}
@@ -300,40 +299,40 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
             <View key={m.key} style={st.macroRow}>
               <View style={st.macroLblRow}>
                 <View style={[st.macroDot, { backgroundColor: m.color }]} />
-                <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+                <Text style={st.macroName}>{m.label}</Text>
               </View>
-              <Text style={[st.macroVal, { color: theme.colors.textSecondary }]}>{m.pct}% · {m.g}g</Text>
+              <Text style={st.macroVal}>{m.pct}% · {m.g}g</Text>
             </View>
           ))}
         </View>
 
         {/* Customize toggle */}
         <TouchableOpacity style={st.customizeBtn} onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingMacros(v => !v); }}>
-          <Text style={[st.customizeTxt, { color: theme.colors.textSecondary }]}>{isEditingMacros ? 'Done' : 'Customize macros'}</Text>
-          <Feather name={isEditingMacros ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textSecondary} />
+          <Text style={st.customizeTxt}>{isEditingMacros ? 'Done' : 'Customize macros'}</Text>
+          <Feather name={isEditingMacros ? 'chevron-up' : 'chevron-down'} size={16} color={Acid.tx2} />
         </TouchableOpacity>
 
         {/* Editing controls */}
         {isEditingMacros && (
           <View style={st.editSection}>
             {totalPercentage !== 100 && (
-              <View style={[st.totalBadge, { backgroundColor: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.successBg : theme.colors.error + '15' }]}>
-                <Text style={[st.totalTxt, { color: (totalPercentage >= 99 && totalPercentage <= 101) ? theme.colors.success : theme.colors.error }]}>{totalPercentage}% Total</Text>
+              <View style={st.totalBadge}>
+                <Text style={[st.totalTxt, { color: (totalPercentage >= 99 && totalPercentage <= 101) ? Acid.good : Acid.error }]}>{totalPercentage}% Total</Text>
               </View>
             )}
             {macros.map(m => (
-              <View key={m.key} style={[st.editRow, { borderColor: theme.colors.border }]}>
+              <View key={m.key} style={st.editRow}>
                 <View style={st.macroLblRow}>
                   <View style={[st.macroDot, { backgroundColor: m.color }]} />
-                  <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+                  <Text style={st.macroName}>{m.label}</Text>
                 </View>
                 <View style={st.editControls}>
-                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => handleMacroChange(m.key, -5)}>
-                    <Feather name="minus" size={14} color={theme.colors.textPrimary} />
+                  <TouchableOpacity style={st.adjBtn} onPress={() => handleMacroChange(m.key, -5)}>
+                    <Feather name="minus" size={14} color={Acid.tx} />
                   </TouchableOpacity>
-                  <Text style={[st.editPct, { color: theme.colors.textPrimary }]}>{m.pct}%</Text>
-                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => handleMacroChange(m.key, 5)}>
-                    <Feather name="plus" size={14} color={theme.colors.textPrimary} />
+                  <Text style={st.editPct}>{m.pct}%</Text>
+                  <TouchableOpacity style={st.adjBtn} onPress={() => handleMacroChange(m.key, 5)}>
+                    <Feather name="plus" size={14} color={Acid.tx} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -342,14 +341,14 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         )}
 
         {!isEditingMacros && (
-          <Text style={[st.helperTxt, { color: theme.colors.textSecondary }]}>You can adjust this anytime</Text>
+          <Text style={st.helperTxt}>You can adjust this anytime</Text>
         )}
       </ScrollView>
 
       {/* Save button */}
-      <View style={[st.footer, { backgroundColor: theme.mode === 'dark' ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.9)' }]}>
-        <TouchableOpacity style={[st.saveBtn, { backgroundColor: theme.colors.primary }]} onPress={handleSave} activeOpacity={0.8}>
-          <Text style={[st.saveTxt, { color: theme.colors.primaryForeground }]}>Save Changes</Text>
+      <View style={st.footer}>
+        <TouchableOpacity style={st.saveBtn} onPress={handleSave} activeOpacity={0.8}>
+          <Text style={st.saveTxt}>Save Changes</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -359,48 +358,51 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 const st = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 16, paddingVertical: 12, borderBottomWidth: 1 },
-  headerTitle: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold },
+  headerTitle: { fontFamily: Acid.serifItalic, fontSize: 20, color: Acid.tx },
   backBtn: { padding: 4 },
   content: { flex: 1 },
-  contentInner: { padding: 20, paddingBottom: 100 },
+  contentInner: { padding: 20, paddingBottom: 120 },
 
   // Goal headline
-  goalTitle: { fontSize: 26, fontWeight: 'bold', marginBottom: 4 },
-  goalSub: { fontSize: Typography.fontSize.md, marginBottom: 24 },
+  goalTitle: { fontFamily: Acid.serifItalic, fontSize: 28, lineHeight: 36, color: Acid.tx, marginBottom: 4 },
+  goalSub: { fontSize: Typography.fontSize.md, color: Acid.tx2, marginBottom: 24 },
 
-  // Calorie card
-  calCard: { borderRadius: 16, padding: 20, borderWidth: 1, alignItems: 'center', marginBottom: 28 },
-  calRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 10 },
-  calNum: { fontSize: 44, fontWeight: '800', letterSpacing: -1 },
-  calUnit: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.medium, marginLeft: 6 },
-  recalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20 },
-  recalcTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
+  // Calorie hero
+  calCard: { alignItems: 'center', paddingVertical: 16, marginBottom: 28 },
+  calRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 },
+  calNum: { fontFamily: Acid.serif, fontSize: 56, lineHeight: 60, color: Acid.tx },
+  calUnit: { fontSize: Typography.fontSize.lg, color: Acid.tx3, marginLeft: 8 },
+  recalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
+  recalcTxt: { fontSize: 12, letterSpacing: 1, color: Acid.lime },
 
   // Macros
-  sectionLabel: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12, textTransform: 'uppercase' },
-  macroBar: { width: '100%', height: 14, borderRadius: 7, flexDirection: 'row', overflow: 'hidden', marginBottom: 16 },
+  sectionLabel: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 12, textTransform: 'uppercase' },
+  macroBar: { width: '100%', height: 4, borderRadius: 2, flexDirection: 'row', overflow: 'hidden', backgroundColor: Acid.hair, marginBottom: 16 },
   macroSeg: { height: '100%' },
   macroRows: { gap: 12, marginBottom: 8 },
   macroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   macroLblRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   macroDot: { width: 10, height: 10, borderRadius: 5 },
-  macroName: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium },
-  macroVal: { fontSize: Typography.fontSize.sm, fontWeight: '500' },
+  macroName: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium, color: Acid.tx },
+  macroVal: { fontSize: Typography.fontSize.sm, fontWeight: '500', color: Acid.tx2 },
 
   customizeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, width: '100%' },
-  customizeTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
+  customizeTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium, color: Acid.tx2 },
 
   editSection: { gap: 12, marginBottom: 8 },
-  totalBadge: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  totalBadge: { alignSelf: 'flex-end', paddingVertical: 4 },
   totalTxt: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold },
-  editRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  editRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Acid.hair },
   editControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  adjBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  editPct: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, width: 40, textAlign: 'center' },
+  adjBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: Acid.hair2, alignItems: 'center', justifyContent: 'center' },
+  editPct: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, color: Acid.tx, width: 40, textAlign: 'center' },
 
-  helperTxt: { fontSize: Typography.fontSize.xs, textAlign: 'center', marginTop: -4 },
+  helperTxt: { fontSize: Typography.fontSize.xs, color: Acid.tx3, textAlign: 'center', marginTop: -4 },
 
-  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: 'transparent' },
-  saveBtn: { height: 56, borderRadius: 28, alignItems: 'center', justifyContent: 'center', shadowColor: '#000', shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.2, shadowRadius: 8, elevation: 4 },
-  saveTxt: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold },
+  footer: { position: 'absolute', bottom: 0, left: 0, right: 0, padding: 16, paddingBottom: 32, borderTopWidth: 1, borderTopColor: Acid.hair, backgroundColor: Acid.moss },
+  saveBtn: {
+    height: 56, borderRadius: 999, alignItems: 'center', justifyContent: 'center', backgroundColor: Acid.lime,
+    shadowColor: Acid.lime, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.35, shadowRadius: 16, elevation: 6,
+  },
+  saveTxt: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, color: Acid.moss },
 });

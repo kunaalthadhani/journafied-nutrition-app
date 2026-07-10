@@ -19,7 +19,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { usePreferences } from '../contexts/PreferencesContext';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
@@ -61,12 +61,7 @@ type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
 type StepId = 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity';
 
-const STEP_ACCENT: Record<StepId, string> = {
-  name: '#3B82F6', goal: '#3B82F6', sex: '#8B5CF6', dob: '#10B981',
-  height: '#10B981', weight: '#F59E0B', pace: '#EC4899', activity: '#06B6D4',
-};
-
-const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
+const MACRO_COLORS = { protein: Acid.protein, carbs: Acid.carbs, fat: Acid.fat };
 
 const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
   const s: StepId[] = hasName ? ['goal', 'sex', 'dob', 'height', 'weight'] : ['name', 'goal', 'sex', 'dob', 'height', 'weight'];
@@ -108,11 +103,9 @@ interface ScrollPickerProps {
   selectedValue: number | string;
   onValueChange: (value: number | string) => void;
   width?: number;
-  accent?: string;
 }
 
-const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onValueChange, width = 80, accent = '#3B82F6' }) => {
-  const theme = useTheme();
+const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onValueChange, width = 80 }) => {
   const flatListRef = useRef<FlatList>(null);
   const isScrollingRef = useRef(false);
   const selectedIdx = items.findIndex(i => i.value === selectedValue);
@@ -151,7 +144,7 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onVal
 
   return (
     <View style={[pSt.container, { width, height: PICKER_HEIGHT }]}>
-      <View style={[pSt.highlight, { top: PICKER_ITEM_HEIGHT * paddingItems, borderColor: accent + '40', backgroundColor: accent + '08' }]} />
+      <View style={[pSt.highlight, { top: PICKER_ITEM_HEIGHT * paddingItems }]} />
       <FlatList
         ref={flatListRef}
         data={items}
@@ -167,10 +160,13 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onVal
           const isSelected = item.value === selectedValue;
           return (
             <TouchableOpacity activeOpacity={0.7} onPress={() => scrollToItem(index)} style={[pSt.item, { height: PICKER_ITEM_HEIGHT }]}>
-              <Text style={[pSt.itemText, {
-                color: isSelected ? theme.colors.textPrimary : theme.colors.textTertiary,
-                fontWeight: isSelected ? '700' : '400',
-                fontSize: isSelected ? 22 : 16,
+              <Text style={[pSt.itemText, isSelected ? {
+                fontFamily: Acid.serif,
+                color: Acid.tx,
+                fontSize: 22,
+              } : {
+                color: Acid.tx3,
+                fontSize: 16,
               }]}>{item.label}</Text>
             </TouchableOpacity>
           );
@@ -182,7 +178,11 @@ const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onVal
 
 const pSt = StyleSheet.create({
   container: { overflow: 'hidden' },
-  highlight: { position: 'absolute', left: 0, right: 0, height: PICKER_ITEM_HEIGHT, borderRadius: 12, borderWidth: 1.5, zIndex: 1, pointerEvents: 'none' },
+  highlight: {
+    position: 'absolute', left: 0, right: 0, height: PICKER_ITEM_HEIGHT,
+    borderTopWidth: 1.5, borderBottomWidth: 1.5, borderColor: Acid.lime + '55',
+    backgroundColor: Acid.limeSoft, zIndex: 1, pointerEvents: 'none',
+  },
   item: { alignItems: 'center', justifyContent: 'center' },
   itemText: { textAlign: 'center' },
 });
@@ -222,7 +222,6 @@ const ageFromDob = (month: number, day: number, year: number): number => {
 export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
   onBack, onCalculated, initialData,
 }) => {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const { weightUnit: preferredWeightUnit, setWeightUnit: persistWeightUnit } = usePreferences();
 
@@ -459,12 +458,12 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
   // ── Progress dots ───────────────────────────────────────────────
   const renderDots = () => {
-    const accent = STEP_ACCENT[currentStepId] || theme.colors.primary;
+    const accent = Acid.lime;
     return (
       <View style={st.dotsRow}>
         {steps.map((stepId, i) => (
           <View key={i} style={[st.dot, {
-            backgroundColor: i === currentIdx ? accent : i < currentIdx ? accent + '50' : theme.colors.border,
+            backgroundColor: i === currentIdx ? accent : i < currentIdx ? accent + '50' : Acid.hair2,
             width: i === currentIdx ? 20 : 8,
           }]} />
         ))}
@@ -500,40 +499,40 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     return (
       <View style={st.resultWrap}>
         {/* Personalized headline */}
-        <Text style={[st.resultGoal, { color: theme.colors.textPrimary }]}>
+        <Text style={st.resultGoal}>
           {firstName ? `Here's your plan, ${firstName}` : goalLabel}
         </Text>
-        <Text style={[st.resultGoalSub, { color: theme.colors.textSecondary }]}>{goalSub}</Text>
+        <Text style={st.resultGoalSub}>{goalSub}</Text>
 
-        {/* Calorie card with count-up */}
-        <View style={[st.calCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[st.calLabel, { color: theme.colors.textSecondary }]}>DAILY TARGET</Text>
+        {/* Calorie hero with count-up */}
+        <View style={st.calCard}>
+          <Text style={st.calLabel}>DAILY TARGET</Text>
           <View style={st.calRow}>
-            <Text style={[st.calNum, { color: theme.colors.primary }]}>{displayCal}</Text>
-            <Text style={[st.calUnit, { color: theme.colors.textPrimary }]}>kcal</Text>
+            <Text style={st.calNum}>{displayCal}</Text>
+            <Text style={st.calUnit}>kcal</Text>
           </View>
         </View>
 
         {/* How we got this number */}
         {breakdown && (
-          <View style={[st.breakdownCard, { backgroundColor: theme.colors.secondaryBg }]}>
-            <Text style={[st.breakdownTitle, { color: theme.colors.textSecondary }]}>HOW WE CALCULATED THIS</Text>
+          <View style={st.breakdownCard}>
+            <Text style={st.breakdownTitle}>HOW WE CALCULATED THIS</Text>
             <View style={st.breakdownRow}>
-              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Basal Metabolic Rate (BMR)</Text>
-              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>{breakdown.bmr} kcal</Text>
+              <Text style={st.breakdownLabel}>Basal Metabolic Rate (BMR)</Text>
+              <Text style={st.breakdownValue}>{breakdown.bmr} kcal</Text>
             </View>
             <View style={st.breakdownRow}>
-              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Activity ({breakdown.multiplierLabel})</Text>
-              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>× {breakdown.multiplier}</Text>
+              <Text style={st.breakdownLabel}>Activity ({breakdown.multiplierLabel})</Text>
+              <Text style={st.breakdownValue}>× {breakdown.multiplier}</Text>
             </View>
             <View style={[st.breakdownRow, { borderBottomWidth: 0 }]}>
-              <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>Maintenance (TDEE)</Text>
-              <Text style={[st.breakdownValue, { color: theme.colors.textPrimary }]}>{breakdown.tdee} kcal</Text>
+              <Text style={st.breakdownLabel}>Maintenance (TDEE)</Text>
+              <Text style={st.breakdownValue}>{breakdown.tdee} kcal</Text>
             </View>
             {breakdown.adjustment !== 0 && (
               <View style={[st.breakdownRow, { borderBottomWidth: 0 }]}>
-                <Text style={[st.breakdownLabel, { color: theme.colors.textSecondary }]}>{goal === 'lose' ? 'Deficit' : 'Surplus'}</Text>
-                <Text style={[st.breakdownValue, { color: goal === 'lose' ? theme.colors.error : '#10B981' }]}>{breakdown.adjustmentLabel}</Text>
+                <Text style={st.breakdownLabel}>{goal === 'lose' ? 'Deficit' : 'Surplus'}</Text>
+                <Text style={[st.breakdownValue, { color: goal === 'lose' ? Acid.error : Acid.good }]}>{breakdown.adjustmentLabel}</Text>
               </View>
             )}
           </View>
@@ -542,24 +541,24 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         {/* Summary chips */}
         <View style={st.chipGrid}>
           {chips.map((c, i) => (
-            <View key={i} style={[st.chip, { backgroundColor: theme.colors.secondaryBg }]}>
-              <Feather name={c.icon as any} size={14} color={theme.colors.textSecondary} />
+            <View key={i} style={st.chip}>
+              <Feather name={c.icon as any} size={14} color={Acid.tx3} />
               <View>
-                <Text style={[st.chipLbl, { color: theme.colors.textSecondary }]}>{c.label}</Text>
-                <Text style={[st.chipVal, { color: theme.colors.textPrimary }]}>{c.value}</Text>
+                <Text style={st.chipLbl}>{c.label}</Text>
+                <Text style={st.chipVal}>{c.value}</Text>
               </View>
             </View>
           ))}
         </View>
 
         {/* ── Macro section ─────────────────────────────────────── */}
-        <Text style={[st.macroTitle, { color: theme.colors.textSecondary }]}>MACRO SPLIT</Text>
+        <Text style={st.macroTitle}>MACRO SPLIT</Text>
 
         {/* Stacked bar */}
-        <View style={[st.macroBar, { backgroundColor: theme.colors.border }]}>
-          <View style={[st.macroSeg, { flex: proteinPct, backgroundColor: MACRO_COLORS.protein, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }]} />
+        <View style={st.macroBar}>
+          <View style={[st.macroSeg, { flex: proteinPct, backgroundColor: MACRO_COLORS.protein }]} />
           <View style={[st.macroSeg, { flex: carbsPct, backgroundColor: MACRO_COLORS.carbs }]} />
-          <View style={[st.macroSeg, { flex: fatPct, backgroundColor: MACRO_COLORS.fat, borderTopRightRadius: 6, borderBottomRightRadius: 6 }]} />
+          <View style={[st.macroSeg, { flex: fatPct, backgroundColor: MACRO_COLORS.fat }]} />
         </View>
 
         {/* Macro rows */}
@@ -568,40 +567,40 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             <View key={m.key} style={st.macroRow}>
               <View style={st.macroLblRow}>
                 <View style={[st.macroDot, { backgroundColor: m.color }]} />
-                <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+                <Text style={st.macroName}>{m.label}</Text>
               </View>
-              <Text style={[st.macroVal, { color: theme.colors.textSecondary }]}>{m.pct}% · {m.g}g</Text>
+              <Text style={st.macroVal}>{m.pct}% · {m.g}g</Text>
             </View>
           ))}
         </View>
 
         {/* Customize toggle */}
         <TouchableOpacity style={st.customizeBtn} onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setEditingMacros(v => !v); }}>
-          <Text style={[st.customizeTxt, { color: theme.colors.textSecondary }]}>{editingMacros ? 'Done' : 'Customize macros'}</Text>
-          <Feather name={editingMacros ? 'chevron-up' : 'chevron-down'} size={16} color={theme.colors.textSecondary} />
+          <Text style={st.customizeTxt}>{editingMacros ? 'Done' : 'Customize macros'}</Text>
+          <Feather name={editingMacros ? 'chevron-up' : 'chevron-down'} size={16} color={Acid.tx2} />
         </TouchableOpacity>
 
         {/* Editing controls */}
         {editingMacros && (
           <View style={st.editSection}>
             {totalPct !== 100 && (
-              <View style={[st.totalBadge, { backgroundColor: (totalPct >= 99 && totalPct <= 101) ? theme.colors.successBg : theme.colors.error + '15' }]}>
-                <Text style={[st.totalTxt, { color: (totalPct >= 99 && totalPct <= 101) ? theme.colors.success : theme.colors.error }]}>{totalPct}% Total</Text>
+              <View style={st.totalBadge}>
+                <Text style={[st.totalTxt, { color: (totalPct >= 99 && totalPct <= 101) ? Acid.good : Acid.error }]}>{totalPct}% Total</Text>
               </View>
             )}
             {macros.map(m => (
-              <View key={m.key} style={[st.editRow, { borderColor: theme.colors.border }]}>
+              <View key={m.key} style={st.editRow}>
                 <View style={st.macroLblRow}>
                   <View style={[st.macroDot, { backgroundColor: m.color }]} />
-                  <Text style={[st.macroName, { color: theme.colors.textPrimary }]}>{m.label}</Text>
+                  <Text style={st.macroName}>{m.label}</Text>
                 </View>
                 <View style={st.editControls}>
-                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => setMacro(m.key, -5)}>
-                    <Feather name="minus" size={14} color={theme.colors.textPrimary} />
+                  <TouchableOpacity style={st.adjBtn} onPress={() => setMacro(m.key, -5)}>
+                    <Feather name="minus" size={14} color={Acid.tx} />
                   </TouchableOpacity>
-                  <Text style={[st.editPct, { color: theme.colors.textPrimary }]}>{m.pct}%</Text>
-                  <TouchableOpacity style={[st.adjBtn, { borderColor: theme.colors.border }]} onPress={() => setMacro(m.key, 5)}>
-                    <Feather name="plus" size={14} color={theme.colors.textPrimary} />
+                  <Text style={st.editPct}>{m.pct}%</Text>
+                  <TouchableOpacity style={st.adjBtn} onPress={() => setMacro(m.key, 5)}>
+                    <Feather name="plus" size={14} color={Acid.tx} />
                   </TouchableOpacity>
                 </View>
               </View>
@@ -611,10 +610,10 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
         {/* Save button */}
         <TouchableOpacity
-          style={[st.savBtn, { backgroundColor: (totalPct >= 99 && totalPct <= 101) ? theme.colors.primary : theme.colors.border }]}
+          style={[st.savBtn, { backgroundColor: (totalPct >= 99 && totalPct <= 101) ? Acid.lime : Acid.hair2 }]}
           onPress={handleSave}
           disabled={totalPct < 99 || totalPct > 101}>
-          <Text style={[st.savTxt, { color: (totalPct >= 99 && totalPct <= 101) ? theme.colors.primaryForeground : theme.colors.textSecondary }]}>Start Tracking</Text>
+          <Text style={[st.savTxt, { color: (totalPct >= 99 && totalPct <= 101) ? Acid.moss : Acid.tx3 }]}>Start Tracking</Text>
         </TouchableOpacity>
       </View>
     );
@@ -623,15 +622,16 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // ── Step renderers ──────────────────────────────────────────────
   const renderName = () => (
     <View style={st.step}>
-      <Text style={[st.title, { color: theme.colors.textPrimary }]}>What should we call you?</Text>
-      <Text style={[st.sub, { color: theme.colors.textSecondary }]}>Your first name is enough</Text>
+      <Text style={st.title}>What should we call you?</Text>
+      <Text style={st.sub}>Your first name is enough</Text>
       <View style={st.field}>
         <TextInput
-          style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: userName ? STEP_ACCENT.name : theme.colors.border }]}
+          style={[st.input, { borderBottomColor: userName ? Acid.lime : Acid.hair2 }]}
+          selectionColor={Acid.lime}
           value={userName}
           onChangeText={setUserName}
           placeholder="Your name"
-          placeholderTextColor={'#A1A1AA'}
+          placeholderTextColor={Acid.tx3}
           autoFocus
           autoCapitalize="words"
           maxLength={30}
@@ -644,24 +644,22 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
   const renderGoal = () => (
     <View style={st.step}>
-      <Text style={[st.title, { color: theme.colors.textPrimary }]}>What's your goal?</Text>
-      <Text style={[st.sub, { color: theme.colors.textSecondary }]}>This shapes your entire plan</Text>
+      <Text style={st.title}>What are we doing?</Text>
+      <Text style={st.sub}>This shapes your entire plan</Text>
       <View style={st.opts}>
         {([
           { id: 'lose' as Goal, label: 'Lose Weight', desc: 'Burn fat & get lean', icon: 'trending-down' },
           { id: 'maintain' as Goal, label: 'Maintain Weight', desc: 'Stay at your current weight', icon: 'minus' },
           { id: 'gain' as Goal, label: 'Gain Weight', desc: 'Build muscle & mass', icon: 'trending-up' },
         ]).map(o => (
-          <TouchableOpacity key={o.id} style={[st.optCard, { backgroundColor: theme.colors.card, borderColor: goal === o.id ? STEP_ACCENT.goal : theme.colors.border }]}
+          <TouchableOpacity key={o.id} style={st.optCard}
             onPress={() => { setGoal(o.id); if (o.id === 'maintain') setSelectedRate(0); autoAdv(); }}>
-            <View style={[st.optIcon, { backgroundColor: goal === o.id ? STEP_ACCENT.goal + '15' : theme.colors.secondaryBg }]}>
-              <Feather name={o.icon as any} size={20} color={goal === o.id ? STEP_ACCENT.goal : theme.colors.textSecondary} />
-            </View>
+            <Feather name={o.icon as any} size={20} color={goal === o.id ? Acid.lime : Acid.tx3} style={{ width: 32 }} />
             <View style={{ flex: 1 }}>
-              <Text style={[st.optTitle, { color: goal === o.id ? STEP_ACCENT.goal : theme.colors.textPrimary }]}>{o.label}</Text>
-              <Text style={[st.optSub, { color: theme.colors.textSecondary }]}>{o.desc}</Text>
+              <Text style={[st.optTitle, { color: goal === o.id ? Acid.lime : Acid.tx }]}>{o.label}</Text>
+              <Text style={st.optSub}>{o.desc}</Text>
             </View>
-            {goal === o.id && <Feather name="check" size={20} color={STEP_ACCENT.goal} />}
+            {goal === o.id && <Feather name="check" size={20} color={Acid.lime} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -669,21 +667,20 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   );
 
   const renderSex = () => {
-    const accent = STEP_ACCENT.sex;
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Biological sex</Text>
-        <Text style={[st.sub, { color: theme.colors.textSecondary }]}>Used to calculate your metabolic rate</Text>
+        <Text style={st.title}>Biological sex</Text>
+        <Text style={st.sub}>It only sets your metabolic rate</Text>
         <View style={st.opts}>
           {([
             { id: 'male' as Gender, label: 'Male' },
             { id: 'female' as Gender, label: 'Female' },
             { id: 'prefer_not_to_say' as Gender, label: 'Prefer not to say' },
           ]).map(o => (
-            <TouchableOpacity key={o.id} style={[st.selOpt, { backgroundColor: theme.colors.card, borderColor: gender === o.id ? accent : theme.colors.border }]}
+            <TouchableOpacity key={o.id} style={st.selOpt}
               onPress={() => { setGender(o.id); autoAdv(); }}>
-              <Text style={[st.selTxt, { color: gender === o.id ? accent : theme.colors.textPrimary }]}>{o.label}</Text>
-              {gender === o.id && <Feather name="check" size={20} color={accent} />}
+              <Text style={[st.selTxt, { color: gender === o.id ? Acid.lime : Acid.tx }]}>{o.label}</Text>
+              {gender === o.id && <Feather name="check" size={20} color={Acid.lime} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -692,49 +689,46 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   const renderDob = () => {
-    const computedAge = ageFromDob(dobMonth, dobDay, dobYear);
-    const accent = STEP_ACCENT.dob;
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Date of birth</Text>
-        <Text style={[st.sub, { color: theme.colors.textSecondary }]}>We'll calculate your age automatically</Text>
+        <Text style={st.title}>When were you born?</Text>
+        <Text style={st.sub}>We'll calculate your age automatically</Text>
         <View style={st.pickerRow}>
-          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => { setDobMonth(v as number); setDobTouched(true); }} width={90} accent={accent} />
-          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => { setDobDay(v as number); setDobTouched(true); }} width={60} accent={accent} />
-          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => { setDobYear(v as number); setDobTouched(true); }} width={80} accent={accent} />
+          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => { setDobMonth(v as number); setDobTouched(true); }} width={90} />
+          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => { setDobDay(v as number); setDobTouched(true); }} width={60} />
+          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => { setDobYear(v as number); setDobTouched(true); }} width={80} />
         </View>
         {!dobTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: theme.colors.textTertiary }}>Scroll to set your date of birth</Text>
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to set your date of birth</Text>
         )}
       </View>
     );
   };
 
   const renderHeight = () => {
-    const accent = STEP_ACCENT.height;
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your height</Text>
-        <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
+        <Text style={st.title}>How tall are you?</Text>
+        <View style={[st.toggle, { alignSelf: 'center', marginBottom: 24 }]}>
           {(['cm', 'ft'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, heightUnit === u && { backgroundColor: accent + '15', borderWidth: 1.5, borderColor: accent }]} onPress={() => setHeightUnit(u)}>
-              <Text style={[st.togTxt, { color: heightUnit === u ? accent : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
+            <TouchableOpacity key={u} style={[st.togBtn, heightUnit === u && st.togActive]} onPress={() => setHeightUnit(u)}>
+              <Text style={[st.togTxt, { color: heightUnit === u ? Acid.lime : Acid.tx3 }]}>{u.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}
         </View>
         {heightUnit === 'cm' ? (
           <View style={st.pickerRow}>
-            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => { setHeightCmVal(v as number); setHeightTouched(true); }} width={100} accent={accent} />
-            <Text style={[st.pickerUnit, { color: theme.colors.textSecondary }]}>cm</Text>
+            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => { setHeightCmVal(v as number); setHeightTouched(true); }} width={100} />
+            <Text style={[st.pickerUnit, { color: Acid.tx2 }]}>cm</Text>
           </View>
         ) : (
           <View style={st.pickerRow}>
-            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => { setHeightFtVal(v as number); setHeightTouched(true); }} width={80} accent={accent} />
-            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => { setHeightInVal(v as number); setHeightTouched(true); }} width={80} accent={accent} />
+            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => { setHeightFtVal(v as number); setHeightTouched(true); }} width={80} />
+            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => { setHeightInVal(v as number); setHeightTouched(true); }} width={80} />
           </View>
         )}
         {!heightTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: theme.colors.textTertiary }}>Scroll to set your height</Text>
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to set your height</Text>
         )}
       </View>
     );
@@ -745,49 +739,50 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const renderWeight = () => {
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your weight</Text>
+        <Text style={st.title}>Where are we starting?</Text>
         {/* Unit toggle */}
-        <View style={[st.toggle, { backgroundColor: theme.colors.secondaryBg, alignSelf: 'center', marginBottom: 24 }]}>
+        <View style={[st.toggle, { alignSelf: 'center', marginBottom: 24 }]}>
           {(['kg', 'lbs'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && { backgroundColor: STEP_ACCENT.weight + '15', borderWidth: 1.5, borderColor: STEP_ACCENT.weight }]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); persistWeightUnit(u).catch(() => {}); }}>
-              <Text style={[st.togTxt, { color: weightUnit === u ? STEP_ACCENT.weight : theme.colors.textSecondary }]}>{u.toUpperCase()}</Text>
+            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && st.togActive]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); persistWeightUnit(u).catch(() => {}); }}>
+              <Text style={[st.togTxt, { color: weightUnit === u ? Acid.lime : Acid.tx3 }]}>{u.toUpperCase()}</Text>
             </TouchableOpacity>
           ))}
         </View>
         <View style={st.field}>
-          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>CURRENT WEIGHT ({weightUnit.toUpperCase()})</Text>
-          <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: weight ? STEP_ACCENT.weight : theme.colors.border }]}
+          <Text style={st.fieldLbl}>CURRENT WEIGHT ({weightUnit.toUpperCase()})</Text>
+          <TextInput style={[st.input, { borderBottomColor: weight ? Acid.lime : Acid.hair2 }]}
+            selectionColor={Acid.lime}
             value={weight} onChangeText={(v) => { setWeight(v); setWeightError(''); }} placeholder={weightUnit === 'kg' ? '70' : '150'}
-            placeholderTextColor={'#A1A1AA'} keyboardType="numeric" maxLength={5} autoFocus />
+            placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} autoFocus />
         </View>
         <View style={st.field}>
-          <Text style={[st.fieldLbl, { color: theme.colors.textSecondary }]}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
-          <TextInput style={[st.input, { color: theme.colors.textPrimary, borderBottomColor: targetWeight ? STEP_ACCENT.weight : theme.colors.border }]}
+          <Text style={st.fieldLbl}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
+          <TextInput style={[st.input, { borderBottomColor: targetWeight ? Acid.lime : Acid.hair2 }]}
+            selectionColor={Acid.lime}
             value={targetWeight} onChangeText={(v) => { setTargetWeight(v); setWeightError(''); }} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
-            placeholderTextColor={'#A1A1AA'} keyboardType="numeric" maxLength={5} />
+            placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} />
         </View>
         {weightError !== '' && (
-          <Text style={[st.weightWarning, { color: theme.colors.error }]}>{weightError}</Text>
+          <Text style={[st.weightWarning, { color: Acid.error }]}>{weightError}</Text>
         )}
       </View>
     );
   };
 
   const renderPace = () => {
-    const accent = STEP_ACCENT.pace;
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Your pace</Text>
-        <Text style={[st.sub, { color: theme.colors.textSecondary }]}>How fast do you want to reach your goal?</Text>
+        <Text style={st.title}>How fast?</Text>
+        <Text style={st.sub}>Slower is easier to sustain</Text>
         <View style={st.opts}>
           {getRateOptions().map(o => (
-            <TouchableOpacity key={o.rate} style={[st.optCard, { backgroundColor: theme.colors.card, borderColor: selectedRate === o.rate ? accent : theme.colors.border }]}
+            <TouchableOpacity key={o.rate} style={st.optCard}
               onPress={() => { setSelectedRate(o.rate); autoAdv(); }}>
               <View style={{ flex: 1 }}>
-                <Text style={[st.optTitle, { color: selectedRate === o.rate ? accent : theme.colors.textPrimary }]}>{o.label}</Text>
-                <Text style={[st.optSub, { color: theme.colors.textSecondary }]}>{o.sub}</Text>
+                <Text style={[st.optTitle, { color: selectedRate === o.rate ? Acid.lime : Acid.tx }]}>{o.label}</Text>
+                <Text style={st.optSub}>{o.sub}</Text>
               </View>
-              {selectedRate === o.rate && <Feather name="check" size={20} color={accent} />}
+              {selectedRate === o.rate && <Feather name="check" size={20} color={Acid.lime} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -796,11 +791,10 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   const renderActivity = () => {
-    const accent = STEP_ACCENT.activity;
     return (
       <View style={st.step}>
-        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Activity level</Text>
-        <Text style={[st.sub, { color: theme.colors.textSecondary }]}>Be honest — this affects your target significantly</Text>
+        <Text style={st.title}>How active are you?</Text>
+        <Text style={st.sub}>Be honest. Most people overestimate this.</Text>
         <View style={st.opts}>
           {[
             { id: 'sedentary', label: 'Sedentary', desc: 'Office job, little exercise' },
@@ -808,13 +802,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             { id: 'moderate', label: 'Moderately Active', desc: '3-5 days/week exercise' },
             { id: 'very', label: 'Very Active', desc: '6-7 days/week hard exercise' },
           ].map(o => (
-            <TouchableOpacity key={o.id} style={[st.optCard, { backgroundColor: theme.colors.card, borderColor: activityLevel === o.id ? accent : theme.colors.border }]}
+            <TouchableOpacity key={o.id} style={st.optCard}
               onPress={() => { setActivityLevel(o.id); setTimeout(() => showResultScreen(o.id), 280); }}>
               <View style={{ flex: 1 }}>
-                <Text style={[st.optTitle, { color: activityLevel === o.id ? accent : theme.colors.textPrimary }]}>{o.label}</Text>
-                <Text style={[st.optSub, { color: theme.colors.textSecondary }]}>{o.desc}</Text>
+                <Text style={[st.optTitle, { color: activityLevel === o.id ? Acid.lime : Acid.tx }]}>{o.label}</Text>
+                <Text style={st.optSub}>{o.desc}</Text>
               </View>
-              {activityLevel === o.id && <Feather name="check" size={20} color={accent} />}
+              {activityLevel === o.id && <Feather name="check" size={20} color={Acid.lime} />}
             </TouchableOpacity>
           ))}
         </View>
@@ -838,14 +832,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight');
   const showFooter = !showResult && !isAutoStep;
   const nextLabel = currentStepId === 'weight' && weight.trim() !== '' && targetWeight.trim() === '' ? 'Skip' : 'Next';
-  const stepAccent = currentStepId ? STEP_ACCENT[currentStepId] : theme.colors.primary;
 
   return (
-    <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top']}>
+    <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
-        <View style={[st.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[st.header, { borderBottomColor: Acid.hair }]}>
           <TouchableOpacity onPress={showResult ? goPrev : (currentIdx > 0 ? goPrev : onBack)} style={st.backBtn}>
-            <Feather name={showResult || currentIdx > 0 ? 'arrow-left' : 'x'} size={24} color={theme.colors.textPrimary} />
+            <Feather name={showResult || currentIdx > 0 ? 'arrow-left' : 'x'} size={24} color={Acid.tx2} />
           </TouchableOpacity>
           {!showResult && renderDots()}
           <View style={{ width: 32 }} />
@@ -866,17 +859,17 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         </ScrollView>
 
         {showFooter && (
-          <View style={[st.footer, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border, paddingBottom: 16 + insets.bottom }]}>
+          <View style={[st.footer, { backgroundColor: Acid.moss, borderTopColor: Acid.hair, paddingBottom: 16 + insets.bottom }]}>
             {currentIdx > 0 && (
-              <TouchableOpacity style={[st.navBtn, st.prevBtn, { borderColor: theme.colors.border }]} onPress={goPrev} activeOpacity={0.7}>
-                <Text style={[st.navTxt, { color: theme.colors.textSecondary }]}>Previous</Text>
+              <TouchableOpacity style={[st.navBtn, st.prevBtn]} onPress={goPrev} activeOpacity={0.7}>
+                <Text style={[st.navTxt, { color: Acid.tx2 }]}>Previous</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[st.navBtn, st.nextBtn, { backgroundColor: isDisabled() ? theme.colors.border : stepAccent }, currentIdx === 0 && { flex: 1 }]}
+              style={[st.navBtn, st.nextBtn, { backgroundColor: isDisabled() ? Acid.hair2 : Acid.lime }, currentIdx === 0 && { flex: 1 }]}
               onPress={goNext} disabled={isDisabled()}
               activeOpacity={0.7}>
-              <Text style={[st.navTxt, { color: isDisabled() ? theme.colors.textSecondary : '#fff', fontWeight: '600' }]}>{nextLabel}</Text>
+              <Text style={[st.navTxt, { color: isDisabled() ? Acid.tx3 : Acid.moss, fontWeight: '600' }]}>{nextLabel}</Text>
             </TouchableOpacity>
           </View>
         )}
@@ -896,34 +889,34 @@ const st = StyleSheet.create({
   scrollInput: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
   scrollResult: { padding: 24 },
   footer: { padding: 16, borderTopWidth: 1, flexDirection: 'row', gap: 12 },
-  navBtn: { flex: 1, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 14 },
-  prevBtn: { borderWidth: 1, flex: 0.5 },
+  navBtn: { flex: 1, paddingVertical: 16, alignItems: 'center', justifyContent: 'center', borderRadius: 999 },
+  prevBtn: { flex: 0.5 },
   nextBtn: { flex: 1 },
   navTxt: { fontSize: Typography.fontSize.md },
 
   step: { width: '100%', alignItems: 'center', marginBottom: 20 },
-  title: { fontSize: Typography.fontSize.xxl, fontWeight: Typography.fontWeight.bold, textAlign: 'center', marginBottom: 8 },
-  sub: { fontSize: Typography.fontSize.md, textAlign: 'center', marginBottom: 28, opacity: 0.8 },
+  title: { fontFamily: Acid.serifItalic, fontSize: 30, lineHeight: 38, color: Acid.tx, textAlign: 'center', marginBottom: 8 },
+  sub: { fontSize: Typography.fontSize.md, color: Acid.tx2, textAlign: 'center', marginBottom: 28 },
 
-  opts: { width: '100%', gap: 12 },
-  optCard: { flexDirection: 'row', alignItems: 'center', padding: 18, borderRadius: 16, borderWidth: 2, gap: 14 },
-  optIcon: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
-  optTitle: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, marginBottom: 2 },
-  optSub: { fontSize: Typography.fontSize.sm },
+  opts: { width: '100%' },
+  optCard: { flexDirection: 'row', alignItems: 'center', paddingVertical: 18, borderBottomWidth: 1, borderBottomColor: Acid.hair, gap: 14 },
+  optTitle: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold, marginBottom: 2 },
+  optSub: { fontSize: Typography.fontSize.sm, color: Acid.tx2 },
 
-  selOpt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 20, borderRadius: 12, borderWidth: 2 },
+  selOpt: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 20, borderBottomWidth: 1, borderBottomColor: Acid.hair },
   selTxt: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium },
 
   field: { width: '100%', marginBottom: 28 },
-  fieldLbl: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12 },
+  fieldLbl: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 12 },
   fieldRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  input: { fontSize: 28, fontWeight: '600', paddingVertical: 10, borderBottomWidth: 2, textAlign: 'center', width: '100%' },
+  input: { fontFamily: Acid.serif, fontSize: 26, color: Acid.tx, paddingVertical: 10, borderBottomWidth: 1.5, textAlign: 'center', width: '100%' },
   dual: { flexDirection: 'row', gap: 24 },
   unitLbl: { marginTop: 6, fontSize: Typography.fontSize.sm, fontWeight: '500' },
 
-  toggle: { flexDirection: 'row', padding: 3, borderRadius: 10 },
-  togBtn: { paddingHorizontal: 14, paddingVertical: 6, borderRadius: 8 },
-  togTxt: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold },
+  toggle: { flexDirection: 'row', gap: 20 },
+  togBtn: { paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
+  togActive: { borderBottomColor: Acid.lime },
+  togTxt: { fontSize: Typography.fontSize.xs, letterSpacing: 1, fontWeight: Typography.fontWeight.bold },
 
   // Weight warning
   weightWarning: { fontSize: Typography.fontSize.sm, textAlign: 'center', marginTop: -12, marginBottom: 8 },
@@ -935,48 +928,48 @@ const st = StyleSheet.create({
   ageBadgeText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
 
   // Breakdown
-  breakdownCard: { width: '100%', borderRadius: 14, padding: 16, marginBottom: 20 },
-  breakdownTitle: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12 },
-  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: 'rgba(0,0,0,0.06)' },
-  breakdownLabel: { fontSize: Typography.fontSize.sm },
-  breakdownValue: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semiBold },
+  breakdownCard: { width: '100%', paddingTop: 12, marginBottom: 20, borderTopWidth: 1, borderTopColor: Acid.hair },
+  breakdownTitle: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 8 },
+  breakdownRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 8, borderBottomWidth: 1, borderBottomColor: Acid.hair },
+  breakdownLabel: { fontSize: Typography.fontSize.sm, color: Acid.tx2 },
+  breakdownValue: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semiBold, color: Acid.tx },
 
   // Result
   resultWrap: { width: '100%', alignItems: 'center' },
-  resultGoal: { fontSize: 26, fontWeight: 'bold', marginBottom: 4, textAlign: 'center' },
-  resultGoalSub: { fontSize: Typography.fontSize.md, marginBottom: 24, textAlign: 'center' },
-  calCard: { alignItems: 'center', padding: 24, borderRadius: 20, borderWidth: 1, width: '100%', marginBottom: 20 },
-  calLabel: { fontSize: Typography.fontSize.xs, fontWeight: '600', letterSpacing: 1, marginBottom: 10, textTransform: 'uppercase' },
+  resultGoal: { fontFamily: Acid.serifItalic, fontSize: 28, lineHeight: 36, color: Acid.tx, marginBottom: 4, textAlign: 'center' },
+  resultGoalSub: { fontSize: Typography.fontSize.md, color: Acid.tx2, marginBottom: 24, textAlign: 'center' },
+  calCard: { alignItems: 'center', paddingVertical: 16, width: '100%', marginBottom: 16 },
+  calLabel: { fontSize: 10, letterSpacing: 2, color: Acid.tx3, marginBottom: 8, textTransform: 'uppercase' },
   calRow: { flexDirection: 'row', alignItems: 'baseline' },
-  calNum: { fontSize: 52, fontWeight: '800', lineHeight: 56 },
-  calUnit: { fontSize: Typography.fontSize.lg, fontWeight: '600', marginLeft: 8 },
+  calNum: { fontFamily: Acid.serif, fontSize: 64, lineHeight: 68, color: Acid.lime },
+  calUnit: { fontSize: Typography.fontSize.lg, color: Acid.tx3, marginLeft: 8 },
 
   chipGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, width: '100%', marginBottom: 28 },
-  chip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 12, minWidth: '45%' },
-  chipLbl: { fontSize: Typography.fontSize.xs, marginBottom: 1 },
-  chipVal: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semiBold },
+  chip: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, minWidth: '45%' },
+  chipLbl: { fontSize: Typography.fontSize.xs, color: Acid.tx3, marginBottom: 1 },
+  chipVal: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.semiBold, color: Acid.tx },
 
   // Macros
-  macroTitle: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold, letterSpacing: 1, marginBottom: 12, alignSelf: 'flex-start' },
-  macroBar: { width: '100%', height: 14, borderRadius: 7, flexDirection: 'row', overflow: 'hidden', marginBottom: 16 },
+  macroTitle: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 12, alignSelf: 'flex-start' },
+  macroBar: { width: '100%', height: 4, borderRadius: 2, flexDirection: 'row', overflow: 'hidden', backgroundColor: Acid.hair, marginBottom: 16 },
   macroSeg: { height: '100%' },
   macroRows: { width: '100%', gap: 10, marginBottom: 8 },
   macroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
   macroLblRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   macroDot: { width: 10, height: 10, borderRadius: 5 },
-  macroName: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium },
-  macroVal: { fontSize: Typography.fontSize.sm, fontWeight: '500' },
+  macroName: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.medium, color: Acid.tx },
+  macroVal: { fontSize: Typography.fontSize.sm, fontWeight: '500', color: Acid.tx2 },
   customizeBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 12, width: '100%' },
-  customizeTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium },
+  customizeTxt: { fontSize: Typography.fontSize.sm, fontWeight: Typography.fontWeight.medium, color: Acid.tx2 },
 
   editSection: { width: '100%', gap: 12, marginBottom: 8 },
-  totalBadge: { alignSelf: 'flex-end', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 12 },
+  totalBadge: { alignSelf: 'flex-end', paddingVertical: 4 },
   totalTxt: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.bold },
-  editRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1 },
+  editRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: Acid.hair },
   editControls: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  adjBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, alignItems: 'center', justifyContent: 'center' },
-  editPct: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, width: 40, textAlign: 'center' },
+  adjBtn: { width: 32, height: 32, borderRadius: 16, borderWidth: 1, borderColor: Acid.hair2, alignItems: 'center', justifyContent: 'center' },
+  editPct: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold, color: Acid.tx, width: 40, textAlign: 'center' },
 
-  savBtn: { width: '100%', height: 56, borderRadius: 14, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+  savBtn: { width: '100%', height: 56, borderRadius: 999, alignItems: 'center', justifyContent: 'center', marginTop: 16 },
   savTxt: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.bold },
 });

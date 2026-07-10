@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.37**
+The AI coach and the whole goal setup flow join the new look. The coach lost its chat bubbles: it now speaks in the serif italic voice on open moss, your questions sit right-aligned in lime, and the starter questions became clean hairline rows. The goal questionnaire dropped its rainbow of step colors for the one lime accent, questions got friendlier ("What are we doing?", "Where are we starting?", "How active are you?"), option cards became ledger rows, the scroll pickers show your pick in the serif between two lime hairlines, and your calculated daily target lands as a huge lime serif number. The Nutrition Goals screen matches. Every step, every calculation, and the order of questions are exactly as before.
+
 **v1.4.36**
 Settings joins the new look, and it's the biggest conversion yet. The whole screen is now a clean dark ledger: no more white boxes around sections, no more icon circles, just hairline rows with a serif title. Every feature panel that slides up from Settings got the same treatment, including Calorie Bank, Dynamic Adjustments, Smart Suggest, Pattern Detection, Grocery Suggestions, Weekly AI Overview, the weight unit picker, and the Notifications screen. Pickers like the threshold and cycle day are now underlined words instead of outlined chips. Every toggle and setting works exactly as before. The account and connections panels keep the old look for now, they're later in the queue.
 
