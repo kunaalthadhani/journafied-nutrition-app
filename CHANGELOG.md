@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.35**
+The how it works walkthrough joins the new look. It used to be a white card floating over the screen with icons in tinted circles. Now it's a full-screen moss experience: lime accent icon, serif headline, and a lime pill button, matching the sign-in screen. Same five slides, same copy, same swipe behavior. You can replay it any time from the menu.
+
 **v1.4.34**
 Second screen of the new look: the food detail sheet you get when tapping a logged item. Dark moss sheet, your food's name in the serif, a big serif calorie number, and macros as clean columns instead of colored boxes. The edit fields are now underlines that light up lime while you type. The Nutrition Facts list also got decluttered: instead of 26 rows of mostly empty dashes, you only see the nutrients your food actually has, with a "show all" toggle if you want to fill in more. All editing behavior is unchanged, including calories recalculating when you change a macro.
 
