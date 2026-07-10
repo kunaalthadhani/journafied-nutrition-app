@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.38**
+The goal questionnaire got a structural rebuild on top of its new look. The big one: recalculating your plan now saves the moment you confirm it. Before, "Save Plan" only staged the numbers on the summary screen, and backing out from there silently threw your whole recalculation away. Also fixed: every result chip (goal, activity, pace, age, height, weight) is now tappable, jumping you to that one question and straight back to your plan. Your name is asked last instead of first, right before the plan reveal. Maintain users no longer see a meaningless target weight field, and switching to maintain clears a stale target. Progress is a smooth bar instead of dots that vanished when steps changed. Leaving mid-setup asks before discarding your answers, and so does leaving the goals screen with unsaved macro tweaks. Macro splits are snapped to exactly 100% before saving on every path. Same questions, same math.
+
 **v1.4.37**
 The AI coach and the whole goal setup flow join the new look. The coach lost its chat bubbles: it now speaks in the serif italic voice on open moss, your questions sit right-aligned in lime, and the starter questions became clean hairline rows. The goal questionnaire dropped its rainbow of step colors for the one lime accent, questions got friendlier ("What are we doing?", "Where are we starting?", "How active are you?"), option cards became ledger rows, the scroll pickers show your pick in the serif between two lime hairlines, and your calculated daily target lands as a huge lime serif number. The Nutrition Goals screen matches. Every step, every calculation, and the order of questions are exactly as before.
 

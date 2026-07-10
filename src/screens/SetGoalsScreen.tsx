@@ -61,6 +61,18 @@ const MACRO_COLORS = {
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
 
+// The macro editor allows 99-101%. Never persist that: snap to exactly 100 by
+// adjusting the largest macro, the same rule handleSave has always used.
+const normalizeMacros = (p: number, c: number, f: number) => {
+  const diff = p + c + f - 100;
+  if (diff !== 0) {
+    if (p >= c && p >= f) p -= diff;
+    else if (c >= f) c -= diff;
+    else f -= diff;
+  }
+  return { p, c, f };
+};
+
 const fmtPace = (kgPerWeek: number, unit: string): string => unit === 'lbs'
   ? `${Math.round(kgPerWeek * 2.20462 * 10) / 10} lbs`
   : `${kgPerWeek} kg`;
@@ -103,6 +115,11 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 
   const [isEditingMacros, setIsEditingMacros] = useState(false);
 
+  // What was last persisted. Used to catch unsaved macro tweaks on exit.
+  const lastSavedRef = React.useRef<string | null>(
+    initialGoals ? JSON.stringify([initialGoals.calories, initialGoals.proteinPercentage, initialGoals.carbsPercentage, initialGoals.fatPercentage]) : null
+  );
+
   const proteinGrams = macroGrams(calories, proteinPercentage, 4);
   const carbsGrams = macroGrams(calories, carbsPercentage, 4);
   const fatGrams = macroGrams(calories, fatPercentage, 9);
@@ -139,37 +156,50 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.carbsPercentage !== undefined) setCarbsPercentage(result.carbsPercentage);
     if (result.fatPercentage !== undefined) setFatPercentage(result.fatPercentage);
 
-    // First-time flow: calculator includes macros → stage the goal data and
-    // show the signup screen. Goals are saved AFTER signup completes (or skip)
-    // so we don't write a half-baked profile in case the user abandons mid-flow.
+    // Build the full goal payload from the calculator result, with the macro
+    // split snapped to exactly 100 before it can be persisted anywhere.
+    const norm = normalizeMacros(
+      result.proteinPercentage ?? proteinPercentage,
+      result.carbsPercentage ?? carbsPercentage,
+      result.fatPercentage ?? fatPercentage,
+    );
+    const goalData: GoalData = {
+      calories: result.calories,
+      proteinPercentage: norm.p,
+      carbsPercentage: norm.c,
+      fatPercentage: norm.f,
+      proteinGrams: macroGrams(result.calories, norm.p, 4),
+      carbsGrams: macroGrams(result.calories, norm.c, 4),
+      fatGrams: macroGrams(result.calories, norm.f, 9),
+      currentWeightKg: result.currentWeightKg || null,
+      targetWeightKg: result.targetWeightKg || null,
+      age: result.age, gender: result.gender,
+      heightCm: result.heightCm, heightFeet: result.heightFeet, heightInches: result.heightInches,
+      goal: result.goal, activityRate: result.activityRate,
+      activityLevel: result.activityLevel,
+      name: result.name,
+      dob: result.dob,
+      trackingGoal: result.trackingGoal ?? trackingGoal,
+    };
+    setProteinPercentage(norm.p);
+    setCarbsPercentage(norm.c);
+    setFatPercentage(norm.f);
+
+    // First-time flow: stage the goal data and show the signup screen. Goals
+    // are saved AFTER signup completes (or skip) so we don't write a
+    // half-baked profile in case the user abandons mid-flow.
     if (isFirstTime && result.proteinPercentage !== undefined) {
-      const pPct = result.proteinPercentage;
-      const cPct = result.carbsPercentage ?? 45;
-      const fPct = result.fatPercentage ?? 25;
-      const goalData: GoalData = {
-        calories: result.calories,
-        proteinPercentage: pPct,
-        carbsPercentage: cPct,
-        fatPercentage: fPct,
-        proteinGrams: macroGrams(result.calories, pPct, 4),
-        carbsGrams: macroGrams(result.calories, cPct, 4),
-        fatGrams: macroGrams(result.calories, fPct, 9),
-        currentWeightKg: result.currentWeightKg || null,
-        targetWeightKg: result.targetWeightKg || null,
-        age: result.age, gender: result.gender,
-        heightCm: result.heightCm, heightFeet: result.heightFeet, heightInches: result.heightInches,
-        goal: result.goal, activityRate: result.activityRate,
-        activityLevel: result.activityLevel,
-        name: result.name,
-        dob: result.dob,
-      };
       pendingGoalDataRef.current = goalData;
       setShowCalculator(false);
       setShowSignup(true);
       return;
     }
 
-    // Returning user: every field above, macros included, is now applied.
+    // Returning user: persist immediately. The wizard's confirm button is the
+    // save. Before this, "Save Plan" only staged into this screen and a back
+    // tap here silently threw the recalculated plan away.
+    onSave(goalData);
+    lastSavedRef.current = JSON.stringify([goalData.calories, goalData.proteinPercentage, goalData.carbsPercentage, goalData.fatPercentage]);
     setShowCalculator(false);
   };
 
@@ -195,13 +225,8 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       Alert.alert("Invalid Percentages", `Total is ${totalPercentage}%. Adjust macros to be within 99-101%.`, [{ text: "OK" }]);
       return;
     }
-    let normP = proteinPercentage, normC = carbsPercentage, normF = fatPercentage;
-    const diff = totalPercentage - 100;
-    if (diff !== 0) {
-      if (normP >= normC && normP >= normF) normP -= diff;
-      else if (normC >= normF) normC -= diff;
-      else normF -= diff;
-    }
+    const { p: normP, c: normC, f: normF } = normalizeMacros(proteinPercentage, carbsPercentage, fatPercentage);
+    lastSavedRef.current = JSON.stringify([calories, normP, normC, normF]);
     onSave({
       calories, proteinPercentage: normP, carbsPercentage: normC, fatPercentage: normF,
       proteinGrams: macroGrams(calories, normP, 4),
@@ -210,6 +235,19 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       currentWeightKg, targetWeightKg, age, gender, heightCm, heightFeet, heightInches,
       goal, activityRate, name, dob, trackingGoal, activityLevel,
     });
+    onBack();
+  };
+
+  // Leaving with unsaved macro tweaks gets a prompt instead of silent loss.
+  const handleScreenBack = () => {
+    const current = JSON.stringify([calories, proteinPercentage, carbsPercentage, fatPercentage]);
+    if (lastSavedRef.current !== null && current !== lastSavedRef.current) {
+      Alert.alert('Save your changes?', 'You adjusted your plan but have not saved it.', [
+        { text: 'Discard', style: 'destructive', onPress: onBack },
+        { text: 'Save', onPress: handleSave },
+      ]);
+      return;
+    }
     onBack();
   };
 
@@ -256,7 +294,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       {/* Header */}
       <View style={[st.header, { borderBottomColor: Acid.hair }]}>
-        <TouchableOpacity onPress={onBack} style={st.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+        <TouchableOpacity onPress={handleScreenBack} style={st.backBtn} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
           <Feather name="arrow-left" size={24} color={Acid.tx2} />
         </TouchableOpacity>
         <Text style={st.headerTitle}>Nutrition Goals</Text>

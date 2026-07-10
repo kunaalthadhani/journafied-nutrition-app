@@ -8,6 +8,7 @@ import {
   ScrollView,
   KeyboardAvoidingView,
   Platform,
+  Alert,
   Animated,
   Dimensions,
   LayoutAnimation,
@@ -63,10 +64,14 @@ type StepId = 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | '
 
 const MACRO_COLORS = { protein: Acid.protein, carbs: Acid.carbs, fat: Acid.fat };
 
+// The name comes LAST, not first: it has no effect on the math, and the first
+// question should be about the user's goal, not admin. Asked right before the
+// plan reveal it reads as personalization instead of a form.
 const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
-  const s: StepId[] = hasName ? ['goal', 'sex', 'dob', 'height', 'weight'] : ['name', 'goal', 'sex', 'dob', 'height', 'weight'];
+  const s: StepId[] = ['goal', 'sex', 'dob', 'height', 'weight'];
   if (goal !== 'maintain') s.push('pace');
   s.push('activity');
+  if (!hasName) s.push('name');
   return s;
 };
 
@@ -266,6 +271,9 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // ── Navigation ──────────────────────────────────────────────────
   const [currentIdx, setCurrentIdx] = useState(0);
   const [showResult, setShowResult] = useState(false);
+  // Set while the user edits a single step they jumped to from the result
+  // screen. Confirming the step returns to the result instead of advancing.
+  const [editingFromResult, setEditingFromResult] = useState(false);
   const [calculatedCalories, setCalculatedCalories] = useState<number | null>(null);
   const [displayCal, setDisplayCal] = useState(0);
 
@@ -374,9 +382,21 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     });
   }, [slideAnim, fadeAnim, scaleAnim]);
 
+  const calcRef = useRef(calcCaloriesDetailed);
+  calcRef.current = calcCaloriesDetailed;
+  const [breakdown, setBreakdown] = useState<CalcBreakdown | null>(null);
+
+  const showResultScreen = useCallback((actOverride?: string) => {
+    const bd = calcRef.current(actOverride);
+    setCalculatedCalories(bd.final);
+    setBreakdown(bd);
+    setEditingFromResult(false);
+    slide('fwd', () => setShowResult(true));
+  }, [slide]);
+
   const goNext = useCallback(() => {
     // Validate weight vs target weight on Next
-    if (steps[currentIdx] === 'weight' && targetWeight.trim() !== '') {
+    if (steps[currentIdx] === 'weight' && goal !== 'maintain' && targetWeight.trim() !== '') {
       const w = toKg(weight, weightUnit);
       const t = toKg(targetWeight, targetWeightUnit);
       if (goal === 'lose' && t >= w) {
@@ -388,8 +408,25 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
         return;
       }
     }
-    if (currentIdx < steps.length - 1) slide('fwd', () => setCurrentIdx(i => i + 1));
-  }, [currentIdx, steps, weight, targetWeight, weightUnit, targetWeightUnit, goal, slide]);
+    if (editingFromResult) {
+      // Changing the goal away from maintain can leave the pace unanswered.
+      // Route through pace before returning to the result.
+      if (goal !== 'maintain' && selectedRate === null) {
+        const paceIdx = steps.indexOf('pace');
+        if (paceIdx >= 0 && paceIdx !== currentIdx) {
+          slide('fwd', () => setCurrentIdx(paceIdx));
+          return;
+        }
+      }
+      showResultScreen();
+      return;
+    }
+    if (currentIdx === steps.length - 1) {
+      showResultScreen();
+      return;
+    }
+    slide('fwd', () => setCurrentIdx(i => i + 1));
+  }, [currentIdx, steps, weight, targetWeight, weightUnit, targetWeightUnit, goal, selectedRate, editingFromResult, showResultScreen, slide]);
 
   const goPrev = useCallback(() => {
     if (showResult) slide('back', () => setShowResult(false));
@@ -398,16 +435,32 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
   const autoAdv = useCallback(() => { setTimeout(() => goNext(), 280); }, [goNext]);
 
-  const calcRef = useRef(calcCaloriesDetailed);
-  calcRef.current = calcCaloriesDetailed;
-  const [breakdown, setBreakdown] = useState<CalcBreakdown | null>(null);
+  // Jump from a result chip straight to one step. Confirming it returns here.
+  const jumpToStep = useCallback((stepId: StepId) => {
+    const idx = steps.indexOf(stepId);
+    if (idx < 0) return;
+    setEditingFromResult(true);
+    slide('back', () => {
+      setShowResult(false);
+      setCurrentIdx(idx);
+    });
+  }, [steps, slide]);
 
-  const showResultScreen = useCallback((actOverride?: string) => {
-    const bd = calcRef.current(actOverride);
-    setCalculatedCalories(bd.final);
-    setBreakdown(bd);
-    slide('fwd', () => setShowResult(true));
-  }, [slide]);
+  // ── Exit guard ──────────────────────────────────────────────────
+  const isReturning = !!initialData?.goal;
+  const handleExit = () => {
+    const hasProgress = !isReturning && (
+      goal !== null || gender !== null || dobTouched || heightTouched || weight.trim() !== ''
+    );
+    if (hasProgress) {
+      Alert.alert('Leave setup?', 'Your answers so far will be lost.', [
+        { text: 'Keep going', style: 'cancel' },
+        { text: 'Leave', style: 'destructive', onPress: onBack },
+      ]);
+      return;
+    }
+    onBack();
+  };
 
   // ── Save ────────────────────────────────────────────────────────
   const handleSave = () => {
@@ -456,20 +509,14 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     else setFatPct((v: number) => Math.max(5, Math.min(80, v + delta)));
   };
 
-  // ── Progress dots ───────────────────────────────────────────────
-  const renderDots = () => {
-    const accent = Acid.lime;
-    return (
-      <View style={st.dotsRow}>
-        {steps.map((stepId, i) => (
-          <View key={i} style={[st.dot, {
-            backgroundColor: i === currentIdx ? accent : i < currentIdx ? accent + '50' : Acid.hair2,
-            width: i === currentIdx ? 20 : 8,
-          }]} />
-        ))}
-      </View>
-    );
-  };
+  // ── Progress ────────────────────────────────────────────────────
+  // A continuous bar instead of dots: when choosing "maintain" removes the
+  // pace step, the fill just recalculates instead of a dot visibly vanishing.
+  const renderProgress = () => (
+    <View style={st.progressTrack}>
+      <View style={[st.progressFill, { width: `${((currentIdx + 1) / steps.length) * 100}%` }]} />
+    </View>
+  );
 
   // ── Result screen ───────────────────────────────────────────────
   const renderResult = () => {
@@ -483,12 +530,16 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     const fG = macroGrams(cal, fatPct, 9);
 
     const firstName = userName.trim().split(' ')[0];
-    const chips: { label: string; value: string; icon: string }[] = [
-      { label: 'Goal', value: goalLabel, icon: 'target' },
-      { label: 'Activity', value: activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Lightly active' : activityLevel === 'moderate' ? 'Moderately active' : 'Very active', icon: 'activity' },
+    const heightLabel = heightUnit === 'cm' ? `${heightCmVal} cm` : `${heightFtVal}'${heightInVal}"`;
+    // Every chip jumps straight to its step for a one-field edit, then returns here.
+    const chips: { label: string; value: string; icon: string; step: StepId }[] = [
+      { label: 'Goal', value: goalLabel, icon: 'target', step: 'goal' },
+      { label: 'Activity', value: activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Lightly active' : activityLevel === 'moderate' ? 'Moderately active' : 'Very active', icon: 'activity', step: 'activity' },
     ];
-    if (goal !== 'maintain' && selectedRate) chips.push({ label: 'Pace', value: `${fmtPace(selectedRate, weightUnit)}/wk`, icon: 'trending-up' });
-    chips.push({ label: 'Age', value: age, icon: 'user' });
+    if (goal !== 'maintain' && selectedRate) chips.push({ label: 'Pace', value: `${fmtPace(selectedRate, weightUnit)}/wk`, icon: 'trending-up', step: 'pace' });
+    chips.push({ label: 'Age', value: age, icon: 'user', step: 'dob' });
+    chips.push({ label: 'Height', value: heightLabel, icon: 'arrow-up', step: 'height' });
+    chips.push({ label: 'Weight', value: `${weight} ${weightUnit}`, icon: 'anchor', step: 'weight' });
 
     const macros = [
       { key: 'p' as const, label: 'Protein', color: MACRO_COLORS.protein, pct: proteinPct, g: pG },
@@ -538,16 +589,17 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           </View>
         )}
 
-        {/* Summary chips */}
+        {/* Summary chips — tap to edit that one answer */}
         <View style={st.chipGrid}>
           {chips.map((c, i) => (
-            <View key={i} style={st.chip}>
+            <TouchableOpacity key={i} style={st.chip} onPress={() => jumpToStep(c.step)} activeOpacity={0.6}>
               <Feather name={c.icon as any} size={14} color={Acid.tx3} />
-              <View>
+              <View style={{ flex: 1 }}>
                 <Text style={st.chipLbl}>{c.label}</Text>
                 <Text style={st.chipVal}>{c.value}</Text>
               </View>
-            </View>
+              <Feather name="chevron-right" size={14} color={Acid.tx3} />
+            </TouchableOpacity>
           ))}
         </View>
 
@@ -613,7 +665,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           style={[st.savBtn, { backgroundColor: (totalPct >= 99 && totalPct <= 101) ? Acid.lime : Acid.hair2 }]}
           onPress={handleSave}
           disabled={totalPct < 99 || totalPct > 101}>
-          <Text style={[st.savTxt, { color: (totalPct >= 99 && totalPct <= 101) ? Acid.moss : Acid.tx3 }]}>Start Tracking</Text>
+          <Text style={[st.savTxt, { color: (totalPct >= 99 && totalPct <= 101) ? Acid.moss : Acid.tx3 }]}>{isReturning ? 'Save Plan' : 'Start Tracking'}</Text>
         </TouchableOpacity>
       </View>
     );
@@ -622,8 +674,8 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // ── Step renderers ──────────────────────────────────────────────
   const renderName = () => (
     <View style={st.step}>
-      <Text style={st.title}>What should we call you?</Text>
-      <Text style={st.sub}>Your first name is enough</Text>
+      <Text style={st.title}>And your name?</Text>
+      <Text style={st.sub}>So we know who this plan is for</Text>
       <View style={st.field}>
         <TextInput
           style={[st.input, { borderBottomColor: userName ? Acid.lime : Acid.hair2 }]}
@@ -653,7 +705,29 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           { id: 'gain' as Goal, label: 'Gain Weight', desc: 'Build muscle & mass', icon: 'trending-up' },
         ]).map(o => (
           <TouchableOpacity key={o.id} style={st.optCard}
-            onPress={() => { setGoal(o.id); if (o.id === 'maintain') setSelectedRate(0); autoAdv(); }}>
+            onPress={() => {
+              setGoal(o.id);
+              // Maintain needs no pace and no target weight. Leaving maintain
+              // must clear the forced 0 so the flow routes back through pace.
+              if (o.id === 'maintain') { setSelectedRate(0); setTargetWeight(''); }
+              else if (selectedRate === 0) setSelectedRate(null);
+              // Changing the goal changes the step list, so the delayed goNext
+              // would run against a stale array in a result edit. Route from
+              // the tapped value instead.
+              const needsPace = o.id !== 'maintain' && (selectedRate === null || selectedRate === 0);
+              setTimeout(() => {
+                if (editingFromResult) {
+                  if (needsPace) {
+                    const paceIdx = buildSteps(o.id, hasExistingName).indexOf('pace');
+                    slide('fwd', () => setCurrentIdx(paceIdx));
+                  } else {
+                    showResultScreen();
+                  }
+                } else {
+                  goNext();
+                }
+              }, 280);
+            }}>
             <Feather name={o.icon as any} size={20} color={goal === o.id ? Acid.lime : Acid.tx3} style={{ width: 32 }} />
             <View style={{ flex: 1 }}>
               <Text style={[st.optTitle, { color: goal === o.id ? Acid.lime : Acid.tx }]}>{o.label}</Text>
@@ -699,7 +773,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => { setDobYear(v as number); setDobTouched(true); }} width={80} />
         </View>
         {!dobTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to set your date of birth</Text>
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to your date, or tap it to confirm</Text>
         )}
       </View>
     );
@@ -728,7 +802,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           </View>
         )}
         {!heightTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to set your height</Text>
+          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to your height, or tap it to confirm</Text>
         )}
       </View>
     );
@@ -755,13 +829,16 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             value={weight} onChangeText={(v) => { setWeight(v); setWeightError(''); }} placeholder={weightUnit === 'kg' ? '70' : '150'}
             placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} autoFocus />
         </View>
-        <View style={st.field}>
-          <Text style={st.fieldLbl}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
-          <TextInput style={[st.input, { borderBottomColor: targetWeight ? Acid.lime : Acid.hair2 }]}
-            selectionColor={Acid.lime}
-            value={targetWeight} onChangeText={(v) => { setTargetWeight(v); setWeightError(''); }} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
-            placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} />
-        </View>
+        {/* A target weight means nothing when the goal is to stay put */}
+        {goal !== 'maintain' && (
+          <View style={st.field}>
+            <Text style={st.fieldLbl}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
+            <TextInput style={[st.input, { borderBottomColor: targetWeight ? Acid.lime : Acid.hair2 }]}
+              selectionColor={Acid.lime}
+              value={targetWeight} onChangeText={(v) => { setTargetWeight(v); setWeightError(''); }} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
+              placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} />
+          </View>
+        )}
         {weightError !== '' && (
           <Text style={[st.weightWarning, { color: Acid.error }]}>{weightError}</Text>
         )}
@@ -803,7 +880,14 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
             { id: 'very', label: 'Very Active', desc: '6-7 days/week hard exercise' },
           ].map(o => (
             <TouchableOpacity key={o.id} style={st.optCard}
-              onPress={() => { setActivityLevel(o.id); setTimeout(() => showResultScreen(o.id), 280); }}>
+              onPress={() => {
+                setActivityLevel(o.id);
+                const isLast = currentIdx === steps.length - 1;
+                setTimeout(() => {
+                  if (editingFromResult || isLast) showResultScreen(o.id);
+                  else goNext();
+                }, 280);
+              }}>
               <View style={{ flex: 1 }}>
                 <Text style={[st.optTitle, { color: activityLevel === o.id ? Acid.lime : Acid.tx }]}>{o.label}</Text>
                 <Text style={st.optSub}>{o.desc}</Text>
@@ -831,16 +915,27 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const isAutoStep = currentStepId === 'goal' || currentStepId === 'sex' || currentStepId === 'pace' || currentStepId === 'activity';
   const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight');
   const showFooter = !showResult && !isAutoStep;
-  const nextLabel = currentStepId === 'weight' && weight.trim() !== '' && targetWeight.trim() === '' ? 'Skip' : 'Next';
+  const nextLabel = editingFromResult ? 'Done'
+    : currentStepId === 'name' ? 'See my plan'
+    : (currentStepId === 'weight' && goal !== 'maintain' && weight.trim() !== '' && targetWeight.trim() === '') ? 'Skip'
+    : 'Next';
+  // In a one-field edit the back arrow finishes the edit (when valid) instead
+  // of walking the whole flow. There is no cancel: you came to change a field.
+  const handleHeaderBack = () => {
+    if (showResult) { goPrev(); return; }
+    if (editingFromResult) { if (!isDisabled()) goNext(); return; }
+    if (currentIdx > 0) { goPrev(); return; }
+    handleExit();
+  };
 
   return (
     <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top']}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}>
         <View style={[st.header, { borderBottomColor: Acid.hair }]}>
-          <TouchableOpacity onPress={showResult ? goPrev : (currentIdx > 0 ? goPrev : onBack)} style={st.backBtn}>
-            <Feather name={showResult || currentIdx > 0 ? 'arrow-left' : 'x'} size={24} color={Acid.tx2} />
+          <TouchableOpacity onPress={handleHeaderBack} style={st.backBtn}>
+            <Feather name={showResult || editingFromResult || currentIdx > 0 ? 'arrow-left' : 'x'} size={24} color={Acid.tx2} />
           </TouchableOpacity>
-          {!showResult && renderDots()}
+          {!showResult && !editingFromResult && renderProgress()}
           <View style={{ width: 32 }} />
         </View>
 
@@ -860,13 +955,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
 
         {showFooter && (
           <View style={[st.footer, { backgroundColor: Acid.moss, borderTopColor: Acid.hair, paddingBottom: 16 + insets.bottom }]}>
-            {currentIdx > 0 && (
+            {currentIdx > 0 && !editingFromResult && (
               <TouchableOpacity style={[st.navBtn, st.prevBtn]} onPress={goPrev} activeOpacity={0.7}>
                 <Text style={[st.navTxt, { color: Acid.tx2 }]}>Previous</Text>
               </TouchableOpacity>
             )}
             <TouchableOpacity
-              style={[st.navBtn, st.nextBtn, { backgroundColor: isDisabled() ? Acid.hair2 : Acid.lime }, currentIdx === 0 && { flex: 1 }]}
+              style={[st.navBtn, st.nextBtn, { backgroundColor: isDisabled() ? Acid.hair2 : Acid.lime }, (currentIdx === 0 || editingFromResult) && { flex: 1 }]}
               onPress={goNext} disabled={isDisabled()}
               activeOpacity={0.7}>
               <Text style={[st.navTxt, { color: isDisabled() ? Acid.tx3 : Acid.moss, fontWeight: '600' }]}>{nextLabel}</Text>
@@ -883,8 +978,8 @@ const st = StyleSheet.create({
   safe: { flex: 1 },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1 },
   backBtn: { padding: 4 },
-  dotsRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  dot: { height: 8, borderRadius: 4 },
+  progressTrack: { flex: 1, maxWidth: 180, height: 2, borderRadius: 1, backgroundColor: Acid.hair2, overflow: 'hidden', marginHorizontal: 16 },
+  progressFill: { height: '100%', borderRadius: 1, backgroundColor: Acid.lime },
   scrollCentered: { flexGrow: 1, justifyContent: 'center', padding: 24 },
   scrollInput: { paddingHorizontal: 24, paddingTop: 24, paddingBottom: 16 },
   scrollResult: { padding: 24 },
