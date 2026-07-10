@@ -1,8 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, View, Text, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
-import { Typography } from '../constants/typography';
+import { Acid } from '../constants/acid';
 
 interface SettingItemProps {
     icon?: string;
@@ -25,11 +24,9 @@ export const SettingItem: React.FC<SettingItemProps> = ({
     showChevron = true,
     disabled = false,
 }) => {
-    const theme = useTheme();
-
     return (
         <TouchableOpacity
-            style={[styles.settingItem, { borderBottomColor: theme.colors.border }, disabled && { opacity: 0.5 }]}
+            style={[styles.settingItem, disabled && { opacity: 0.5 }]}
             onPress={disabled ? undefined : onPress}
             onLongPress={disabled ? undefined : onLongPress}
             activeOpacity={0.7}
@@ -37,16 +34,14 @@ export const SettingItem: React.FC<SettingItemProps> = ({
         >
             <View style={styles.settingItemLeft}>
                 {icon && (
-                    <View style={[styles.iconContainer, { backgroundColor: theme.colors.input }]}>
-                        <Feather name={icon as any} size={20} color={theme.colors.textPrimary} />
-                    </View>
+                    <Feather name={icon as any} size={18} color={Acid.tx2} style={styles.icon} />
                 )}
                 <View style={styles.settingItemText}>
-                    <Text style={[styles.settingTitle, { color: theme.colors.textPrimary }]}>
+                    <Text style={styles.settingTitle}>
                         {title}
                     </Text>
                     {subtitle && (
-                        <Text style={[styles.settingSubtitle, { color: theme.colors.textSecondary }]}>
+                        <Text style={styles.settingSubtitle}>
                             {subtitle}
                         </Text>
                     )}
@@ -55,7 +50,7 @@ export const SettingItem: React.FC<SettingItemProps> = ({
             <View style={styles.settingItemRight}>
                 {rightElement}
                 {showChevron && onPress && !disabled && (
-                    <Feather name="chevron-right" size={20} color={theme.colors.textTertiary} />
+                    <Feather name="chevron-right" size={18} color={Acid.tx3} />
                 )}
             </View>
         </TouchableOpacity>
@@ -68,16 +63,14 @@ interface SettingSectionProps {
 }
 
 export const SettingSection: React.FC<SettingSectionProps> = ({ title, children }) => {
-    const theme = useTheme();
-
     return (
         <View style={styles.section}>
             {title && (
-                <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+                <Text style={styles.sectionTitle}>
                     {title}
                 </Text>
             )}
-            <View style={[styles.sectionContent, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View>
                 {children}
             </View>
         </View>
@@ -86,52 +79,46 @@ export const SettingSection: React.FC<SettingSectionProps> = ({ title, children 
 
 const styles = StyleSheet.create({
     section: {
-        marginTop: 24,
+        marginTop: 28,
     },
     sectionTitle: {
-        fontSize: Typography.fontSize.sm,
-        fontWeight: Typography.fontWeight.semiBold,
+        fontSize: 11,
+        letterSpacing: 2,
         textTransform: 'uppercase',
-        letterSpacing: 0.5,
-        marginBottom: 8,
+        color: Acid.tx3,
+        marginBottom: 4,
         paddingHorizontal: 4,
-    },
-    sectionContent: {
-        borderRadius: 12,
-        borderWidth: 1,
-        overflow: 'hidden',
     },
     settingItem: {
         flexDirection: 'row',
         alignItems: 'center',
         justifyContent: 'space-between',
-        paddingHorizontal: 16,
+        paddingHorizontal: 4,
         paddingVertical: 16,
         borderBottomWidth: 1,
+        borderBottomColor: Acid.hair,
     },
     settingItemLeft: {
         flexDirection: 'row',
         alignItems: 'center',
         flex: 1,
-        gap: 12,
     },
-    iconContainer: {
-        width: 40,
-        height: 40,
-        borderRadius: 20,
-        justifyContent: 'center',
-        alignItems: 'center',
+    icon: {
+        width: 30,
     },
     settingItemText: {
         flex: 1,
     },
     settingTitle: {
-        fontSize: Typography.fontSize.md,
-        fontWeight: Typography.fontWeight.medium,
+        fontSize: 15,
+        fontWeight: '500',
+        color: Acid.tx,
         marginBottom: 2,
     },
     settingSubtitle: {
-        fontSize: Typography.fontSize.sm,
+        fontSize: 12.5,
+        color: Acid.tx2,
+        lineHeight: 17,
     },
     settingItemRight: {
         flexDirection: 'row',

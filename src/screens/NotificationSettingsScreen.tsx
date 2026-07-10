@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { View, StyleSheet, ScrollView, TouchableOpacity, Text, Switch, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
+import { Acid } from '../constants/acid';
 import { SettingItem, SettingSection } from '../components/SettingsComponents';
 import { TimePickerModal } from '../components/TimePickerModal';
 import { dataStorage, Preferences, SmartReminderPreferences, PREFERENCES_DEFAULTS } from '../services/dataStorage';
@@ -27,7 +27,6 @@ const DEFAULT_SMART_PREFS: SmartReminderPreferences = {
 };
 
 export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProps> = ({ onBack, initialPreferences }) => {
-    const theme = useTheme();
     const [loading, setLoading] = useState(!initialPreferences);
     const [preferences, setPreferences] = useState<Preferences | null>(initialPreferences ? {
         ...PREFERENCES_DEFAULTS,
@@ -113,12 +112,12 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
 
     if (loading || !preferences) {
         return (
-            <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+            <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
                 <View style={styles.header}>
                     <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                        <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                        <Feather name="arrow-left" size={24} color={Acid.tx} />
                     </TouchableOpacity>
-                    <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Notifications</Text>
+                    <Text style={[styles.headerTitle, { color: Acid.tx }]}>Notifications</Text>
                     <View style={{ width: 40 }} />
                 </View>
             </SafeAreaView>
@@ -128,13 +127,13 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
     const { mealReminders } = preferences;
 
     return (
-        <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                    <Feather name="arrow-left" size={24} color={Acid.tx} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.headerTitle, { color: Acid.tx }]}>
                     Notifications
                 </Text>
                 <View style={styles.headerRight} />
@@ -152,7 +151,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                             <Switch
                                 value={preferences.notificationsEnabled}
                                 onValueChange={handleGlobalToggle}
-                                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                 thumbColor={Colors.white}
                             />
                         }
@@ -171,7 +170,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                 <Switch
                                     value={smartPrefs.enabled}
                                     onValueChange={(val) => updateSmartPrefs({ enabled: val })}
-                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                    trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                     thumbColor={Colors.white}
                                 />
                             }
@@ -181,32 +180,32 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                         {smartPrefs.enabled && (
                             <>
                                 {/* Mode toggle */}
-                                <View style={[styles.modeToggleRow, { backgroundColor: theme.colors.input }]}>
+                                <View style={styles.modeToggleRow}>
                                     <TouchableOpacity
                                         style={[
                                             styles.modeToggleOption,
-                                            reminderMode === 'smart' && { backgroundColor: theme.colors.primary },
+                                            reminderMode === 'smart' && styles.modeToggleActive,
                                         ]}
                                         onPress={() => updateSmartPrefs({ reminderMode: 'smart' })}
                                     >
-                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'smart' ? Colors.white : theme.colors.textPrimary }]}>
+                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'smart' ? Acid.lime : Acid.tx3 }]}>
                                             Smart
                                         </Text>
                                     </TouchableOpacity>
                                     <TouchableOpacity
                                         style={[
                                             styles.modeToggleOption,
-                                            reminderMode === 'scheduled' && { backgroundColor: theme.colors.primary },
+                                            reminderMode === 'scheduled' && styles.modeToggleActive,
                                         ]}
                                         onPress={() => updateSmartPrefs({ reminderMode: 'scheduled' })}
                                     >
-                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'scheduled' ? Colors.white : theme.colors.textPrimary }]}>
+                                        <Text style={[styles.modeToggleText, { color: reminderMode === 'scheduled' ? Acid.lime : Acid.tx3 }]}>
                                             Scheduled
                                         </Text>
                                     </TouchableOpacity>
                                 </View>
 
-                                <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+                                <Text style={[styles.helperText, { color: Acid.tx2 }]}>
                                     {reminderMode === 'smart'
                                         ? 'TrackKcal learns when you typically eat and nudges you at the right time. Needs a few days of logging to calibrate.'
                                         : 'Reminders fire at the times you pick below.'}
@@ -223,7 +222,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                                 <Switch
                                                     value={mealReminders.breakfast.enabled}
                                                     onValueChange={(val) => handleMealReminderToggle('breakfast', val)}
-                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                                     thumbColor={Colors.white}
                                                 />
                                             }
@@ -238,7 +237,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                                 <Switch
                                                     value={mealReminders.lunch.enabled}
                                                     onValueChange={(val) => handleMealReminderToggle('lunch', val)}
-                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                                     thumbColor={Colors.white}
                                                 />
                                             }
@@ -253,7 +252,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                                 <Switch
                                                     value={mealReminders.dinner.enabled}
                                                     onValueChange={(val) => handleMealReminderToggle('dinner', val)}
-                                                    trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                                    trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                                     thumbColor={Colors.white}
                                                 />
                                             }
@@ -270,7 +269,7 @@ export const NotificationSettingsScreen: React.FC<NotificationSettingsScreenProp
                                         <Switch
                                             value={smartPrefs.endOfDaySummary}
                                             onValueChange={(val) => updateSmartPrefs({ endOfDaySummary: val })}
-                                            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                            trackColor={{ false: Acid.hair2, true: Acid.lime }}
                                             thumbColor={Colors.white}
                                         />
                                     }
@@ -315,8 +314,8 @@ const styles = StyleSheet.create({
         padding: 8,
     },
     headerTitle: {
-        fontSize: Typography.fontSize.xl,
-        fontWeight: Typography.fontWeight.semiBold,
+        fontFamily: Acid.serifItalic,
+        fontSize: 22,
     },
     headerRight: {
         width: 40,
@@ -333,15 +332,20 @@ const styles = StyleSheet.create({
     },
     modeToggleRow: {
         flexDirection: 'row',
-        borderRadius: 10,
-        padding: 4,
         marginVertical: 8,
+        borderBottomWidth: 1,
+        borderBottomColor: Acid.hair,
     },
     modeToggleOption: {
         flex: 1,
         paddingVertical: 10,
         alignItems: 'center',
-        borderRadius: 8,
+        borderBottomWidth: 2,
+        borderBottomColor: 'transparent',
+        marginBottom: -1,
+    },
+    modeToggleActive: {
+        borderBottomColor: Acid.lime,
     },
     modeToggleText: {
         fontSize: Typography.fontSize.sm,

@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.36**
+Settings joins the new look, and it's the biggest conversion yet. The whole screen is now a clean dark ledger: no more white boxes around sections, no more icon circles, just hairline rows with a serif title. Every feature panel that slides up from Settings got the same treatment, including Calorie Bank, Dynamic Adjustments, Smart Suggest, Pattern Detection, Grocery Suggestions, Weekly AI Overview, the weight unit picker, and the Notifications screen. Pickers like the threshold and cycle day are now underlined words instead of outlined chips. Every toggle and setting works exactly as before. The account and connections panels keep the old look for now, they're later in the queue.
+
 **v1.4.35**
 The how it works walkthrough joins the new look. It used to be a white card floating over the screen with icons in tinted circles. Now it's a full-screen moss experience: lime accent icon, serif headline, and a lime pill button, matching the sign-in screen. Same five slides, same copy, same swipe behavior. You can replay it any time from the menu.
 
