@@ -7,6 +7,7 @@ import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { ParsedFood } from '../utils/foodNutrition';
 import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { MealEntry } from '../services/dataStorage';
 import { SavedPrompt } from '../services/dataStorage';
 import { ConfidenceBadge } from './ConfidenceBadge';
@@ -92,6 +93,35 @@ const SCREEN_HEIGHT = Dimensions.get('window').height;
 // Macro colors from design system
 const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
 
+const NUTRIENT_ROWS: { label: string; key: string; unit: string; isHeader?: boolean; indent?: number }[] = [
+  { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
+  { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
+  { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
+  { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
+  { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
+  { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
+  { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
+  { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
+  { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
+  { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
+  { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
+  { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
+  { label: 'Omega-3', key: 'omega_3_g', unit: 'g', indent: 1 },
+  { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
+  { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
+  { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
+  { label: 'Iron', key: 'iron_mg', unit: 'mg' },
+  { label: 'Magnesium', key: 'magnesium_mg', unit: 'mg' },
+  { label: 'Zinc', key: 'zinc_mg', unit: 'mg' },
+  { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
+  { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
+  { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
+  { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
+  { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
+  { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
+  { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
+];
+
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   meals,
   onRemoveFood,
@@ -109,6 +139,8 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   const [editedPrompt, setEditedPrompt] = useState('');
   const [isMealUpdating, setIsMealUpdating] = useState(false);
   const [modalVisible, setModalVisible] = useState(false);
+  const [focusedKey, setFocusedKey] = useState<string | null>(null);
+  const [showAllNutrients, setShowAllNutrients] = useState(false);
 
   // Slide-up animation
   const slideAnim = useRef(new Animated.Value(SCREEN_HEIGHT)).current;
@@ -135,6 +167,8 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
       setSelectedFood(null);
       setBaseFood(null);
       setSelectedMealId(null);
+      setFocusedKey(null);
+      setShowAllNutrients(false);
     });
   };
 
@@ -379,16 +413,16 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
         animationType="none"
         onRequestClose={handleCloseModal}
       >
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)' }}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)' }}>
           {/* Tappable backdrop */}
           <TouchableOpacity style={{ height: SCREEN_HEIGHT * 0.05 }} activeOpacity={1} onPress={handleCloseModal} />
 
           <Animated.View
             style={{
               height: SCREEN_HEIGHT * 0.95,
-              backgroundColor: theme.colors.background,
-              borderTopLeftRadius: 20,
-              borderTopRightRadius: 20,
+              backgroundColor: Acid.moss,
+              borderTopLeftRadius: 24,
+              borderTopRightRadius: 24,
               overflow: 'hidden',
               transform: [{ translateY: slideAnim }],
             }}
@@ -398,70 +432,73 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
               style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}
               {...foodPanResponder.panHandlers}
             >
-              <View style={{ width: 36, height: 5, borderRadius: 3, backgroundColor: theme.colors.border }} />
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: Acid.hair2 }} />
             </View>
 
             {selectedFood && (
               <>
                 {/* Header */}
-                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 20, paddingBottom: 12 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'flex-start', paddingHorizontal: 24, paddingTop: 8, paddingBottom: 12 }}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ fontSize: 20, fontWeight: '700', color: theme.colors.textPrimary }}>{selectedFood.name}</Text>
-                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginTop: 2 }}>{selectedFood.weight_g}g serving</Text>
+                    <Text style={{ fontFamily: Acid.serifItalic, fontSize: 26, lineHeight: 32, color: Acid.tx }}>{selectedFood.name}</Text>
+                    <Text style={{ fontSize: 13, color: Acid.tx2, marginTop: 4 }}>{selectedFood.weight_g}g serving</Text>
                   </View>
                   <TouchableOpacity onPress={handleCloseModal} style={{ padding: 4 }}>
-                    <Feather name="x" size={22} color={theme.colors.textTertiary} />
+                    <Feather name="x" size={22} color={Acid.tx3} />
                   </TouchableOpacity>
                 </View>
 
                 <ScrollView
                   style={{ flex: 1 }}
-                  contentContainerStyle={{ paddingHorizontal: 20, paddingBottom: 40 }}
+                  contentContainerStyle={{ paddingHorizontal: 24, paddingBottom: 40 }}
                   showsVerticalScrollIndicator={false}
                   keyboardShouldPersistTaps="handled"
                 >
                   {/* Calorie hero */}
-                  <View style={{ alignItems: 'center', paddingVertical: 20 }}>
-                    <Text style={{ fontSize: 48, fontWeight: '800', color: theme.colors.textPrimary }}>{Math.round(selectedFood.calories)}</Text>
-                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginTop: -2 }}>calories</Text>
+                  <View style={{ alignItems: 'center', paddingTop: 18, paddingBottom: 22 }}>
+                    <Text style={{ fontFamily: Acid.serif, fontSize: 64, lineHeight: 68, color: Acid.tx }}>{Math.round(selectedFood.calories)}</Text>
+                    <Text style={{ fontSize: 11, letterSpacing: 2.5, color: Acid.tx3, marginTop: 2 }}>CALORIES</Text>
                   </View>
 
                   {/* Macro bar */}
-                  <View style={{ height: 8, borderRadius: 4, flexDirection: 'row', overflow: 'hidden', marginBottom: 16 }}>
-                    <View style={{ width: `${proteinPct}%`, backgroundColor: MACRO_COLORS.protein }} />
-                    <View style={{ width: `${carbsPct}%`, backgroundColor: MACRO_COLORS.carbs }} />
-                    <View style={{ width: `${fatPct}%`, backgroundColor: MACRO_COLORS.fat }} />
+                  <View style={{ height: 3, borderRadius: 1.5, flexDirection: 'row', overflow: 'hidden', backgroundColor: Acid.hair, marginBottom: 18 }}>
+                    <View style={{ width: `${proteinPct}%`, backgroundColor: Acid.protein }} />
+                    <View style={{ width: `${carbsPct}%`, backgroundColor: Acid.carbs }} />
+                    <View style={{ width: `${fatPct}%`, backgroundColor: Acid.fat }} />
                   </View>
 
-                  {/* Macro pills */}
-                  <View style={{ flexDirection: 'row', gap: 10, marginBottom: 28 }}>
+                  {/* Macro stats — columns, not boxes */}
+                  <View style={{ flexDirection: 'row', marginBottom: 32 }}>
                     {[
-                      { label: 'Protein', value: selectedFood.protein, color: MACRO_COLORS.protein },
-                      { label: 'Carbs', value: selectedFood.carbs, color: MACRO_COLORS.carbs },
-                      { label: 'Fat', value: selectedFood.fat, color: MACRO_COLORS.fat },
+                      { label: 'PROTEIN', value: selectedFood.protein, color: Acid.protein },
+                      { label: 'CARBS', value: selectedFood.carbs, color: Acid.carbs },
+                      { label: 'FAT', value: selectedFood.fat, color: Acid.fat },
                     ].map((m) => (
-                      <View key={m.label} style={{
-                        flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 12,
-                        backgroundColor: m.color + '10',
-                      }}>
-                        <Text style={{ fontSize: 20, fontWeight: '700', color: m.color }}>{Math.round(m.value)}g</Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 2 }}>{m.label}</Text>
+                      <View key={m.label} style={{ flex: 1, alignItems: 'center' }}>
+                        <Text style={{ fontFamily: Acid.serif, fontSize: 22, color: Acid.tx }}>
+                          {Math.round(m.value)}<Text style={{ fontSize: 14, color: Acid.tx3 }}>g</Text>
+                        </Text>
+                        <Text style={{ fontSize: 10, letterSpacing: 1.5, color: m.color, marginTop: 4 }}>{m.label}</Text>
                       </View>
                     ))}
                   </View>
 
                   {/* Edit Macros */}
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 12 }}>Edit Macros</Text>
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 24 }}>
+                  <Text style={{ fontSize: 11, letterSpacing: 2, color: Acid.tx3, marginBottom: 16 }}>EDIT MACROS</Text>
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', columnGap: 20, rowGap: 20, marginBottom: 32 }}>
                     {/* Calories */}
-                    <View style={{ width: '47%' }}>
-                      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4 }}>Calories</Text>
+                    <View style={{ width: '45%' }}>
+                      <Text style={{ fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 2 }}>CALORIES</Text>
                       <TextInput
                         style={{
-                          borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10,
-                          paddingVertical: 10, paddingHorizontal: 12, fontSize: 16,
-                          color: theme.colors.textPrimary, backgroundColor: theme.colors.card,
+                          borderBottomWidth: 1.5,
+                          borderBottomColor: focusedKey === 'edit_calories' ? Acid.lime : Acid.hair2,
+                          paddingVertical: 8, paddingHorizontal: 0, fontSize: 20,
+                          fontFamily: Acid.serif, color: Acid.tx,
                         }}
+                        selectionColor={Acid.lime}
+                        onFocus={() => setFocusedKey('edit_calories')}
+                        onBlur={() => setFocusedKey(null)}
                         keyboardType="numeric"
                         value={String(Math.round(selectedFood.calories))}
                         onChangeText={(text) => {
@@ -486,18 +523,22 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     </View>
                     {/* Protein, Carbs, Fat */}
                     {[
-                      { label: 'Protein', key: 'protein' as keyof ParsedFood, color: MACRO_COLORS.protein },
-                      { label: 'Carbs', key: 'carbs' as keyof ParsedFood, color: MACRO_COLORS.carbs },
-                      { label: 'Fat', key: 'fat' as keyof ParsedFood, color: MACRO_COLORS.fat },
+                      { label: 'PROTEIN (G)', key: 'protein' as keyof ParsedFood, color: Acid.protein },
+                      { label: 'CARBS (G)', key: 'carbs' as keyof ParsedFood, color: Acid.carbs },
+                      { label: 'FAT (G)', key: 'fat' as keyof ParsedFood, color: Acid.fat },
                     ].map((item) => (
-                      <View key={item.label} style={{ width: '47%' }}>
-                        <Text style={{ fontSize: 12, color: item.color, marginBottom: 4 }}>{item.label} (g)</Text>
+                      <View key={item.label} style={{ width: '45%' }}>
+                        <Text style={{ fontSize: 10, letterSpacing: 1.5, color: item.color, marginBottom: 2 }}>{item.label}</Text>
                         <TextInput
                           style={{
-                            borderWidth: 1, borderColor: theme.colors.border, borderRadius: 10,
-                            paddingVertical: 10, paddingHorizontal: 12, fontSize: 16,
-                            color: theme.colors.textPrimary, backgroundColor: theme.colors.card,
+                            borderBottomWidth: 1.5,
+                            borderBottomColor: focusedKey === `edit_${item.key}` ? Acid.lime : Acid.hair2,
+                            paddingVertical: 8, paddingHorizontal: 0, fontSize: 20,
+                            fontFamily: Acid.serif, color: Acid.tx,
                           }}
+                          selectionColor={Acid.lime}
+                          onFocus={() => setFocusedKey(`edit_${item.key}`)}
+                          onBlur={() => setFocusedKey(null)}
                           keyboardType="numeric"
                           value={String(selectedFood[item.key] ?? '')}
                           onChangeText={(text) => {
@@ -515,90 +556,91 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                   </View>
 
                   {/* Nutrition Facts */}
-                  <View style={{ borderTopWidth: 1, borderTopColor: theme.colors.border, paddingTop: 16 }}>
-                    <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 12 }}>Nutrition Facts</Text>
+                  <View style={{ borderTopWidth: 1, borderTopColor: Acid.hair, paddingTop: 20 }}>
+                    <Text style={{ fontSize: 11, letterSpacing: 2, color: Acid.tx3, marginBottom: 8 }}>NUTRITION FACTS</Text>
 
-                    {[
-                      { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
-                      { label: 'Dietary Fibre', key: 'dietary_fiber', unit: 'g', indent: 1 },
-                      { label: 'Sugar', key: 'sugar', unit: 'g', indent: 1 },
-                      { label: 'Added Sugars', key: 'added_sugars', unit: 'g', indent: 2 },
-                      { label: 'Sugar Alcohols', key: 'sugar_alcohols', unit: 'g', indent: 2 },
-                      { label: 'Net Carbs', key: 'net_carbs', unit: 'g', indent: 1 },
-                      { label: 'Protein', key: 'protein', unit: 'g', isHeader: true },
-                      { label: 'Total Fat', key: 'fat', unit: 'g', isHeader: true },
-                      { label: 'Saturated Fat', key: 'saturated_fat', unit: 'g', indent: 1 },
-                      { label: 'Trans Fat', key: 'trans_fat', unit: 'g', indent: 1 },
-                      { label: 'Polyunsaturated Fat', key: 'polyunsaturated_fat', unit: 'g', indent: 1 },
-                      { label: 'Monounsaturated Fat', key: 'monounsaturated_fat', unit: 'g', indent: 1 },
-                      { label: 'Omega-3', key: 'omega_3_g', unit: 'g', indent: 1 },
-                      { label: 'Cholesterol', key: 'cholesterol_mg', unit: 'mg' },
-                      { label: 'Sodium', key: 'sodium_mg', unit: 'mg' },
-                      { label: 'Calcium', key: 'calcium_mg', unit: 'mg' },
-                      { label: 'Iron', key: 'iron_mg', unit: 'mg' },
-                      { label: 'Magnesium', key: 'magnesium_mg', unit: 'mg' },
-                      { label: 'Zinc', key: 'zinc_mg', unit: 'mg' },
-                      { label: 'Potassium', key: 'potassium_mg', unit: 'mg' },
-                      { label: 'Vitamin A', key: 'vitamin_a_mcg', unit: 'mcg' },
-                      { label: 'Vitamin C', key: 'vitamin_c_mg', unit: 'mg' },
-                      { label: 'Vitamin D', key: 'vitamin_d_mcg', unit: 'mcg' },
-                      { label: 'Vitamin E', key: 'vitamin_e_mg', unit: 'mg' },
-                      { label: 'Vitamin K', key: 'vitamin_k_mcg', unit: 'mcg' },
-                      { label: 'Vitamin B12', key: 'vitamin_b12_mcg', unit: 'mcg' },
-                    ].map((item) => (
-                      <View key={item.key} style={{
-                        flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
-                        paddingVertical: 8, paddingLeft: (item.indent || 0) * 16,
-                        borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth,
-                        borderBottomColor: theme.colors.border,
-                      }}>
-                        <Text style={{
-                          fontSize: 13, flex: 1,
-                          color: theme.colors.textSecondary,
-                          fontWeight: item.isHeader ? '600' : '400',
-                        }}>
-                          {item.indent ? `${item.label}` : item.label}
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', width: 100, justifyContent: 'flex-end' }}>
-                          <TextInput
-                            style={{ fontSize: 13, textAlign: 'right', padding: 0, minWidth: 40, marginRight: 4, color: theme.colors.textPrimary }}
-                            keyboardType="numeric"
-                            placeholder="-"
-                            placeholderTextColor={theme.colors.textTertiary}
-                            value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
-                            onChangeText={(text) => {
-                              const val = text === '' ? undefined : Number(text);
-                              const updated = { ...selectedFood, [item.key]: val };
-                              if (['protein', 'carbs', 'fat'].includes(item.key)) {
-                                const p = Number(updated.protein || 0);
-                                const c = Number(updated.carbs || 0);
-                                const f = Number(updated.fat || 0);
-                                updated.calories = Math.round(p * 4 + c * 4 + f * 9);
-                              }
-                              setSelectedFood(updated);
-                            }}
-                          />
-                          <Text style={{ fontSize: 11, color: theme.colors.textTertiary, width: 28, textAlign: 'right' }}>{item.unit}</Text>
-                        </View>
-                      </View>
-                    ))}
+                    {(() => {
+                      // Visibility comes from the snapshot at open, not live edits,
+                      // so a row does not vanish while the user is clearing it.
+                      const hasValue = (key: string) =>
+                        baseFood?.[key as keyof ParsedFood] !== undefined;
+                      const visibleRows = showAllNutrients
+                        ? NUTRIENT_ROWS
+                        : NUTRIENT_ROWS.filter(r => r.isHeader || hasValue(r.key));
+                      const hiddenCount = NUTRIENT_ROWS.length - visibleRows.length;
+                      return (
+                        <>
+                          {visibleRows.map((item) => (
+                            <View key={item.key} style={{
+                              flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+                              paddingVertical: 9, paddingLeft: (item.indent || 0) * 14,
+                              borderBottomWidth: item.indent ? 0 : StyleSheet.hairlineWidth,
+                              borderBottomColor: Acid.hair,
+                            }}>
+                              <Text style={{
+                                fontSize: 13, flex: 1,
+                                color: item.isHeader ? Acid.tx : Acid.tx2,
+                                fontWeight: item.isHeader ? '600' : '400',
+                              }}>
+                                {item.label}
+                              </Text>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', width: 100, justifyContent: 'flex-end' }}>
+                                <TextInput
+                                  style={{ fontSize: 14, textAlign: 'right', padding: 0, minWidth: 40, marginRight: 4, color: Acid.tx }}
+                                  selectionColor={Acid.lime}
+                                  keyboardType="numeric"
+                                  placeholder="–"
+                                  placeholderTextColor={Acid.tx3}
+                                  value={selectedFood[item.key as keyof ParsedFood] !== undefined ? String(selectedFood[item.key as keyof ParsedFood]) : ''}
+                                  onChangeText={(text) => {
+                                    const val = text === '' ? undefined : Number(text);
+                                    const updated = { ...selectedFood, [item.key]: val };
+                                    if (['protein', 'carbs', 'fat'].includes(item.key)) {
+                                      const p = Number(updated.protein || 0);
+                                      const c = Number(updated.carbs || 0);
+                                      const f = Number(updated.fat || 0);
+                                      updated.calories = Math.round(p * 4 + c * 4 + f * 9);
+                                    }
+                                    setSelectedFood(updated);
+                                  }}
+                                />
+                                <Text style={{ fontSize: 11, color: Acid.tx3, width: 28, textAlign: 'right' }}>{item.unit}</Text>
+                              </View>
+                            </View>
+                          ))}
+                          {(hiddenCount > 0 || showAllNutrients) && (
+                            <TouchableOpacity
+                              onPress={() => setShowAllNutrients(prev => !prev)}
+                              style={{ paddingVertical: 14, alignItems: 'center' }}
+                            >
+                              <Text style={{ fontSize: 11, letterSpacing: 1.5, color: Acid.lime }}>
+                                {showAllNutrients ? 'SHOW LESS' : `SHOW ALL NUTRIENTS (${hiddenCount} MORE)`}
+                              </Text>
+                            </TouchableOpacity>
+                          )}
+                        </>
+                      );
+                    })()}
                   </View>
                 </ScrollView>
 
                 {/* Save / Cancel */}
                 {onUpdateFood && selectedMealId && (
                   <View style={{
-                    flexDirection: 'row', gap: 12, paddingHorizontal: 20, paddingVertical: 16,
-                    borderTopWidth: 1, borderTopColor: theme.colors.border, backgroundColor: theme.colors.background,
+                    flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 24, paddingVertical: 16,
+                    borderTopWidth: 1, borderTopColor: Acid.hair, backgroundColor: Acid.moss,
                   }}>
                     <TouchableOpacity
-                      style={{ flex: 1, paddingVertical: 14, borderRadius: 12, borderWidth: 1, borderColor: theme.colors.border, alignItems: 'center' }}
+                      style={{ paddingVertical: 16, paddingHorizontal: 20 }}
                       onPress={handleCloseModal}
                     >
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textSecondary }}>Cancel</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '600', color: Acid.tx2 }}>Cancel</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
-                      style={{ flex: 1, paddingVertical: 14, borderRadius: 12, backgroundColor: theme.colors.primary, alignItems: 'center' }}
+                      style={{
+                        flex: 1, paddingVertical: 16, borderRadius: 999, backgroundColor: Acid.lime, alignItems: 'center',
+                        shadowColor: Acid.lime, shadowOpacity: 0.35, shadowRadius: 16, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+                      }}
                       onPress={() => {
                         if (selectedFood && onUpdateFood && selectedMealId) {
                           const p = Number(selectedFood.protein || 0);
@@ -612,7 +654,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                         handleCloseModal();
                       }}
                     >
-                      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.primaryForeground }}>Save</Text>
+                      <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.moss }}>Save</Text>
                     </TouchableOpacity>
                   </View>
                 )}
