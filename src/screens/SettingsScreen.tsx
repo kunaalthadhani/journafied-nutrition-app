@@ -41,6 +41,10 @@ interface SettingsScreenProps {
   onIntegrations?: () => void;
   onDowngradeToFree?: () => void;
   onGrocerySuggestions?: () => void;
+  onSetGoals?: () => void;
+  onOpenAbout?: () => void;
+  onOpenFeedback?: () => void;
+  onAdminPush?: () => void;
   onHowItWorks?: () => void;
   renderAccountScreen?: (onBack: () => void) => React.ReactNode;
   onAccountClose?: () => void;
@@ -54,6 +58,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   onIntegrations,
   onDowngradeToFree,
   onGrocerySuggestions,
+  onSetGoals,
+  onOpenAbout,
+  onOpenFeedback,
+  onAdminPush,
   onHowItWorks,
   renderAccountScreen,
   onAccountClose,
@@ -69,6 +77,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   type SlideUpType = 'account' | 'notifications' | 'connections' | 'weightUnit' | 'dynamic' | 'smartSuggest' | 'patternDetection' | 'weeklyOverview' | 'grocery' | 'calorieBank';
   const [activeSlideUp, setActiveSlideUp] = useState<SlideUpType | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const adminTapCount = useRef(0);
+  const adminTapTimer = useRef<NodeJS.Timeout | null>(null);
   const activeSlideUpRef = useRef<SlideUpType | null>(null);
 
   // Feature flags & settings. Smart Suggest defaults OFF for new accounts.
@@ -354,6 +364,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         {/* App Preferences */}
         <SettingSection title="App Preferences">
           <SettingItem
+            icon="target"
+            title="Nutrition Goals"
+            subtitle="Daily target and macro split"
+            onPress={() => onSetGoals?.()}
+          />
+          <SettingItem
             icon="bell"
             title="Notifications"
             subtitle="Meal reminders & updates"
@@ -507,10 +523,10 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
         <SettingSection title="Support & Legal">
           <SettingItem icon="help-circle" title="Help & Support" onPress={() => Alert.alert('Help', 'Support content coming soon.')} />
           <SettingItem icon="book-open" title="How it Works" onPress={onHowItWorks} />
-          <SettingItem icon="mail" title="Contact Us" onPress={() => Alert.alert('Contact', 'Contact form coming soon.')} />
+          <SettingItem icon="mail" title="Send Feedback" subtitle="Tell us what to fix or build" onPress={() => onOpenFeedback?.()} />
           <SettingItem icon="file-text" title="Privacy Policy" onPress={() => Alert.alert('Privacy', 'Privacy Policy')} />
           <SettingItem icon="file-text" title="Terms of Service" onPress={() => Alert.alert('Terms', 'Terms of Service')} />
-          <SettingItem icon="info" title="About" onPress={handleAbout} />
+          <SettingItem icon="info" title="About" onPress={() => (onOpenAbout ? onOpenAbout() : handleAbout())} />
         </SettingSection>
 
         {/* Data Management */}
@@ -543,9 +559,22 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           </SettingSection>
         )}
 
-        <Text style={{ textAlign: 'center', color: Acid.tx3, fontSize: Typography.fontSize.xs, paddingVertical: 24 }}>
-          TrackKcal v{APP_VERSION}
-        </Text>
+        <TouchableOpacity
+          activeOpacity={1}
+          onPress={() => {
+            adminTapCount.current += 1;
+            if (adminTapTimer.current) clearTimeout(adminTapTimer.current);
+            adminTapTimer.current = setTimeout(() => { adminTapCount.current = 0; }, 2000);
+            if (adminTapCount.current >= 7) {
+              adminTapCount.current = 0;
+              onAdminPush?.();
+            }
+          }}
+        >
+          <Text style={{ textAlign: 'center', color: Acid.tx3, fontSize: Typography.fontSize.xs, paddingVertical: 24 }}>
+            TrackKcal v{APP_VERSION}
+          </Text>
+        </TouchableOpacity>
 
       </ScrollView>
 

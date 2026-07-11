@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.43**
+Home gets its final polish from the design review. The side menu is gone: everything it held now lives where it belongs. Nutrition Goals, Send Feedback, and About are rows in Settings (Profile tab), and the hidden admin console moved to tapping the version number in Settings seven times. The bottom bar is now a floating glass pill in the Apple style you pointed to, with a lime plus button beside it that opens a quick log sheet: Type it, Snap it, or Say it. The white strip above the app on your iPhone is fixed, it was the web app's theme color still set to the old paper white, now moss. The sign-in reminder lost its box, and the splash screen goes dark to match.
+
 **v1.4.42**
 Home rebuilt to the design board's exact anatomy, not just its colors. The big number is now calories LEFT, with eaten, burned, and target in one line under it. The three macro bars are always visible below the hero. Your meals are one flat timestamped ledger: time, food, serif calories on the right, and portions written in words instead of P/C/F codes. Meal actions (save prompt, edit, delete) moved into a proper bottom sheet, opened by the ··· on each meal or a long press, and it works on Android and the web where the old alert menu could not. A greeting with your streak as a "day N" counter sits at the top, the scrolling date strip became a serif date headline with arrows to step between days plus a days-logged count, and one serif italic coach line above the input reads your day and offers ASK COACH. The input became a single rounded pill with a camera glyph. The column on the right edge is now visible with a lime glow. This build was adversarially reviewed by 22 agents before shipping; their 17 confirmed findings (Android menu trap, mislabeled TODAY on past days, invisible failed meals, unreadable button text, and more) are all fixed in it.
 

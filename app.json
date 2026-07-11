@@ -5,12 +5,12 @@
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
-    "userInterfaceStyle": "light",
+    "userInterfaceStyle": "dark",
     "newArchEnabled": true,
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#0C120D"
     },
     "ios": {
       "bundleIdentifier": "com.trackkcal.app",
@@ -44,8 +44,8 @@
       "favicon": "./assets/favicon.png",
       "output": "single",
       "bundler": "metro",
-      "themeColor": "#FBF9F4",
-      "backgroundColor": "#FBF9F4",
+      "themeColor": "#0C120D",
+      "backgroundColor": "#0C120D",
       "display": "standalone",
       "lang": "en",
       "name": "TrackKcal",

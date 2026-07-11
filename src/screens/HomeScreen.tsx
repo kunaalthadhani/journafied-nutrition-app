@@ -24,7 +24,6 @@ import { TopNavigationBar } from '../components/TopNavigationBar';
 import { CalendarModal } from '../components/CalendarModal';
 import { StatCardsSection } from '../components/StatCardsSection';
 import { BottomInputBar } from '../components/BottomInputBar';
-import { SidebarMenu } from '../components/SidebarMenu';
 import { FeedbackModal } from '../components/FeedbackModal';
 import { SetGoalsScreen } from './SetGoalsScreen';
 import { WeightTrackerScreen } from './WeightTrackerScreen';
@@ -35,7 +34,6 @@ import { AccountScreen } from './AccountScreen';
 import { AboutScreen } from './AboutScreen';
 import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 import { AdminPushScreen } from './AdminPushScreen';
-import { ReferralScreen } from './ReferralScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
@@ -93,7 +91,6 @@ export const HomeScreen: React.FC = () => {
   const { accountInfo, loadAllData: refreshUserContext } = useUser();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showFirstLogMessage, setShowFirstLogMessage] = useState(false);
-  const [menuVisible, setMenuVisible] = useState(false);
   const [showSetGoals, setShowSetGoals] = useState(false);
   const [showWeightTracker, setShowWeightTracker] = useState(false);
   const [showNutritionAnalysis, setShowNutritionAnalysis] = useState(false);
@@ -104,8 +101,8 @@ export const HomeScreen: React.FC = () => {
   const [entryCount, setEntryCount] = useState<number>(0);
   const [showAccount, setShowAccount] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
+  const [showQuickLog, setShowQuickLog] = useState(false);
   const [showAdminPush, setShowAdminPush] = useState(false);
-  const [showReferral, setShowReferral] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
   const [totalEarnedEntries, setTotalEarnedEntries] = useState(0);
@@ -381,10 +378,6 @@ export const HomeScreen: React.FC = () => {
     protein: { current: totalExerciseCalories, target: 0, unit: 'cal' }, // Exercise calories
     fat: { current: remainingCalories, target: 0, unit: 'cal' } // Remaining calories
   };
-  const handleMenuPress = () => {
-    setMenuVisible(true);
-  };
-
   const handleStreakPress = () => {
     setShowStreakWidget(true);
   };
@@ -524,7 +517,6 @@ export const HomeScreen: React.FC = () => {
     if (!canNavigate('account')) return;
     if (mode) setAccountInitialMode(mode);
     setAccountFromWall(false);
-    setMenuVisible(false);
     setShowSettings(false);
     setShowAccount(true);
   };
@@ -568,28 +560,6 @@ export const HomeScreen: React.FC = () => {
     setShowAbout(false);
   };
 
-  const handleOpenReferral = () => {
-    if (!canNavigate('referral')) return;
-    setMenuVisible(false);
-    setShowReferral(true);
-  };
-
-  const handleReferralBack = async () => {
-    setShowReferral(false);
-    // Reload referral data
-    try {
-      const accountInfo = await dataStorage.loadAccountInfo();
-      await refreshUserContext();
-      if (accountInfo?.email) {
-        const code = await dataStorage.getReferralCode(accountInfo.email);
-        setReferralCode(code?.code || null);
-        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-        setTotalEarnedEntries(earned);
-      }
-    } catch (error) {
-      if (__DEV__) console.error('Error reloading referral data:', error);
-    }
-  };
 
 
 
@@ -1349,17 +1319,9 @@ export const HomeScreen: React.FC = () => {
         setShowAbout(false);
         return true;
       }
-      if (showReferral) {
-        setShowReferral(false);
-        return true;
-      }
 
       if (showCalendar) {
         setShowCalendar(false);
-        return true;
-      }
-      if (menuVisible) {
-        setMenuVisible(false);
         return true;
       }
       // At the true home screen; allow default behavior (exit app)
@@ -1378,8 +1340,6 @@ export const HomeScreen: React.FC = () => {
     showSetGoals,
     showAccount,
     showAbout,
-    showReferral,
-    menuVisible,
   ]);
 
   useEffect(() => {
@@ -2401,6 +2361,10 @@ export const HomeScreen: React.FC = () => {
           onLogin={handleAccount}
           onDowngradeToFree={handleDowngradeToFree}
           onGrocerySuggestions={handleGrocerySuggestions}
+          onSetGoals={() => { setShowSettings(false); handleSetGoals(); }}
+          onOpenAbout={handleAbout}
+          onOpenFeedback={() => { setShowSettings(false); setShowFeedback(true); }}
+          onAdminPush={handleAdminPush}
           onHowItWorks={() => {
             setShowSettings(false);
             setWalkthroughHideOffer(false);
@@ -2527,22 +2491,6 @@ export const HomeScreen: React.FC = () => {
   }
 
 
-  if (showReferral) {
-    const isLoggedIn = !!accountInfo?.email;
-    return (
-      <Modal visible={showReferral} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleReferralBack}>
-        <ReferralScreen
-          isLoggedIn={isLoggedIn}
-          userEmail={accountInfo?.email || null}
-          referralCode={referralCode}
-          totalEarnedEntriesFromReferrals={totalEarnedEntries}
-          onBack={handleReferralBack}
-          onLoginPress={handleAccount}
-        />
-      </Modal>
-    );
-  }
-
 
   // Smart Adjustment Handlers
   // Smart Adjustment Handlers
@@ -2570,7 +2518,6 @@ export const HomeScreen: React.FC = () => {
       <View style={[styles.container, { backgroundColor: Acid.moss }]}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
-          onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
         />
 
@@ -2641,14 +2588,13 @@ export const HomeScreen: React.FC = () => {
             onPress={() => handleAccount('signup')}
             activeOpacity={0.85}
             style={{
-              marginHorizontal: 16,
-              marginTop: 10,
-              backgroundColor: Acid.mossDeep,
-              borderColor: Acid.hair,
-              borderWidth: 1,
-              borderRadius: 12,
-              paddingHorizontal: 14,
-              paddingVertical: 10,
+              marginHorizontal: 20,
+              marginTop: 6,
+              borderTopWidth: 1,
+              borderTopColor: Acid.hair,
+              borderBottomWidth: 1,
+              borderBottomColor: Acid.hair,
+              paddingVertical: 12,
               flexDirection: 'row',
               alignItems: 'center',
               gap: 10,
@@ -3031,6 +2977,7 @@ export const HomeScreen: React.FC = () => {
             screen; the rest open the existing full-screen surfaces. */}
         <AcidTabBar
           active="home"
+          onPlus={() => setShowQuickLog(true)}
           onPress={(tab) => {
             if (tab === 'insights') handleNutritionAnalysis();
             else if (tab === 'coach') { if (canNavigate('chatCoach')) setShowChatCoach(true); }
@@ -3039,27 +2986,46 @@ export const HomeScreen: React.FC = () => {
           }}
         />
 
-        <SidebarMenu
-          visible={menuVisible}
-          onClose={() => setMenuVisible(false)}
-          onSetGoals={handleSetGoals}
-          onWeightTracker={handleWeightTracker}
-          onNutritionAnalysis={handleNutritionAnalysis}
-          onSettings={handleSettings}
-          onLogin={handleAccount}
-          onAbout={handleAbout}
-          onAdminPush={handleAdminPush}
-          onReferral={handleOpenReferral}
-          onFeedback={() => {
-            setMenuVisible(false);
-            setShowFeedback(true);
-          }}
-          onHowItWorks={() => {
-            setMenuVisible(false);
-            setWalkthroughHideOffer(false);
-            setShowWalkthrough(true);
-          }}
-        />
+        {/* Quick log sheet, opened by the tab bar's plus */}
+        <Modal
+          visible={showQuickLog}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowQuickLog(false)}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+            activeOpacity={1}
+            onPress={() => setShowQuickLog(false)}
+          >
+            <View style={{ backgroundColor: Acid.moss, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 34 }}>
+              <Text style={{ fontFamily: Acid.serifItalic, fontSize: 20, color: Acid.tx, marginBottom: 8 }}>Log something</Text>
+              {[
+                { icon: 'type', label: 'Type it', hint: 'Describe your meal in words', action: () => setShouldFocusInput(true) },
+                { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', action: () => handlePlusPress() },
+                { icon: 'mic', label: 'Say it', hint: 'Speak and we transcribe', action: () => handleMicPress() },
+              ].map(row => (
+                <TouchableOpacity
+                  key={row.label}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderTopWidth: 1, borderTopColor: Acid.hair }}
+                  onPress={() => { setShowQuickLog(false); setTimeout(row.action, 250); }}
+                >
+                  <Feather name={row.icon as any} size={19} color={Acid.lime} />
+                  <View>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: Acid.tx }}>{row.label}</Text>
+                    <Text style={{ fontSize: 12, color: Acid.tx3, marginTop: 1 }}>{row.hint}</Text>
+                  </View>
+                </TouchableOpacity>
+              ))}
+              <TouchableOpacity
+                style={{ paddingVertical: 16, borderTopWidth: 1, borderTopColor: Acid.hair }}
+                onPress={() => setShowQuickLog(false)}
+              >
+                <Text style={{ fontSize: 15, color: Acid.tx2 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
 
         <FeedbackModal visible={showFeedback} onClose={() => setShowFeedback(false)} />
 
