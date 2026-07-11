@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Acid } from '../constants/acid';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export type AcidTabId = 'home' | 'insights' | 'coach' | 'body' | 'profile';
 
@@ -22,8 +23,9 @@ const TABS: { id: AcidTabId; label: string; icon: string }[] = [
 // other tabs open the existing full-screen surfaces. It never shows an active
 // state other than Home because the destinations are modals for now.
 export const AcidTabBar: React.FC<AcidTabBarProps> = ({ active, onPress }) => {
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.bar}>
+    <View style={[styles.bar, { paddingBottom: Math.max(insets.bottom, 8) }]}>
       {TABS.map(tab => {
         const isActive = tab.id === active;
         return (
@@ -49,7 +51,6 @@ const styles = StyleSheet.create({
     borderTopColor: Acid.hair,
     backgroundColor: Acid.moss,
     paddingTop: 8,
-    paddingBottom: 4,
   },
   tab: {
     flex: 1,

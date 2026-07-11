@@ -8,11 +8,10 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Plus, Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
+import { Camera, Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { Spacing } from '../constants/spacing';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarVisualizer } from './BarVisualizer';
 
 interface QuickPrompt {
@@ -57,7 +56,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const [isUserTyping, setIsUserTyping] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-  const insets = useSafeAreaInsets();
   const inputRef = React.useRef<TextInput>(null);
 
   const currentText = text;
@@ -133,9 +131,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
         styles.keyboardContainer,
         {
           backgroundColor: Acid.moss,
-          paddingBottom: Platform.OS === 'ios'
-            ? (insets.bottom > 0 ? insets.bottom : 20)
-            : 5,
+          paddingBottom: 8,
         },
       ]}
     >
@@ -150,7 +146,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             {quickPrompts.map((prompt) => (
               <View
                 key={prompt.id}
-                style={[styles.quickPromptChip, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}
+                style={[styles.quickPromptChip, { backgroundColor: Acid.mossDeep }]}
               >
                 <TouchableOpacity
                   onPress={() => onQuickPromptPress?.(prompt)}
@@ -158,7 +154,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                   style={styles.quickPromptTextWrapper}
                 >
                   <Text
-                    style={[styles.quickPromptText, { color: Acid.tx }]}
+                    style={[styles.quickPromptText, { color: Acid.tx2 }]}
                     numberOfLines={2}
                     ellipsizeMode="tail"
                   >
@@ -186,14 +182,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             />
           </View>
         )}
-        <View style={[styles.inputContainer, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}>
+        <View style={[styles.inputContainer, { backgroundColor: Acid.mossDeep }]}>
           <TouchableOpacity
             onPress={onPlusPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             disabled={isLoading || isRecording || isTranscribing}
             style={styles.plusIconButton}
           >
-            <Plus color={Acid.tx} size={20} strokeWidth={2.4} />
+            <Camera color={Acid.tx2} size={20} strokeWidth={2} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -279,7 +275,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               <TouchableOpacity
                 style={[
                   styles.circleButton,
-                  { backgroundColor: hasText ? Acid.lime : Acid.hair2 }
+                  { backgroundColor: hasText ? Acid.lime : 'transparent' }
                 ]}
                 onPress={hasText ? handleSubmit : onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
@@ -290,7 +286,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 ) : hasText ? (
                   <Send size={18} color={Acid.moss} strokeWidth={2.4} />
                 ) : (
-                  <Mic size={18} color={Acid.tx} strokeWidth={2.4} />
+                  <Mic size={19} color={Acid.tx2} strokeWidth={2.2} />
                 )}
               </TouchableOpacity>
             )}
@@ -320,11 +316,10 @@ const styles = StyleSheet.create({
   },
   quickPromptChip: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8, // Shadcn style: slightly rounded
-    borderWidth: 1,
+    paddingVertical: 7,
+    borderRadius: 999,
     marginRight: Spacing.sm,
   },
   quickPromptTextWrapper: {
@@ -344,11 +339,10 @@ const styles = StyleSheet.create({
   inputContainer: {
     flexDirection: 'row',
     alignItems: 'flex-end',
-    borderRadius: 12,
-    paddingHorizontal: 8,
+    borderRadius: 26,
+    paddingHorizontal: 10,
     paddingVertical: 8,
     minHeight: 52,
-    borderWidth: 1,
   },
   leftControls: {
     flexDirection: 'row',

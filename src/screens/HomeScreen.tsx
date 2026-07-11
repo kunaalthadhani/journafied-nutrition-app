@@ -19,9 +19,8 @@ import {
 import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { format, isSameDay, subDays } from 'date-fns';
+import { format, isSameDay, subDays, addDays } from 'date-fns';
 import { TopNavigationBar } from '../components/TopNavigationBar';
-import { DateSelector } from '../components/DateSelector';
 import { CalendarModal } from '../components/CalendarModal';
 import { StatCardsSection } from '../components/StatCardsSection';
 import { BottomInputBar } from '../components/BottomInputBar';
@@ -94,7 +93,6 @@ export const HomeScreen: React.FC = () => {
   const { accountInfo, loadAllData: refreshUserContext } = useUser();
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showFirstLogMessage, setShowFirstLogMessage] = useState(false);
-  const [scrollEnabled, setScrollEnabled] = useState(true);
   const [menuVisible, setMenuVisible] = useState(false);
   const [showSetGoals, setShowSetGoals] = useState(false);
   const [showWeightTracker, setShowWeightTracker] = useState(false);
@@ -136,7 +134,6 @@ export const HomeScreen: React.FC = () => {
   const [isRecording, setIsRecording] = useState(false);
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
-  const [hasUserTyped, setHasUserTyped] = useState(false);
   const [uploadStatusVisible, setUploadStatusVisible] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadFileName, setUploadFileName] = useState('');
@@ -1855,7 +1852,6 @@ export const HomeScreen: React.FC = () => {
   const handleSelectSavedPrompt = async (prompt: { text: string }) => {
     setTranscribedText(prompt.text);
     setShouldFocusInput(true);
-    setHasUserTyped(true);
     await analyticsService.trackSavedPromptReused();
   };
 
@@ -2364,7 +2360,6 @@ export const HomeScreen: React.FC = () => {
 
 
 
-  const formattedDate = format(selectedDate, 'd MMM, yyyy');
 
   if (showAdminPush) {
     return (
@@ -2571,22 +2566,67 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={[]}>
       <View style={[styles.container, { backgroundColor: Acid.moss }]}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
-          selectedDate={formattedDate}
-          userName={accountInfo?.name?.split(' ')[0] || "there"}
           onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
-          onStreakPress={handleStreakPress}
-          streak={currentStreak}
-          // Snowflake only while a recovery day is actively protecting the streak
-          // (yesterday frozen, or one fired this session). Keying it to the
-          // SELECTED date made swiping to an old frozen day repaint the whole top
-          // bar as "recovery" even though today's streak was fine.
-          frozen={(streakFreeze?.usedOnDates.includes(format(subDays(new Date(), 1), 'yyyy-MM-dd')) ?? false) || justFrozeDate !== null}
         />
+
+        {/* Greeting row: name left, streak day counter right. The counter goes
+            sky while a recovery day is actively protecting the streak. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20, paddingTop: 4 }}>
+          <Text style={{ fontSize: 14, color: Acid.tx2 }}>
+            {`Good ${new Date().getHours() < 12 ? 'morning' : new Date().getHours() < 17 ? 'afternoon' : 'evening'}${accountInfo?.name ? `, ${accountInfo.name.split(' ')[0]}` : ''}`}
+          </Text>
+          {currentStreak > 0 && (
+            <TouchableOpacity onPress={handleStreakPress} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{
+                fontSize: 12,
+                fontWeight: '600',
+                color: ((streakFreeze?.usedOnDates.includes(format(subDays(new Date(), 1), 'yyyy-MM-dd')) ?? false) || justFrozeDate !== null) ? Acid.protein : Acid.lime,
+              }}>
+                day {currentStreak}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* Date headline with day stepping. Replaces the scrolling date strip:
+            the day is a serif title, the calendar opens on tap, and the logged
+            count keeps the honesty the strip's status bars carried. */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingTop: 2, paddingBottom: 10 }}>
+          <TouchableOpacity
+            onPress={() => handleDateSelect(subDays(selectedDate, 1))}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }}
+          >
+            <Feather name="chevron-left" size={20} color={Acid.tx3} />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleCalendarPress} activeOpacity={0.7} style={{ marginHorizontal: 8 }}>
+            <Text style={{ fontFamily: Acid.serif, fontSize: 24, lineHeight: 30, color: Acid.tx }}>
+              {isSameDay(selectedDate, new Date()) ? 'Today' : format(selectedDate, 'EEEE d')}
+            </Text>
+          </TouchableOpacity>
+          <TouchableOpacity
+            onPress={() => { if (!isSameDay(selectedDate, new Date())) handleDateSelect(addDays(selectedDate, 1)); }}
+            hitSlop={{ top: 10, bottom: 10, left: 6, right: 10 }}
+            style={{ opacity: isSameDay(selectedDate, new Date()) ? 0.25 : 1 }}
+          >
+            <Feather name="chevron-right" size={20} color={Acid.tx3} />
+          </TouchableOpacity>
+          <Text style={{ fontSize: 10, letterSpacing: 1.2, color: Acid.tx3, marginLeft: 'auto' }}>
+            {format(selectedDate, 'MMMM').toUpperCase()}
+            {(() => {
+              let logged = 0;
+              for (let i = 0; i < 7; i++) {
+                const key = format(subDays(new Date(), i), 'yyyy-MM-dd');
+                if ((summariesByDate[key]?.entryCount || 0) > 0) logged++;
+              }
+              return `  ·  ${logged} OF 7 LOGGED`;
+            })()}
+          </Text>
+        </View>
 
         <SmartAdjustmentBanner
           visible={!!adjustmentAvailable}
@@ -2653,13 +2693,6 @@ export const HomeScreen: React.FC = () => {
 
 
 
-        {/* Date Selector (horizontal scroll/pan within the bar only) — stays pinned */}
-        <DateSelector
-          selectedDate={selectedDate}
-          onDateSelect={handleDateSelect}
-          summariesByDate={summariesByDate}
-        />
-
         {/* Streak Widget Modal is rendered at the bottom with other modals */}
 
         {/* Main content + input bar move together with the keyboard */}
@@ -2674,7 +2707,6 @@ export const HomeScreen: React.FC = () => {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={false}
             removeClippedSubviews={false}
-            scrollEnabled={scrollEnabled}
             keyboardShouldPersistTaps="handled"
           >
             {/* Stat Cards — scroll away as the food log scrolls up so the list gets the full height.
@@ -2712,10 +2744,10 @@ export const HomeScreen: React.FC = () => {
               </TouchableOpacity>
             ) : (
               <StatCardsSection
+                isToday={isSameDay(selectedDate, new Date())}
                 macrosData={macrosData}
                 macros2Data={macros2Data}
                 dailyCalories={bankAdjustedCalories}
-                onScrollEnable={setScrollEnabled}
                 calorieBankActive={calorieBankActive}
                 calorieBankBalance={calorieBankCycle?.bankBalance || 0}
                 weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
@@ -2861,6 +2893,7 @@ export const HomeScreen: React.FC = () => {
             )}
             <FoodLogSection
               meals={currentDayMeals}
+              dayLabel={isSameDay(selectedDate, new Date()) ? 'TODAY' : format(selectedDate, 'EEEE d').toUpperCase()}
               onRemoveFood={handleRemoveFood}
               onEditMealPrompt={handleEditMealPrompt}
               savedPrompts={savedPrompts}
@@ -2916,15 +2949,32 @@ export const HomeScreen: React.FC = () => {
               onDeleteEntry={handleDeleteExerciseEntry}
             />
 
-            {/* Motivational Text - only show if no meals logged for current day */}
-            {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
-              <View style={styles.motivationalTextContainer}>
-                <Text style={[styles.motivationalTitle, { color: Acid.tx }]}>
-                  Ready when you are!
+            {/* The coach line: one serif italic sentence about the day, with
+                the door to the coach. Deterministic copy, no AI call. */}
+            {isSameDay(selectedDate, new Date()) && (
+              <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
+                <Text style={{ fontFamily: Acid.serifItalic, fontSize: 16, lineHeight: 24, color: Acid.tx }}>
+                  {(() => {
+                    const remaining = Math.round(macros2Data?.fat?.current ?? 0);
+                    const h = new Date().getHours();
+                    const phrase = h < 12 ? 'the whole day ahead' : h < 17 ? 'the afternoon ahead' : 'the evening to go';
+                    const nothingLogged = currentDayMeals.length === 0 && currentDayExercises.length === 0;
+                    if (!goalsSet) return "Tell me what you ate or how you moved and I'll handle the rest.";
+                    if (nothingLogged) return "Nothing logged yet. Tell me your first meal and I'll pace your day.";
+                    if (currentDayMeals.length === 0) return "Workout logged. Tell me what you eat and I'll balance the day.";
+                    if (remaining < 0) return `${Math.abs(remaining).toLocaleString()} kcal over today. Tomorrow starts a clean page.`;
+                    return `${remaining.toLocaleString()} kcal left with ${phrase}.`;
+                  })()}
                 </Text>
-                <Text style={[styles.motivationalText, { color: Acid.tx2 }]}>
-                  Tell me what you ate or how you moved and I’ll handle the rest
-                </Text>
+                {isPremium && (
+                  <TouchableOpacity
+                    onPress={() => { if (canNavigate('chatCoach')) setShowChatCoach(true); }}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    style={{ marginTop: 8 }}
+                  >
+                    <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: Acid.lime }}>ASK COACH →</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             )}
 
@@ -2943,7 +2993,6 @@ export const HomeScreen: React.FC = () => {
             transcribedText={transcribedText}
             onTranscribedTextChange={setTranscribedText}
             onUserTyping={() => {
-              setHasUserTyped(true);
               setShouldFocusInput(false);
             }}
             autoFocus={shouldFocusInput}
@@ -2957,6 +3006,25 @@ export const HomeScreen: React.FC = () => {
                     "Describe your meal"
             }
           />
+
+          {/* THE COLUMN — the day filling up as you eat. Lives inside the
+              content area so it naturally spans chrome-to-input-bar. */}
+          {goalsSet && (
+            <View pointerEvents="none" style={{ position: 'absolute', right: 3, top: 4, bottom: 78, width: 4 }}>
+              <View style={{ ...StyleSheet.absoluteFillObject, borderRadius: 2, backgroundColor: Acid.hair, opacity: 0.6 }} />
+              <View style={{
+                position: 'absolute', bottom: 0, left: 0, right: 0,
+                height: `${Math.min(100, Math.max(3, ((macros2Data?.carbs?.current || 0) / Math.max(1, bankAdjustedCalories || 1)) * 100))}%`,
+                borderRadius: 2,
+                backgroundColor: Acid.lime,
+                shadowColor: Acid.lime,
+                shadowOpacity: 0.8,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 0 },
+                elevation: 4,
+              }} />
+            </View>
+          )}
         </KeyboardAvoidingView>
 
         {/* Bottom tab bar — phase 1 of the board's navigation. Home is this
@@ -2970,17 +3038,6 @@ export const HomeScreen: React.FC = () => {
             else if (tab === 'profile') handleSettings();
           }}
         />
-
-        {/* THE COLUMN — the day filling up as you eat, on the screen's edge */}
-        {goalsSet && (
-          <View pointerEvents="none" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 3, backgroundColor: Acid.hair }}>
-            <View style={{
-              position: 'absolute', bottom: 0, left: 0, right: 0,
-              height: `${Math.min(100, Math.max(0, ((macros2Data?.carbs?.current || 0) / Math.max(1, bankAdjustedCalories || 1)) * 100))}%`,
-              backgroundColor: Acid.lime,
-            }} />
-          </View>
-        )}
 
         <SidebarMenu
           visible={menuVisible}
@@ -3200,28 +3257,6 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-  },
-  motivationalTextContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingHorizontal: 32,
-    paddingVertical: 40,
-    minHeight: 200,
-  },
-  motivationalTitle: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.semiBold,
-    color: Acid.tx,
-    textAlign: 'center',
-    marginBottom: 8,
-  },
-  motivationalText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.normal,
-    color: Acid.tx2,
-    textAlign: 'center',
-    lineHeight: Typography.lineHeight.relaxed * Typography.fontSize.md,
   },
   bottomSpacer: {
     height: 160, // Space for bottom input bar + chips + safe area

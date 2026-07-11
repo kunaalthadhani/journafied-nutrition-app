@@ -140,7 +140,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
     if (!visible || !isPremium) return null;
 
     return (
-        <View style={[styles.container, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+        <View style={styles.container}>
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handlePress}
@@ -148,9 +148,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                 disabled={expanded}
             >
                 <View style={styles.leftRow}>
-                    <View style={[styles.iconBox, { backgroundColor: Acid.lime }]}>
-                        <Feather name="zap" size={16} color="white" />
-                    </View>
+                    <Feather name="zap" size={16} color={Acid.lime} style={{ marginRight: 2 }} />
                     <View>
                         <Text style={[styles.title, { color: Acid.tx }]}>Smart Suggest</Text>
                         <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
@@ -159,9 +157,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                     </View>
                 </View>
                 {!expanded && (
-                    <View style={[styles.badge, { borderColor: Acid.lime }]}>
-                        <Text style={[styles.badgeText, { color: Acid.lime }]}>PREMIUM</Text>
-                    </View>
+                    <Text style={[styles.badgeText, { color: Acid.tx3 }]}>PREMIUM</Text>
                 )}
             </TouchableOpacity>
 
@@ -174,7 +170,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
 
             {expanded && !loading && suggestion && (
                 <View style={styles.content}>
-                    <View style={[styles.suggestionBox, { backgroundColor: Acid.mossDeep }]}>
+                    <View style={styles.suggestionBox}>
                         <Text style={[styles.suggestionText, { color: Acid.tx }]}>
                             {suggestion.displayText}
                         </Text>
@@ -197,7 +193,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                                 style={[styles.logButton, { backgroundColor: Acid.carbs || '#f59e0b' }]}
                                 onPress={() => fetchSuggestion(true, true)}
                             >
-                                <Feather name="alert-triangle" size={16} color="white" />
+                                <Feather name="alert-triangle" size={16} color={Acid.moss} />
                                 <Text style={styles.logButtonText}>I'm Hungry, Suggest Me</Text>
                             </TouchableOpacity>
                         ) : (
@@ -212,17 +208,17 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                             >
                                 {logState === 'logging' ? (
                                     <>
-                                        <ActivityIndicator size="small" color="white" />
+                                        <ActivityIndicator size="small" color={Acid.moss} />
                                         <Text style={styles.logButtonText}>Logging...</Text>
                                     </>
                                 ) : logState === 'logged' ? (
                                     <>
-                                        <Feather name="check-circle" size={16} color="white" />
+                                        <Feather name="check-circle" size={16} color={Acid.moss} />
                                         <Text style={styles.logButtonText}>Meal Logged</Text>
                                     </>
                                 ) : (
                                     <>
-                                        <Feather name="plus-circle" size={16} color="white" />
+                                        <Feather name="plus-circle" size={16} color={Acid.moss} />
                                         <Text style={styles.logButtonText}>Log This Meal</Text>
                                     </>
                                 )}
@@ -249,12 +245,13 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
 
 const styles = StyleSheet.create({
     container: {
-        marginHorizontal: 16,
+        marginHorizontal: 20,
         marginTop: 0,
-        marginBottom: 16,
-        borderRadius: 16,
-        borderWidth: 1,
-        overflow: 'hidden',
+        marginBottom: 12,
+        borderTopWidth: 1,
+        borderTopColor: Acid.hair,
+        borderBottomWidth: 1,
+        borderBottomColor: Acid.hair,
     },
     header: {
         flexDirection: 'row',
@@ -267,13 +264,6 @@ const styles = StyleSheet.create({
         alignItems: 'center',
         gap: 12,
     },
-    iconBox: {
-        width: 32,
-        height: 32,
-        borderRadius: 10,
-        alignItems: 'center',
-        justifyContent: 'center',
-    },
     title: {
         fontFamily: Typography.fontFamily.semiBold,
         fontSize: 15,
@@ -281,12 +271,6 @@ const styles = StyleSheet.create({
     subtitle: {
         fontFamily: Typography.fontFamily.regular,
         fontSize: 12,
-    },
-    badge: {
-        borderWidth: 1,
-        borderRadius: 6,
-        paddingHorizontal: 6,
-        paddingVertical: 2,
     },
     badgeText: {
         fontFamily: Typography.fontFamily.bold,
@@ -331,7 +315,7 @@ const styles = StyleSheet.create({
         borderRadius: 8,
     },
     logButtonText: {
-        color: 'white',
+        color: Acid.moss,
         fontFamily: Typography.fontFamily.semiBold,
         fontSize: 13,
     },

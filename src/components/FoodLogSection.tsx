@@ -1,7 +1,7 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, Image, TextInput, Animated, Easing, ScrollView, TouchableWithoutFeedback, ActivityIndicator, Dimensions, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Animated, ScrollView, ActivityIndicator, Dimensions, PanResponder } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { BookmarkPlus, BookmarkCheck } from 'lucide-react-native';
+import { format } from 'date-fns';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
@@ -15,6 +15,7 @@ export interface Meal extends MealEntry { }
 
 interface FoodLogSectionProps {
   meals: Meal[];
+  dayLabel?: string;
   onRemoveFood: (foodId: string) => void;
   onEditMealPrompt?: (mealId: string, newPrompt: string) => Promise<void> | void;
   savedPrompts?: SavedPrompt[];
@@ -22,30 +23,6 @@ interface FoodLogSectionProps {
   onDeleteMeal?: (mealId: string) => void;
   onUpdateFood?: (mealId: string, updatedFood: ParsedFood) => void;
 }
-
-const AnimatedBookmarkButton = ({ isSaved, onPress }: { isSaved: boolean, onPress: () => void }) => {
-  const scale = React.useRef(new Animated.Value(1)).current;
-
-  const handlePress = () => {
-    Animated.sequence([
-      Animated.timing(scale, { toValue: 1.4, duration: 150, useNativeDriver: true, easing: Easing.out(Easing.ease) }),
-      Animated.timing(scale, { toValue: 1, duration: 150, useNativeDriver: true, easing: Easing.in(Easing.ease) })
-    ]).start();
-    onPress();
-  };
-
-  return (
-    <TouchableOpacity onPress={handlePress} style={styles.iconButton}>
-      <Animated.View style={{ transform: [{ scale }] }}>
-        {isSaved ? (
-          <BookmarkCheck size={14} color={Acid.tx} />
-        ) : (
-          <BookmarkPlus size={14} color={Acid.tx2} />
-        )}
-      </Animated.View>
-    </TouchableOpacity>
-  );
-};
 
 const PARSING_MESSAGES = [
   'Crunching the numbers on those calories...',
@@ -66,26 +43,6 @@ const PARSING_MESSAGES = [
 ];
 
 const getParsingMessage = () => PARSING_MESSAGES[Math.floor(Math.random() * PARSING_MESSAGES.length)];
-
-const LOADING_TITLES = [
-  'Crunching the meal...',
-  'Analyzing your plate...',
-  'Decoding the flavors...',
-  'Breaking it down...',
-  'Reading the ingredients...',
-  'Doing the math...',
-];
-
-const RotatingTitle: React.FC<{ style: any }> = ({ style }) => {
-  const [idx, setIdx] = useState(() => Math.floor(Math.random() * LOADING_TITLES.length));
-  React.useEffect(() => {
-    const timer = setInterval(() => {
-      setIdx(prev => (prev + 1) % LOADING_TITLES.length);
-    }, 2000);
-    return () => clearInterval(timer);
-  }, []);
-  return <Text style={style} numberOfLines={2}>{LOADING_TITLES[idx]}</Text>;
-};
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -123,6 +80,7 @@ const NUTRIENT_ROWS: { label: string; key: string; unit: string; isHeader?: bool
 
 export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   meals,
+  dayLabel,
   onRemoveFood,
   onEditMealPrompt,
   savedPrompts = [],
@@ -130,6 +88,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   onDeleteMeal,
   onUpdateFood,
 }) => {  const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
+  const [actionMeal, setActionMeal] = useState<Meal | null>(null);
   const [baseFood, setBaseFood] = useState<ParsedFood | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -248,159 +207,169 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
     return null;
   }
 
+  // Meal-level actions live in an in-app sheet, not Alert.alert: Android caps
+  // alerts at three buttons and the web shim only runs one action, so an
+  // Alert-based menu breaks on both. Opened by the row's ··· and by long-press.
+  const openMealActions = (meal: Meal) => {
+    if (meal.isLoading) return;
+    setActionMeal(meal);
+  };
+
+  const loggedMeals = meals.filter(m => !m.isLoading);
+  const actionMealSaved = actionMeal ? savedPromptLookup.has((actionMeal.prompt || '').trim().toLowerCase()) : false;
+
   return (
     <>
       <View style={styles.container}>
+        {/* Day ledger header */}
+        <View style={styles.ledgerHeader}>
+          <Text style={styles.ledgerHeaderText}>{dayLabel || 'TODAY'}</Text>
+          <Text style={styles.ledgerHeaderText}>
+            {loggedMeals.length} MEAL{loggedMeals.length === 1 ? '' : 'S'}
+          </Text>
+        </View>
+
         {meals.map((meal) => {
+          const timeLabel = meal.timestamp ? format(new Date(meal.timestamp), 'H:mm') : '';
+
+          if (meal.isLoading) {
+            return (
+              <View key={meal.id} style={styles.row}>
+                <Text style={styles.rowTime}>{timeLabel}</Text>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color={Acid.lime} />
+                  <Text style={{ fontSize: 12, color: Acid.tx2, fontStyle: 'italic', flex: 1 }} numberOfLines={1}>
+                    {getParsingMessage()}
+                  </Text>
+                </View>
+              </View>
+            );
+          }
+
+          const isEditing = editingMealId === meal.id;
+
           return (
-            <View key={meal.id} style={styles.mealCard}>
-              {/* Header with Prompt / Image */}
-              <View style={styles.cardHeader}>
-                {meal.imageUri ? (
-                  <View style={styles.imageHeader}>
-                    <Image
-                      source={{ uri: meal.imageUri }}
-                      style={[styles.thumbnail, { borderColor: Acid.hair }]}
-                      resizeMode="cover"
-                    />
-                    <View style={styles.imageHeaderText}>
-                      {meal.isLoading ? (
-                        <RotatingTitle style={[styles.promptText, { color: Acid.tx2, fontStyle: 'italic' }]} />
-                      ) : (
-                        <Text
-                          style={[styles.promptText, { color: Acid.tx, fontStyle: 'italic' }]}
-                          numberOfLines={2}
-                        >
-                          {meal.summary || meal.prompt || "Food from image"}
-                        </Text>
-                      )}
+            <View key={meal.id}>
+              {isEditing && (
+                <View style={styles.editRow}>
+                  <TextInput
+                    style={styles.promptInput}
+                    selectionColor={Acid.lime}
+                    value={editedPrompt}
+                    onChangeText={setEditedPrompt}
+                    autoFocus
+                    onSubmitEditing={handleSavePrompt}
+                    returnKeyType="done"
+                  />
+                  <TouchableOpacity onPress={handleSavePrompt} style={styles.iconButton}>
+                    <Feather name="check" size={16} color={Acid.lime} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={handleCancelEditPrompt} style={styles.iconButton}>
+                    <Feather name="x" size={16} color={Acid.tx3} />
+                  </TouchableOpacity>
+                </View>
+              )}
+              {meal.foods.map((food, idx) => (
+                <TouchableOpacity
+                  key={food.id}
+                  style={styles.row}
+                  onPress={() => handleFoodPress(meal.id, food)}
+                  onLongPress={() => openMealActions(meal)}
+                  delayLongPress={350}
+                >
+                  <Text style={styles.rowTime}>{idx === 0 ? timeLabel : ''}</Text>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={styles.rowName} numberOfLines={1}>{food.name}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
+                      <Text style={styles.rowSub}>
+                        {food.weight_g}g · {Math.round(food.protein)}g protein · {Math.round(food.carbs)}g carbs · {Math.round(food.fat)}g fat
+                      </Text>
+                      <ConfidenceBadge
+                        confidence={food.confidence}
+                        confidenceReason={food.confidence_reason}
+                        foodName={food.name}
+                      />
                     </View>
                   </View>
-                ) : (
-                  <View style={styles.promptRow}>
-                    {editingMealId === meal.id ? (
-                      <View style={styles.editContainer}>
-                        <TextInput
-                          style={styles.promptInput} selectionColor={Acid.lime}
-                          value={editedPrompt}
-                          onChangeText={setEditedPrompt}
-                          autoFocus
-                          onSubmitEditing={handleSavePrompt}
-                          returnKeyType="done"
-                        />
-                        <TouchableOpacity onPress={handleSavePrompt} style={styles.iconButton}>
-                          <Feather name="check" size={16} color={Acid.lime} />
-                        </TouchableOpacity>
-                        <TouchableOpacity onPress={handleCancelEditPrompt} style={styles.iconButton}>
-                          <Feather name="x" size={16} color={Acid.tx3} />
-                        </TouchableOpacity>
-                      </View>
-                    ) : (
-                      <View style={styles.promptDisplay}>
-                        <Text
-                          style={[styles.promptText, { color: Acid.tx, fontStyle: 'italic' }]}
-                          numberOfLines={2}
-                        >
-                          {meal.isLoading ? '' : (meal.summary || meal.prompt)}
-                        </Text>
-                        {!meal.isLoading && (
-                          <View style={styles.promptActions}>
-                            {onToggleSavePrompt && (
-                              <AnimatedBookmarkButton
-                                isSaved={savedPromptLookup.has((meal.prompt || '').trim().toLowerCase())}
-                                onPress={() => onToggleSavePrompt(meal)}
-                              />
-                            )}
-                            {onEditMealPrompt && (
-                              <TouchableOpacity onPress={() => handleStartEditPrompt(meal)} style={styles.iconButton}>
-                                <Feather name="edit-2" size={12} color={Acid.tx2} />
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        )}
-                      </View>
-                    )}
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                    <Text style={styles.rowKcal}>{Math.round(food.calories)}</Text>
+                    <Text style={styles.rowKcalUnit}> kcal</Text>
                   </View>
-                )}
-                {onDeleteMeal && !meal.isLoading && (
-                  <TouchableOpacity
-                    onPress={() => onDeleteMeal(meal.id)}
-                    style={styles.deleteMealButton}
-                  >
-                    <Feather name="trash-2" size={14} color={Acid.tx3} />
-                  </TouchableOpacity>
-                )}
-              </View>
-
-              {/* Foods */}
-              {meal.isLoading ? (
-                <View style={{ padding: 16, gap: 8 }}>
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: Acid.hair, opacity: 0.5 }} />
-                  </View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color={Acid.lime} />
-                    <Text style={{ fontSize: 12, color: Acid.tx2, fontStyle: 'italic' }}>
-                      {getParsingMessage()}
+                  {idx === 0 && (
+                    <TouchableOpacity
+                      onPress={() => openMealActions(meal)}
+                      hitSlop={{ top: 10, bottom: 10, left: 8, right: 10 }}
+                      style={{ paddingLeft: 10 }}
+                    >
+                      <Feather name="more-horizontal" size={16} color={Acid.tx3} />
+                    </TouchableOpacity>
+                  )}
+                </TouchableOpacity>
+              ))}
+              {/* A meal whose analysis produced no foods must still be visible
+                  and deletable, or it lives in the count forever. */}
+              {meal.foods.length === 0 && (
+                <TouchableOpacity style={styles.row} onPress={() => openMealActions(meal)}>
+                  <Text style={styles.rowTime}>{timeLabel}</Text>
+                  <View style={{ flex: 1, paddingRight: 10 }}>
+                    <Text style={[styles.rowSub, { fontStyle: 'italic' }]} numberOfLines={1}>
+                      {meal.summary || meal.prompt || 'Entry'} · no items recognized
                     </Text>
                   </View>
-                </View>
-              ) : (
-                <View style={styles.foodList}>
-                  {meal.foods.map((food, idx) => (
-                    <TouchableOpacity
-                      key={food.id}
-                      style={[
-                        styles.foodItem,
-                        { borderBottomWidth: 1, borderBottomColor: Acid.hair }
-                      ]}
-                      onPress={() => handleFoodPress(meal.id, food)}
-                    >
-                      <View style={styles.foodInfo}>
-                        <Text style={[styles.foodName, { color: Acid.tx }]}>
-                          {food.name}
-                          <Text style={[styles.foodWeight, { color: Acid.tx2 }]}> · {food.weight_g}g</Text>
-                        </Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                          <Text style={[styles.foodMacros, { color: Acid.tx2 }]}>
-                            {Math.round(food.calories)} kcal ·{' '}
-                            <Text style={{ color: MACRO_COLORS.protein }}>P:{Math.round(food.protein)}</Text>{' '}
-                            <Text style={{ color: MACRO_COLORS.carbs }}>C:{Math.round(food.carbs)}</Text>{' '}
-                            <Text style={{ color: MACRO_COLORS.fat }}>F:{Math.round(food.fat)}</Text>
-                          </Text>
-                          <ConfidenceBadge
-                            confidence={food.confidence}
-                            confidenceReason={food.confidence_reason}
-                            foodName={food.name}
-                          />
-                        </View>
-                      </View>
-                      <Feather name="chevron-right" size={14} color={Acid.tx3} />
-                    </TouchableOpacity>
-                  ))}
-                  {/* Meal totals */}
-                  {meal.foods.length > 0 && (() => {
-                    const totCal = Math.round(meal.foods.reduce((s, f) => s + (f.calories || 0), 0));
-                    const totP = Math.round(meal.foods.reduce((s, f) => s + (f.protein || 0), 0));
-                    const totC = Math.round(meal.foods.reduce((s, f) => s + (f.carbs || 0), 0));
-                    const totF = Math.round(meal.foods.reduce((s, f) => s + (f.fat || 0), 0));
-                    return (
-                      <View style={styles.mealTotalRow}>
-                        <Text style={[styles.mealTotalCal, { color: Acid.tx }]}>{totCal} kcal</Text>
-                        <Text style={[styles.mealTotalMacros, { color: Acid.tx2 }]}>
-                          <Text style={{ color: MACRO_COLORS.protein }}>P:{totP}</Text>{' '}
-                          <Text style={{ color: MACRO_COLORS.carbs }}>C:{totC}</Text>{' '}
-                          <Text style={{ color: MACRO_COLORS.fat }}>F:{totF}</Text>
-                        </Text>
-                      </View>
-                    );
-                  })()}
-                </View>
+                  <Feather name="more-horizontal" size={16} color={Acid.tx3} />
+                </TouchableOpacity>
               )}
             </View>
           );
         })}
       </View>
+
+      {/* ── Meal actions sheet ── */}
+      <Modal
+        visible={actionMeal !== null}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setActionMeal(null)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+          activeOpacity={1}
+          onPress={() => setActionMeal(null)}
+        >
+          <View style={styles.actionSheet}>
+            <Text style={styles.actionTitle} numberOfLines={2}>
+              {actionMeal?.summary || actionMeal?.prompt || 'Meal'}
+            </Text>
+            {onToggleSavePrompt && actionMeal?.prompt && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => { const m = actionMeal; setActionMeal(null); if (m) onToggleSavePrompt(m); }}
+              >
+                <Text style={styles.actionText}>{actionMealSaved ? 'Remove saved prompt' : 'Save prompt'}</Text>
+              </TouchableOpacity>
+            )}
+            {onEditMealPrompt && actionMeal && !actionMeal.imageUri && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => { const m = actionMeal; setActionMeal(null); if (m) handleStartEditPrompt(m); }}
+              >
+                <Text style={styles.actionText}>Edit description</Text>
+              </TouchableOpacity>
+            )}
+            {onDeleteMeal && actionMeal && (
+              <TouchableOpacity
+                style={styles.actionRow}
+                onPress={() => { const id = actionMeal.id; setActionMeal(null); onDeleteMeal(id); }}
+              >
+                <Text style={[styles.actionText, { color: Acid.error }]}>Delete meal</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity style={styles.actionRow} onPress={() => setActionMeal(null)}>
+              <Text style={[styles.actionText, { color: Acid.tx2 }]}>Cancel</Text>
+            </TouchableOpacity>
+          </View>
+        </TouchableOpacity>
+      </Modal>
 
       {/* ── Food Detail Slide-Up Modal ── */}
       <Modal
@@ -666,59 +635,82 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
 const styles = StyleSheet.create({
   container: {
     marginBottom: Spacing.lg,
-    paddingHorizontal: Spacing.sm,
+    paddingHorizontal: 16,
   },
-  mealCard: {
-    marginBottom: Spacing.md,
+  actionSheet: {
+    backgroundColor: Acid.moss,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 24,
+    paddingTop: 20,
+    paddingBottom: 34,
+  },
+  actionTitle: {
+    fontFamily: Acid.serifItalic,
+    fontSize: 17,
+    color: Acid.tx,
+    marginBottom: 8,
+  },
+  actionRow: {
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: Acid.hair,
+  },
+  actionText: {
+    fontSize: 15,
+    fontWeight: '500',
+    color: Acid.tx,
+  },
+  ledgerHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+    paddingVertical: 8,
     borderBottomWidth: 1,
     borderBottomColor: Acid.hair,
-    paddingBottom: 4,
   },
-  cardHeader: {
+  ledgerHeaderText: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Acid.tx3,
+  },
+  row: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    justifyContent: 'space-between',
-    paddingVertical: 10,
+    alignItems: 'center',
     paddingHorizontal: 4,
+    paddingVertical: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Acid.hair,
   },
-  imageHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flex: 1,
+  rowTime: {
+    width: 46,
+    fontSize: 11,
+    color: Acid.tx3,
   },
-  imageHeaderText: {
-    marginLeft: 10,
-    flex: 1,
-  },
-  thumbnail: {
-    width: 40,
-    height: 40,
-    borderRadius: 6,
-    borderWidth: 1,
-  },
-  promptRow: {
-    flex: 1,
-    marginRight: 8,
-  },
-  promptDisplay: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-  },
-  promptText: {
-    fontFamily: Acid.serifItalic,
+  rowName: {
     fontSize: 15,
-    lineHeight: 21,
+    fontWeight: '600',
+    color: Acid.tx,
   },
-  promptActions: {
-    flexDirection: 'row',
-    marginLeft: 6,
-    gap: 6,
+  rowSub: {
+    fontSize: 11,
+    color: Acid.tx3,
   },
-  editContainer: {
+  rowKcal: {
+    fontFamily: Acid.serif,
+    fontSize: 17,
+    color: Acid.tx,
+  },
+  rowKcalUnit: {
+    fontSize: 10,
+    color: Acid.tx3,
+  },
+  editRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    flex: 1,
+    paddingHorizontal: 4,
+    paddingVertical: 8,
   },
   promptInput: {
     flex: 1,
@@ -732,50 +724,5 @@ const styles = StyleSheet.create({
   },
   iconButton: {
     padding: 2,
-  },
-  deleteMealButton: {
-    padding: 4,
-    opacity: 0.7,
-  },
-  foodList: {
-    paddingVertical: 4,
-  },
-  foodItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 4,
-    paddingVertical: 12,
-  },
-  foodInfo: {
-    flex: 1,
-  },
-  foodName: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    marginBottom: 2,
-  },
-  foodWeight: {
-    fontWeight: Typography.fontWeight.normal,
-  },
-  foodMacros: {
-    fontSize: Typography.fontSize.xs,
-  },
-  mealTotalRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 4,
-    paddingVertical: 10,
-    borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: Acid.hair,
-  },
-  mealTotalCal: {
-    fontFamily: Acid.serif,
-    fontSize: 16,
-  },
-  mealTotalMacros: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: '600' as const,
   },
 });

@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 
-import { Menu, Calendar, Flame, Snowflake } from 'lucide-react-native';
+import { Menu, Calendar } from 'lucide-react-native';
 import { Acid } from '../constants/acid';
 
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -9,21 +9,15 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 interface TopNavigationBarProps {
   onMenuPress?: () => void;
   onCalendarPress?: () => void;
-  onStreakPress?: () => void;
   userName?: string;
   selectedDate?: string;
-  streak?: number;
-  frozen?: boolean;
 }
 
-// The board's home chrome: wordmark left, streak and calendar right. The
-// trend/analysis shortcuts moved to the bottom tab bar.
+// The board's home chrome: wordmark left, calendar right. The streak lives in
+// the greeting row and the trend shortcuts moved to the bottom tab bar.
 export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
   onMenuPress,
   onCalendarPress,
-  onStreakPress,
-  streak = 0,
-  frozen = false,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -45,20 +39,6 @@ export const TopNavigationBar: React.FC<TopNavigationBarProps> = ({
         </View>
 
         <View style={styles.rightIconsContainer}>
-          {streak > 0 && (
-            <TouchableOpacity
-              onPress={onStreakPress}
-              activeOpacity={0.7}
-              style={styles.streakContainer}
-              hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            >
-              {frozen
-                ? <Snowflake color={Acid.protein} size={14} strokeWidth={2.2} />
-                : <Flame color={Acid.carbs} size={14} strokeWidth={2.2} />}
-              <Text style={[styles.streakText, { color: frozen ? Acid.protein : Acid.carbs }]}>{streak}</Text>
-            </TouchableOpacity>
-          )}
-
           <TouchableOpacity
             style={styles.iconContainer}
             onPress={onCalendarPress}
@@ -100,15 +80,5 @@ const styles = StyleSheet.create({
     letterSpacing: 2.5,
     fontWeight: '700',
     color: Acid.tx,
-  },
-  streakContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 6,
-  },
-  streakText: {
-    fontSize: 13,
-    fontWeight: '700',
   },
 });
