@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.39**
+The Weight Tracker joins the new look, the biggest data screen so far. Your weight chart is now a lime line on open moss with no card around it, the hero numbers (current, change, target) are serif columns instead of bordered boxes, and the Tracker and Insights tabs plus the time range picker became underlined words. Editing a history entry shows a lime underline, the log weight sheet went dark with a serif input and a glowing lime save, and every insight card converted to a dark panel with the chart colors mapped to the app's data palette: green for good, amber for caution, sky and lilac for informational. All the chart math, scrubbing, insights logic, and the data protections from earlier versions are untouched.
+
 **v1.4.38**
 The goal questionnaire got a structural rebuild on top of its new look. The big one: recalculating your plan now saves the moment you confirm it. Before, "Save Plan" only staged the numbers on the summary screen, and backing out from there silently threw your whole recalculation away. Also fixed: every result chip (goal, activity, pace, age, height, weight) is now tappable, jumping you to that one question and straight back to your plan. Your name is asked last instead of first, right before the plan reveal. Maintain users no longer see a meaningless target weight field, and switching to maintain clears a stale target. Progress is a smooth bar instead of dots that vanished when steps changed. Leaving mid-setup asks before discarding your answers, and so does leaving the goals screen with unsaved macro tweaks. Macro splits are snapped to exactly 100% before saving on every path. Same questions, same math.
 
