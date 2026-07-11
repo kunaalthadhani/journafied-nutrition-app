@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 
@@ -15,17 +15,16 @@ interface SubscriptionScreenProps {
 }
 
 export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, onSubscribe, onRestore }) => {
-  const theme = useTheme();
   const [selectedPlan, setSelectedPlan] = useState<Plan>('annual');
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={Acid.tx} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Premium</Text>
+        <Text style={[styles.headerTitle, { color: Acid.tx }]}>Premium</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -36,22 +35,22 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
         removeClippedSubviews={false}
       >
         {/* Intro Card */}
-        <View style={[styles.introCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Unlock TrackKcal Premium</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Ad-free. Unlimited entries. Cancel anytime.</Text>
+        <View style={[styles.introCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+          <Text style={[styles.title, { color: Acid.tx }]}>Unlock TrackKcal Premium</Text>
+          <Text style={[styles.subtitle, { color: Acid.tx2 }]}>Ad-free. Unlimited entries. Cancel anytime.</Text>
 
           <View style={styles.features}>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={theme.colors.primary} />
-              <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Ad-Free Experience</Text>
+              <Feather name="check-circle" size={18} color={Acid.lime} />
+              <Text style={[styles.featureText, { color: Acid.tx }]}>Ad-Free Experience</Text>
             </View>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={theme.colors.primary} />
-              <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Unlimited Entries & History</Text>
+              <Feather name="check-circle" size={18} color={Acid.lime} />
+              <Text style={[styles.featureText, { color: Acid.tx }]}>Unlimited Entries & History</Text>
             </View>
             <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={theme.colors.primary} />
-              <Text style={[styles.featureText, { color: theme.colors.textPrimary }]}>Priority Features & Updates</Text>
+              <Feather name="check-circle" size={18} color={Acid.lime} />
+              <Text style={[styles.featureText, { color: Acid.tx }]}>Priority Features & Updates</Text>
             </View>
           </View>
         </View>
@@ -61,30 +60,30 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => setSelectedPlan('annual')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'annual' ? theme.colors.primary : theme.colors.border, backgroundColor: theme.colors.card }]}
+            style={[styles.planOption, { borderColor: selectedPlan === 'annual' ? Acid.lime : Acid.hair, backgroundColor: Acid.mossDeep }]}
           >
             <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'annual' ? theme.colors.primary : theme.colors.border, backgroundColor: selectedPlan === 'annual' ? theme.colors.primary : 'transparent' }]} />
-              <Text style={[styles.planTitle, { color: theme.colors.textPrimary }]}>Annual</Text>
-              <View style={[styles.badge, { backgroundColor: theme.colors.primary }]}>
-                <Text style={[styles.badgeText, { color: theme.colors.primaryForeground }]}>Best Value</Text>
+              <View style={[styles.radio, { borderColor: selectedPlan === 'annual' ? Acid.lime : Acid.hair, backgroundColor: selectedPlan === 'annual' ? Acid.lime : 'transparent' }]} />
+              <Text style={[styles.planTitle, { color: Acid.tx }]}>Annual</Text>
+              <View style={[styles.badge, { backgroundColor: Acid.lime }]}>
+                <Text style={[styles.badgeText, { color: Acid.moss }]}>Best Value</Text>
               </View>
             </View>
-            <Text style={[styles.planPrice, { color: theme.colors.textPrimary }]}>AED7.50/mo</Text>
-            <Text style={[styles.planSubText, { color: theme.colors.textSecondary }]}>Billed AED89.99 annually</Text>
+            <Text style={[styles.planPrice, { color: Acid.tx }]}>AED7.50/mo</Text>
+            <Text style={[styles.planSubText, { color: Acid.tx2 }]}>Billed AED89.99 annually</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             activeOpacity={0.9}
             onPress={() => setSelectedPlan('monthly')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'monthly' ? theme.colors.primary : theme.colors.border, backgroundColor: theme.colors.card }]}
+            style={[styles.planOption, { borderColor: selectedPlan === 'monthly' ? Acid.lime : Acid.hair, backgroundColor: Acid.mossDeep }]}
           >
             <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'monthly' ? theme.colors.primary : theme.colors.border, backgroundColor: selectedPlan === 'monthly' ? theme.colors.primary : 'transparent' }]} />
-              <Text style={[styles.planTitle, { color: theme.colors.textPrimary }]}>Monthly</Text>
+              <View style={[styles.radio, { borderColor: selectedPlan === 'monthly' ? Acid.lime : Acid.hair, backgroundColor: selectedPlan === 'monthly' ? Acid.lime : 'transparent' }]} />
+              <Text style={[styles.planTitle, { color: Acid.tx }]}>Monthly</Text>
             </View>
-            <Text style={[styles.planPrice, { color: theme.colors.textPrimary }]}>AED24.99/mo</Text>
-            <Text style={[styles.planSubText, { color: theme.colors.textSecondary }]}>Billed monthly</Text>
+            <Text style={[styles.planPrice, { color: Acid.tx }]}>AED24.99/mo</Text>
+            <Text style={[styles.planSubText, { color: Acid.tx2 }]}>Billed monthly</Text>
           </TouchableOpacity>
         </View>
 
@@ -92,12 +91,12 @@ export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, 
       </ScrollView>
 
       {/* Sticky bottom actions */}
-      <View style={[styles.stickyFooter, { backgroundColor: theme.colors.background, borderTopColor: theme.colors.border }]}>
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: theme.colors.primary }]} activeOpacity={0.9} onPress={() => onSubscribe(selectedPlan)}>
-          <Text style={[styles.ctaText, { color: theme.colors.primaryForeground }]}>Continue</Text>
+      <View style={[styles.stickyFooter, { backgroundColor: Acid.moss, borderTopColor: Acid.hair }]}>
+        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: Acid.lime }]} activeOpacity={0.9} onPress={() => onSubscribe(selectedPlan)}>
+          <Text style={[styles.ctaText, { color: Acid.moss }]}>Continue</Text>
         </TouchableOpacity>
         <TouchableOpacity style={styles.restoreButton} onPress={onRestore}>
-          <Text style={[styles.restoreText, { color: theme.colors.textSecondary }]}>Restore purchases</Text>
+          <Text style={[styles.restoreText, { color: Acid.tx2 }]}>Restore purchases</Text>
         </TouchableOpacity>
       </View>
     </SafeAreaView>

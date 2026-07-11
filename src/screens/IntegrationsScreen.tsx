@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Switch, Alert, Platform, ActivityIndicator, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { healthService } from '../services/HealthService';
 
@@ -10,10 +10,7 @@ interface IntegrationsScreenProps {
     onBack: () => void;
 }
 
-export const IntegrationsScreen: React.FC<IntegrationsScreenProps> = ({ onBack }) => {
-    const theme = useTheme();
-
-    // State for connections
+export const IntegrationsScreen: React.FC<IntegrationsScreenProps> = ({ onBack }) => {    // State for connections
     const [isAppleHealthConnected, setIsAppleHealthConnected] = useState(false);
     const [isHealthConnectConnected, setIsHealthConnectConnected] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
@@ -82,36 +79,36 @@ export const IntegrationsScreen: React.FC<IntegrationsScreenProps> = ({ onBack }
     };
 
     return (
-        <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+        <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
             {/* Header */}
-            <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+            <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
                 <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                    <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+                    <Feather name="arrow-left" size={24} color={Acid.tx} />
                 </TouchableOpacity>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Integrations</Text>
+                <Text style={[styles.headerTitle, { color: Acid.tx }]}>Integrations</Text>
                 <View style={styles.headerRight} />
             </View>
 
             <ScrollView style={styles.content}>
-                <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.description, { color: Acid.tx2 }]}>
                     Connect your smart watch and health apps to automatically sync steps, calories, and workouts.
                 </Text>
 
                 {/* iOS Section */}
                 {Platform.OS === 'ios' && (
-                    <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                    <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
                         <View style={styles.cardHeader}>
                             <View style={[styles.iconContainer, { backgroundColor: '#F0F0F0' }]}>
                                 <Feather name="activity" size={24} color="#FF2D55" />
                             </View>
                             <View style={styles.cardTexts}>
-                                <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>Apple Health</Text>
-                                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>Syncs with Apple Watch</Text>
+                                <Text style={[styles.cardTitle, { color: Acid.tx }]}>Apple Health</Text>
+                                <Text style={[styles.cardSubtitle, { color: Acid.tx2 }]}>Syncs with Apple Watch</Text>
                             </View>
                             <Switch
                                 value={isAppleHealthConnected}
                                 onValueChange={handleToggleAppleHealth}
-                                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                trackColor={{ false: Acid.hair, true: Acid.lime }}
                                 thumbColor={'#FFF'}
                             />
                         </View>
@@ -120,19 +117,19 @@ export const IntegrationsScreen: React.FC<IntegrationsScreenProps> = ({ onBack }
 
                 {/* Android Section */}
                 {Platform.OS === 'android' && (
-                    <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                    <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
                         <View style={styles.cardHeader}>
                             <View style={[styles.iconContainer, { backgroundColor: '#E3F2FD' }]}>
                                 <Feather name="watch" size={24} color="#2196F3" />
                             </View>
                             <View style={styles.cardTexts}>
-                                <Text style={[styles.cardTitle, { color: theme.colors.textPrimary }]}>Health Connect</Text>
-                                <Text style={[styles.cardSubtitle, { color: theme.colors.textSecondary }]}>Samsung Health, Google Fit, Pixel Watch</Text>
+                                <Text style={[styles.cardTitle, { color: Acid.tx }]}>Health Connect</Text>
+                                <Text style={[styles.cardSubtitle, { color: Acid.tx2 }]}>Samsung Health, Google Fit, Pixel Watch</Text>
                             </View>
                             <Switch
                                 value={isHealthConnectConnected}
                                 onValueChange={handleToggleHealthConnect}
-                                trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+                                trackColor={{ false: Acid.hair, true: Acid.lime }}
                                 thumbColor={'#FFF'}
                             />
                         </View>
@@ -141,25 +138,25 @@ export const IntegrationsScreen: React.FC<IntegrationsScreenProps> = ({ onBack }
 
                 {/* Sync Status Section */}
                 {(isAppleHealthConnected || isHealthConnectConnected) && (
-                    <View style={[styles.statusSection, { borderTopColor: theme.colors.border }]}>
-                        <Text style={[styles.statusTitle, { color: theme.colors.textPrimary }]}>Sync Status</Text>
+                    <View style={[styles.statusSection, { borderTopColor: Acid.hair }]}>
+                        <Text style={[styles.statusTitle, { color: Acid.tx }]}>Sync Status</Text>
 
                         <View style={styles.statusRow}>
-                            <Text style={[styles.statusLabel, { color: theme.colors.textSecondary }]}>Last synced:</Text>
-                            <Text style={[styles.statusValue, { color: theme.colors.textPrimary }]}>{lastSync || 'Never'}</Text>
+                            <Text style={[styles.statusLabel, { color: Acid.tx2 }]}>Last synced:</Text>
+                            <Text style={[styles.statusValue, { color: Acid.tx }]}>{lastSync || 'Never'}</Text>
                         </View>
 
                         <TouchableOpacity
-                            style={[styles.syncButton, { backgroundColor: theme.colors.primary }]}
+                            style={[styles.syncButton, { backgroundColor: Acid.lime }]}
                             onPress={handleManualSync}
                             disabled={isLoading}
                         >
                             {isLoading ? (
-                                <ActivityIndicator color={theme.colors.primaryForeground} size="small" />
+                                <ActivityIndicator color={Acid.moss} size="small" />
                             ) : (
                                 <>
-                                    <Feather name="refresh-cw" size={18} color={theme.colors.primaryForeground} />
-                                    <Text style={[styles.syncButtonText, { color: theme.colors.primaryForeground }]}>Sync Now</Text>
+                                    <Feather name="refresh-cw" size={18} color={Acid.moss} />
+                                    <Text style={[styles.syncButtonText, { color: Acid.moss }]}>Sync Now</Text>
                                 </>
                             )}
                         </TouchableOpacity>

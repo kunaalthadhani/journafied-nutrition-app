@@ -11,7 +11,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Flame, Snowflake } from 'lucide-react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { DailySummary } from '../services/dataStorage';
 import { format, startOfWeek, addDays } from 'date-fns';
@@ -40,9 +40,7 @@ export const StreakWidgetCard: React.FC<StreakWidgetCardProps> = ({
   caloriesTarget,
   summariesByDate,
   frozenDates,
-}) => {
-  const theme = useTheme();
-  const insets = useSafeAreaInsets();
+}) => {  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
 
   useEffect(() => {
@@ -93,8 +91,8 @@ export const StreakWidgetCard: React.FC<StreakWidgetCardProps> = ({
           style={[
             styles.sheet,
             {
-              backgroundColor: theme.colors.background,
-              borderColor: theme.colors.border,
+              backgroundColor: Acid.moss,
+              borderColor: Acid.hair,
               paddingTop: insets.top + 8,
               transform: [{ translateY: slideAnim }],
             },
@@ -102,41 +100,41 @@ export const StreakWidgetCard: React.FC<StreakWidgetCardProps> = ({
         >
           {/* Close button */}
           <View style={styles.header}>
-            <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Your Streak</Text>
+            <Text style={[styles.headerTitle, { color: Acid.tx }]}>Your Streak</Text>
             <TouchableOpacity onPress={closeWithAnimation} style={styles.closeButton}>
-              <X color={theme.colors.textSecondary} size={20} />
+              <X color={Acid.tx2} size={20} />
             </TouchableOpacity>
           </View>
 
           {/* Card content */}
-          <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
             {/* Left side — streak */}
-            <View style={[styles.left, { borderRightColor: theme.colors.border }]}>
+            <View style={[styles.left, { borderRightColor: Acid.hair }]}>
               <Text style={styles.flameIcon}>{flameEmoji}</Text>
               <Text style={[styles.streakCount, { color: flameColor }]}>
                 {streak} {streak === 1 ? 'day' : 'days'}
               </Text>
-              <Text style={[styles.streakLabel, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.streakLabel, { color: Acid.tx2 }]}>
                 Logging streak
               </Text>
             </View>
 
             {/* Right side — calories + weekly dots */}
             <View style={styles.right}>
-              <Text style={[styles.calorieText, { color: theme.colors.textPrimary }]}>
+              <Text style={[styles.calorieText, { color: Acid.tx }]}>
                 {Math.round(caloriesConsumed).toLocaleString()}
-                <Text style={[styles.calorieTarget, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.calorieTarget, { color: Acid.tx2 }]}>
                   {' '}/ {Math.round(caloriesTarget).toLocaleString()} kcal
                 </Text>
               </Text>
 
-              <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+              <View style={[styles.progressTrack, { backgroundColor: Acid.hair }]}>
                 <View
                   style={[
                     styles.progressFill,
                     {
                       width: `${Math.round(progress * 100)}%`,
-                      backgroundColor: progress >= 1 ? theme.colors.warning : theme.colors.success,
+                      backgroundColor: progress >= 1 ? Acid.carbs : Acid.good,
                     },
                   ]}
                 />
@@ -149,17 +147,17 @@ export const StreakWidgetCard: React.FC<StreakWidgetCardProps> = ({
                       style={[
                         styles.dot,
                         day.logged
-                          ? { backgroundColor: theme.colors.success }
+                          ? { backgroundColor: Acid.good }
                           : day.isFuture
-                            ? { backgroundColor: theme.colors.border, opacity: 0.4 }
+                            ? { backgroundColor: Acid.hair, opacity: 0.4 }
                             : day.isToday
-                              ? { borderWidth: 2, borderColor: theme.colors.success, backgroundColor: 'transparent' }
-                              : { backgroundColor: theme.colors.border },
+                              ? { borderWidth: 2, borderColor: Acid.good, backgroundColor: 'transparent' }
+                              : { backgroundColor: Acid.hair },
                       ]}
                     />
                     <Text style={[
                       styles.dayLabel,
-                      { color: day.isToday ? theme.colors.textPrimary : theme.colors.textSecondary },
+                      { color: day.isToday ? Acid.tx : Acid.tx2 },
                       day.isToday && { fontWeight: Typography.fontWeight.semiBold },
                     ]}>
                       {DAY_LABELS[i]}

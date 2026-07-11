@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { CalorieBankCompletedCycle } from '../services/dataStorage';
 
 interface CycleResetCardProps {
@@ -10,8 +10,6 @@ interface CycleResetCardProps {
 }
 
 export const CycleResetCard: React.FC<CycleResetCardProps> = ({ cycle, onDismiss }) => {
-  const theme = useTheme();
-
   const usedPct = cycle.weeklyBudget > 0
     ? Math.round((cycle.weeklyActual / cycle.weeklyBudget) * 100)
     : 0;
@@ -30,50 +28,50 @@ export const CycleResetCard: React.FC<CycleResetCardProps> = ({ cycle, onDismiss
         : 'Balanced week. Keep the rhythm going.';
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+    <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Weekly Summary</Text>
+        <Text style={[styles.title, { color: Acid.tx }]}>Weekly Summary</Text>
         <TouchableOpacity onPress={onDismiss} style={styles.dismissBtn}>
-          <Feather name="x" size={18} color={theme.colors.textTertiary} />
+          <Feather name="x" size={18} color={Acid.tx3} />
         </TouchableOpacity>
       </View>
 
-      <Text style={[styles.mainStat, { color: theme.colors.textPrimary }]}>
+      <Text style={[styles.mainStat, { color: Acid.tx }]}>
         You used {Math.round(cycle.weeklyActual).toLocaleString()} of {Math.round(cycle.weeklyBudget).toLocaleString()} kcal
       </Text>
 
       {cycle.expiredCalories > 0 && (
-        <Text style={[styles.subStat, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.subStat, { color: Acid.tx2 }]}>
           {Math.round(cycle.expiredCalories).toLocaleString()} kcal went unused
         </Text>
       )}
 
       {isOver && (
-        <Text style={[styles.subStat, { color: '#EF4444' }]}>
+        <Text style={[styles.subStat, { color: Acid.error }]}>
           {Math.round(overUnder).toLocaleString()} kcal over budget
         </Text>
       )}
 
       <View style={styles.detailsRow}>
         <View style={styles.detailItem}>
-          <Text style={[styles.detailValue, { color: theme.colors.textPrimary }]}>{cycle.bankUtilization}%</Text>
-          <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>Bank used</Text>
+          <Text style={[styles.detailValue, { color: Acid.tx }]}>{cycle.bankUtilization}%</Text>
+          <Text style={[styles.detailLabel, { color: Acid.tx3 }]}>Bank used</Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={[styles.detailValue, { color: theme.colors.textPrimary }]}>{cycle.daysLogged}/{cycle.daysInCycle}</Text>
-          <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>Days logged</Text>
+          <Text style={[styles.detailValue, { color: Acid.tx }]}>{cycle.daysLogged}/{cycle.daysInCycle}</Text>
+          <Text style={[styles.detailLabel, { color: Acid.tx3 }]}>Days logged</Text>
         </View>
         <View style={styles.detailItem}>
-          <Text style={[styles.detailValue, { color: theme.colors.textPrimary }]}>{usedPct}%</Text>
-          <Text style={[styles.detailLabel, { color: theme.colors.textTertiary }]}>Budget used</Text>
+          <Text style={[styles.detailValue, { color: Acid.tx }]}>{usedPct}%</Text>
+          <Text style={[styles.detailLabel, { color: Acid.tx3 }]}>Budget used</Text>
         </View>
       </View>
 
-      <Text style={[styles.coach, { color: theme.colors.textPrimary }]}>
+      <Text style={[styles.coach, { color: Acid.tx }]}>
         {coachLine}
       </Text>
 
-      <Text style={[styles.footer, { color: theme.colors.textTertiary }]}>
+      <Text style={[styles.footer, { color: Acid.tx3 }]}>
         Your new cycle starts today
       </Text>
     </View>

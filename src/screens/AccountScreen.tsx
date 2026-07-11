@@ -80,9 +80,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   initialStreakFreeze,
   initialFrozenDates,
   initialMode = 'signin',
-}) => {
-  const theme = useTheme();
-  const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
+}) => {  const { convertWeightToDisplay, getWeightUnitLabel } = usePreferences();
 
   // -- Auth State --
   // If we have stored account info with an email, treat as logged in until session check completes
@@ -649,18 +647,18 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const renderLoggedIn = () => (
     <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} showsVerticalScrollIndicator={false}>
       {/* Profile Card */}
-      <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+      <View style={[styles.summaryCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
+          <View style={{ width: 60, height: 60, borderRadius: 30, backgroundColor: Acid.lime, alignItems: 'center', justifyContent: 'center' }}>
             <Text style={{ fontSize: 24, color: 'white', fontWeight: 'bold' }}>{accountInfo?.name?.charAt(0).toUpperCase() || 'U'}</Text>
           </View>
           <View>
-            <Text style={[styles.profileName, { color: theme.colors.textPrimary }]}>{accountInfo?.name || 'User'}</Text>
-            <Text style={[styles.profileEmail, { color: theme.colors.textSecondary }]}>{accountInfo?.email}</Text>
+            <Text style={[styles.profileName, { color: Acid.tx }]}>{accountInfo?.name || 'User'}</Text>
+            <Text style={[styles.profileEmail, { color: Acid.tx2 }]}>{accountInfo?.email}</Text>
           </View>
         </View>
-        <View style={[styles.planBadge, { alignSelf: 'flex-start', marginTop: 12, backgroundColor: plan === 'premium' ? theme.colors.primary : theme.colors.input }]}>
-          <Text style={[styles.planBadgeText, { color: plan === 'premium' ? 'white' : theme.colors.textSecondary }]}>
+        <View style={[styles.planBadge, { alignSelf: 'flex-start', marginTop: 12, backgroundColor: plan === 'premium' ? Acid.lime : Acid.mossDeep }]}>
+          <Text style={[styles.planBadgeText, { color: plan === 'premium' ? 'white' : Acid.tx2 }]}>
             {plan === 'premium' ? 'Premium Plan' : 'Free Plan'}
           </Text>
         </View>
@@ -669,39 +667,39 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       {/* Stats Card */}
 
       {/* Account Stats */}
-      <View style={[styles.summaryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+      <View style={[styles.summaryCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
 
-        <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>Account Stats</Text>
+        <Text style={[styles.sectionTitle, { color: Acid.tx }]}>Account Stats</Text>
         <View style={styles.statsGrid}>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Total Entries</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{entryCount}</Text>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Total Entries</Text>
+            <Text style={[styles.statValue, { color: Acid.tx }]}>{entryCount}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Referrals</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>{referralDetails.totalReferrals}</Text>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Referrals</Text>
+            <Text style={[styles.statValue, { color: Acid.tx }]}>{referralDetails.totalReferrals}</Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Current Weight</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Current Weight</Text>
+            <Text style={[styles.statValue, { color: Acid.tx }]}>
               {weightSummary.current !== null ? `${Math.round(convertWeightToDisplay(weightSummary.current) * 10) / 10} ${getWeightUnitLabel()}` : '—'}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Goal Weight</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Goal Weight</Text>
+            <Text style={[styles.statValue, { color: Acid.tx }]}>
               {weightSummary.goal !== null ? `${Math.round(convertWeightToDisplay(weightSummary.goal) * 10) / 10} ${getWeightUnitLabel()}` : '—'}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Weight Change</Text>
-            <Text style={[styles.statValue, { color: weightSummary.change !== null && weightSummary.change > 0 ? '#22C55E' : theme.colors.textPrimary }]}>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Weight Change</Text>
+            <Text style={[styles.statValue, { color: weightSummary.change !== null && weightSummary.change > 0 ? Acid.good : Acid.tx }]}>
               {weightSummary.change !== null ? `${weightSummary.change > 0 ? '-' : '+'}${Math.abs(Math.round(convertWeightToDisplay(weightSummary.change) * 10) / 10)} ${getWeightUnitLabel()}` : '—'}
             </Text>
           </View>
           <View style={styles.statItem}>
-            <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Daily Calorie Goal</Text>
-            <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Daily Calorie Goal</Text>
+            <Text style={[styles.statValue, { color: Acid.tx }]}>
               {goals?.calories ? `${goals.calories} kcal` : '—'}
             </Text>
           </View>
@@ -711,9 +709,9 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
 
       {/* Actions */}
-      <TouchableOpacity style={[styles.logoutButton, { borderColor: theme.colors.border }]} onPress={handleSignOut}>
-        <Feather name="log-out" size={18} color={theme.colors.error} />
-        <Text style={[styles.logoutButtonText, { color: theme.colors.error }]}>Sign Out</Text>
+      <TouchableOpacity style={[styles.logoutButton, { borderColor: Acid.hair }]} onPress={handleSignOut}>
+        <Feather name="log-out" size={18} color={Acid.error} />
+        <Text style={[styles.logoutButtonText, { color: Acid.error }]}>Sign Out</Text>
       </TouchableOpacity>
 
       <TouchableOpacity
@@ -760,11 +758,11 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         }}
       >
         <Feather name="trash-2" size={16} color="#EF4444" />
-        <Text style={{ color: '#EF4444', fontSize: 14, fontWeight: '600' }}>Delete Account</Text>
+        <Text style={{ color: Acid.error, fontSize: 14, fontWeight: '600' }}>Delete Account</Text>
       </TouchableOpacity>
 
       <TouchableOpacity style={{ alignSelf: 'center', padding: 10, marginTop: 4 }} onPress={handleClearData}>
-        <Text style={{ color: theme.colors.textTertiary, fontSize: 12 }}>Clear All Local Data</Text>
+        <Text style={{ color: Acid.tx3, fontSize: 12 }}>Clear All Local Data</Text>
       </TouchableOpacity>
     </ScrollView>
   );
@@ -774,13 +772,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
   const isAcid = !authSession && !isLoading;
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: isAcid ? Acid.moss : theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: isAcid ? Acid.moss : Acid.moss }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: isAcid ? 'transparent' : theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: isAcid ? 'transparent' : Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={isAcid ? Acid.tx2 : theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={isAcid ? Acid.tx2 : Acid.tx} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+        <Text style={[styles.headerTitle, { color: Acid.tx }]}>
           {authSession ? 'My Account' : ''}
         </Text>
         <View style={{ width: 40 }} />
@@ -788,7 +786,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
       {isLoading ? (
         <View style={styles.loadingState}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+          <ActivityIndicator size="large" color={Acid.lime} />
         </View>
       ) : (
         authSession ? renderLoggedIn() : renderNotLoggedIn()
@@ -803,28 +801,28 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : 'height'} style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-            <View style={{ backgroundColor: theme.colors.card, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '70%', padding: 20 }}>
+            <View style={{ backgroundColor: Acid.mossDeep, borderTopLeftRadius: 20, borderTopRightRadius: 20, height: '70%', padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.colors.textPrimary }}>Select Country</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: Acid.tx }}>Select Country</Text>
                 <TouchableOpacity onPress={() => setShowCountryPicker(false)}>
-                  <Feather name="x" size={24} color={theme.colors.textPrimary} />
+                  <Feather name="x" size={24} color={Acid.tx} />
                 </TouchableOpacity>
               </View>
 
               {/* Search Bar */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.input, borderRadius: 8, paddingHorizontal: 12, marginBottom: 16, height: 40, borderWidth: 1, borderColor: theme.colors.border }}>
-                <Feather name="search" size={16} color={theme.colors.textTertiary} style={{ marginRight: 8 }} />
+              <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Acid.mossDeep, borderRadius: 8, paddingHorizontal: 12, marginBottom: 16, height: 40, borderWidth: 1, borderColor: Acid.hair }}>
+                <Feather name="search" size={16} color={Acid.tx3} style={{ marginRight: 8 }} />
                 <TextInput
-                  style={{ flex: 1, color: theme.colors.textPrimary, height: '100%' }}
+                  style={{ flex: 1, color: Acid.tx, height: '100%' }}
                   placeholder="Search country..."
-                  placeholderTextColor={theme.colors.textTertiary}
+                  placeholderTextColor={Acid.tx3}
                   value={countrySearchQuery}
                   onChangeText={setCountrySearchQuery}
                   autoCorrect={false}
                 />
                 {countrySearchQuery.length > 0 && (
                   <TouchableOpacity onPress={() => setCountrySearchQuery('')}>
-                    <Feather name="x-circle" size={16} color={theme.colors.textTertiary} />
+                    <Feather name="x-circle" size={16} color={Acid.tx3} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -835,7 +833,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                 keyboardShouldPersistTaps="handled"
                 renderItem={({ item }) => (
                   <TouchableOpacity
-                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: theme.colors.border }}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Acid.hair }}
                     onPress={() => {
                       setSelectedCountry(item);
                       setShowCountryPicker(false);
@@ -843,8 +841,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
                     }}
                   >
                     <Text style={{ fontSize: 24, marginRight: 12 }}>{item.code === 'AE' ? '🇦🇪' : item.code === 'US' ? '🇺🇸' : item.code === 'GB' ? '🇬🇧' : '🏳️'}</Text>
-                    <Text style={{ fontSize: 16, color: theme.colors.textPrimary, flex: 1 }}>{item.name}</Text>
-                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textSecondary }}>{item.dial_code}</Text>
+                    <Text style={{ fontSize: 16, color: Acid.tx, flex: 1 }}>{item.name}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: 'bold', color: Acid.tx2 }}>{item.dial_code}</Text>
                   </TouchableOpacity>
                 )}
               />
@@ -863,26 +861,26 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       >
         <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
           <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
+            <View style={{ backgroundColor: Acid.mossDeep, borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: theme.colors.textPrimary }}>Reset Password</Text>
+                <Text style={{ fontSize: 18, fontWeight: 'bold', color: Acid.tx }}>Reset Password</Text>
                 <TouchableOpacity onPress={() => setForgotPasswordVisible(false)}>
-                  <Feather name="x" size={24} color={theme.colors.textSecondary} />
+                  <Feather name="x" size={24} color={Acid.tx2} />
                 </TouchableOpacity>
               </View>
 
-              <Text style={{ fontSize: 14, color: theme.colors.textSecondary, marginBottom: 8 }}>
+              <Text style={{ fontSize: 14, color: Acid.tx2, marginBottom: 8 }}>
                 Enter your email to receive a reset link.
               </Text>
 
               <TextInput
                 style={[styles.input, {
-                  backgroundColor: theme.colors.input,
-                  color: theme.colors.textPrimary,
-                  borderColor: theme.colors.border
+                  backgroundColor: Acid.mossDeep,
+                  color: Acid.tx,
+                  borderColor: Acid.hair
                 }]}
                 placeholder="john@example.com"
-                placeholderTextColor={theme.colors.textTertiary}
+                placeholderTextColor={Acid.tx3}
                 value={resetInput}
                 onChangeText={setResetInput}
                 keyboardType="email-address"
@@ -966,14 +964,14 @@ const styles = StyleSheet.create({
     fontSize: Typography.fontSize.md,
   },
   primaryButton: {
-    backgroundColor: '#171717', // Neutral-900 or theme.colors.textPrimary equivalent
+    backgroundColor: '#171717', // Neutral-900 or Acid.tx equivalent
     borderRadius: 10,
     paddingVertical: 14,
     alignItems: 'center',
     marginTop: 16,
   },
   primaryButtonText: {
-    color: Colors.white,
+    color: Acid.moss,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
@@ -1006,7 +1004,7 @@ const styles = StyleSheet.create({
     flex: 1,
     margin: 2,
     borderRadius: 3,
-    backgroundColor: '#10B981',
+    backgroundColor: Acid.good,
   },
   loadingState: {
     flex: 1,
@@ -1034,7 +1032,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   signOutButton: {
-    backgroundColor: '#10B981',
+    backgroundColor: Acid.good,
     borderRadius: 10,
     paddingVertical: 12,
     alignItems: 'center',
@@ -1044,7 +1042,7 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   signOutButtonText: {
-    color: Colors.white,
+    color: Acid.moss,
     fontWeight: Typography.fontWeight.semiBold,
   },
   planRow: {
@@ -1184,7 +1182,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   whatsappButtonText: {
-    color: Colors.white,
+    color: Acid.moss,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },

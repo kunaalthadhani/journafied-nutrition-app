@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 
@@ -35,7 +35,6 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
   onRetry,
   statusMessage,
 }) => {
-  const theme = useTheme();
   const progressAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -51,13 +50,13 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
   const getStatusColor = () => {
     switch (status) {
       case 'completed':
-        return theme.colors.success;
+        return Acid.good;
       case 'failed':
-        return theme.colors.error;
+        return Acid.error;
       case 'analyzing':
-        return theme.colors.info;
+        return Acid.protein;
       default:
-        return theme.colors.accent;
+        return Acid.lime;
     }
   };
 
@@ -89,17 +88,17 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
       onRequestClose={onClose}
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]} edges={['top', 'left', 'right']}>
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
           <TouchableOpacity
             onPress={onClose}
             style={styles.backButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <Feather name="arrow-left" size={24} color={theme.colors.success} />
+            <Feather name="arrow-left" size={24} color={Acid.good} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
             Upload Image
           </Text>
           <View style={styles.backButton} />
@@ -107,7 +106,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
 
         {/* Upload Status Section */}
         <View style={styles.uploadStatusSection}>
-          <Text style={[styles.statusText, { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.statusText, { color: Acid.tx2 }]}>
             {status === 'uploading' && `Uploading - ${progress}%`}
             {status === 'analyzing' && (statusMessage || 'Analyzing image...')}
             {status === 'completed' && (statusMessage || 'Upload completed')}
@@ -115,25 +114,25 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
           </Text>
 
           {/* File List */}
-          <View style={[styles.fileItem, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.fileItem, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
             <View style={styles.fileIconContainer}>
               {imageUri ? (
                 <Image source={{ uri: imageUri }} style={styles.fileImage} />
               ) : (
-                <View style={[styles.fileIconPlaceholder, { backgroundColor: theme.colors.input }]}>
-                  <Feather name={getFileIcon()} size={24} color={theme.colors.success} />
+                <View style={[styles.fileIconPlaceholder, { backgroundColor: Acid.mossDeep }]}>
+                  <Feather name={getFileIcon()} size={24} color={Acid.good} />
                 </View>
               )}
             </View>
 
             <View style={styles.fileInfo}>
-              <Text style={[styles.fileName, { color: theme.colors.textPrimary }]} numberOfLines={1}>
+              <Text style={[styles.fileName, { color: Acid.tx }]} numberOfLines={1}>
                 {fileName}
               </Text>
 
               {(status === 'uploading' || status === 'analyzing') && (
                 <>
-                  <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.input }]}>
+                  <View style={[styles.progressBarContainer, { backgroundColor: Acid.mossDeep }]}>
                     <Animated.View
                       style={[
                         styles.progressBar,
@@ -147,7 +146,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                       ]}
                     />
                   </View>
-                  <Text style={[styles.progressText, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.progressText, { color: Acid.tx2 }]}>
                     {status === 'analyzing' ? 'Analyzing food items...' : `${progress}% - Uploading...`}
                   </Text>
                 </>
@@ -155,7 +154,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
 
               {status === 'completed' && (
                 <>
-                  <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.input }]}>
+                  <View style={[styles.progressBarContainer, { backgroundColor: Acid.mossDeep }]}>
                     <View
                       style={[
                         styles.progressBar,
@@ -167,8 +166,8 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                     />
                   </View>
                   <View style={styles.statusRow}>
-                    <Feather name="check-circle" size={16} color={theme.colors.success} />
-                    <Text style={[styles.statusMessage, { color: theme.colors.success }]}>
+                    <Feather name="check-circle" size={16} color={Acid.good} />
+                    <Text style={[styles.statusMessage, { color: Acid.good }]}>
                       Upload successful
                     </Text>
                   </View>
@@ -177,7 +176,7 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
 
               {status === 'failed' && (
                 <>
-                  <View style={[styles.progressBarContainer, { backgroundColor: theme.colors.input }]}>
+                  <View style={[styles.progressBarContainer, { backgroundColor: Acid.mossDeep }]}>
                     <View
                       style={[
                         styles.progressBar,
@@ -189,8 +188,8 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
                     />
                   </View>
                   <View style={styles.statusRow}>
-                    <Feather name="alert-circle" size={16} color={theme.colors.error} />
-                    <Text style={[styles.statusMessage, { color: theme.colors.error }]}>
+                    <Feather name="alert-circle" size={16} color={Acid.error} />
+                    <Text style={[styles.statusMessage, { color: Acid.error }]}>
                       {statusMessage || 'Error'}
                     </Text>
                   </View>
@@ -201,12 +200,12 @@ export const ImageUploadStatus: React.FC<ImageUploadStatusProps> = ({
             <View style={styles.fileActions}>
               {(status === 'uploading' || status === 'analyzing') && (
                 <TouchableOpacity onPress={onClose} style={styles.actionButton} disabled={status === 'analyzing'}>
-                  <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                  <Feather name="x" size={20} color={Acid.tx2} />
                 </TouchableOpacity>
               )}
               {status === 'failed' && onRetry && (
                 <TouchableOpacity onPress={onRetry} style={styles.actionButton}>
-                  <Feather name="refresh-cw" size={20} color={theme.colors.info} />
+                  <Feather name="refresh-cw" size={20} color={Acid.protein} />
                 </TouchableOpacity>
               )}
             </View>

@@ -10,7 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 interface AccountWallModalProps {
   visible: boolean;
@@ -24,34 +24,31 @@ export const AccountWallModal: React.FC<AccountWallModalProps> = ({
   onContinueWithEmail,
   onDismiss,
   logCount,
-}) => {
-  const theme = useTheme();
-
-  return (
+}) => {  return (
     <Modal
       visible={visible}
       animationType="slide"
       presentationStyle={Platform.OS === 'ios' ? 'pageSheet' : undefined}
       onRequestClose={onDismiss}
     >
-      <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+      <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
         {/* Close button */}
         {onDismiss && (
           <TouchableOpacity onPress={onDismiss} style={st.closeBtn}>
-            <Feather name="x" size={24} color={theme.colors.textTertiary} />
+            <Feather name="x" size={24} color={Acid.tx3} />
           </TouchableOpacity>
         )}
         <View style={st.content}>
           {/* Icon */}
-          <View style={[st.iconWrap, { backgroundColor: '#3B82F6' + '12' }]}>
+          <View style={[st.iconWrap, { backgroundColor: Acid.protein + '12' }]}>
             <Feather name="shield" size={40} color="#3B82F6" />
           </View>
 
           {/* Headline */}
-          <Text style={[st.title, { color: theme.colors.textPrimary }]}>
+          <Text style={[st.title, { color: Acid.tx }]}>
             You've logged {logCount} times!
           </Text>
-          <Text style={[st.sub, { color: theme.colors.textSecondary }]}>
+          <Text style={[st.sub, { color: Acid.tx2 }]}>
             Create an account to keep your data safe and unlock all features
           </Text>
 
@@ -63,10 +60,10 @@ export const AccountWallModal: React.FC<AccountWallModalProps> = ({
               { icon: 'zap', text: 'Unlock the AI Nutritionist & insights' },
             ].map((b, i) => (
               <View key={i} style={st.benefitRow}>
-                <View style={[st.benefitIcon, { backgroundColor: theme.colors.secondaryBg }]}>
+                <View style={[st.benefitIcon, { backgroundColor: Acid.mossDeep }]}>
                   <Feather name={b.icon as any} size={18} color="#3B82F6" />
                 </View>
-                <Text style={[st.benefitText, { color: theme.colors.textPrimary }]}>{b.text}</Text>
+                <Text style={[st.benefitText, { color: Acid.tx }]}>{b.text}</Text>
               </View>
             ))}
           </View>
@@ -74,19 +71,19 @@ export const AccountWallModal: React.FC<AccountWallModalProps> = ({
           {/* CTA buttons */}
           <View style={st.buttons}>
             {/* Google — placeholder */}
-            <TouchableOpacity style={[st.oauthBtn, { backgroundColor: theme.colors.secondaryBg, opacity: 0.5 }]} disabled>
-              <Text style={[st.oauthTxt, { color: theme.colors.textSecondary }]}>Sign in with Google — coming soon</Text>
+            <TouchableOpacity style={[st.oauthBtn, { backgroundColor: Acid.mossDeep, opacity: 0.5 }]} disabled>
+              <Text style={[st.oauthTxt, { color: Acid.tx2 }]}>Sign in with Google — coming soon</Text>
             </TouchableOpacity>
 
             {/* Apple — placeholder */}
-            <TouchableOpacity style={[st.oauthBtn, { backgroundColor: theme.colors.secondaryBg, opacity: 0.5 }]} disabled>
-              <Text style={[st.oauthTxt, { color: theme.colors.textSecondary }]}>Sign in with Apple — coming soon</Text>
+            <TouchableOpacity style={[st.oauthBtn, { backgroundColor: Acid.mossDeep, opacity: 0.5 }]} disabled>
+              <Text style={[st.oauthTxt, { color: Acid.tx2 }]}>Sign in with Apple — coming soon</Text>
             </TouchableOpacity>
 
             {/* Email CTA */}
-            <TouchableOpacity style={[st.emailBtn, { backgroundColor: theme.colors.primary }]} onPress={onContinueWithEmail}>
-              <Feather name="mail" size={18} color={theme.colors.primaryForeground} style={{ marginRight: 8 }} />
-              <Text style={[st.emailTxt, { color: theme.colors.primaryForeground }]}>Continue with email</Text>
+            <TouchableOpacity style={[st.emailBtn, { backgroundColor: Acid.lime }]} onPress={onContinueWithEmail}>
+              <Feather name="mail" size={18} color={Acid.moss} style={{ marginRight: 8 }} />
+              <Text style={[st.emailTxt, { color: Acid.moss }]}>Continue with email</Text>
             </TouchableOpacity>
           </View>
         </View>

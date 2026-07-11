@@ -4,10 +4,7 @@ import { MacrosCard } from './MacrosCard';
 import { Macros2Card } from './Macros2Card';
 import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
 import { StatCardSkeleton } from './StatCardSkeleton';
-import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
-import { useTheme } from '../constants/theme';
 
 interface SwipeableCardsProps {
   macrosData?: MacroData;
@@ -42,7 +39,6 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   daysInCycle,
   loading,
 }) => {
-  const theme = useTheme();
   const [currentCard, setCurrentCard] = useState<CardType>('macros2');
 
   // Card order depends on whether bank is active
@@ -136,7 +132,7 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
 
   if (loading) {
     return (
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+      <View style={styles.container}>
         <View style={styles.cardWrapper}>
           <StatCardSkeleton />
         </View>
@@ -145,7 +141,7 @@ export const SwipeableCards: React.FC<SwipeableCardsProps> = ({
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <View style={styles.container}>
       <View style={styles.cardWrapper}>
         <Animated.View
           style={[

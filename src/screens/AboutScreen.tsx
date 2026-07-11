@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 
@@ -11,20 +11,18 @@ interface AboutScreenProps {
 }
 
 export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
-  const theme = useTheme();
-
   const handleLink = (url: string) => {
     Linking.openURL(url).catch(() => { });
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       {/* Header */}
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={Acid.tx} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>About</Text>
+        <Text style={[styles.headerTitle, { color: Acid.tx }]}>About</Text>
         <View style={styles.headerRight} />
       </View>
 
@@ -34,23 +32,23 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
         showsVerticalScrollIndicator={false}
         removeClippedSubviews={false}
       >
-        <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <Text style={[styles.appName, { color: theme.colors.textPrimary }]}>TrackKcal</Text>
-          <Text style={[styles.version, { color: theme.colors.textSecondary }]}>Version 1.0.0</Text>
-          <Text style={[styles.description, { color: theme.colors.textSecondary }]}>TrackKcal helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
+        <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+          <Text style={[styles.appName, { color: Acid.tx }]}>TrackKcal</Text>
+          <Text style={[styles.version, { color: Acid.tx2 }]}>Version 1.0.0</Text>
+          <Text style={[styles.description, { color: Acid.tx2 }]}>TrackKcal helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
         </View>
 
-        <View style={[styles.section, { borderColor: theme.colors.border }]}>
-          <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>Links</Text>
+        <View style={[styles.section, { borderColor: Acid.hair }]}>
+          <Text style={[styles.sectionTitle, { color: Acid.tx2 }]}>Links</Text>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://trackkcal.com/privacy.html')}>
-            <Feather name="shield" size={18} color={theme.colors.textPrimary} />
-            <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Privacy Policy</Text>
-            <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
+            <Feather name="shield" size={18} color={Acid.tx} />
+            <Text style={[styles.linkText, { color: Acid.tx }]}>Privacy Policy</Text>
+            <Feather name="external-link" size={16} color={Acid.tx3} />
           </TouchableOpacity>
           <TouchableOpacity style={styles.linkRow} onPress={() => handleLink('https://trackkcal.com/terms.html')}>
-            <Feather name="file-text" size={18} color={theme.colors.textPrimary} />
-            <Text style={[styles.linkText, { color: theme.colors.textPrimary }]}>Terms of Service</Text>
-            <Feather name="external-link" size={16} color={theme.colors.textTertiary} />
+            <Feather name="file-text" size={18} color={Acid.tx} />
+            <Text style={[styles.linkText, { color: Acid.tx }]}>Terms of Service</Text>
+            <Feather name="external-link" size={16} color={Acid.tx3} />
           </TouchableOpacity>
         </View>
 

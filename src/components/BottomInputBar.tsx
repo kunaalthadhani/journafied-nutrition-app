@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { Plus, Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Spacing } from '../constants/spacing';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { BarVisualizer } from './BarVisualizer';
@@ -57,7 +57,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const [isUserTyping, setIsUserTyping] = React.useState(false);
   const [isFocused, setIsFocused] = React.useState(false);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   const inputRef = React.useRef<TextInput>(null);
 
@@ -133,7 +132,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
       style={[
         styles.keyboardContainer,
         {
-          backgroundColor: theme.colors.background,
+          backgroundColor: Acid.moss,
           paddingBottom: Platform.OS === 'ios'
             ? (insets.bottom > 0 ? insets.bottom : 20)
             : 5,
@@ -151,7 +150,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             {quickPrompts.map((prompt) => (
               <View
                 key={prompt.id}
-                style={[styles.quickPromptChip, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                style={[styles.quickPromptChip, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}
               >
                 <TouchableOpacity
                   onPress={() => onQuickPromptPress?.(prompt)}
@@ -159,7 +158,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                   style={styles.quickPromptTextWrapper}
                 >
                   <Text
-                    style={[styles.quickPromptText, { color: theme.colors.textPrimary }]}
+                    style={[styles.quickPromptText, { color: Acid.tx }]}
                     numberOfLines={2}
                     ellipsizeMode="tail"
                   >
@@ -171,14 +170,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                   hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                   style={styles.quickPromptRemove}
                 >
-                  <X size={14} color={theme.colors.textSecondary} strokeWidth={2} />
+                  <X size={14} color={Acid.tx3} strokeWidth={2} />
                 </TouchableOpacity>
               </View>
             ))}
           </ScrollView>
         )}
         {isRecording && (
-          <View style={[styles.visualizerContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <View style={[styles.visualizerContainer, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}>
             <BarVisualizer
               state="listening"
               barCount={20}
@@ -187,14 +186,14 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             />
           </View>
         )}
-        <View style={[styles.inputContainer, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+        <View style={[styles.inputContainer, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}>
           <TouchableOpacity
             onPress={onPlusPress}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
             disabled={isLoading || isRecording || isTranscribing}
             style={styles.plusIconButton}
           >
-            <Plus color={theme.colors.textPrimary} size={20} strokeWidth={2.4} />
+            <Plus color={Acid.tx} size={20} strokeWidth={2.4} />
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -209,7 +208,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           >
             {showCustomPlaceholder && (
               <View style={styles.placeholderContainer} pointerEvents="none">
-                <Text style={[styles.customPlaceholder, { color: '#B0B0B0' }]}>
+                <Text style={[styles.customPlaceholder, { color: Acid.tx3 }]}>
                   {placeholder}
                 </Text>
               </View>
@@ -219,12 +218,12 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               style={[
                 styles.textInput,
                 {
-                  color: theme.colors.textPrimary,
+                  color: Acid.tx,
                 },
                 (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
               ]}
               placeholder={showCustomPlaceholder ? '' : placeholder}
-              placeholderTextColor="#B0B0B0"
+              placeholderTextColor={Acid.tx3}
               value={currentText}
               onChangeText={handleTextChange}
               onSubmitEditing={handleSubmit}
@@ -267,31 +266,31 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               <TouchableOpacity
                 style={[
                   styles.circleButton,
-                  { backgroundColor: theme.colors.error }
+                  { backgroundColor: Acid.error }
                 ]}
                 onPress={onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 disabled={isLoading || isTranscribing}
               >
-                <StopCircle size={18} color={theme.colors.background} strokeWidth={2.4} />
+                <StopCircle size={18} color={Acid.moss} strokeWidth={2.4} />
               </TouchableOpacity>
             ) : (
               // Send or mic button
               <TouchableOpacity
                 style={[
                   styles.circleButton,
-                  { backgroundColor: hasText ? theme.colors.primary : theme.colors.input }
+                  { backgroundColor: hasText ? Acid.lime : Acid.hair2 }
                 ]}
                 onPress={hasText ? handleSubmit : onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 disabled={isLoading || isTranscribing}
               >
                 {isTranscribing ? (
-                  <Loader size={18} color={hasText ? theme.colors.background : theme.colors.textSecondary} strokeWidth={2.4} />
+                  <Loader size={18} color={hasText ? Acid.moss : Acid.tx2} strokeWidth={2.4} />
                 ) : hasText ? (
-                  <Send size={18} color={theme.colors.background} strokeWidth={2.4} />
+                  <Send size={18} color={Acid.moss} strokeWidth={2.4} />
                 ) : (
-                  <Mic size={18} color={theme.colors.textPrimary} strokeWidth={2.4} />
+                  <Mic size={18} color={Acid.tx} strokeWidth={2.4} />
                 )}
               </TouchableOpacity>
             )}

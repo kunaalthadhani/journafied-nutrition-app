@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, startOfDay, isSameDay } from 'date-fns';
 import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
@@ -104,9 +104,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   initialTab,
   scrollToInsight = null,
   onScrollToInsightConsumed,
-}) => {
-  const theme = useTheme();
-  const insightsScrollRef = useRef<ScrollView>(null);
+}) => {  const insightsScrollRef = useRef<ScrollView>(null);
   const insightSlotRefs = useRef<Partial<Record<InsightId, View | null>>>({});
   const pendingScrollRef = useRef<InsightId | null>(null);
   const consumedCbRef = useRef(onScrollToInsightConsumed);
@@ -148,14 +146,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const def = getInsightDefinition(id);
     if (!def) return null;
     return (
-      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, opacity: 0.5 }]}>
+      <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20, opacity: 0.5 }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.input, alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name="lock" size={14} color={theme.colors.textTertiary} />
+          <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: Acid.mossDeep, alignItems: 'center', justifyContent: 'center' }}>
+            <Feather name="lock" size={14} color={Acid.tx3} />
           </View>
           <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>{def.name}</Text>
-            <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>{def.requirementText}</Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: Acid.tx }}>{def.name}</Text>
+            <Text style={{ fontSize: 12, color: Acid.tx3 }}>{def.requirementText}</Text>
           </View>
         </View>
       </View>
@@ -167,16 +165,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Shown when an insight is unlocked but the user has not set goals, so it has
   // targets to compare against. Without this the card renders an empty gap.
   const NeedsGoalsCard = ({ name }: { name: string }) => (
-    <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.85} style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+    <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.85} style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-        <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: theme.colors.primary + '15', alignItems: 'center', justifyContent: 'center' }}>
-          <Feather name="target" size={14} color={theme.colors.primary} />
+        <View style={{ width: 32, height: 32, borderRadius: 10, backgroundColor: Acid.lime + '15', alignItems: 'center', justifyContent: 'center' }}>
+          <Feather name="target" size={14} color={Acid.lime} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textPrimary }}>{name}</Text>
-          <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Set your goals to use this insight</Text>
+          <Text style={{ fontSize: 14, fontWeight: '600', color: Acid.tx }}>{name}</Text>
+          <Text style={{ fontSize: 12, color: Acid.tx2 }}>Set your goals to use this insight</Text>
         </View>
-        <Feather name="chevron-right" size={16} color={theme.colors.textTertiary} />
+        <Feather name="chevron-right" size={16} color={Acid.tx3} />
       </View>
     </TouchableOpacity>
   );
@@ -184,23 +182,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   // Shown inside a tab when the user has data overall but none in the selected
   // time range, so the chart would otherwise sit empty or imply a flat zero week.
   const NoRangeDataCard = () => (
-    <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 28, alignItems: 'center' }]}>
-      <Feather name="bar-chart-2" size={28} color={theme.colors.textTertiary} style={{ marginBottom: 10 }} />
-      <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 4 }}>
+    <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 28, alignItems: 'center' }]}>
+      <Feather name="bar-chart-2" size={28} color={Acid.tx3} style={{ marginBottom: 10 }} />
+      <Text style={{ fontSize: 15, fontWeight: '600', color: Acid.tx, marginBottom: 4 }}>
         No meals logged in this range
       </Text>
-      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center' }}>
+      <Text style={{ fontSize: 13, color: Acid.tx2, textAlign: 'center' }}>
         Pick a wider range or log a meal to see your trend here.
       </Text>
     </View>
   );
 
   const toneForPriority = (kind: TopPriorityItem['kind']) => {
-    if (kind === 'pattern') return { color: theme.colors.primary, icon: 'zap', badge: 'PATTERN' };
-    if (kind === 'warning') return { color: '#EF4444', icon: 'alert-triangle', badge: 'PRIORITY' };
-    if (kind === 'pattern-rule') return { color: '#F59E0B', icon: 'trending-up', badge: 'PATTERN' };
-    if (kind === 'achievement') return { color: '#10B981', icon: 'award', badge: 'WIN' };
-    return { color: theme.colors.primary, icon: 'target', badge: 'SUGGESTED' };
+    if (kind === 'pattern') return { color: Acid.lime, icon: 'zap', badge: 'PATTERN' };
+    if (kind === 'warning') return { color: Acid.error, icon: 'alert-triangle', badge: 'PRIORITY' };
+    if (kind === 'pattern-rule') return { color: Acid.carbs, icon: 'trending-up', badge: 'PATTERN' };
+    if (kind === 'achievement') return { color: Acid.good, icon: 'award', badge: 'WIN' };
+    return { color: Acid.lime, icon: 'target', badge: 'SUGGESTED' };
   };
 
   // The headline card on the Insights tab: one thing to act on, with a concrete
@@ -209,28 +207,28 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     if (!topPriority) return null;
     const tone = toneForPriority(topPriority.kind);
     return (
-      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 18, borderLeftWidth: 3, borderLeftColor: tone.color }]}>
+      <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 18, borderLeftWidth: 3, borderLeftColor: tone.color }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
           <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${tone.color}15`, alignItems: 'center', justifyContent: 'center' }}>
             <Feather name={tone.icon as any} size={14} color={tone.color} />
           </View>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, flex: 1 }}>{topPriority.title}</Text>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx, flex: 1 }}>{topPriority.title}</Text>
           <View style={{ backgroundColor: `${tone.color}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
             <Text style={{ fontSize: 10, fontWeight: '700', color: tone.color }}>{tone.badge}</Text>
           </View>
         </View>
-        <Text style={{ fontSize: 13, color: theme.colors.textSecondary, lineHeight: 19 }}>{topPriority.description}</Text>
+        <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 19 }}>{topPriority.description}</Text>
         {/* Fixed window, unlike the range-driven cards below it. Saying so stops
             it reading as a summary of whatever range pill is selected. */}
-        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 6 }}>
+        <Text style={{ fontSize: 11, color: Acid.tx3, marginTop: 6 }}>
           Based on your last 7 logged days
         </Text>
         {topPriority.actionText && (
-          <View style={{ marginTop: 12, backgroundColor: theme.colors.input, borderRadius: 10, padding: 12 }}>
+          <View style={{ marginTop: 12, backgroundColor: Acid.mossDeep, borderRadius: 10, padding: 12 }}>
             {topPriority.actionLabel && (
               <Text style={{ fontSize: 12, fontWeight: '700', color: tone.color, marginBottom: 3 }}>{topPriority.actionLabel}</Text>
             )}
-            <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 19 }}>{topPriority.actionText}</Text>
+            <Text style={{ fontSize: 13, color: Acid.tx, lineHeight: 19 }}>{topPriority.actionText}</Text>
           </View>
         )}
         {topPriority.canLogMeal && onRequestLogMeal && (
@@ -462,7 +460,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const rangeSubtitle = (text: string) =>
     averageIsTodayOnly ? `${text} · today so far` : `${text} · ${rangeLabel(timeRange)}`;
   const CardEmptyNote = () => (
-    <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 16 }}>
+    <Text style={{ fontSize: 13, color: Acid.tx2, textAlign: 'center', paddingVertical: 16 }}>
       No logged days in the {rangeLabel(timeRange)}. Pick a wider range.
     </Text>
   );
@@ -707,24 +705,20 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
   const timeRanges: TimeRange[] = [...CHART_RANGES];
 
-  // Pill-style time range selector used across all tabs
+  // Underlined range words, the board's pattern everywhere
   const renderTimeRangePills = () => (
-    <View style={{ flexDirection: 'row', gap: 4, backgroundColor: theme.colors.input, borderRadius: 12, padding: 4, alignSelf: 'center', marginBottom: 8 }}>
+    <View style={{ flexDirection: 'row', gap: 22, alignSelf: 'center', marginBottom: 8 }}>
       {timeRanges.map((range) => (
         <TouchableOpacity
           key={range}
           onPress={() => handleTimeRangeChange(range)}
           style={{
-            paddingHorizontal: 12,
             paddingVertical: 6,
-            borderRadius: 8,
-            backgroundColor: timeRange === range ? theme.colors.card : 'transparent',
-            shadowColor: timeRange === range ? '#000' : 'transparent',
-            shadowOpacity: timeRange === range ? 0.05 : 0,
-            shadowRadius: 2,
+            borderBottomWidth: 2,
+            borderBottomColor: timeRange === range ? Acid.lime : 'transparent',
           }}
         >
-          <Text style={{ fontSize: 12, fontWeight: '600', color: timeRange === range ? theme.colors.textPrimary : theme.colors.textSecondary }}>
+          <Text style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1, color: timeRange === range ? Acid.lime : Acid.tx3 }}>
             {range}
           </Text>
         </TouchableOpacity>
@@ -1104,17 +1098,17 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         <Svg height={size} width={size}>
           {/* Webs */}
           {webs.map((pointsStr, i) => (
-            <Polygon key={i} points={pointsStr} stroke={theme.colors.border} strokeWidth="1" fill="none" opacity={0.5} />
+            <Polygon key={i} points={pointsStr} stroke={Acid.hair} strokeWidth="1" fill="none" opacity={0.5} />
           ))}
           {/* Axis Lines */}
           {radarData.map((_, i) => {
             const angle = i * angleStep - Math.PI / 2;
             const x = center + radius * Math.cos(angle);
             const y = center + radius * Math.sin(angle);
-            return <Line key={i} x1={center} y1={center} x2={x} y2={y} stroke={theme.colors.border} strokeWidth="1" opacity={0.5} />;
+            return <Line key={i} x1={center} y1={center} x2={x} y2={y} stroke={Acid.hair} strokeWidth="1" opacity={0.5} />;
           })}
           {/* Data Shape */}
-          <Polygon points={points} fill="rgba(59, 130, 246, 0.2)" stroke={theme.colors.primary} strokeWidth="2" />
+          <Polygon points={points} fill="rgba(59, 130, 246, 0.2)" stroke={Acid.lime} strokeWidth="2" />
           {/* Labels */}
           {radarData.map((d, i) => {
             const angle = i * angleStep - Math.PI / 2;
@@ -1126,7 +1120,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 key={i}
                 x={x}
                 y={y + 4}
-                fill={theme.colors.textSecondary}
+                fill={Acid.tx2}
                 fontSize="10"
                 fontWeight="bold"
                 textAnchor="middle"
@@ -1141,23 +1135,23 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
       >
         {/* Header */}
         <View
-          style={[styles.header, { borderBottomColor: theme.colors.border }]}
+          style={[styles.header, { borderBottomColor: Acid.hair }]}
           {...panResponder.panHandlers}
         >
           <TouchableOpacity onPress={handleClose} style={styles.backButton}>
-            <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+            <Feather name="chevron-down" size={24} color={Acid.tx} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
             Nutrition Analysis
           </Text>
           <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerRight}>
-            <Feather name="info" size={20} color={theme.colors.textSecondary} />
+            <Feather name="info" size={20} color={Acid.tx2} />
           </TouchableOpacity>
         </View>
 
@@ -1172,17 +1166,17 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             <View
               style={[
                 styles.emptyStateContainer,
-                { backgroundColor: theme.colors.card, borderColor: theme.colors.border },
+                { backgroundColor: Acid.mossDeep, borderColor: Acid.hair },
               ]}
             >
-              <Text style={[styles.emptyStateTitle, { color: theme.colors.textPrimary }]}>
+              <Text style={[styles.emptyStateTitle, { color: Acid.tx }]}>
                 Log your first meal
               </Text>
-              <Text style={[styles.emptyStateText, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.emptyStateText, { color: Acid.tx2 }]}>
                 Start tracking your nutrition by logging your meals.
               </Text>
               <TouchableOpacity
-                style={[styles.emptyStateButton, { backgroundColor: theme.colors.primary }]}
+                style={[styles.emptyStateButton, { backgroundColor: Acid.lime }]}
                 onPress={() => {
                   if (onRequestLogMeal) {
                     onRequestLogMeal();
@@ -1192,7 +1186,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 }}
                 activeOpacity={0.85}
               >
-                <Text style={[styles.emptyStateButtonText, { color: theme.colors.primaryForeground }]}>
+                <Text style={[styles.emptyStateButtonText, { color: Acid.moss }]}>
                   Log Meal
                 </Text>
               </TouchableOpacity>
@@ -1204,29 +1198,29 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             {activeTab === 'Calories' ? (
               <>
                 {/* Average Calories Hero */}
-                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>
+                <View style={styles.heroCard}>
+                  <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>
                     {averageIsTodayOnly ? 'TODAY SO FAR' : 'AVG / DAY'}
                   </Text>
-                  <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+                  <Text style={[styles.heroValue, { color: Acid.tx }]} numberOfLines={1} adjustsFontSizeToFit>
                     {averageCalories !== null ? `${averageCalories}` : '--'}
                   </Text>
-                  <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
+                  <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>Kcal</Text>
                 </View>
 
                 {/* Target Calories Hero */}
-                <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                  <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>TARGET</Text>
+                <View style={styles.heroCard}>
+                  <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>TARGET</Text>
                   {hasTargetCalories ? (
                     <>
-                      <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+                      <Text style={[styles.heroValue, { color: Acid.tx }]} numberOfLines={1} adjustsFontSizeToFit>
                         {`${targetCalories}`}
                       </Text>
-                      <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
+                      <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>Kcal</Text>
                     </>
                   ) : (
                     <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.7}>
-                      <Text style={{ color: theme.colors.primary, fontWeight: '600', marginTop: 4, fontSize: 14 }}>Set Goal</Text>
+                      <Text style={{ color: Acid.lime, fontWeight: '600', marginTop: 4, fontSize: 14 }}>Set Goal</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -1236,15 +1230,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   const diff = averageCalories - targetCalories!;
                   const isDeficit = diff < 0;
                   const isOnTrack = Math.abs(diff) <= 50;
-                  const color = isOnTrack ? '#10B981' : isDeficit ? '#3B82F6' : '#EF4444';
+                  const color = isOnTrack ? Acid.good : isDeficit ? Acid.protein : Acid.error;
                   const label = isOnTrack ? 'ON TRACK' : isDeficit ? 'DEFICIT' : 'SURPLUS';
                   return (
-                    <View style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-                      <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+                    <View style={styles.heroCard}>
+                      <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>{label}</Text>
                       <Text style={[styles.heroValue, { color }]} numberOfLines={1} adjustsFontSizeToFit>
                         {isOnTrack ? '0' : isDeficit ? `${diff}` : `+${diff}`}
                       </Text>
-                      <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>Kcal</Text>
+                      <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>Kcal</Text>
                     </View>
                   );
                 })()}
@@ -1252,24 +1246,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             ) : (
               <>
                 {[
-                  { label: 'PROTEIN', value: averageProtein, color: '#3B82F6' },
-                  { label: 'CARBS', value: averageCarbs, color: '#F59E0B' },
-                  { label: 'FAT', value: averageFat, color: '#8B5CF6' },
+                  { label: 'PROTEIN', value: averageProtein, color: Acid.protein },
+                  { label: 'CARBS', value: averageCarbs, color: Acid.carbs },
+                  { label: 'FAT', value: averageFat, color: Acid.fat },
                 ].map((macro) => (
                   <View
                     key={macro.label}
-                    style={[styles.heroCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+                    style={styles.heroCard}
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5, marginBottom: 4 }}>
                       <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: macro.color }} />
-                      <Text style={[styles.heroLabel, { color: theme.colors.textSecondary }]}>
+                      <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>
                         {macro.label}
                       </Text>
                     </View>
-                    <Text style={[styles.heroValue, { color: theme.colors.textPrimary }]} numberOfLines={1} adjustsFontSizeToFit>
+                    <Text style={[styles.heroValue, { color: Acid.tx }]} numberOfLines={1} adjustsFontSizeToFit>
                       {macro.value !== null ? macro.value.toFixed(0) : '--'}
                     </Text>
-                    <Text style={[styles.heroUnit, { color: theme.colors.textTertiary }]}>
+                    <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>
                       {averageIsTodayOnly ? 'g · today so far' : 'g · avg/day'}
                     </Text>
                   </View>
@@ -1281,60 +1275,30 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           {hasAnyData && (
             <React.Fragment>
               {/* Tab Navigation */}
-              <View style={[styles.tabContainer, { backgroundColor: theme.colors.input }]}>
+              <View style={styles.tabContainer}>
                 <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    activeTab === 'Calories' && { backgroundColor: theme.colors.primary },
-                  ]}
+                  style={[styles.tab, activeTab === 'Calories' && styles.tabActive]}
                   onPress={() => setActiveTab('Calories')}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      {
-                        color: activeTab === 'Calories' ? theme.colors.primaryForeground : theme.colors.textSecondary,
-                      },
-                    ]}
-                  >
+                  <Text style={[styles.tabText, { color: activeTab === 'Calories' ? Acid.lime : Acid.tx3 }]}>
                     Calories
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[
-                    styles.tab,
-                    activeTab === 'Macros' && { backgroundColor: theme.colors.primary },
-                  ]}
+                  style={[styles.tab, activeTab === 'Macros' && styles.tabActive]}
                   onPress={() => setActiveTab('Macros')}
                 >
-                  <Text
-                    style={[
-                      styles.tabText,
-                      {
-                        color: activeTab === 'Macros' ? theme.colors.primaryForeground : theme.colors.textSecondary,
-                      },
-                    ]}
-                  >
+                  <Text style={[styles.tabText, { color: activeTab === 'Macros' ? Acid.lime : Acid.tx3 }]}>
                     Macros
                   </Text>
                 </TouchableOpacity>
                 {isPremium && (
                   <TouchableOpacity
-                    style={[
-                      styles.tab,
-                      activeTab === 'Insights' && { backgroundColor: theme.colors.primary },
-                    ]}
+                    style={[styles.tab, activeTab === 'Insights' && styles.tabActive]}
                     onPress={() => setActiveTab('Insights')}
                   >
-                    <Text
-                      style={[
-                        styles.tabText,
-                        {
-                          color: activeTab === 'Insights' ? theme.colors.primaryForeground : theme.colors.textSecondary,
-                        },
-                      ]}
-                    >
-                      ✨ Insights
+                    <Text style={[styles.tabText, { color: activeTab === 'Insights' ? Acid.lime : Acid.tx3 }]}>
+                      Insights
                     </Text>
                   </TouchableOpacity>
                 )}
@@ -1349,8 +1313,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     style={[
                       styles.graphCard,
                       {
-                        backgroundColor: theme.colors.card,
-                        shadowColor: theme.colors.shadow,
+                        backgroundColor: Acid.mossDeep,
+                        shadowColor: '#000',
                       },
                     ]}
                     {...graphPanResponder.panHandlers}
@@ -1369,11 +1333,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         }}
                       >
                         <View style={{
-                          backgroundColor: theme.colors.card,
+                          backgroundColor: Acid.mossDeep,
                           borderRadius: 8,
                           padding: 8,
                           borderWidth: 1,
-                          borderColor: theme.colors.border,
+                          borderColor: Acid.hair,
                           shadowColor: '#000',
                           shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.1,
@@ -1381,16 +1345,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           elevation: 3,
                           alignItems: 'center'
                         }}>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>
+                          <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 2 }}>
                             {format(scrubbingPoints[scrubbingIndex].data.date, 'MMM d')}
                           </Text>
-                          <Text style={{ fontSize: 16, fontWeight: 'bold', color: theme.colors.textPrimary }}>
+                          <Text style={{ fontSize: 16, fontWeight: 'bold', color: Acid.tx }}>
                             {scrubbingPoints[scrubbingIndex].data.calories.toFixed(0)} Kcal
                           </Text>
                         </View>
                         {/* Triangle */}
-                        <View style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: theme.colors.border, marginTop: -1 }} />
-                        <View style={{ width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: theme.colors.card, marginTop: -7 }} />
+                        <View style={{ width: 0, height: 0, borderLeftWidth: 6, borderRightWidth: 6, borderTopWidth: 6, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: Acid.hair, marginTop: -1 }} />
+                        <View style={{ width: 0, height: 0, borderLeftWidth: 5, borderRightWidth: 5, borderTopWidth: 5, borderLeftColor: 'transparent', borderRightColor: 'transparent', borderTopColor: Acid.mossDeep, marginTop: -7 }} />
                       </View>
                     )}
 
@@ -1415,7 +1379,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   y1={y}
                                   x2={graphWidth - padding}
                                   y2={y}
-                                  stroke={theme.colors.border}
+                                  stroke={Acid.hair}
                                   strokeWidth={0.5}
                                   strokeDasharray="2,2"
                                 />
@@ -1423,7 +1387,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   x={paddingLeft - 6}
                                   y={y + 3}
                                   fontSize={10}
-                                  fill={theme.colors.textTertiary}
+                                  fill={Acid.tx3}
                                   textAnchor="end"
                                 >
                                   {value.toFixed(0)}
@@ -1457,7 +1421,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           <AnimatedPath
                             d={caloriesPath}
                             fill="none"
-                            stroke={theme.colors.primary}
+                            stroke={Acid.lime}
                             strokeWidth={3}
                             strokeLinecap="round"
                             strokeLinejoin="round"
@@ -1482,8 +1446,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               cx={x}
                               cy={y}
                               r={4}
-                              fill={theme.colors.card}
-                              stroke={theme.colors.primary}
+                              fill={Acid.mossDeep}
+                              stroke={Acid.lime}
                               strokeWidth={2}
                             />
                           );
@@ -1498,7 +1462,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               x={x}
                               y={graphHeight - 8}
                               fontSize="10"
-                              fill={theme.colors.textTertiary}
+                              fill={Acid.tx3}
                               textAnchor="middle"
                             >
                               {formatXLabel(caloriesData[idx].date)}
@@ -1522,7 +1486,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   y1={padding}
                                   x2={pt.x}
                                   y2={padding + innerHeight}
-                                  stroke={theme.colors.textSecondary}
+                                  stroke={Acid.tx2}
                                   strokeWidth={1}
                                   strokeDasharray="4,4"
                                 />
@@ -1530,8 +1494,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   cx={pt.x}
                                   cy={y}
                                   r={6}
-                                  fill={theme.colors.primary}
-                                  stroke={theme.colors.card}
+                                  fill={Acid.lime}
+                                  stroke={Acid.mossDeep}
                                   strokeWidth={3}
                                 />
                               </>
@@ -1547,14 +1511,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {renderTimeRangePills()}
 
                   {/* Date Range */}
-                  <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.dateRange, { color: Acid.tx2 }]}>
                     {getDateRange()}
                   </Text>
 
                   {/* What the numbers mean. This one line was the whole "numbers
                       change but I don't know what's shown" complaint. */}
                   {hasDataInRange && (
-                    <Text style={{ fontSize: 12, color: theme.colors.textTertiary, textAlign: 'center', paddingTop: 2 }}>
+                    <Text style={{ fontSize: 12, color: Acid.tx3, textAlign: 'center', paddingTop: 2 }}>
                       {averageIsTodayOnly
                         ? 'Only today is logged so far. Averages start tomorrow.'
                         : `Average of ${completedDays.length} logged ${completedDays.length === 1 ? 'day' : 'days'} in the ${rangeLabel(timeRange)}. Today counts once complete.`}
@@ -1564,11 +1528,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {/* Selected period vs the equal period before it */}
                   {periodComparison && periodComparison.calories !== null && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8 }}>
-                      <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
-                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
+                      <Feather name="trending-up" size={14} color={Acid.tx2} />
+                      <Text style={{ fontSize: 13, color: Acid.tx2 }}>vs {previousRangeLabel(timeRange)}:</Text>
                       {(() => {
                         const val = periodComparison.calories ?? 0;
-                        const color = val === 0 ? theme.colors.textSecondary : val > 0 ? '#EF4444' : '#10B981';
+                        const color = val === 0 ? Acid.tx2 : val > 0 ? Acid.error : Acid.good;
                         const sign = val > 0 ? '+' : '';
                         return (
                           <View style={{ backgroundColor: `${color}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
@@ -1581,18 +1545,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                   {/* Calories History Table */}
                   {caloriesHistory.length > 0 && (
-                    <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
-                      <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                    <View style={[styles.historyContainer, { borderColor: Acid.hair }]}>
+                      <Text style={[styles.historyTitle, { color: Acid.tx }]}>
                         History
                       </Text>
                       <View style={styles.historyHeaderSpacer} />
                       {/* Fixed Spacer issue if needed, but keeping basic structure */}
                       {caloriesHistory.map((entry) => (
-                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: theme.colors.border }]}>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary }]}>
+                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.tx2 }]}>
                             {format(entry.date, 'd MMM yyyy')}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textPrimary, textAlign: 'right' }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.tx, textAlign: 'right' }]}>
                             {`${entry.calories.toFixed(0)} Kcal`}
                           </Text>
                           <TouchableOpacity
@@ -1600,7 +1564,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             style={{ padding: 4, marginLeft: 6 }}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                            <Feather name="edit-2" size={14} color={Acid.tx2} />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -1616,7 +1580,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {!hasDataInRange && <NoRangeDataCard />}
                   {hasDataInRange && (<>
                   <Animated.View
-                    style={[styles.graphCard, { backgroundColor: theme.colors.card, opacity: macrosChartOpacity }]}
+                    style={[styles.graphCard, { backgroundColor: Acid.mossDeep, opacity: macrosChartOpacity }]}
                     {...graphPanResponder.panHandlers}
                   >
                     {/* Tooltip Overlay */}
@@ -1633,31 +1597,31 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                         }}
                       >
                         <View style={{
-                          backgroundColor: theme.colors.card,
+                          backgroundColor: Acid.mossDeep,
                           borderRadius: 8,
                           padding: 8,
                           borderWidth: 1,
-                          borderColor: theme.colors.border,
+                          borderColor: Acid.hair,
                           shadowColor: '#000',
                           shadowOffset: { width: 0, height: 2 },
                           shadowOpacity: 0.1,
                           shadowRadius: 4,
                           elevation: 3,
                         }}>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 4, textAlign: 'center' }}>
+                          <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 4, textAlign: 'center' }}>
                             {format(scrubbingPoints[scrubbingIndex].data.date, 'MMM d')}
                           </Text>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#3B82F6' }} />
-                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>P: {(scrubbingPoints[scrubbingIndex].data as any).protein.toFixed(0)}g</Text>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Acid.protein }} />
+                            <Text style={{ fontSize: 12, color: Acid.tx }}>P: {(scrubbingPoints[scrubbingIndex].data as any).protein.toFixed(0)}g</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#F59E0B' }} />
-                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>C: {(scrubbingPoints[scrubbingIndex].data as any).carbs.toFixed(0)}g</Text>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Acid.carbs }} />
+                            <Text style={{ fontSize: 12, color: Acid.tx }}>C: {(scrubbingPoints[scrubbingIndex].data as any).carbs.toFixed(0)}g</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: '#8B5CF6' }} />
-                            <Text style={{ fontSize: 12, color: theme.colors.textPrimary }}>F: {(scrubbingPoints[scrubbingIndex].data as any).fat.toFixed(0)}g</Text>
+                            <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Acid.fat }} />
+                            <Text style={{ fontSize: 12, color: Acid.tx }}>F: {(scrubbingPoints[scrubbingIndex].data as any).fat.toFixed(0)}g</Text>
                           </View>
                         </View>
                       </View>
@@ -1677,7 +1641,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 y1={y}
                                 x2={graphWidth - padding}
                                 y2={y}
-                                stroke={theme.colors.border}
+                                stroke={Acid.hair}
                                 strokeWidth={0.5}
                                 strokeDasharray="2,2"
                               />
@@ -1685,7 +1649,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 x={paddingLeft - 6}
                                 y={y + 3}
                                 fontSize={10}
-                                fill={theme.colors.textTertiary}
+                                fill={Acid.tx3}
                                 textAnchor="end"
                               >
                                 {value.toFixed(0)}
@@ -1768,7 +1732,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               x={x}
                               y={graphHeight - 8}
                               fontSize="10"
-                              fill={theme.colors.textTertiary}
+                              fill={Acid.tx3}
                               textAnchor="middle"
                             >
                               {formatXLabel(graphData[idx].date)}
@@ -1791,13 +1755,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   y1={padding}
                                   x2={pt.x}
                                   y2={padding + innerHeight}
-                                  stroke={theme.colors.textSecondary}
+                                  stroke={Acid.tx2}
                                   strokeWidth={1}
                                   strokeDasharray="4,4"
                                 />
-                                <Circle cx={pt.x} cy={proteinY} r={5} fill="#3B82F6" stroke={theme.colors.card} strokeWidth={2} />
-                                <Circle cx={pt.x} cy={carbsY} r={5} fill="#F59E0B" stroke={theme.colors.card} strokeWidth={2} />
-                                <Circle cx={pt.x} cy={fatY} r={5} fill="#8B5CF6" stroke={theme.colors.card} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={proteinY} r={5} fill="#3B82F6" stroke={Acid.mossDeep} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={carbsY} r={5} fill="#F59E0B" stroke={Acid.mossDeep} strokeWidth={2} />
+                                <Circle cx={pt.x} cy={fatY} r={5} fill="#8B5CF6" stroke={Acid.mossDeep} strokeWidth={2} />
                               </>
                             );
                           })()
@@ -1810,13 +1774,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {/* Macros Legend */}
                   <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', gap: 20, paddingVertical: 8 }}>
                     {[
-                      { label: 'Protein', color: '#3B82F6' },
-                      { label: 'Carbs', color: '#F59E0B' },
-                      { label: 'Fat', color: '#8B5CF6' },
+                      { label: 'Protein', color: Acid.protein },
+                      { label: 'Carbs', color: Acid.carbs },
+                      { label: 'Fat', color: Acid.fat },
                     ].map((item) => (
                       <View key={item.label} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={{ width: 10, height: 3, borderRadius: 1.5, backgroundColor: item.color }} />
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{item.label}</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2 }}>{item.label}</Text>
                       </View>
                     ))}
                     {targetProtein !== undefined && (
@@ -1825,10 +1789,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                         <View style={{ flexDirection: 'row', gap: 2 }}>
                           {[0, 1, 2].map(i => (
-                            <View key={i} style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: '#3B82F6', opacity: 0.6 }} />
+                            <View key={i} style={{ width: 3, height: 3, borderRadius: 1.5, backgroundColor: Acid.protein, opacity: 0.6 }} />
                           ))}
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Protein target</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2 }}>Protein target</Text>
                       </View>
                     )}
                   </View>
@@ -1838,13 +1802,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {renderTimeRangePills()}
 
                   {/* Date Range */}
-                  <Text style={[styles.dateRange, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.dateRange, { color: Acid.tx2 }]}>
                     {getDateRange()}
                   </Text>
 
                   {/* Same context line as the Calories tab */}
                   {hasDataInRange && (
-                    <Text style={{ fontSize: 12, color: theme.colors.textTertiary, textAlign: 'center', paddingTop: 2 }}>
+                    <Text style={{ fontSize: 12, color: Acid.tx3, textAlign: 'center', paddingTop: 2 }}>
                       {averageIsTodayOnly
                         ? 'Only today is logged so far. Averages start tomorrow.'
                         : `Average of ${completedDays.length} logged ${completedDays.length === 1 ? 'day' : 'days'} in the ${rangeLabel(timeRange)}. Today counts once complete.`}
@@ -1854,14 +1818,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                   {/* Selected period vs the equal period before it (macros) */}
                   {periodComparison && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, flexWrap: 'wrap' }}>
-                      <Feather name="trending-up" size={14} color={theme.colors.textSecondary} />
-                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary }}>vs {previousRangeLabel(timeRange)}:</Text>
+                      <Feather name="trending-up" size={14} color={Acid.tx2} />
+                      <Text style={{ fontSize: 13, color: Acid.tx2 }}>vs {previousRangeLabel(timeRange)}:</Text>
                       {[
-                        { label: 'P', val: periodComparison.protein, color: '#3B82F6' },
-                        { label: 'C', val: periodComparison.carbs, color: '#F59E0B' },
-                        { label: 'F', val: periodComparison.fat, color: '#8B5CF6' },
+                        { label: 'P', val: periodComparison.protein, color: Acid.protein as string },
+                        { label: 'C', val: periodComparison.carbs, color: Acid.carbs as string },
+                        { label: 'F', val: periodComparison.fat, color: Acid.fat as string },
                       ].filter((m): m is { label: string; val: number; color: string } => m.val !== null).map((m) => {
-                        const chipColor = m.val === 0 ? theme.colors.textSecondary : m.val > 0 ? m.color : '#10B981';
+                        const chipColor = m.val === 0 ? Acid.tx2 : m.val > 0 ? m.color : Acid.good;
                         const sign = m.val > 0 ? '+' : '';
                         return (
                           <View key={m.label} style={{ backgroundColor: `${chipColor}15`, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 }}>
@@ -1878,14 +1842,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                     if (!hasTargets) {
                       return (
-                        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-                          <Feather name="target" size={18} color={theme.colors.primary} />
+                        <View style={[styles.infoBox, { backgroundColor: Acid.mossDeep }]}>
+                          <Feather name="target" size={18} color={Acid.lime} />
                           <View style={{ flex: 1 }}>
-                            <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                            <Text style={[styles.infoText, { color: Acid.tx2 }]}>
                               Set macro goals to get personalized insights on your nutrition.
                             </Text>
                             <TouchableOpacity onPress={handleSetGoalPress} activeOpacity={0.7} style={{ marginTop: 6 }}>
-                              <Text style={{ color: theme.colors.primary, fontWeight: '600', fontSize: 13 }}>Set Goals</Text>
+                              <Text style={{ color: Acid.lime, fontWeight: '600', fontSize: 13 }}>Set Goals</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -1896,9 +1860,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     // half a day of eating always reads as "way below target".
                     if (averageIsTodayOnly) {
                       return (
-                        <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
-                          <Feather name="clock" size={18} color={theme.colors.textSecondary} />
-                          <Text style={[styles.infoText, { color: theme.colors.textSecondary, flex: 1 }]}>
+                        <View style={[styles.infoBox, { backgroundColor: Acid.mossDeep }]}>
+                          <Feather name="clock" size={18} color={Acid.tx2} />
+                          <Text style={[styles.infoText, { color: Acid.tx2, flex: 1 }]}>
                             Today is still in progress. Macro insights compare completed days against your targets.
                           </Text>
                         </View>
@@ -1910,15 +1874,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                     if (targetProtein !== undefined && averageProtein !== null) {
                       const pct = ((averageProtein - targetProtein) / targetProtein) * 100;
-                      insights.push({ macro: 'Protein', color: '#3B82F6', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                      insights.push({ macro: 'Protein', color: Acid.protein, pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
                     }
                     if (targetCarbs !== undefined && averageCarbs !== null) {
                       const pct = ((averageCarbs - targetCarbs) / targetCarbs) * 100;
-                      insights.push({ macro: 'Carbs', color: '#F59E0B', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                      insights.push({ macro: 'Carbs', color: Acid.carbs, pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
                     }
                     if (targetFat !== undefined && averageFat !== null) {
                       const pct = ((averageFat - targetFat) / targetFat) * 100;
-                      insights.push({ macro: 'Fat', color: '#8B5CF6', pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
+                      insights.push({ macro: 'Fat', color: Acid.fat, pct, status: pct < -15 ? 'low' : pct > 15 ? 'high' : 'on_track' });
                     }
 
                     const offTrack = insights.filter(i => i.status !== 'on_track');
@@ -1930,7 +1894,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                     if (allOnTrack) {
                       icon = 'check-circle';
-                      iconColor = '#10B981';
+                      iconColor = Acid.good;
                       message = `All macros are within target range over the ${rangeLabel(timeRange)}. You're nailing your nutrition goals — keep it up!`;
                     } else if (offTrack.length > 0) {
                       // Pick the most off-track macro
@@ -1963,9 +1927,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     }
 
                     return (
-                      <View style={[styles.infoBox, { backgroundColor: theme.colors.input }]}>
+                      <View style={[styles.infoBox, { backgroundColor: Acid.mossDeep }]}>
                         <Feather name={icon as any} size={18} color={iconColor} />
-                        <Text style={[styles.infoText, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.infoText, { color: Acid.tx2 }]}>
                           {message}
                         </Text>
                       </View>
@@ -1974,37 +1938,37 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
 
                   {/* Macros History Table */}
                   {macrosHistory.length > 0 && (
-                    <View style={[styles.historyContainer, { borderColor: theme.colors.border }]}>
-                      <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                    <View style={[styles.historyContainer, { borderColor: Acid.hair }]}>
+                      <Text style={[styles.historyTitle, { color: Acid.tx }]}>
                         History
                       </Text>
                       <View style={styles.historyHeaderRow}>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, flex: 1.5 }]}>
+                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, flex: 1.5 }]}>
                           Date
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
+                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
                           Protein
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
+                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
                           Carbs
                         </Text>
-                        <Text style={[styles.historyHeaderText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
+                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
                           Fat
                         </Text>
                         <View style={{ width: 28 }} />
                       </View>
                       {macrosHistory.map((entry) => (
-                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: theme.colors.border }]}>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary, flex: 1.5 }]}>
+                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.tx2, flex: 1.5 }]}>
                             {format(entry.date, 'd MMM yyyy')}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.primary, textAlign: 'right' }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.lime, textAlign: 'right' }]}>
                             {`${entry.protein.toFixed(0)}g`}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textSecondary, textAlign: 'right' }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.tx2, textAlign: 'right' }]}>
                             {`${entry.carbs.toFixed(0)}g`}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: theme.colors.textTertiary, textAlign: 'right' }]}>
+                          <Text style={[styles.historyCellText, { color: Acid.tx3, textAlign: 'right' }]}>
                             {`${entry.fat.toFixed(0)}g`}
                           </Text>
                           <TouchableOpacity
@@ -2012,7 +1976,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             style={{ padding: 4, marginLeft: 6 }}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <Feather name="edit-2" size={14} color={theme.colors.textSecondary} />
+                            <Feather name="edit-2" size={14} color={Acid.tx2} />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -2028,11 +1992,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                 <View style={styles.graphContainer}>
                   {!isPremium ? (
                     <View style={{ alignItems: 'center', padding: 40, opacity: 0.6 }}>
-                      <Feather name="lock" size={48} color={theme.colors.textSecondary} style={{ marginBottom: 16 }} />
-                      <Text style={{ color: theme.colors.textPrimary, fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
+                      <Feather name="lock" size={48} color={Acid.tx2} style={{ marginBottom: 16 }} />
+                      <Text style={{ color: Acid.tx, fontSize: 18, fontWeight: 'bold', marginBottom: 8 }}>
                         Premium Feature
                       </Text>
-                      <Text style={{ color: theme.colors.textSecondary, textAlign: 'center' }}>
+                      <Text style={{ color: Acid.tx2, textAlign: 'center' }}>
                         Unlock advanced analytics, AI-powered insights, and weekly trend reports.
                       </Text>
                     </View>
@@ -2050,29 +2014,29 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {!isUnlocked('ai-weekly-insight') ? (
                         <LockedInsightCard id="ai-weekly-insight" />
                       ) : (insightText || isGeneratingInsight) && (
-                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                           <TouchableOpacity
                             activeOpacity={0.7}
                             onPress={() => !isGeneratingInsight && setInsightCollapsed(prev => !prev)}
                             style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
                           >
-                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${theme.colors.primary}15`, alignItems: 'center', justifyContent: 'center' }}>
-                              <Feather name="cpu" size={14} color={theme.colors.primary} />
+                            <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${Acid.lime}15`, alignItems: 'center', justifyContent: 'center' }}>
+                              <Feather name="cpu" size={14} color={Acid.lime} />
                             </View>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>AI Weekly Insight</Text>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>AI Weekly Insight</Text>
                             {insightIsNew && !isGeneratingInsight && (
-                              <View style={{ backgroundColor: '#10B981', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
+                              <View style={{ backgroundColor: Acid.good, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                                 <Text style={{ fontSize: 10, fontWeight: '700', color: '#FFFFFF' }}>NEW</Text>
                               </View>
                             )}
                             <View style={{ marginLeft: 'auto', flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                               {!isGeneratingInsight && (
-                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>
+                                <Text style={{ fontSize: 10, color: Acid.tx3 }}>
                                   Refreshes every {calorieBankData?.enabled ? calorieBankData.cycleStartDay : 'Monday'}
                                 </Text>
                               )}
                               {!isGeneratingInsight && (
-                                <Feather name={insightCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={theme.colors.textTertiary} />
+                                <Feather name={insightCollapsed ? 'chevron-down' : 'chevron-up'} size={16} color={Acid.tx3} />
                               )}
                             </View>
                           </TouchableOpacity>
@@ -2080,11 +2044,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <View style={{ marginTop: 12 }}>
                               {isGeneratingInsight ? (
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                  <Feather name="loader" size={14} color={theme.colors.textSecondary} />
-                                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary, fontStyle: 'italic' }}>Analyzing your nutrition data...</Text>
+                                  <Feather name="loader" size={14} color={Acid.tx2} />
+                                  <Text style={{ fontSize: 13, color: Acid.tx2, fontStyle: 'italic' }}>Analyzing your nutrition data...</Text>
                                 </View>
                               ) : (
-                                <Text style={{ fontSize: 13, color: theme.colors.textPrimary, lineHeight: 20 }}>
+                                <Text style={{ fontSize: 13, color: Acid.tx, lineHeight: 20 }}>
                                   {insightText}
                                 </Text>
                               )}
@@ -2101,64 +2065,64 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           {isUnlocked('calorie-bank') && (
                         <>
                           {/* Bank Utilization */}
-                          <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                          <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 12 }}>
                               <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: '#22C55E15', alignItems: 'center', justifyContent: 'center' }}>
                                 <Feather name="credit-card" size={14} color="#22C55E" />
                               </View>
-                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Bank</Text>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Calorie Bank</Text>
                               <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Bank', 'Shows your weekly calorie budget progress, how much you have banked, and your bank utilization. The budget number counts only days you logged. Utilization tells you what percentage of your banked calories you actually used. Cap days counts the days you saved the maximum your daily cap allows.')}>
-                                <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                <Feather name="info" size={13} color={Acid.tx3} />
                               </TouchableOpacity>
                               <View style={{ backgroundColor: '#22C55E20', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6, marginLeft: 'auto' }}>
-                                <Text style={{ fontSize: 10, fontWeight: '600', color: '#22C55E' }}>ACTIVE</Text>
+                                <Text style={{ fontSize: 10, fontWeight: '600', color: Acid.good }}>ACTIVE</Text>
                               </View>
                             </View>
 
                             {/* Budget progress */}
                             <View style={{ marginBottom: 16 }}>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
-                                <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>Weekly budget</Text>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textPrimary }}>
+                                <Text style={{ fontSize: 12, color: Acid.tx2 }}>Weekly budget</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: Acid.tx }}>
                                   {Math.round(calorieBankData.weeklyActual).toLocaleString()} / {Math.round(calorieBankData.weeklyBudget).toLocaleString()} kcal
                                 </Text>
                               </View>
-                              <View style={{ height: 8, borderRadius: 4, backgroundColor: theme.colors.input, overflow: 'hidden' }}>
+                              <View style={{ height: 8, borderRadius: 4, backgroundColor: Acid.mossDeep, overflow: 'hidden' }}>
                                 <View style={{
                                   height: '100%', borderRadius: 4,
                                   width: `${Math.min(100, (calorieBankData.weeklyActual / (calorieBankData.weeklyBudget || 1)) * 100)}%`,
-                                  backgroundColor: calorieBankData.weeklyActual > calorieBankData.weeklyBudget ? '#EF4444' : '#22C55E',
+                                  backgroundColor: calorieBankData.weeklyActual > calorieBankData.weeklyBudget ? Acid.error : Acid.good,
                                 }} />
                               </View>
                             </View>
 
                             {/* Stats grid */}
                             <View style={{ flexDirection: 'row', gap: 8 }}>
-                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
-                                <Text style={{ fontSize: 20, fontWeight: '800', color: '#22C55E' }}>+{Math.round(calorieBankData.bankBalance)}</Text>
-                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Banked</Text>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: Acid.mossDeep }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: Acid.good }}>+{Math.round(calorieBankData.bankBalance)}</Text>
+                                <Text style={{ fontSize: 10, color: Acid.tx3, marginTop: 2 }}>Banked</Text>
                               </View>
-                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
-                                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{calorieBankData.bankUtilization}%</Text>
-                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Utilization</Text>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: Acid.mossDeep }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: Acid.tx }}>{calorieBankData.bankUtilization}%</Text>
+                                <Text style={{ fontSize: 10, color: Acid.tx3, marginTop: 2 }}>Utilization</Text>
                               </View>
-                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: theme.colors.input }}>
-                                <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{calorieBankData.capHitDays}</Text>
-                                <Text style={{ fontSize: 10, color: theme.colors.textTertiary, marginTop: 2 }}>Cap days</Text>
+                              <View style={{ flex: 1, alignItems: 'center', paddingVertical: 12, borderRadius: 10, backgroundColor: Acid.mossDeep }}>
+                                <Text style={{ fontSize: 20, fontWeight: '800', color: Acid.tx }}>{calorieBankData.capHitDays}</Text>
+                                <Text style={{ fontSize: 10, color: Acid.tx3, marginTop: 2 }}>Cap days</Text>
                               </View>
                             </View>
                           </View>
 
                           {/* Daily Distribution */}
                           {calorieBankData.perDayBreakdown.length > 0 && (
-                            <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                            <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Bank Distribution</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Bank Distribution</Text>
                                 <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Bank Distribution', 'Shows how much you banked or spent each day of your current cycle. Green bars are days you ate under target and saved calories. Amber bars are days you ate over and drew from the bank. This helps you see whether your week is balanced or if you are front-loading restriction and back-loading spending.')}>
-                                  <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                  <Feather name="info" size={13} color={Acid.tx3} />
                                 </TouchableOpacity>
                               </View>
-                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Daily banking and spending this cycle · "skipped" = day not logged</Text>
+                              <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>Daily banking and spending this cycle · "skipped" = day not logged</Text>
                               {calorieBankData.perDayBreakdown.map((day, i) => {
                                 const dayDate = new Date(day.day + 'T12:00:00');
                                 const dayLabel = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][dayDate.getDay()];
@@ -2180,17 +2144,17 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                     <Text style={{
                                       width: 32, fontSize: 12,
                                       fontWeight: isToday ? '700' : '400',
-                                      color: isToday ? theme.colors.textPrimary : theme.colors.textSecondary,
+                                      color: isToday ? Acid.tx : Acid.tx2,
                                     }}>{dayLabel}</Text>
-                                    <View style={{ flex: 1, height: 16, borderRadius: 4, backgroundColor: theme.colors.input, overflow: 'hidden', flexDirection: 'row' }}>
+                                    <View style={{ flex: 1, height: 16, borderRadius: 4, backgroundColor: Acid.mossDeep, overflow: 'hidden', flexDirection: 'row' }}>
                                       {!isFuture && !isSkipped && day.banked > 0 && (
-                                        <View style={{ width: `${bankedPct * 100}%`, height: '100%', backgroundColor: '#22C55E', borderRadius: 4 }} />
+                                        <View style={{ width: `${bankedPct * 100}%`, height: '100%', backgroundColor: Acid.good, borderRadius: 4 }} />
                                       )}
                                       {!isFuture && !isSkipped && day.spent > 0 && (
-                                        <View style={{ width: `${spentPct * 100}%`, height: '100%', backgroundColor: '#F59E0B', borderRadius: 4 }} />
+                                        <View style={{ width: `${spentPct * 100}%`, height: '100%', backgroundColor: Acid.carbs, borderRadius: 4 }} />
                                       )}
                                     </View>
-                                    <Text style={{ width: 50, textAlign: 'right', fontSize: 11, color: isFuture || isSkipped ? theme.colors.textTertiary : theme.colors.textSecondary }}>
+                                    <Text style={{ width: 50, textAlign: 'right', fontSize: 11, color: isFuture || isSkipped ? Acid.tx3 : Acid.tx2 }}>
                                       {isFuture ? '—' : isSkipped ? 'skipped' : day.banked > 0 ? `+${Math.round(day.banked)}` : day.spent > 0 ? `-${Math.round(day.spent)}` : '0'}
                                     </Text>
                                   </View>
@@ -2198,12 +2162,12 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               })}
                               <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#22C55E' }} />
-                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>Banked</Text>
+                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: Acid.good }} />
+                                  <Text style={{ fontSize: 10, color: Acid.tx3 }}>Banked</Text>
                                 </View>
                                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: '#F59E0B' }} />
-                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>Spent</Text>
+                                  <View style={{ width: 8, height: 8, borderRadius: 2, backgroundColor: Acid.carbs }} />
+                                  <Text style={{ fontSize: 10, color: Acid.tx3 }}>Spent</Text>
                                 </View>
                               </View>
                             </View>
@@ -2218,21 +2182,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {!isUnlocked('goal-adherence') && <LockedInsightCard id="goal-adherence" />}
                       {isUnlocked('goal-adherence') && !(targetProtein || targetCarbs || targetFat) && <NeedsGoalsCard name="Goal Adherence" />}
                       {isUnlocked('goal-adherence') && (targetProtein || targetCarbs || targetFat) && (
-                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Goal Adherence</Text>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Goal Adherence</Text>
                             <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Goal Adherence', 'Shows how close your average daily intake is to your targets for each macro and calories. 100% means you are hitting the target exactly. Below 100% means you are under, above means you are over. This helps you see which macros need attention and whether your overall intake matches your plan.')}>
-                              <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                              <Feather name="info" size={13} color={Acid.tx3} />
                             </TouchableOpacity>
                           </View>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>{rangeSubtitle('Average vs. target')}</Text>
+                          <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>{rangeSubtitle('Average vs. target')}</Text>
                           {!hasAverage ? <CardEmptyNote /> : (
                           <View style={{ flexDirection: 'row', justifyContent: 'space-around' }}>
                             {[
-                              { label: 'Protein', avg: averageProtein ?? 0, target: targetProtein, color: '#3B82F6' },
-                              { label: 'Carbs', avg: averageCarbs ?? 0, target: targetCarbs, color: '#F59E0B' },
-                              { label: 'Fat', avg: averageFat ?? 0, target: targetFat, color: '#8B5CF6' },
-                              ...(targetCalories ? [{ label: 'Calories', avg: averageCalories ?? 0, target: targetCalories, color: theme.colors.primary }] : []),
+                              { label: 'Protein', avg: averageProtein ?? 0, target: targetProtein, color: Acid.protein },
+                              { label: 'Carbs', avg: averageCarbs ?? 0, target: targetCarbs, color: Acid.carbs },
+                              { label: 'Fat', avg: averageFat ?? 0, target: targetFat, color: Acid.fat },
+                              ...(targetCalories ? [{ label: 'Calories', avg: averageCalories ?? 0, target: targetCalories, color: Acid.lime }] : []),
                             ].filter(m => m.target).map((macro) => {
                               // The number tells the truth (140% is 140%); only the
                               // ring is capped at a full circle. Clamping both hid
@@ -2244,7 +2208,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 <View key={macro.label} style={{ alignItems: 'center' }}>
                                   <View style={{ position: 'relative', width: 72, height: 72, alignItems: 'center', justifyContent: 'center' }}>
                                     <Svg width={72} height={72} viewBox="0 0 80 80">
-                                      <Circle cx="40" cy="40" r="32" stroke={theme.colors.input} strokeWidth="6" fill="transparent" />
+                                      <Circle cx="40" cy="40" r="32" stroke={Acid.mossDeep} strokeWidth="6" fill="transparent" />
                                       <Circle
                                         cx="40" cy="40" r="32"
                                         stroke={macro.color}
@@ -2257,13 +2221,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                       />
                                     </Svg>
                                     <View style={{ position: 'absolute' }}>
-                                      <Text style={{ fontSize: 14, fontWeight: '800', color: theme.colors.textPrimary, textAlign: 'center' }}>
+                                      <Text style={{ fontSize: 14, fontWeight: '800', color: Acid.tx, textAlign: 'center' }}>
                                         {Math.round(rawPct * 100)}%
                                       </Text>
                                     </View>
                                   </View>
-                                  <Text style={{ fontSize: 11, fontWeight: '600', color: theme.colors.textSecondary, marginTop: 6 }}>{macro.label}</Text>
-                                  <Text style={{ fontSize: 10, color: theme.colors.textTertiary }}>{Math.round(macro.avg)}/{macro.target}{macro.label === 'Calories' ? '' : 'g'}</Text>
+                                  <Text style={{ fontSize: 11, fontWeight: '600', color: Acid.tx2, marginTop: 6 }}>{macro.label}</Text>
+                                  <Text style={{ fontSize: 10, color: Acid.tx3 }}>{Math.round(macro.avg)}/{macro.target}{macro.label === 'Calories' ? '' : 'g'}</Text>
                                 </View>
                               );
                             })}
@@ -2277,20 +2241,20 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <InsightSlot id="calorie-trend">
                       {!isUnlocked('calorie-trend') && <LockedInsightCard id="calorie-trend" />}
                       {isUnlocked('calorie-trend') && graphData.length >= 2 && (
-                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
                             <View>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Calorie Trend</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Calorie Trend</Text>
                                 <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Calorie Trend', 'Tracks your daily calorie intake over time as a line chart. The dashed line shows your average and the red line shows your target. Use this to spot upward or downward trends in your eating. A steady line near target means consistency. A rising line means you are gradually eating more than planned.')}>
-                                  <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                  <Feather name="info" size={13} color={Acid.tx3} />
                                 </TouchableOpacity>
                               </View>
-                              <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{rangeSubtitle('Daily intake')}</Text>
+                              <Text style={{ fontSize: 12, color: Acid.tx2 }}>{rangeSubtitle('Daily intake')}</Text>
                             </View>
                             <View style={{ alignItems: 'flex-end' }}>
-                              <Text style={{ fontSize: 20, fontWeight: '800', color: theme.colors.textPrimary }}>{averageCalories ?? 0}</Text>
-                              <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>avg Kcal / logged day</Text>
+                              <Text style={{ fontSize: 20, fontWeight: '800', color: Acid.tx }}>{averageCalories ?? 0}</Text>
+                              <Text style={{ fontSize: 11, color: Acid.tx2 }}>avg Kcal / logged day</Text>
                             </View>
                           </View>
                           {(() => {
@@ -2323,8 +2287,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                               <Svg width={cW} height={cH}>
                                 <Defs>
                                   <LinearGradient id="calTrendGrad" x1="0" y1="0" x2="0" y2="1">
-                                    <Stop offset="0" stopColor={theme.colors.primary} stopOpacity="0.2" />
-                                    <Stop offset="1" stopColor={theme.colors.primary} stopOpacity="0" />
+                                    <Stop offset="0" stopColor={Acid.lime} stopOpacity="0.2" />
+                                    <Stop offset="1" stopColor={Acid.lime} stopOpacity="0" />
                                   </LinearGradient>
                                 </Defs>
                                 {/* Grid lines */}
@@ -2333,18 +2297,18 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                   const label = Math.round(minV + r * range);
                                   return (
                                     <React.Fragment key={i}>
-                                      <Line x1={cPadL} y1={y} x2={cW - cPadR} y2={y} stroke={theme.colors.border} strokeWidth={0.5} strokeDasharray="2,2" />
-                                      <SvgText x={cPadL - 4} y={y + 3} fontSize="9" fill={theme.colors.textTertiary} textAnchor="end">{label}</SvgText>
+                                      <Line x1={cPadL} y1={y} x2={cW - cPadR} y2={y} stroke={Acid.hair} strokeWidth={0.5} strokeDasharray="2,2" />
+                                      <SvgText x={cPadL - 4} y={y + 3} fontSize="9" fill={Acid.tx3} textAnchor="end">{label}</SvgText>
                                     </React.Fragment>
                                   );
                                 })}
                                 {/* Area fill */}
                                 <Path d={areaPath} fill="url(#calTrendGrad)" />
                                 {/* Line */}
-                                <Path d={linePath} fill="none" stroke={theme.colors.primary} strokeWidth={2} strokeLinejoin="round" />
+                                <Path d={linePath} fill="none" stroke={Acid.lime} strokeWidth={2} strokeLinejoin="round" />
                                 {/* Avg dashed line */}
-                                <Line x1={cPadL} y1={avgY} x2={cW - cPadR} y2={avgY} stroke={theme.colors.textSecondary} strokeWidth={1} strokeDasharray="4,3" opacity={0.6} />
-                                <SvgText x={cW - cPadR} y={avgY - 4} fontSize="9" fill={theme.colors.textSecondary} textAnchor="end">avg</SvgText>
+                                <Line x1={cPadL} y1={avgY} x2={cW - cPadR} y2={avgY} stroke={Acid.tx2} strokeWidth={1} strokeDasharray="4,3" opacity={0.6} />
+                                <SvgText x={cW - cPadR} y={avgY - 4} fontSize="9" fill={Acid.tx2} textAnchor="end">avg</SvgText>
                                 {/* Target line */}
                                 {targetY !== null && (
                                   <>
@@ -2354,7 +2318,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 )}
                                 {/* Data dots */}
                                 {pts.length <= 14 && pts.map((p, i) => (
-                                  <Circle key={i} cx={p.x} cy={p.y} r={3} fill={theme.colors.card} stroke={theme.colors.primary} strokeWidth={1.5} />
+                                  <Circle key={i} cx={p.x} cy={p.y} r={3} fill={Acid.mossDeep} stroke={Acid.lime} strokeWidth={1.5} />
                                 ))}
                               </Svg>
                             );
@@ -2366,14 +2330,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Macro Split Bar ── */}
                       <InsightSlot id="macro-split">
                       {!isUnlocked('macro-split') && <LockedInsightCard id="macro-split" />}
-                      {isUnlocked('macro-split') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      {isUnlocked('macro-split') && <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Macro Split</Text>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Macro Split</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Macro Split', 'Breaks down your average daily calories into protein, carbs, and fat as a percentage. The colored bar shows the proportion visually. This helps you see if your diet is balanced or leaning too heavily toward one macro. For example, a very low protein percentage often leads to muscle loss and increased hunger.')}>
-                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                            <Feather name="info" size={13} color={Acid.tx3} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>{rangeSubtitle('Average daily ratio')}</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>{rangeSubtitle('Average daily ratio')}</Text>
                         {!hasAverage ? <CardEmptyNote /> : (() => {
                           const p = averageProtein ?? 0;
                           const c = averageCarbs ?? 0;
@@ -2391,24 +2355,24 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                             <View>
                               {/* Stacked bar */}
                               <View style={{ height: 28, flexDirection: 'row', borderRadius: 14, overflow: 'hidden', marginBottom: 12 }}>
-                                <View style={{ width: `${pCalPct}%`, backgroundColor: '#3B82F6' }} />
-                                <View style={{ width: `${cCalPct}%`, backgroundColor: '#F59E0B' }} />
-                                <View style={{ width: `${fCalPct}%`, backgroundColor: '#8B5CF6' }} />
+                                <View style={{ width: `${pCalPct}%`, backgroundColor: Acid.protein }} />
+                                <View style={{ width: `${cCalPct}%`, backgroundColor: Acid.carbs }} />
+                                <View style={{ width: `${fCalPct}%`, backgroundColor: Acid.fat }} />
                               </View>
                               {/* Labels */}
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                                 {[
-                                  { label: 'Protein', grams: p, pct: pCalPct, color: '#3B82F6' },
-                                  { label: 'Carbs', grams: c, pct: cCalPct, color: '#F59E0B' },
-                                  { label: 'Fat', grams: f, pct: fCalPct, color: '#8B5CF6' },
+                                  { label: 'Protein', grams: p, pct: pCalPct, color: Acid.protein },
+                                  { label: 'Carbs', grams: c, pct: cCalPct, color: Acid.carbs },
+                                  { label: 'Fat', grams: f, pct: fCalPct, color: Acid.fat },
                                 ].map((m) => (
                                   <View key={m.label} style={{ alignItems: 'center', flex: 1 }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 4 }}>
                                       <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: m.color }} />
-                                      <Text style={{ fontSize: 12, fontWeight: '600', color: theme.colors.textSecondary }}>{m.label}</Text>
+                                      <Text style={{ fontSize: 12, fontWeight: '600', color: Acid.tx2 }}>{m.label}</Text>
                                     </View>
-                                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>{Math.round(m.pct)}%</Text>
-                                    <Text style={{ fontSize: 11, color: theme.colors.textTertiary }}>{Math.round(m.grams)}g/day</Text>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: Acid.tx }}>{Math.round(m.pct)}%</Text>
+                                    <Text style={{ fontSize: 11, color: Acid.tx3 }}>{Math.round(m.grams)}g/day</Text>
                                   </View>
                                 ))}
                               </View>
@@ -2431,15 +2395,15 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {!isUnlocked('nutrition-balance') && <LockedInsightCard id="nutrition-balance" />}
                       {isUnlocked('nutrition-balance') && radarData.length === 0 && <NeedsGoalsCard name="Nutrition Balance" />}
                       {isUnlocked('nutrition-balance') && radarData.length > 0 && (
-                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20, alignItems: 'center' }]}>
+                        <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20, alignItems: 'center' }]}>
                           <View style={{ width: '100%', marginBottom: 8 }}>
                             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                              <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Nutrition Balance</Text>
+                              <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Nutrition Balance</Text>
                               <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Nutrition Balance', 'A radar chart comparing your actual intake against your targets across all macros. A perfectly balanced shape means you are hitting every target evenly. If one axis is shorter than the others, that macro needs more attention. This gives you a quick visual of your overall nutrition quality.')}>
-                                <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                                <Feather name="info" size={13} color={Acid.tx3} />
                               </TouchableOpacity>
                             </View>
-                            <Text style={{ fontSize: 12, color: theme.colors.textSecondary }}>{rangeSubtitle('Target vs. your average per logged day')}</Text>
+                            <Text style={{ fontSize: 12, color: Acid.tx2 }}>{rangeSubtitle('Target vs. your average per logged day')}</Text>
                           </View>
                           {hasAverage ? renderRadarChart() : <CardEmptyNote />}
                         </View>
@@ -2450,14 +2414,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <InsightSlot id="weekly-pattern">
                       {!isUnlocked('weekly-pattern') && <LockedInsightCard id="weekly-pattern" />}
                       {isUnlocked('weekly-pattern') && completedDays.length >= 3 && (
-                        <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                        <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                            <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Weekly Pattern</Text>
+                            <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Weekly Pattern</Text>
                             <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weekly Pattern', 'Shows your average calorie intake for each day of the week. This reveals habits you might not notice. Many people eat significantly more on weekends or less on Mondays. Knowing your pattern helps you plan ahead for days you tend to overeat.')}>
-                              <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                              <Feather name="info" size={13} color={Acid.tx3} />
                             </TouchableOpacity>
                           </View>
-                          <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Average calories by day of week · {rangeLabel(timeRange)}</Text>
+                          <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>Average calories by day of week · {rangeLabel(timeRange)}</Text>
                           {(() => {
                             const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
                             const dayBuckets: Record<string, { total: number; count: number }> = {};
@@ -2495,13 +2459,13 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                     const isToday = dayNames[(new Date().getDay() === 0 ? 6 : new Date().getDay() - 1)] === d.day;
                                     return (
                                       <React.Fragment key={d.day}>
-                                        <Rect x={x} y={y} width={barW} height={Math.max(barH, 2)} rx={barW / 2} fill={isToday ? theme.colors.primary : `${theme.colors.primary}40`} />
+                                        <Rect x={x} y={y} width={barW} height={Math.max(barH, 2)} rx={barW / 2} fill={isToday ? Acid.lime : `${Acid.lime}40`} />
                                         {d.avg > 0 && (
-                                          <SvgText x={x + barW / 2} y={y - 4} fontSize="9" fill={theme.colors.textSecondary} textAnchor="middle" fontWeight="600">
+                                          <SvgText x={x + barW / 2} y={y - 4} fontSize="9" fill={Acid.tx2} textAnchor="middle" fontWeight="600">
                                             {d.avg}
                                           </SvgText>
                                         )}
-                                        <SvgText x={x + barW / 2} y={barChartH + 14} fontSize="10" fill={isToday ? theme.colors.textPrimary : theme.colors.textSecondary} textAnchor="middle" fontWeight={isToday ? '700' : '500'}>
+                                        <SvgText x={x + barW / 2} y={barChartH + 14} fontSize="10" fill={isToday ? Acid.tx : Acid.tx2} textAnchor="middle" fontWeight={isToday ? '700' : '500'}>
                                           {d.day}
                                         </SvgText>
                                       </React.Fragment>
@@ -2518,14 +2482,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Meal Timing ── */}
                       <InsightSlot id="meal-timing">
                       {!isUnlocked('meal-timing') && <LockedInsightCard id="meal-timing" />}
-                      {isUnlocked('meal-timing') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      {isUnlocked('meal-timing') && <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Meal Timing</Text>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Meal Timing</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Meal Timing', 'Breaks down what percentage of your calories you eat in the morning, afternoon, and evening. If most of your calories come from evening meals, it may explain energy dips during the day or late-night hunger. Spreading intake more evenly can improve energy and reduce overeating.')}>
-                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                            <Feather name="info" size={13} color={Acid.tx3} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>When are you eating? · {rangeLabel(timeRange)}</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>When are you eating? · {rangeLabel(timeRange)}</Text>
                         {(() => {
                           const buckets = { Morning: { cals: 0, count: 0 }, Afternoon: { cals: 0, count: 0 }, Evening: { cals: 0, count: 0 } };
                           // Same window as the chart, and LOCAL day keys — the old
@@ -2551,9 +2515,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           const daysCount = Math.max(1, totalDaysWithData.size);
 
                           const periods = [
-                            { key: 'Morning' as const, label: 'Morning', sub: '4AM – 12PM', icon: 'sunrise' as const, color: '#F59E0B' },
-                            { key: 'Afternoon' as const, label: 'Afternoon', sub: '12PM – 5PM', icon: 'sun' as const, color: '#3B82F6' },
-                            { key: 'Evening' as const, label: 'Evening', sub: '5PM – 4AM', icon: 'moon' as const, color: '#8B5CF6' },
+                            { key: 'Morning' as const, label: 'Morning', sub: '4AM – 12PM', icon: 'sunrise' as const, color: Acid.carbs },
+                            { key: 'Afternoon' as const, label: 'Afternoon', sub: '12PM – 5PM', icon: 'sun' as const, color: Acid.protein },
+                            { key: 'Evening' as const, label: 'Evening', sub: '5PM – 4AM', icon: 'moon' as const, color: Acid.fat },
                           ];
 
                           return (
@@ -2570,16 +2534,16 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                           <Feather name={p.icon} size={14} color={p.color} />
                                         </View>
                                         <View>
-                                          <Text style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary }}>{p.label}</Text>
-                                          <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>{p.sub}</Text>
+                                          <Text style={{ fontSize: 13, fontWeight: '600', color: Acid.tx }}>{p.label}</Text>
+                                          <Text style={{ fontSize: 10, color: Acid.tx2 }}>{p.sub}</Text>
                                         </View>
                                       </View>
                                       <View style={{ alignItems: 'flex-end' }}>
-                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary }}>{(pct * 100).toFixed(0)}%</Text>
-                                        <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>~{avgCals} Kcal</Text>
+                                        <Text style={{ fontSize: 14, fontWeight: 'bold', color: Acid.tx }}>{(pct * 100).toFixed(0)}%</Text>
+                                        <Text style={{ fontSize: 10, color: Acid.tx2 }}>~{avgCals} Kcal</Text>
                                       </View>
                                     </View>
-                                    <View style={{ height: 6, backgroundColor: theme.colors.input, borderRadius: 3, overflow: 'hidden' }}>
+                                    <View style={{ height: 6, backgroundColor: Acid.mossDeep, borderRadius: 3, overflow: 'hidden' }}>
                                       <View style={{ width: `${pct * 100}%`, height: '100%', backgroundColor: p.color, borderRadius: 3 }} />
                                     </View>
                                   </View>
@@ -2594,14 +2558,14 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       {/* ── Top Foods ── */}
                       <InsightSlot id="top-foods">
                       {!isUnlocked('top-foods') && <LockedInsightCard id="top-foods" />}
-                      {isUnlocked('top-foods') && <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
+                      {isUnlocked('top-foods') && <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
                         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                          <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary }}>Top Foods</Text>
+                          <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx }}>Top Foods</Text>
                           <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Top Foods', 'Lists the foods you log most often, ranked by frequency. This shows what your diet actually looks like day to day. If the same 3 foods dominate, you may be missing key nutrients. More variety generally means better micronutrient coverage and less food fatigue.')}>
-                            <Feather name="info" size={13} color={theme.colors.textTertiary} />
+                            <Feather name="info" size={13} color={Acid.tx3} />
                           </TouchableOpacity>
                         </View>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Most logged items · {rangeLabel(timeRange)}</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>Most logged items · {rangeLabel(timeRange)}</Text>
                         {(() => {
                           const window = getRangeWindow(timeRange);
 
@@ -2624,21 +2588,21 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                           const maxCount = sorted.length > 0 ? sorted[0][1].count : 1;
 
                           if (sorted.length === 0) {
-                            return <Text style={{ fontSize: 13, color: theme.colors.textSecondary, textAlign: 'center', paddingVertical: 12 }}>Log more meals to see your top foods.</Text>;
+                            return <Text style={{ fontSize: 13, color: Acid.tx2, textAlign: 'center', paddingVertical: 12 }}>Log more meals to see your top foods.</Text>;
                           }
 
                           return (
                             <View style={{ gap: 10 }}>
                               {sorted.map(([name, data], i) => (
                                 <View key={name} style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                                  <Text style={{ width: 18, fontSize: 12, fontWeight: '700', color: theme.colors.textTertiary, textAlign: 'center' }}>{i + 1}</Text>
+                                  <Text style={{ width: 18, fontSize: 12, fontWeight: '700', color: Acid.tx3, textAlign: 'center' }}>{i + 1}</Text>
                                   <View style={{ flex: 1 }}>
                                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 4, gap: 8 }}>
-                                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: theme.colors.textPrimary, textTransform: 'capitalize', flex: 1, flexShrink: 1 }}>{name}</Text>
-                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary, flexShrink: 0 }}>{data.count}x · {Math.round(data.cals / data.count)} Kcal avg</Text>
+                                      <Text numberOfLines={1} style={{ fontSize: 13, fontWeight: '600', color: Acid.tx, textTransform: 'capitalize', flex: 1, flexShrink: 1 }}>{name}</Text>
+                                      <Text style={{ fontSize: 11, color: Acid.tx2, flexShrink: 0 }}>{data.count}x · {Math.round(data.cals / data.count)} Kcal avg</Text>
                                     </View>
-                                    <View style={{ height: 4, backgroundColor: theme.colors.input, borderRadius: 2, overflow: 'hidden' }}>
-                                      <View style={{ width: `${(data.count / maxCount) * 100}%`, height: '100%', backgroundColor: theme.colors.primary, borderRadius: 2 }} />
+                                    <View style={{ height: 4, backgroundColor: Acid.mossDeep, borderRadius: 2, overflow: 'hidden' }}>
+                                      <View style={{ width: `${(data.count / maxCount) * 100}%`, height: '100%', backgroundColor: Acid.lime, borderRadius: 2 }} />
                                     </View>
                                   </View>
                                 </View>
@@ -2653,9 +2617,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                       <InsightSlot id="sugar-load">
                       {!isUnlocked('sugar-load') && <LockedInsightCard id="sugar-load" />}
                       {isUnlocked('sugar-load') && (
-                      <View style={[styles.graphCard, { backgroundColor: theme.colors.card, padding: 20 }]}>
-                        <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 4 }}>Sugar Load</Text>
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>Natural vs. added sugars, daily average · {rangeLabel(timeRange)}</Text>
+                      <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 20 }]}>
+                        <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx, marginBottom: 4 }}>Sugar Load</Text>
+                        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>Natural vs. added sugars, daily average · {rangeLabel(timeRange)}</Text>
                         {(() => {
                           let totalSugar = 0;
                           let addedSugar = 0;
@@ -2686,25 +2650,25 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                                 {[
                                   { label: 'Added', val: avgAdded, color: '#FB7185' },
                                   { label: 'Natural', val: avgNatural, color: '#4ADE80' },
-                                  { label: 'Total', val: avgTotal, color: theme.colors.textPrimary },
+                                  { label: 'Total', val: avgTotal, color: Acid.tx },
                                 ].map(s => (
                                   <View key={s.label} style={{ alignItems: 'center' }}>
                                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginBottom: 2 }}>
                                       {s.label !== 'Total' && <View style={{ width: 7, height: 7, borderRadius: 3.5, backgroundColor: s.color }} />}
-                                      <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>{s.label}</Text>
+                                      <Text style={{ fontSize: 11, color: Acid.tx2 }}>{s.label}</Text>
                                     </View>
-                                    <Text style={{ fontSize: 18, fontWeight: '800', color: theme.colors.textPrimary }}>{s.val}g</Text>
+                                    <Text style={{ fontSize: 18, fontWeight: '800', color: Acid.tx }}>{s.val}g</Text>
                                   </View>
                                 ))}
                               </View>
-                              <View style={{ height: 20, flexDirection: 'row', borderRadius: 10, overflow: 'hidden', backgroundColor: theme.colors.input, position: 'relative', marginBottom: 6 }}>
+                              <View style={{ height: 20, flexDirection: 'row', borderRadius: 10, overflow: 'hidden', backgroundColor: Acid.mossDeep, position: 'relative', marginBottom: 6 }}>
                                 <View style={{ width: `${(avgAdded / maxBar) * 100}%`, height: '100%', backgroundColor: '#FB7185' }} />
                                 <View style={{ width: `${(avgNatural / maxBar) * 100}%`, height: '100%', backgroundColor: '#4ADE80' }} />
-                                <View style={{ position: 'absolute', left: `${(dailyLimit / maxBar) * 100}%`, top: 0, bottom: 0, width: 2, backgroundColor: theme.colors.textPrimary }} />
+                                <View style={{ position: 'absolute', left: `${(dailyLimit / maxBar) * 100}%`, top: 0, bottom: 0, width: 2, backgroundColor: Acid.tx }} />
                               </View>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                                <Text style={{ fontSize: 10, color: theme.colors.textSecondary }}>0g</Text>
-                                <Text style={{ fontSize: 10, color: theme.colors.textPrimary, fontWeight: '600' }}>Limit {dailyLimit}g</Text>
+                                <Text style={{ fontSize: 10, color: Acid.tx2 }}>0g</Text>
+                                <Text style={{ fontSize: 10, color: Acid.tx, fontWeight: '600' }}>Limit {dailyLimit}g</Text>
                               </View>
                             </View>
                           );
@@ -2730,39 +2694,39 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
         presentationStyle="pageSheet"
         onRequestClose={() => setShowInfo(false)}
       >
-        <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-          <View style={[styles.infoHeader, { borderBottomColor: theme.colors.border }]}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }}>
+          <View style={[styles.infoHeader, { borderBottomColor: Acid.hair }]}>
             <View style={styles.infoHeaderBtn} />
-            <Text style={[styles.infoHeaderTitle, { color: theme.colors.textPrimary }]}>About Nutrition Analysis</Text>
+            <Text style={[styles.infoHeaderTitle, { color: Acid.tx }]}>About Nutrition Analysis</Text>
             <TouchableOpacity onPress={() => setShowInfo(false)} style={styles.infoHeaderBtn}>
-              <Feather name="x" size={22} color={theme.colors.textPrimary} />
+              <Feather name="x" size={22} color={Acid.tx} />
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.infoContent}>
-            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Overview</Text>
-            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoSectionTitle, { color: Acid.tx }]}>Overview</Text>
+            <Text style={[styles.infoBody, { color: Acid.tx2 }]}>
               Nutrition Analysis gives you a visual breakdown of your daily eating. It tracks calories and macronutrients (protein, carbs, fat) over time so you can spot trends and stay on track with your goals.
             </Text>
 
-            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Calories Tab</Text>
-            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoSectionTitle, { color: Acid.tx }]}>Calories Tab</Text>
+            <Text style={[styles.infoBody, { color: Acid.tx2 }]}>
               The bar chart shows your daily calorie intake. The dashed line represents your calorie target. Days where you went over your target will show in a different colour. Use the time range selector (1D, 1W, 1M, etc.) to zoom in or out.
             </Text>
 
-            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Macros Tab</Text>
-            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoSectionTitle, { color: Acid.tx }]}>Macros Tab</Text>
+            <Text style={[styles.infoBody, { color: Acid.tx2 }]}>
               The Macros tab breaks down your protein, carbs, and fat intake. It shows how each macro contributes to your daily nutrition and whether you are hitting your targets. This is useful for making sure you are getting enough protein or managing your carb intake.
             </Text>
 
-            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Insights Tab</Text>
-            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoSectionTitle, { color: Acid.tx }]}>Insights Tab</Text>
+            <Text style={[styles.infoBody, { color: Acid.tx2 }]}>
               The Insights tab provides an AI-generated summary of your eating patterns. It highlights your top foods, average intake, and suggestions for improvement. Insights are refreshed periodically based on your logged meals.
             </Text>
 
-            <View style={[styles.infoDivider, { backgroundColor: theme.colors.border }]} />
+            <View style={[styles.infoDivider, { backgroundColor: Acid.hair }]} />
 
-            <Text style={[styles.infoSectionTitle, { color: theme.colors.textPrimary }]}>Tips</Text>
-            <Text style={[styles.infoBody, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.infoSectionTitle, { color: Acid.tx }]}>Tips</Text>
+            <Text style={[styles.infoBody, { color: Acid.tx2 }]}>
               For the most accurate analysis, log everything you eat throughout the day. Even small snacks and drinks count toward your daily totals. The more consistently you log, the more useful the trends and insights become.
             </Text>
           </ScrollView>
@@ -2788,8 +2752,8 @@ const styles = StyleSheet.create({
     padding: 8,
   },
   headerTitle: {
-    fontSize: Typography.fontSize.xl,
-    fontWeight: Typography.fontWeight.semiBold,
+    fontFamily: Acid.serifItalic,
+    fontSize: 22,
   },
   headerRight: {
     width: 40,
@@ -2821,16 +2785,20 @@ const styles = StyleSheet.create({
 
   tabContainer: {
     flexDirection: 'row',
-    borderRadius: 8,
-    padding: 4,
+    borderBottomWidth: 1,
+    borderBottomColor: Acid.hair,
     marginBottom: 24,
   },
   tab: {
     flex: 1,
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 6,
+    paddingVertical: 10,
     alignItems: 'center',
+    borderBottomWidth: 2,
+    borderBottomColor: 'transparent',
+    marginBottom: -1,
+  },
+  tabActive: {
+    borderBottomColor: Acid.lime,
   },
   tabText: {
     fontSize: Typography.fontSize.md,
@@ -2958,27 +2926,19 @@ const styles = StyleSheet.create({
   heroCard: {
     paddingHorizontal: 12,
     paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
     alignItems: 'center',
     justifyContent: 'center',
     flex: 1,
     minHeight: 88,
   },
   heroLabel: {
-    fontSize: 11,
-    fontWeight: Typography.fontWeight.semiBold,
+    fontSize: 10,
     marginBottom: 4,
-    letterSpacing: 0.8,
+    letterSpacing: 1.5,
   },
   heroValue: {
-    fontSize: 26,
-    fontWeight: Typography.fontWeight.bold,
+    fontFamily: Acid.serif,
+    fontSize: 28,
     lineHeight: 32,
     minHeight: 32,
   },

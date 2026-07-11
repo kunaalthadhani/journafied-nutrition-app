@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Modal, View, Text, TextInput, TouchableOpacity, StyleSheet, Alert } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { authService } from '../services/authService';
 
 // Shown when Supabase fires PASSWORD_RECOVERY (the user opened a reset link).
@@ -8,7 +8,6 @@ import { authService } from '../services/authService';
 // this event, so this is the surface that actually lets a PWA user finish a
 // password reset. On native the same event fires once the deep link is wired.
 export const PasswordRecoveryModal: React.FC = () => {
-  const theme = useTheme();
   const [visible, setVisible] = useState(false);
   const [password, setPassword] = useState('');
   const [saving, setSaving] = useState(false);
@@ -48,26 +47,26 @@ export const PasswordRecoveryModal: React.FC = () => {
   return (
     <Modal visible={visible} transparent animationType="fade" onRequestClose={() => setVisible(false)}>
       <View style={styles.overlay}>
-        <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Set a new password</Text>
-          <Text style={[styles.sub, { color: theme.colors.textSecondary }]}>
+        <View style={[styles.card, { backgroundColor: Acid.mossDeep }]}>
+          <Text style={[styles.title, { color: Acid.tx }]}>Set a new password</Text>
+          <Text style={[styles.sub, { color: Acid.tx2 }]}>
             Enter a new password for your account.
           </Text>
           <TextInput
-            style={[styles.input, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+            style={[styles.input, { color: Acid.tx, borderColor: Acid.hair }]}
             placeholder="New password"
-            placeholderTextColor={theme.colors.textTertiary}
+            placeholderTextColor={Acid.tx3}
             secureTextEntry
             value={password}
             onChangeText={setPassword}
             autoFocus
           />
           <TouchableOpacity
-            style={[styles.button, { backgroundColor: theme.colors.primary, opacity: saving ? 0.6 : 1 }]}
+            style={[styles.button, { backgroundColor: Acid.lime, opacity: saving ? 0.6 : 1 }]}
             onPress={handleSave}
             disabled={saving}
           >
-            <Text style={[styles.buttonText, { color: theme.colors.primaryForeground }]}>
+            <Text style={[styles.buttonText, { color: Acid.moss }]}>
               {saving ? 'Saving...' : 'Save password'}
             </Text>
           </TouchableOpacity>

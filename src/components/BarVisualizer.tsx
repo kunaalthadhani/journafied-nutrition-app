@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Animated, Easing } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 export type AgentState = 'connecting' | 'initializing' | 'listening' | 'speaking' | 'thinking';
 
@@ -20,7 +20,6 @@ export const BarVisualizer: React.FC<BarVisualizerProps> = ({
   maxHeight = 90,
   demo = false,
 }) => {
-  const theme = useTheme();
   const bars = useRef(
     Array.from({ length: barCount }, () => ({
       height: new Animated.Value(minHeight),

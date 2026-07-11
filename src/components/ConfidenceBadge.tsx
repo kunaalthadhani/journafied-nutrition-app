@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, TouchableOpacity, Modal, ActivityIndicator, ScrollView, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { generateConfidenceHint, ConfidenceHint } from '../services/openaiService';
 
 type Confidence = 'low' | 'medium' | 'high';
@@ -13,13 +13,12 @@ interface ConfidenceBadgeProps {
 }
 
 const COLORS: Record<Confidence, { dot: string; bg: string; label: string }> = {
-  high: { dot: '#10B981', bg: '#10B98115', label: 'High' },
-  medium: { dot: '#F59E0B', bg: '#F59E0B15', label: 'Medium' },
-  low: { dot: '#EF4444', bg: '#EF444415', label: 'Low' },
+  high: { dot: Acid.good, bg: '#10B98115', label: 'High' },
+  medium: { dot: Acid.carbs, bg: '#F59E0B15', label: 'Medium' },
+  low: { dot: Acid.error, bg: '#EF444415', label: 'Low' },
 };
 
 export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({ confidence, confidenceReason, foodName }) => {
-  const theme = useTheme();
   const [open, setOpen] = useState(false);
   const [hint, setHint] = useState<ConfidenceHint | null>(null);
   const [hintLoading, setHintLoading] = useState(false);
@@ -66,34 +65,34 @@ export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({ confidence, co
           activeOpacity={1}
           onPress={() => setOpen(false)}
         >
-          <TouchableOpacity activeOpacity={1} style={[styles.modalCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+          <TouchableOpacity activeOpacity={1} style={[styles.modalCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
             <View style={styles.modalHeader}>
               <View style={[styles.dotLarge, { backgroundColor: c.dot }]} />
-              <Text style={[styles.modalTitle, { color: theme.colors.textPrimary }]}>
+              <Text style={[styles.modalTitle, { color: Acid.tx }]}>
                 {c.label} confidence
               </Text>
               <TouchableOpacity onPress={() => setOpen(false)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                <Feather name="x" size={18} color={theme.colors.textTertiary} />
+                <Feather name="x" size={18} color={Acid.tx3} />
               </TouchableOpacity>
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-              <Text style={[styles.foodNameLabel, { color: theme.colors.textTertiary }]}>{foodName}</Text>
+              <Text style={[styles.foodNameLabel, { color: Acid.tx3 }]}>{foodName}</Text>
 
               {confidenceReason ? (
-                <Text style={[styles.body, { color: theme.colors.textPrimary }]}>{confidenceReason}</Text>
+                <Text style={[styles.body, { color: Acid.tx }]}>{confidenceReason}</Text>
               ) : null}
 
               {confidence !== 'high' && (
-                <View style={[styles.hintBox, { backgroundColor: theme.colors.input }]}>
-                  <Text style={[styles.hintHeader, { color: theme.colors.textSecondary }]}>
+                <View style={[styles.hintBox, { backgroundColor: Acid.mossDeep }]}>
+                  <Text style={[styles.hintHeader, { color: Acid.tx2 }]}>
                     To raise confidence next time
                   </Text>
 
                   {hintLoading && (
                     <View style={styles.loadingRow}>
-                      <ActivityIndicator size="small" color={theme.colors.primary} />
-                      <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>
+                      <ActivityIndicator size="small" color={Acid.lime} />
+                      <Text style={[styles.loadingText, { color: Acid.tx2 }]}>
                         Thinking…
                       </Text>
                     </View>
@@ -101,14 +100,14 @@ export const ConfidenceBadge: React.FC<ConfidenceBadgeProps> = ({ confidence, co
 
                   {!hintLoading && hint && (
                     <>
-                      <Text style={[styles.body, { color: theme.colors.textPrimary }]}>{hint.what_to_add}</Text>
-                      <Text style={[styles.exampleHeader, { color: theme.colors.textTertiary }]}>Example</Text>
-                      <Text style={[styles.exampleText, { color: theme.colors.textSecondary }]}>{hint.example}</Text>
+                      <Text style={[styles.body, { color: Acid.tx }]}>{hint.what_to_add}</Text>
+                      <Text style={[styles.exampleHeader, { color: Acid.tx3 }]}>Example</Text>
+                      <Text style={[styles.exampleText, { color: Acid.tx2 }]}>{hint.example}</Text>
                     </>
                   )}
 
                   {!hintLoading && !hint && (
-                    <Text style={[styles.body, { color: theme.colors.textSecondary }]}>
+                    <Text style={[styles.body, { color: Acid.tx2 }]}>
                       Add the portion size, preparation method, and any add-ons to your next log.
                     </Text>
                   )}

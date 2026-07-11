@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { authService } from '../services/authService';
 import { dataStorage, AccountInfo } from '../services/dataStorage';
@@ -43,8 +43,6 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
   prefilledName,
   onComplete,
 }) => {
-  const theme = useTheme();
-
   const [name, setName] = useState(prefilledName || '');
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
@@ -123,7 +121,7 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={[styles.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={{ flex: 1 }}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
@@ -133,12 +131,12 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
         >
-          <View style={[styles.iconWrap, { backgroundColor: theme.colors.input }]}>
-            <Feather name="bookmark" size={36} color={theme.colors.primary} />
+          <View style={[styles.iconWrap, { backgroundColor: Acid.mossDeep }]}>
+            <Feather name="bookmark" size={36} color={Acid.lime} />
           </View>
 
-          <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Save your plan</Text>
-          <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.title, { color: Acid.tx }]}>Save your plan</Text>
+          <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
             Keep your goals and meals across devices. No password needed.
           </Text>
 
@@ -151,7 +149,6 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
               autoCapitalize="words"
               autoCorrect={false}
               maxLength={30}
-              theme={theme}
             />
             <Field
               label="Email"
@@ -162,7 +159,6 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
               keyboardType="email-address"
               autoComplete="email"
               autoCorrect={false}
-              theme={theme}
             />
             <Field
               label="Mobile (optional)"
@@ -171,19 +167,18 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
               placeholder="+971 50 123 4567"
               keyboardType="phone-pad"
               autoCorrect={false}
-              theme={theme}
             />
           </View>
 
           {error && (
-            <Text style={[styles.error, { color: theme.colors.error }]}>{error}</Text>
+            <Text style={[styles.error, { color: Acid.error }]}>{error}</Text>
           )}
 
           <TouchableOpacity
             style={[
               styles.primaryBtn,
               {
-                backgroundColor: canSubmit ? theme.colors.primary : theme.colors.input,
+                backgroundColor: canSubmit ? Acid.lime : Acid.mossDeep,
               },
             ]}
             onPress={handleContinue}
@@ -191,22 +186,22 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
             activeOpacity={0.85}
           >
             {submitting ? (
-              <ActivityIndicator color={theme.colors.primaryForeground} />
+              <ActivityIndicator color={Acid.moss} />
             ) : (
               <>
-                <Text style={[styles.primaryBtnText, { color: canSubmit ? theme.colors.primaryForeground : theme.colors.textTertiary }]}>
+                <Text style={[styles.primaryBtnText, { color: canSubmit ? Acid.moss : Acid.tx3 }]}>
                   Continue
                 </Text>
-                <Feather name="arrow-right" size={18} color={canSubmit ? theme.colors.primaryForeground : theme.colors.textTertiary} style={{ marginLeft: 6 }} />
+                <Feather name="arrow-right" size={18} color={canSubmit ? Acid.moss : Acid.tx3} style={{ marginLeft: 6 }} />
               </>
             )}
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleSkip} style={styles.skipBtn} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
-            <Text style={[styles.skipText, { color: theme.colors.textTertiary }]}>Skip for now</Text>
+            <Text style={[styles.skipText, { color: Acid.tx3 }]}>Skip for now</Text>
           </TouchableOpacity>
 
-          <Text style={[styles.footerNote, { color: theme.colors.textTertiary }]}>
+          <Text style={[styles.footerNote, { color: Acid.tx3 }]}>
             We use your email only to save your data. No spam.
           </Text>
         </ScrollView>
@@ -225,23 +220,22 @@ interface FieldProps {
   autoComplete?: 'email' | 'tel' | 'name' | 'off';
   autoCorrect?: boolean;
   maxLength?: number;
-  theme: ReturnType<typeof useTheme>;
 }
 
-const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, maxLength, theme }) => (
+const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, maxLength }) => (
   <View style={styles.fieldWrap}>
-    <Text style={[styles.fieldLabel, { color: theme.colors.textSecondary }]}>{label}</Text>
+    <Text style={[styles.fieldLabel, { color: Acid.tx2 }]}>{label}</Text>
     <TextInput
       style={[
         styles.input,
         {
-          backgroundColor: theme.colors.input,
-          color: theme.colors.textPrimary,
-          borderColor: theme.colors.border,
+          backgroundColor: Acid.mossDeep,
+          color: Acid.tx,
+          borderColor: Acid.hair,
         },
       ]}
       placeholder={placeholder}
-      placeholderTextColor={theme.colors.textTertiary}
+      placeholderTextColor={Acid.tx3}
       value={value}
       onChangeText={onChangeText}
       autoCapitalize={autoCapitalize}

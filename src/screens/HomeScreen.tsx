@@ -61,7 +61,7 @@ import { ParsedExercise, calculateExerciseCalories, parseExerciseInput } from '.
 import { voiceService } from '../services/voiceService';
 import * as ImagePicker from 'expo-image-picker';
 import * as Notifications from 'expo-notifications';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
 import { analyticsService } from '../services/analyticsService';
@@ -79,6 +79,7 @@ import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
+import { AcidTabBar } from '../components/AcidTabBar';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
@@ -86,7 +87,6 @@ import { DetectedPattern } from '../services/dataStorage';
 import { useUser } from '../contexts/UserContext';
 
 export const HomeScreen: React.FC = () => {
-  const theme = useTheme();
   // accountInfo is sourced from UserContext (the single source of truth).
   // Never shadow this with local useState — that recreates the "sticky note"
   // bug where signing in updated the context but Home kept showing stale state.
@@ -2571,16 +2571,14 @@ export const HomeScreen: React.FC = () => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['bottom']}>
-      <View style={[styles.container, { backgroundColor: theme.colors.background }]}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['bottom']}>
+      <View style={[styles.container, { backgroundColor: Acid.moss }]}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
           selectedDate={formattedDate}
           userName={accountInfo?.name?.split(' ')[0] || "there"}
           onMenuPress={handleMenuPress}
           onCalendarPress={handleCalendarPress}
-          onWeightTrackerPress={handleWeightTracker}
-          onNutritionAnalysisPress={handleNutritionAnalysis}
           onStreakPress={handleStreakPress}
           streak={currentStreak}
           // Snowflake only while a recovery day is actively protecting the streak
@@ -2605,8 +2603,8 @@ export const HomeScreen: React.FC = () => {
             style={{
               marginHorizontal: 16,
               marginTop: 10,
-              backgroundColor: theme.colors.input,
-              borderColor: theme.colors.border,
+              backgroundColor: Acid.mossDeep,
+              borderColor: Acid.hair,
               borderWidth: 1,
               borderRadius: 12,
               paddingHorizontal: 14,
@@ -2616,11 +2614,11 @@ export const HomeScreen: React.FC = () => {
               gap: 10,
             }}
           >
-            <Feather name="bookmark" size={16} color={theme.colors.primary} />
-            <Text style={{ flex: 1, fontSize: 13, color: theme.colors.textPrimary }}>
+            <Feather name="bookmark" size={16} color={Acid.lime} />
+            <Text style={{ flex: 1, fontSize: 13, color: Acid.tx }}>
               Save your plan across devices
             </Text>
-            <Feather name="chevron-right" size={16} color={theme.colors.textTertiary} />
+            <Feather name="chevron-right" size={16} color={Acid.tx3} />
           </TouchableOpacity>
         )}
 
@@ -2639,12 +2637,12 @@ export const HomeScreen: React.FC = () => {
                 <Text style={{
                   fontSize: 16,
                   fontWeight: '600',
-                  color: theme.colors.textPrimary
+                  color: Acid.tx
                 }}>Recovery Day Used</Text>
               </View>
               <Text style={{
                 fontSize: 14,
-                color: theme.colors.textSecondary,
+                color: Acid.tx2,
                 lineHeight: 20
               }}>
                 You didn't log on {format(new Date(justFrozeDate + 'T12:00:00'), 'EEEE, d MMM')}, so a recovery day covered it and your streak is safe. {streakFreeze ? `${streakFreeze.freezesAvailable} left this month.` : ''}
@@ -2691,8 +2689,8 @@ export const HomeScreen: React.FC = () => {
                 style={{
                   marginHorizontal: 16,
                   marginTop: 8,
-                  backgroundColor: theme.colors.card,
-                  borderColor: theme.colors.border,
+                  backgroundColor: Acid.mossDeep,
+                  borderColor: Acid.hair,
                   borderWidth: 1,
                   borderRadius: 12,
                   padding: 16,
@@ -2701,16 +2699,16 @@ export const HomeScreen: React.FC = () => {
                   gap: 12,
                 }}
               >
-                <Feather name="target" size={20} color={theme.colors.primary} />
+                <Feather name="target" size={20} color={Acid.lime} />
                 <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, fontWeight: '600', color: theme.colors.textPrimary }}>
+                  <Text style={{ fontSize: 15, fontWeight: '600', color: Acid.tx }}>
                     Set your daily goal
                   </Text>
-                  <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 }}>
+                  <Text style={{ fontSize: 13, color: Acid.tx2, marginTop: 2 }}>
                     Add your target so we can track calories and macros.
                   </Text>
                 </View>
-                <Feather name="chevron-right" size={18} color={theme.colors.textTertiary} />
+                <Feather name="chevron-right" size={18} color={Acid.tx3} />
               </TouchableOpacity>
             ) : (
               <StatCardsSection
@@ -2735,11 +2733,11 @@ export const HomeScreen: React.FC = () => {
               calorieBankCycle.bankBalance >= 200 && calorieBankCycle.remainingDays >= 1 && calorieBankCycle.remainingDays <= 2 && (
               <View style={{
                 marginHorizontal: 16, marginBottom: 16, padding: 14, borderRadius: 12,
-                backgroundColor: '#22C55E12', borderWidth: 1, borderColor: '#22C55E33',
+                backgroundColor: Acid.good + '12', borderWidth: 1, borderColor: Acid.good + '33',
                 flexDirection: 'row', alignItems: 'center', gap: 12,
               }}>
-                <Feather name="gift" size={20} color="#16A34A" />
-                <Text style={{ flex: 1, fontSize: 13, color: theme.colors.textPrimary, lineHeight: 18 }}>
+                <Feather name="gift" size={20} color={Acid.good} />
+                <Text style={{ flex: 1, fontSize: 13, color: Acid.tx, lineHeight: 18 }}>
                   You have {Math.round(calorieBankCycle.bankBalance).toLocaleString()} kcal banked and {calorieBankCycle.remainingDays === 1 ? 'today is the last day' : `${calorieBankCycle.remainingDays} days left`}. Enjoy a bigger meal before your week resets.
                 </Text>
               </View>
@@ -2808,20 +2806,20 @@ export const HomeScreen: React.FC = () => {
             {showGroceryUnlockCard && (
               <View style={{ marginHorizontal: 16, marginBottom: 16 }}>
                 <View style={{
-                  backgroundColor: theme.colors.card,
+                  backgroundColor: Acid.mossDeep,
                   borderRadius: 16,
                   borderWidth: 1,
-                  borderColor: '#6366F130',
+                  borderColor: Acid.hair,
                   padding: 20,
                   overflow: 'hidden',
                 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-                    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: '#6366F115', alignItems: 'center', justifyContent: 'center' }}>
-                      <Feather name="shopping-cart" size={18} color="#6366F1" />
+                    <View style={{ width: 36, height: 36, borderRadius: 12, backgroundColor: Acid.limeSoft, alignItems: 'center', justifyContent: 'center' }}>
+                      <Feather name="shopping-cart" size={18} color={Acid.lime} />
                     </View>
                     <View style={{ marginLeft: 12, flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: '700', color: theme.colors.textPrimary }}>Your Grocery List is ready</Text>
-                      <Text style={{ fontSize: 13, color: theme.colors.textSecondary, marginTop: 2 }}>Built from the foods you actually eat</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: Acid.tx }}>Your Grocery List is ready</Text>
+                      <Text style={{ fontSize: 13, color: Acid.tx2, marginTop: 2 }}>Built from the foods you actually eat</Text>
                     </View>
                     <TouchableOpacity
                       onPress={async () => {
@@ -2830,7 +2828,7 @@ export const HomeScreen: React.FC = () => {
                       }}
                       hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                     >
-                      <Feather name="x" size={18} color={theme.colors.textTertiary} />
+                      <Feather name="x" size={18} color={Acid.tx3} />
                     </TouchableOpacity>
                   </View>
                   <TouchableOpacity
@@ -2840,14 +2838,14 @@ export const HomeScreen: React.FC = () => {
                       setShowGrocerySuggestions(true);
                     }}
                     style={{
-                      backgroundColor: '#6366F1',
+                      backgroundColor: Acid.lime,
                       borderRadius: 12,
                       paddingVertical: 12,
                       alignItems: 'center',
                       marginTop: 4,
                     }}
                   >
-                    <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>View Grocery List</Text>
+                    <Text style={{ color: Acid.moss, fontSize: 14, fontWeight: '700' }}>View Grocery List</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -2855,8 +2853,8 @@ export const HomeScreen: React.FC = () => {
 
             {/* Food Log Section */}
             {showFirstLogMessage && (
-              <View style={{ marginBottom: 16, marginHorizontal: 16, padding: 12, backgroundColor: theme.colors.primary + '10', borderRadius: 8, borderWidth: 1, borderColor: theme.colors.primary + '30' }}>
-                <Text style={{ textAlign: 'center', color: theme.colors.primary, fontSize: 13, fontWeight: '600' }}>
+              <View style={{ marginBottom: 16, marginHorizontal: 16, padding: 12, backgroundColor: Acid.lime + '10', borderRadius: 8, borderWidth: 1, borderColor: Acid.lime + '30' }}>
+                <Text style={{ textAlign: 'center', color: Acid.lime, fontSize: 13, fontWeight: '600' }}>
                   "Most people improve simply by paying attention."
                 </Text>
               </View>
@@ -2921,10 +2919,10 @@ export const HomeScreen: React.FC = () => {
             {/* Motivational Text - only show if no meals logged for current day */}
             {currentDayMeals.length === 0 && currentDayExercises.length === 0 && !hasUserTyped && (
               <View style={styles.motivationalTextContainer}>
-                <Text style={[styles.motivationalTitle, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.motivationalTitle, { color: Acid.tx }]}>
                   Ready when you are!
                 </Text>
-                <Text style={[styles.motivationalText, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.motivationalText, { color: Acid.tx2 }]}>
                   Tell me what you ate or how you moved and I’ll handle the rest
                 </Text>
               </View>
@@ -2933,32 +2931,6 @@ export const HomeScreen: React.FC = () => {
             {/* Bottom spacing to account for input bar height */}
             <View style={styles.bottomSpacer} />
           </ScrollView>
-
-          {/* Floating AI Coach Button - Premium Only */}
-          {!isAnalyzingFood && !isRecording && isPremium && (
-            <TouchableOpacity
-              onPress={() => { if (canNavigate('chatCoach')) setShowChatCoach(true); }}
-              style={{
-                position: 'absolute',
-                right: 16,
-                bottom: 90, // Above bottom bar
-                width: 50,
-                height: 50,
-                borderRadius: 25,
-                backgroundColor: theme.colors.primary,
-                alignItems: 'center',
-                justifyContent: 'center',
-                shadowColor: "#000",
-                shadowOffset: { width: 0, height: 2 },
-                shadowOpacity: 0.25,
-                shadowRadius: 3.84,
-                elevation: 5,
-                zIndex: 100
-              }}
-            >
-              <Feather name="message-square" size={24} color={theme.colors.primaryForeground} />
-            </TouchableOpacity>
-          )}
 
           {/* Bottom Input Bar */}
           <BottomInputBar
@@ -2986,6 +2958,29 @@ export const HomeScreen: React.FC = () => {
             }
           />
         </KeyboardAvoidingView>
+
+        {/* Bottom tab bar — phase 1 of the board's navigation. Home is this
+            screen; the rest open the existing full-screen surfaces. */}
+        <AcidTabBar
+          active="home"
+          onPress={(tab) => {
+            if (tab === 'insights') handleNutritionAnalysis();
+            else if (tab === 'coach') { if (canNavigate('chatCoach')) setShowChatCoach(true); }
+            else if (tab === 'body') handleWeightTracker();
+            else if (tab === 'profile') handleSettings();
+          }}
+        />
+
+        {/* THE COLUMN — the day filling up as you eat, on the screen's edge */}
+        {goalsSet && (
+          <View pointerEvents="none" style={{ position: 'absolute', right: 0, top: 0, bottom: 0, width: 3, backgroundColor: Acid.hair }}>
+            <View style={{
+              position: 'absolute', bottom: 0, left: 0, right: 0,
+              height: `${Math.min(100, Math.max(0, ((macros2Data?.carbs?.current || 0) / Math.max(1, bankAdjustedCalories || 1)) * 100))}%`,
+              backgroundColor: Acid.lime,
+            }} />
+          </View>
+        )}
 
         <SidebarMenu
           visible={menuVisible}
@@ -3038,20 +3033,20 @@ export const HomeScreen: React.FC = () => {
             style={[styles.analyzingOverlay, { opacity: overlayOpacity }]}
             pointerEvents={isAnalyzingFood ? 'auto' : 'none'}
           >
-            <BlurView intensity={20} tint={theme.mode === 'dark' ? 'dark' : 'light'} style={StyleSheet.absoluteFill} />
+            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
             <View style={[
               styles.analyzingCard,
               {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
-                shadowColor: theme.colors.shadow,
+                backgroundColor: Acid.mossDeep,
+                borderColor: Acid.hair,
+                shadowColor: '#000',
               }
             ]}>
-              <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 16 }} />
-              <Text style={[styles.analyzingTitle, { color: theme.colors.textPrimary }]}>
+              <ActivityIndicator size="large" color={Acid.lime} style={{ marginBottom: 16 }} />
+              <Text style={[styles.analyzingTitle, { color: Acid.tx }]}>
                 Analyzing
               </Text>
-              <Text style={[styles.analyzingSubtitle, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.analyzingSubtitle, { color: Acid.tx2 }]}>
                 Identifying food and macros...
               </Text>
             </View>
@@ -3194,11 +3189,11 @@ export const HomeScreen: React.FC = () => {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Acid.moss,
   },
   container: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: Acid.moss,
   },
   scrollView: {
     flex: 1,
@@ -3217,14 +3212,14 @@ const styles = StyleSheet.create({
   motivationalTitle: {
     fontSize: Typography.fontSize.xl,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.primaryText,
+    color: Acid.tx,
     textAlign: 'center',
     marginBottom: 8,
   },
   motivationalText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.secondaryText,
+    color: Acid.tx2,
     textAlign: 'center',
     lineHeight: Typography.lineHeight.relaxed * Typography.fontSize.md,
   },

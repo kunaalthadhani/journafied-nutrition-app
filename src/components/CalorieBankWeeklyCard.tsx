@@ -3,7 +3,7 @@ import { View, Text, StyleSheet, Platform } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { NumberTicker } from './NumberTicker';
 
 interface CalorieBankWeeklyCardProps {
@@ -21,29 +21,27 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
   remainingDays = 7,
   daysInCycle = 7,
 }) => {
-  const theme = useTheme();
-
   const weeklyRemaining = Math.max(0, weeklyBudget - weeklyActual);
   const dayOfCycle = daysInCycle - remainingDays + 1;
   const progressPct = weeklyBudget > 0 ? Math.min(100, (weeklyActual / weeklyBudget) * 100) : 0;
   const isOver = weeklyActual > weeklyBudget;
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+    <View style={[styles.container, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair, shadowColor: '#000' }]}>
       {/* Header */}
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Feather name="calendar" size={18} color={theme.colors.textPrimary} />
+          <Feather name="calendar" size={18} color={Acid.tx} />
         </View>
-        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Weekly</Text>
-        <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginLeft: 'auto' }}>
+        <Text style={[styles.title, { color: Acid.tx }]}>Weekly</Text>
+        <Text style={{ fontSize: 11, color: Acid.tx3, marginLeft: 'auto' }}>
           Day {dayOfCycle} of {daysInCycle}
         </Text>
       </View>
 
       {/* Progress bar */}
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: theme.colors.input, overflow: 'hidden', marginBottom: 10 }}>
-        <View style={{ height: '100%', borderRadius: 2, width: `${progressPct}%`, backgroundColor: '#22C55E' }} />
+      <View style={{ height: 4, borderRadius: 2, backgroundColor: Acid.mossDeep, overflow: 'hidden', marginBottom: 10 }}>
+        <View style={{ height: '100%', borderRadius: 2, width: `${progressPct}%`, backgroundColor: Acid.good }} />
       </View>
 
       {/* Three-column stats */}
@@ -52,18 +50,18 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
           <NumberTicker
             value={Math.round(weeklyActual)}
             duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: theme.colors.textPrimary }])}
+            style={StyleSheet.flatten([styles.fractionText, { color: Acid.tx }])}
           />
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Used</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Used</Text>
         </View>
 
         <View style={[styles.statColumn, styles.middleColumn]} accessible accessibilityLabel={`In bank, ${Math.round(bankBalance)} calories`}>
           <NumberTicker
             value={Math.round(bankBalance)}
             duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: bankBalance > 0 ? '#22C55E' : theme.colors.textTertiary }])}
+            style={StyleSheet.flatten([styles.fractionText, { color: bankBalance > 0 ? Acid.good : Acid.tx3 }])}
           />
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>In Bank</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>In Bank</Text>
         </View>
 
         <View
@@ -74,9 +72,9 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
           <NumberTicker
             value={Math.round(weeklyRemaining)}
             duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: isOver ? '#EF4444' : '#10B981' }])}
+            style={StyleSheet.flatten([styles.fractionText, { color: isOver ? Acid.error : Acid.good }])}
           />
-          <Text style={[styles.statLabel, { color: theme.colors.textSecondary }]}>Left</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Left</Text>
         </View>
       </View>
     </View>
@@ -85,14 +83,14 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: Acid.mossDeep,
     borderRadius: 12,
     padding: Platform.OS === 'android' ? 8 : 12,
     marginHorizontal: -16,
     paddingHorizontal: 28,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
+    borderColor: Acid.hair,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 1,
     shadowRadius: 2,
@@ -109,7 +107,7 @@ const styles = StyleSheet.create({
   title: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
-    color: Colors.primaryText,
+    color: Acid.tx,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -125,20 +123,20 @@ const styles = StyleSheet.create({
   middleColumn: {
     borderLeftWidth: 1,
     borderRightWidth: 1,
-    borderLeftColor: Colors.lightBorder,
-    borderRightColor: Colors.lightBorder,
+    borderLeftColor: Acid.hair,
+    borderRightColor: Acid.hair,
     paddingHorizontal: 8,
   },
   fractionText: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.primaryText,
+    color: Acid.tx,
     marginBottom: 6,
   },
   statLabel: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.normal,
-    color: Colors.secondaryText,
+    color: Acid.tx2,
     textAlign: 'center',
     lineHeight: Typography.lineHeight.tight * Typography.fontSize.xs,
   },

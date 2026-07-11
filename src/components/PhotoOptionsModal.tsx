@@ -9,7 +9,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { ChevronDown, ChevronRight, Camera, Image, Info } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 
@@ -31,7 +31,6 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
   onUploadPhoto,
   onModalDismiss,
 }) => {
-  const theme = useTheme();
   const [showTip, setShowTip] = useState(false);
 
   useEffect(() => {
@@ -82,17 +81,17 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
       onDismiss={onModalDismiss}
       presentationStyle="pageSheet"
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]} edges={['top', 'left', 'right']}>
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
           <TouchableOpacity
             onPress={onClose}
             style={styles.closeButton}
             hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
           >
-            <ChevronDown size={28} color={theme.colors.textPrimary} />
+            <ChevronDown size={28} color={Acid.tx} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
             Add Image
           </Text>
           <View style={styles.closeButton} />
@@ -102,9 +101,9 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
         <View style={styles.content}>
           {/* Accuracy Tip */}
           {showTip && (
-            <View style={[styles.tipBanner, { backgroundColor: theme.colors.successBg, borderColor: theme.colors.success + '30' }]}>
-              <Info size={16} color={theme.colors.success} style={{ marginTop: 1 }} />
-              <Text style={[styles.tipText, { color: theme.colors.textSecondary }]}>
+            <View style={[styles.tipBanner, { backgroundColor: Acid.good + '20', borderColor: Acid.good + '30' }]}>
+              <Info size={16} color={Acid.good} style={{ marginTop: 1 }} />
+              <Text style={[styles.tipText, { color: Acid.tx2 }]}>
                 Typing your meal is more accurate for portions and calories. Image analysis works best for identifying what's on your plate.
               </Text>
             </View>
@@ -112,7 +111,7 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
 
           {/* Take Photo */}
           <TouchableOpacity
-            style={[styles.optionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            style={[styles.optionCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}
             onPress={() => {
               onClose();
               setTimeout(onTakePhoto, 300);
@@ -123,15 +122,15 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
               <Camera size={24} color="#3B82F6" />
             </View>
             <View style={styles.textContainer}>
-              <Text style={[styles.optionTitle, { color: theme.colors.textPrimary }]}>Take Photo</Text>
-              <Text style={[styles.optionDescription, { color: theme.colors.textSecondary }]}>Use your camera to capture food</Text>
+              <Text style={[styles.optionTitle, { color: Acid.tx }]}>Take Photo</Text>
+              <Text style={[styles.optionDescription, { color: Acid.tx2 }]}>Use your camera to capture food</Text>
             </View>
-            <ChevronRight size={20} color={theme.colors.textTertiary} />
+            <ChevronRight size={20} color={Acid.tx3} />
           </TouchableOpacity>
 
           {/* Choose from Library */}
           <TouchableOpacity
-            style={[styles.optionCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}
+            style={[styles.optionCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}
             onPress={() => {
               onClose();
               setTimeout(onUploadPhoto, 300);
@@ -139,13 +138,13 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
             activeOpacity={0.7}
           >
             <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
-              <Image size={24} color="#10B981" />
+              <Image size={24} color={Acid.good} />
             </View>
             <View style={styles.textContainer}>
-              <Text style={[styles.optionTitle, { color: theme.colors.textPrimary }]}>Choose from Library</Text>
-              <Text style={[styles.optionDescription, { color: theme.colors.textSecondary }]}>Select an existing photo</Text>
+              <Text style={[styles.optionTitle, { color: Acid.tx }]}>Choose from Library</Text>
+              <Text style={[styles.optionDescription, { color: Acid.tx2 }]}>Select an existing photo</Text>
             </View>
-            <ChevronRight size={20} color={theme.colors.textTertiary} />
+            <ChevronRight size={20} color={Acid.tx3} />
           </TouchableOpacity>
         </View>
 

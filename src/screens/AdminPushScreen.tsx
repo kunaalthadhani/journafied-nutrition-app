@@ -14,7 +14,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 import { notificationService } from '../services/notificationService';
@@ -35,7 +35,6 @@ interface BroadcastSummary {
  * Triggered by tapping the menu title five times.
  */
 export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
-  const theme = useTheme();
   const [title, setTitle] = useState('');
   const [message, setMessage] = useState('');
   const [storedTokens, setStoredTokens] = useState<string[]>([]);
@@ -103,18 +102,18 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
       <KeyboardAvoidingView
         style={styles.flex}
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         keyboardVerticalOffset={12}
       >
         {/* Header */}
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
           <TouchableOpacity onPress={onBack} style={styles.backButton}>
-            <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+            <Feather name="arrow-left" size={24} color={Acid.tx} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
             Admin Push Console
           </Text>
           <TouchableOpacity
@@ -125,9 +124,9 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={styles.refreshButton}
           >
             {isLoadingTokens || isLoadingHistory ? (
-              <ActivityIndicator size="small" color={theme.colors.primary} />
+              <ActivityIndicator size="small" color={Acid.lime} />
             ) : (
-              <Feather name="refresh-cw" size={20} color={theme.colors.textPrimary} />
+              <Feather name="refresh-cw" size={20} color={Acid.tx} />
             )}
           </TouchableOpacity>
         </View>
@@ -142,53 +141,53 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={[
               styles.card,
               {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
+                backgroundColor: Acid.mossDeep,
+                borderColor: Acid.hair,
               },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx2 }]}>
               Manual Push Broadcast
             </Text>
-            <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.helperText, { color: Acid.tx2 }]}>
               Craft a title and message, then deliver it to every device that has granted push
               permissions.
             </Text>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Title</Text>
+              <Text style={[styles.label, { color: Acid.tx }]}>Title</Text>
               <TextInput
                 value={title}
                 onChangeText={setTitle}
                 placeholder="Subscription reminder"
-                placeholderTextColor={theme.colors.textTertiary}
+                placeholderTextColor={Acid.tx3}
                 style={[
                   styles.input,
                   {
-                    backgroundColor: theme.colors.input,
-                    color: theme.colors.textPrimary,
-                    borderColor: theme.colors.border,
+                    backgroundColor: Acid.mossDeep,
+                    color: Acid.tx,
+                    borderColor: Acid.hair,
                   },
                 ]}
               />
             </View>
 
             <View style={styles.formGroup}>
-              <Text style={[styles.label, { color: theme.colors.textPrimary }]}>Message</Text>
+              <Text style={[styles.label, { color: Acid.tx }]}>Message</Text>
               <TextInput
                 value={message}
                 onChangeText={setMessage}
                 placeholder="We added new premium recipes. Tap to explore!"
-                placeholderTextColor={theme.colors.textTertiary}
+                placeholderTextColor={Acid.tx3}
                 multiline
                 numberOfLines={4}
                 style={[
                   styles.input,
                   styles.textArea,
                   {
-                    backgroundColor: theme.colors.input,
-                    color: theme.colors.textPrimary,
-                    borderColor: theme.colors.border,
+                    backgroundColor: Acid.mossDeep,
+                    color: Acid.tx,
+                    borderColor: Acid.hair,
                   },
                 ]}
               />
@@ -197,26 +196,26 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             <TouchableOpacity
               style={[
                 styles.primaryButton,
-                { backgroundColor: theme.colors.primary, opacity: isSending ? 0.7 : 1 },
+                { backgroundColor: Acid.lime, opacity: isSending ? 0.7 : 1 },
               ]}
               onPress={handleSendPush}
               disabled={isSending}
             >
               {isSending ? (
-                <ActivityIndicator color={theme.colors.primaryForeground} />
+                <ActivityIndicator color={Acid.moss} />
               ) : (
-                <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>Send Push</Text>
+                <Text style={[styles.primaryButtonText, { color: Acid.moss }]}>Send Push</Text>
               )}
             </TouchableOpacity>
 
             {broadcastSummary && (
-              <View style={[styles.summaryContainer, { borderColor: theme.colors.border }]}>
+              <View style={[styles.summaryContainer, { borderColor: Acid.hair }]}>
                 <Feather
                   name={broadcastSummary.failureCount > 0 ? 'alert-triangle' : 'check-circle'}
                   size={18}
-                  color={broadcastSummary.failureCount > 0 ? theme.colors.error : theme.colors.success}
+                  color={broadcastSummary.failureCount > 0 ? Acid.error : Acid.good}
                 />
-                <Text style={[styles.summaryText, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.summaryText, { color: Acid.tx2 }]}>
                   Targeted {broadcastSummary.targetCount} device(s) · Delivered to{' '}
                   {broadcastSummary.successCount} device(s).{' '}
                   {broadcastSummary.failureCount > 0
@@ -227,7 +226,7 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             )}
 
             {lastError && (
-              <Text style={[styles.errorText, { color: theme.colors.error }]}>{lastError}</Text>
+              <Text style={[styles.errorText, { color: Acid.error }]}>{lastError}</Text>
             )}
           </View>
 
@@ -235,25 +234,25 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={[
               styles.card,
               {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
+                backgroundColor: Acid.mossDeep,
+                borderColor: Acid.hair,
               },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx2 }]}>
               Registered Devices
             </Text>
             {isLoadingTokens ? (
-              <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary} />
+              <ActivityIndicator style={{ marginTop: 12 }} color={Acid.lime} />
             ) : storedTokens.length === 0 ? (
-              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.helperText, { color: Acid.tx2 }]}>
                 No tokens saved yet. Launch the app on a physical device and accept push
                 permissions to register.
               </Text>
             ) : (
               storedTokens.map((token) => (
-                <View key={token} style={[styles.tokenRow, { borderColor: theme.colors.border }]}>
-                  <Text style={[styles.tokenText, { color: theme.colors.textSecondary }]}>
+                <View key={token} style={[styles.tokenRow, { borderColor: Acid.hair }]}>
+                  <Text style={[styles.tokenText, { color: Acid.tx2 }]}>
                     {token}
                   </Text>
                 </View>
@@ -265,57 +264,57 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={[
               styles.card,
               {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
+                backgroundColor: Acid.mossDeep,
+                borderColor: Acid.hair,
               },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx2 }]}>
               Delivery History
             </Text>
             {isLoadingHistory ? (
-              <ActivityIndicator style={{ marginTop: 12 }} color={theme.colors.primary} />
+              <ActivityIndicator style={{ marginTop: 12 }} color={Acid.lime} />
             ) : history.length === 0 ? (
-              <Text style={[styles.helperText, { color: theme.colors.textSecondary }]}>
+              <Text style={[styles.helperText, { color: Acid.tx2 }]}>
                 No broadcasts sent yet. When you send push notifications, delivery stats will appear
                 here.
               </Text>
             ) : (
               history.map((record) => (
-                <View key={record.id} style={[styles.historyCard, { borderColor: theme.colors.border }]}>
+                <View key={record.id} style={[styles.historyCard, { borderColor: Acid.hair }]}>
                   <View style={styles.historyHeader}>
-                    <Text style={[styles.historyTitle, { color: theme.colors.textPrimary }]}>
+                    <Text style={[styles.historyTitle, { color: Acid.tx }]}>
                       {record.title || 'Untitled broadcast'}
                     </Text>
-                    <Text style={[styles.historyTimestamp, { color: theme.colors.textTertiary }]}>
+                    <Text style={[styles.historyTimestamp, { color: Acid.tx3 }]}>
                       {format(new Date(record.timestamp), 'MMM d, yyyy · h:mm a')}
                     </Text>
                   </View>
-                  <Text style={[styles.historyMessage, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.historyMessage, { color: Acid.tx2 }]}>
                     {record.message}
                   </Text>
                   <View style={styles.historyStatsRow}>
                     <View style={styles.historyStat}>
-                      <Feather name="users" size={15} color={theme.colors.textPrimary} />
-                      <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
+                      <Feather name="users" size={15} color={Acid.tx} />
+                      <Text style={[styles.historyStatText, { color: Acid.tx2 }]}>
                         Targets {record.targetCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="check-circle" size={15} color={theme.colors.success} />
-                      <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
+                      <Feather name="check-circle" size={15} color={Acid.good} />
+                      <Text style={[styles.historyStatText, { color: Acid.tx2 }]}>
                         Sent {record.successCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="alert-triangle" size={15} color={theme.colors.error} />
-                      <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
+                      <Feather name="alert-triangle" size={15} color={Acid.error} />
+                      <Text style={[styles.historyStatText, { color: Acid.tx2 }]}>
                         Failed {record.failureCount}
                       </Text>
                     </View>
                     <View style={styles.historyStat}>
-                      <Feather name="mouse-pointer" size={15} color={theme.colors.info} />
-                      <Text style={[styles.historyStatText, { color: theme.colors.textSecondary }]}>
+                      <Feather name="mouse-pointer" size={15} color={Acid.protein} />
+                      <Text style={[styles.historyStatText, { color: Acid.tx2 }]}>
                         Clicks {record.clickCount}
                       </Text>
                     </View>
@@ -329,36 +328,36 @@ export const AdminPushScreen: React.FC<AdminPushScreenProps> = ({ onBack }) => {
             style={[
               styles.card,
               {
-                backgroundColor: theme.colors.card,
-                borderColor: theme.colors.border,
+                backgroundColor: Acid.mossDeep,
+                borderColor: Acid.hair,
               },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx2 }]}>
               How to Test
             </Text>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color={theme.colors.textPrimary} />
-              <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
+              <Feather name="check" size={16} color={Acid.tx} />
+              <Text style={[styles.listText, { color: Acid.tx2 }]}>
                 Install the app on a physical device (push notifications do not work on most
                 simulators).
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color={theme.colors.textPrimary} />
-              <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
+              <Feather name="check" size={16} color={Acid.tx} />
+              <Text style={[styles.listText, { color: Acid.tx2 }]}>
                 On first launch, accept the push notification permission prompt.
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color={theme.colors.textPrimary} />
-              <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
+              <Feather name="check" size={16} color={Acid.tx} />
+              <Text style={[styles.listText, { color: Acid.tx2 }]}>
                 Open the sidebar and tap the “Menu” title five times to reveal this console.
               </Text>
             </View>
             <View style={styles.listItem}>
-              <Feather name="check" size={16} color={theme.colors.textPrimary} />
-              <Text style={[styles.listText, { color: theme.colors.textSecondary }]}>
+              <Feather name="check" size={16} color={Acid.tx} />
+              <Text style={[styles.listText, { color: Acid.tx2 }]}>
                 Enter a title/message, press “Send Push”, and observe the delivery log in the device
                 notification center and Metro logs.
               </Text>

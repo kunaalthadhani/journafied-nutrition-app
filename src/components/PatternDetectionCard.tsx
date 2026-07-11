@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { DetectedPattern } from '../services/dataStorage';
 import { PremiumBlurredContent } from './PremiumBlurredContent';
@@ -26,9 +26,7 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
     isPremium,
     onUnlockPress,
     onDismiss
-}) => {
-    const theme = useTheme();
-    const [isCollapsed, setIsCollapsed] = useState(true);
+}) => {    const [isCollapsed, setIsCollapsed] = useState(true);
     const [feedback, setFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
 
     const toggleCollapse = () => {
@@ -48,7 +46,7 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
     const getConfidenceColor = () => {
         if (pattern.confidence >= 85) return '#10b981'; // Green
         if (pattern.confidence >= 70) return '#f59e0b'; // Amber
-        return theme.colors.textSecondary;
+        return Acid.tx2;
     };
 
     const handleFeedback = (type: 'helpful' | 'not_helpful') => {
@@ -62,21 +60,21 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
                 onPress={toggleCollapse}
                 activeOpacity={0.8}
                 style={[styles.container, styles.collapsedContainer, {
-                    backgroundColor: theme.colors.card,
-                    borderColor: theme.colors.border,
+                    backgroundColor: Acid.mossDeep,
+                    borderColor: Acid.hair,
                 }]}
             >
                 <View style={styles.collapsedContent}>
                     <View style={styles.collapsedLeft}>
-                        <View style={[styles.iconBoxSmall, { backgroundColor: theme.colors.primary + '15' }]}>
-                            <Feather name="zap" size={16} color={theme.colors.primary} />
+                        <View style={[styles.iconBoxSmall, { backgroundColor: Acid.lime + '15' }]}>
+                            <Feather name="zap" size={16} color={Acid.lime} />
                         </View>
-                        <Text style={[styles.collapsedTitle, { color: theme.colors.textPrimary }]}>
+                        <Text style={[styles.collapsedTitle, { color: Acid.tx }]}>
                             New Insight Available ✨
                         </Text>
                     </View>
                     <View style={styles.collapsedRight}>
-                        <Feather name="chevron-down" size={20} color={theme.colors.textTertiary} />
+                        <Feather name="chevron-down" size={20} color={Acid.tx3} />
                     </View>
                 </View>
             </TouchableOpacity>
@@ -85,8 +83,8 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
 
     return (
         <View style={[styles.container, {
-            backgroundColor: theme.colors.card,
-            borderColor: theme.colors.border
+            backgroundColor: Acid.mossDeep,
+            borderColor: Acid.hair
         }]}>
             {/* Header */}
             <TouchableOpacity
@@ -95,8 +93,8 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
                 style={styles.header}
             >
                 <View style={styles.leftHeader}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.colors.primary + '20' }]}>
-                        <Feather name={getPatternIcon()} size={18} color={theme.colors.primary} />
+                    <View style={[styles.iconBox, { backgroundColor: Acid.lime + '20' }]}>
+                        <Feather name={getPatternIcon()} size={18} color={Acid.lime} />
                     </View>
                     <View style={{ flex: 1 }}>
                         <View style={styles.titleRow}>
@@ -104,7 +102,7 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
                                 {pattern.confidence}% Confidence
                             </Text>
                         </View>
-                        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>
+                        <Text style={[styles.title, { color: Acid.tx }]}>
                             {pattern.title}
                         </Text>
                     </View>
@@ -112,38 +110,38 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
 
                 <View style={styles.headerActions}>
                     <TouchableOpacity onPress={toggleCollapse} style={styles.actionButton}>
-                        <Feather name="chevron-up" size={20} color={theme.colors.textSecondary} />
+                        <Feather name="chevron-up" size={20} color={Acid.tx2} />
                     </TouchableOpacity>
                     <TouchableOpacity onPress={onDismiss} style={styles.actionButton}>
-                        <Feather name="x" size={20} color={theme.colors.textSecondary} />
+                        <Feather name="x" size={20} color={Acid.tx2} />
                     </TouchableOpacity>
                 </View>
             </TouchableOpacity>
 
             {/* Description (Always Visible in Expanded) */}
-            <Text style={[styles.description, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.description, { color: Acid.tx2 }]}>
                 {pattern.description}
             </Text>
 
             {/* Fix Section */}
             {isPremium && pattern.fix ? (
-                <View style={[styles.fixBox, { backgroundColor: theme.colors.success + '10', borderColor: theme.colors.success + '30' }]}>
+                <View style={[styles.fixBox, { backgroundColor: Acid.good + '10', borderColor: Acid.good + '30' }]}>
                     <View style={styles.fixHeader}>
-                        <Feather name="check-circle" size={14} color={theme.colors.success} />
-                        <Text style={[styles.fixLabel, { color: theme.colors.success }]}>SMART FIX</Text>
+                        <Feather name="check-circle" size={14} color={Acid.good} />
+                        <Text style={[styles.fixLabel, { color: Acid.good }]}>SMART FIX</Text>
                     </View>
-                    <Text style={[styles.fixText, { color: theme.colors.textPrimary }]}>
+                    <Text style={[styles.fixText, { color: Acid.tx }]}>
                         {pattern.fix}
                     </Text>
                 </View>
             ) : !isPremium && pattern.fix ? (
                 <PremiumBlurredContent onUnlockPress={onUnlockPress} height={90}>
-                    <View style={[styles.fixBox, { backgroundColor: theme.colors.success + '10', borderColor: theme.colors.success + '30' }]}>
+                    <View style={[styles.fixBox, { backgroundColor: Acid.good + '10', borderColor: Acid.good + '30' }]}>
                         <View style={styles.fixHeader}>
-                            <Feather name="check-circle" size={14} color={theme.colors.success} />
-                            <Text style={[styles.fixLabel, { color: theme.colors.success }]}>SMART FIX</Text>
+                            <Feather name="check-circle" size={14} color={Acid.good} />
+                            <Text style={[styles.fixLabel, { color: Acid.good }]}>SMART FIX</Text>
                         </View>
-                        <Text style={[styles.fixText, { color: theme.colors.textPrimary }]}>
+                        <Text style={[styles.fixText, { color: Acid.tx }]}>
                             {pattern.fix}
                         </Text>
                     </View>
@@ -152,24 +150,24 @@ export const PatternDetectionCard: React.FC<PatternDetectionCardProps> = ({
 
             {/* Footer: Data Points & Feedback */}
             <View style={styles.footer}>
-                <Text style={[styles.dataPoints, { color: theme.colors.textTertiary }]}>
+                <Text style={[styles.dataPoints, { color: Acid.tx3 }]}>
                     Based on {pattern.dataPoints} days of your data
                 </Text>
 
                 {isPremium && (
                     <View style={styles.feedbackContainer}>
                         {feedback ? (
-                            <Text style={[styles.feedbackThanks, { color: theme.colors.textSecondary }]}>Thanks for your feedback!</Text>
+                            <Text style={[styles.feedbackThanks, { color: Acid.tx2 }]}>Thanks for your feedback!</Text>
                         ) : (
                             <>
-                                <Text style={[styles.feedbackLabel, { color: theme.colors.textTertiary }]}>Helpful?</Text>
+                                <Text style={[styles.feedbackLabel, { color: Acid.tx3 }]}>Helpful?</Text>
                                 <View style={styles.feedbackButtons}>
                                     <TouchableOpacity onPress={() => handleFeedback('helpful')} style={styles.feedbackButton}>
-                                        <Feather name="thumbs-up" size={14} color={theme.colors.textSecondary} />
+                                        <Feather name="thumbs-up" size={14} color={Acid.tx2} />
                                     </TouchableOpacity>
-                                    <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                                    <View style={[styles.divider, { backgroundColor: Acid.hair }]} />
                                     <TouchableOpacity onPress={() => handleFeedback('not_helpful')} style={styles.feedbackButton}>
-                                        <Feather name="thumbs-down" size={14} color={theme.colors.textSecondary} />
+                                        <Feather name="thumbs-down" size={14} color={Acid.tx2} />
                                     </TouchableOpacity>
                                 </View>
                             </>

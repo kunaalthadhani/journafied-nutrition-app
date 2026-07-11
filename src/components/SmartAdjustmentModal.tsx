@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform, ScrollView, Animated, LayoutAnimation, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { AdjustmentRecord } from '../services/dataStorage';
 
@@ -17,9 +17,7 @@ interface SmartAdjustmentModalProps {
     adjustment: AdjustmentRecord | null;
 }
 
-export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visible, onClose, onApply, adjustment }) => {
-    const theme = useTheme();
-    const [isEditing, setIsEditing] = useState(false);
+export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visible, onClose, onApply, adjustment }) => {    const [isEditing, setIsEditing] = useState(false);
     const [isExpanded, setIsExpanded] = useState(false);
     const expandAnim = useRef(new Animated.Value(0)).current; // 0 = collapsed, 1 = expanded
 
@@ -171,18 +169,18 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
                 style={[styles.overlay, { backgroundColor: 'rgba(0,0,0,0.5)' }]}
             >
                 <ScrollView contentContainerStyle={{ flexGrow: 1, justifyContent: 'center' }}>
-                    <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                    <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
 
                         <View style={styles.header}>
                             <View style={[styles.headerIcon, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                                <Feather name="trending-up" size={24} color={theme.colors.primary} />
+                                <Feather name="trending-up" size={24} color={Acid.lime} />
                             </View>
-                            <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Smart Adjustment</Text>
+                            <Text style={[styles.title, { color: Acid.tx }]}>Smart Adjustment</Text>
 
                             {/* Collapsible Educational Text */}
                             <View>
                                 {/* First 2 lines always visible (approx) */}
-                                <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                                <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
                                     Smart Update automatically fine-tunes your nutrition targets based on your weight progress.
                                 </Text>
 
@@ -193,60 +191,60 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
                                         outputRange: [0, 45] // Estimate height for the rest of text
                                     }), opacity: expandAnim
                                 }}>
-                                    <Text style={[styles.subtitle, { color: theme.colors.textSecondary, marginTop: 0 }]}>
+                                    <Text style={[styles.subtitle, { color: Acid.tx2, marginTop: 0 }]}>
                                         This prevents plateaus and ensures your goals stay realistic and effective.
                                     </Text>
                                 </Animated.View>
 
                                 <TouchableOpacity onPress={toggleExpand} activeOpacity={0.8} style={{ padding: 4 }}>
-                                    <Text style={{ color: theme.colors.primary, fontSize: 12, textAlign: 'center' }}>
+                                    <Text style={{ color: Acid.lime, fontSize: 12, textAlign: 'center' }}>
                                         {isExpanded ? 'Show less' : 'Read more'}
                                     </Text>
                                 </TouchableOpacity>
                             </View>
                         </View>
 
-                        <View style={[styles.diffCard, { backgroundColor: theme.colors.background }]}>
+                        <View style={[styles.diffCard, { backgroundColor: Acid.moss }]}>
                             <View style={styles.diffRow}>
-                                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Weight Change</Text>
-                                <Text style={[styles.value, { color: theme.colors.textPrimary }]}>
+                                <Text style={[styles.label, { color: Acid.tx2 }]}>Weight Change</Text>
+                                <Text style={[styles.value, { color: Acid.tx }]}>
                                     {adjustment.previousWeight}kg → {adjustment.currentWeight}kg
                                 </Text>
                             </View>
-                            <View style={[styles.divider, { backgroundColor: theme.colors.border }]} />
+                            <View style={[styles.divider, { backgroundColor: Acid.hair }]} />
 
                             {/* Daily Goal Header + Edit Icon */}
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-                                <Text style={[styles.label, { color: theme.colors.textSecondary }]}>Daily Goal</Text>
+                                <Text style={[styles.label, { color: Acid.tx2 }]}>Daily Goal</Text>
                                 {!isEditing && (
                                     <TouchableOpacity onPress={() => setIsEditing(true)} style={{ padding: 4 }}>
-                                        <Feather name="edit-2" size={16} color={theme.colors.primary} />
+                                        <Feather name="edit-2" size={16} color={Acid.lime} />
                                     </TouchableOpacity>
                                 )}
                             </View>
 
                             <View style={styles.diffRow}>
-                                <Text style={{ fontSize: 14, color: isEditing ? theme.colors.textTertiary : theme.colors.textSecondary, textDecorationLine: isEditing ? 'none' : 'line-through' }}>
+                                <Text style={{ fontSize: 14, color: isEditing ? Acid.tx3 : Acid.tx2, textDecorationLine: isEditing ? 'none' : 'line-through' }}>
                                     {adjustment.previousCalories}
                                 </Text>
-                                <Feather name="arrow-right" size={14} color={theme.colors.textTertiary} />
+                                <Feather name="arrow-right" size={14} color={Acid.tx3} />
 
                                 {isEditing ? (
                                     <View>
-                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: theme.colors.card, borderRadius: 8, borderWidth: 1, borderColor: isTooLow ? 'red' : theme.colors.primary, paddingHorizontal: 8, paddingVertical: 4 }}>
+                                        <View style={{ flexDirection: 'row', alignItems: 'center', backgroundColor: Acid.mossDeep, borderRadius: 8, borderWidth: 1, borderColor: isTooLow ? 'red' : Acid.lime, paddingHorizontal: 8, paddingVertical: 4 }}>
                                             <TextInput
                                                 value={editedCalories}
                                                 onChangeText={handleCaloriesChange}
                                                 keyboardType="numeric"
                                                 placeholder="0"
-                                                placeholderTextColor={theme.colors.textTertiary}
-                                                style={[styles.input, { color: theme.colors.primary, fontWeight: 'bold', minWidth: 40, textAlign: 'right' }]}
+                                                placeholderTextColor={Acid.tx3}
+                                                style={[styles.input, { color: Acid.lime, fontWeight: 'bold', minWidth: 40, textAlign: 'right' }]}
                                             />
-                                            <Text style={{ color: theme.colors.textSecondary, marginLeft: 4 }}>kcal</Text>
+                                            <Text style={{ color: Acid.tx2, marginLeft: 4 }}>kcal</Text>
                                         </View>
                                     </View>
                                 ) : (
-                                    <Text style={[styles.value, { color: theme.colors.primary, fontWeight: 'bold' }]}>
+                                    <Text style={[styles.value, { color: Acid.lime, fontWeight: 'bold' }]}>
                                         {editedCalories} kcal
                                     </Text>
                                 )}
@@ -258,15 +256,15 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
                             )}
                         </View>
 
-                        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginTop: 16, marginBottom: 8, fontWeight: '600' }}>
+                        <Text style={{ fontSize: 12, color: Acid.tx2, marginTop: 16, marginBottom: 8, fontWeight: '600' }}>
                             NEW MACRO SPLIT {isEditing ? '(Editable)' : ''}
                         </Text>
 
                         {isEditing ? (
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24, gap: 8 }}>
-                                <MacroEditItem label="Protein" value={editedProtein} onChange={(t: string) => handleMacroChange('p', t)} color="#3B82F6" theme={theme} />
-                                <MacroEditItem label="Carbs" value={editedCarbs} onChange={(t: string) => handleMacroChange('c', t)} color="#10B981" theme={theme} />
-                                <MacroEditItem label="Fats" value={editedFats} onChange={(t: string) => handleMacroChange('f', t)} color="#F59E0B" theme={theme} />
+                                <MacroEditItem label="Protein" value={editedProtein} onChange={(t: string) => handleMacroChange('p', t)} color={Acid.protein} />
+                                <MacroEditItem label="Carbs" value={editedCarbs} onChange={(t: string) => handleMacroChange('c', t)} color={Acid.carbs} />
+                                <MacroEditItem label="Fats" value={editedFats} onChange={(t: string) => handleMacroChange('f', t)} color={Acid.fat} />
                             </View>
                         ) : (
                             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 }}>
@@ -274,22 +272,22 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
                                     label="Protein"
                                     value={`${editedProtein}g`}
                                     oldValue={adjustment.previousMacros?.protein}
-                                    color="#3B82F6"
-                                    theme={theme}
+                                    color={Acid.protein}
+                                   
                                 />
                                 <MacroItem
                                     label="Carbs"
                                     value={`${editedCarbs}g`}
                                     oldValue={adjustment.previousMacros?.carbs}
-                                    color="#10B981"
-                                    theme={theme}
+                                    color={Acid.good}
+                                   
                                 />
                                 <MacroItem
                                     label="Fats"
                                     value={`${editedFats}g`}
                                     oldValue={adjustment.previousMacros?.fats}
-                                    color="#F59E0B"
-                                    theme={theme}
+                                    color={Acid.carbs}
+                                   
                                 />
                             </View>
                         )}
@@ -297,14 +295,14 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
                         <View style={styles.actions}>
                             <TouchableOpacity
                                 onPress={onClose}
-                                style={[styles.secondaryButton, { borderColor: theme.colors.border }]}
+                                style={[styles.secondaryButton, { borderColor: Acid.hair }]}
                             >
-                                <Text style={{ color: theme.colors.textSecondary, fontWeight: '600' }}>Not Now</Text>
+                                <Text style={{ color: Acid.tx2, fontWeight: '600' }}>Not Now</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity
                                 onPress={handleApplyPress}
-                                style={[styles.primaryButton, { backgroundColor: isTooLow ? theme.colors.textTertiary : theme.colors.primary, opacity: isTooLow ? 0.7 : 1 }]}
+                                style={[styles.primaryButton, { backgroundColor: isTooLow ? Acid.tx3 : Acid.lime, opacity: isTooLow ? 0.7 : 1 }]}
                                 disabled={isTooLow}
                             >
                                 <Text style={{ color: 'white', fontWeight: 'bold' }}>Update My Plan</Text>
@@ -317,35 +315,35 @@ export const SmartAdjustmentModal: React.FC<SmartAdjustmentModalProps> = ({ visi
     );
 };
 
-const MacroItem = ({ label, value, oldValue, color, theme }: any) => (
-    <View style={{ flex: 1, alignItems: 'center', padding: 10, borderRadius: 8, backgroundColor: theme.colors.background, marginHorizontal: 4 }}>
+const MacroItem = ({ label, value, oldValue, color }: any) => (
+    <View style={{ flex: 1, alignItems: 'center', padding: 10, borderRadius: 8, backgroundColor: Acid.moss, marginHorizontal: 4 }}>
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginBottom: 6 }} />
-        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>{label}</Text>
+        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 2 }}>{label}</Text>
 
         {oldValue && (
-            <Text style={{ fontSize: 11, color: theme.colors.textTertiary, textDecorationLine: 'line-through', marginBottom: 0 }}>
+            <Text style={{ fontSize: 11, color: Acid.tx3, textDecorationLine: 'line-through', marginBottom: 0 }}>
                 {oldValue}g
             </Text>
         )}
 
-        <Text style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary }}>{value}</Text>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', color: Acid.tx }}>{value}</Text>
     </View>
 );
 
-const MacroEditItem = ({ label, value, onChange, color, theme }: any) => (
-    <View style={{ flex: 1, alignItems: 'center', padding: 8, borderRadius: 8, backgroundColor: theme.colors.background, borderColor: theme.colors.border, borderWidth: 1 }}>
+const MacroEditItem = ({ label, value, onChange, color }: any) => (
+    <View style={{ flex: 1, alignItems: 'center', padding: 8, borderRadius: 8, backgroundColor: Acid.moss, borderColor: Acid.hair, borderWidth: 1 }}>
         <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: color, marginBottom: 6 }} />
-        <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 2 }}>{label}</Text>
+        <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 2 }}>{label}</Text>
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center' }}>
             <TextInput
                 value={value}
                 onChangeText={onChange}
                 keyboardType="numeric"
                 placeholder="0"
-                placeholderTextColor={theme.colors.textTertiary}
-                style={{ fontSize: 14, fontWeight: 'bold', color: theme.colors.textPrimary, textAlign: 'center', minWidth: 30 }}
+                placeholderTextColor={Acid.tx3}
+                style={{ fontSize: 14, fontWeight: 'bold', color: Acid.tx, textAlign: 'center', minWidth: 30 }}
             />
-            <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>g</Text>
+            <Text style={{ fontSize: 12, color: Acid.tx3 }}>g</Text>
         </View>
     </View>
 );

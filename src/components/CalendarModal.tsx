@@ -12,7 +12,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, ChevronLeft, ChevronRight } from 'lucide-react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { format, isSameMonth, isSameDay, addMonths, subMonths, getDaysInMonth, parseISO, startOfDay } from 'date-fns';
 import { Meal } from './FoodLogSection';
@@ -42,7 +42,6 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
   adjustments,
   summariesByDate = {},
 }) => {
-  const theme = useTheme();
   const insets = useSafeAreaInsets();
   // Animation: Start from -SCREEN_HEIGHT (above screen) to 0
   const slideAnim = useRef(new Animated.Value(-SCREEN_HEIGHT)).current;
@@ -149,8 +148,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
           style={[
             styles.sheet,
             {
-              backgroundColor: theme.colors.card,
-              borderColor: theme.colors.border,
+              backgroundColor: Acid.mossDeep,
+              borderColor: Acid.hair,
               transform: [{ translateY: slideAnim }],
             },
           ]}
@@ -159,17 +158,17 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
             {/* Header */}
             <View style={styles.header}>
               <View style={styles.headerLeft}>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.headerTitle, { color: Acid.tx }]}>
                   {format(currentMonth, 'MMMM yyyy')}
                 </Text>
               </View>
 
               <View style={styles.headerActions}>
                 <TouchableOpacity onPress={handlePreviousMonth} style={styles.navButton}>
-                  <ChevronLeft color={theme.colors.textPrimary} size={20} />
+                  <ChevronLeft color={Acid.tx} size={20} />
                 </TouchableOpacity>
                 <TouchableOpacity onPress={handleNextMonth} style={styles.navButton} disabled={isViewingCurrentMonth}>
-                  <ChevronRight color={isViewingCurrentMonth ? theme.colors.textTertiary : theme.colors.textPrimary} size={20} />
+                  <ChevronRight color={isViewingCurrentMonth ? Acid.tx3 : Acid.tx} size={20} />
                 </TouchableOpacity>
               </View>
             </View>
@@ -178,7 +177,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
             <View style={styles.weekHeader}>
               {weekDays.map((day) => (
                 <View key={day} style={styles.weekDayHeader}>
-                  <Text style={[styles.weekDayText, { color: theme.colors.textTertiary }]}>{day}</Text>
+                  <Text style={[styles.weekDayText, { color: Acid.tx3 }]}>{day}</Text>
                 </View>
               ))}
             </View>
@@ -195,10 +194,10 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
                 // Styles
                 const textColor = isSelectable
-                  ? (isSelected ? theme.colors.background : theme.colors.textPrimary)
-                  : theme.colors.textTertiary;
+                  ? (isSelected ? Acid.moss : Acid.tx)
+                  : Acid.tx3;
 
-                const backgroundColor = isSelected ? theme.colors.textPrimary : 'transparent';
+                const backgroundColor = isSelected ? Acid.tx : 'transparent';
 
                 // Simple Indicator: Green = logged, Red = missed
                 const isPast = startOfDay(dayData.date) < startOfDay(new Date());
@@ -206,8 +205,8 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                 const isMissed = isPast && !hasLog;
                 let indicatorColor = 'transparent';
                 if (isCurrentMonth && !isSelected) {
-                  if (hasLog) indicatorColor = '#10B981'; // Green - logged
-                  else if (isMissed) indicatorColor = '#EF4444'; // Red - missed day
+                  if (hasLog) indicatorColor = Acid.good; // Green - logged
+                  else if (isMissed) indicatorColor = Acid.error; // Red - missed day
                 }
 
                 return (
@@ -230,7 +229,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
                     {/* Adjustment Indicator */}
                     {adjustments?.some(a => a.status === 'applied' && isSameDay(parseISO(a.date), dayData.date)) && (
                       <View style={{ position: 'absolute', top: 2, right: 2 }}>
-                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: theme.colors.primary }} />
+                        <View style={{ width: 6, height: 6, borderRadius: 3, backgroundColor: Acid.lime }} />
                       </View>
                     )}
                   </TouchableOpacity>
@@ -240,7 +239,7 @@ export const CalendarModal: React.FC<CalendarModalProps> = ({
 
             {/* Bottom Handle / Close Hint */}
             <TouchableOpacity onPress={closeWithAnimation} style={styles.bottomHandleContainer}>
-              <View style={[styles.bottomHandle, { backgroundColor: theme.colors.border }]} />
+              <View style={[styles.bottomHandle, { backgroundColor: Acid.hair }]} />
             </TouchableOpacity>
 
           </View>

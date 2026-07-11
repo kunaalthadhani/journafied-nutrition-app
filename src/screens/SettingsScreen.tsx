@@ -18,7 +18,6 @@ import { Feather, MaterialCommunityIcons } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Updates from 'expo-updates';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
 import { Acid } from '../constants/acid';
 import { APP_VERSION } from '../constants/appVersion';
 import { usePreferences } from '../contexts/PreferencesContext';
@@ -59,7 +58,6 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   renderAccountScreen,
   onAccountClose,
 }) => {
-  const theme = useTheme();
   const { weightUnit, setWeightUnit } = usePreferences();
   // Source of truth for whether the user is signed in. Reactive — when
   // UserContext refreshes (after signup, sign-in, sign-out, ITP rehydrate)
@@ -565,11 +563,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <Animated.View
             style={{
               height: SCREEN_HEIGHT * 0.95,
-              // Account (signed in) and Connections still wear the legacy theme;
-              // their sheets keep the legacy ground so they do not float on moss.
-              backgroundColor: activeSlideUp === 'account' || activeSlideUp === 'connections'
-                ? theme.colors.background
-                : Acid.moss,
+              backgroundColor: Acid.moss,
               borderTopLeftRadius: 24,
               borderTopRightRadius: 24,
               overflow: 'hidden',
@@ -581,7 +575,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
               style={{ alignItems: 'center', paddingTop: 12, paddingBottom: 4 }}
               {...slideUpPanResponder.panHandlers}
             >
-              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: activeSlideUp === 'account' || activeSlideUp === 'connections' ? theme.colors.border : Acid.hair2 }} />
+              <View style={{ width: 36, height: 4, borderRadius: 2, backgroundColor: Acid.hair2 }} />
             </View>
 
             {/* ── Account ── */}

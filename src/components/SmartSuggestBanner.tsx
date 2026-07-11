@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ActivityIndicator, LayoutAnimation, Platform, UIManager } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { dataStorage } from '../services/dataStorage';
 import { generateSmartSuggestion } from '../services/openaiService';
@@ -19,7 +19,6 @@ export interface SmartSuggestBannerProps {
 }
 
 export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremium, onLogSuggestion }) => {
-    const theme = useTheme();
     const [visible, setVisible] = useState(false);
     const [loading, setLoading] = useState(false);
     const [expanded, setExpanded] = useState(false);
@@ -141,7 +140,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
     if (!visible || !isPremium) return null;
 
     return (
-        <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+        <View style={[styles.container, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
             <TouchableOpacity
                 activeOpacity={0.7}
                 onPress={handlePress}
@@ -149,43 +148,43 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                 disabled={expanded}
             >
                 <View style={styles.leftRow}>
-                    <View style={[styles.iconBox, { backgroundColor: theme.colors.primary }]}>
+                    <View style={[styles.iconBox, { backgroundColor: Acid.lime }]}>
                         <Feather name="zap" size={16} color="white" />
                     </View>
                     <View>
-                        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Smart Suggest</Text>
-                        <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>
+                        <Text style={[styles.title, { color: Acid.tx }]}>Smart Suggest</Text>
+                        <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
                             {expanded ? "Optimum Meal Found" : "Tap for your optimum next meal"}
                         </Text>
                     </View>
                 </View>
                 {!expanded && (
-                    <View style={[styles.badge, { borderColor: theme.colors.primary }]}>
-                        <Text style={[styles.badgeText, { color: theme.colors.primary }]}>PREMIUM</Text>
+                    <View style={[styles.badge, { borderColor: Acid.lime }]}>
+                        <Text style={[styles.badgeText, { color: Acid.lime }]}>PREMIUM</Text>
                     </View>
                 )}
             </TouchableOpacity>
 
             {loading && (
                 <View style={styles.loadingContainer}>
-                    <ActivityIndicator size="small" color={theme.colors.primary} />
-                    <Text style={[styles.loadingText, { color: theme.colors.textSecondary }]}>Analyzing metabolism...</Text>
+                    <ActivityIndicator size="small" color={Acid.lime} />
+                    <Text style={[styles.loadingText, { color: Acid.tx2 }]}>Analyzing metabolism...</Text>
                 </View>
             )}
 
             {expanded && !loading && suggestion && (
                 <View style={styles.content}>
-                    <View style={[styles.suggestionBox, { backgroundColor: theme.colors.secondaryBg }]}>
-                        <Text style={[styles.suggestionText, { color: theme.colors.textPrimary }]}>
+                    <View style={[styles.suggestionBox, { backgroundColor: Acid.mossDeep }]}>
+                        <Text style={[styles.suggestionText, { color: Acid.tx }]}>
                             {suggestion.displayText}
                         </Text>
                         {suggestion.reasoning && (
-                            <View style={[styles.reasoningContainer, { borderTopColor: theme.colors.border + '40' }]}>
+                            <View style={[styles.reasoningContainer, { borderTopColor: Acid.hair + '40' }]}>
                                 <View style={styles.reasoningHeader}>
-                                    <Feather name="info" size={12} color={theme.colors.primary} style={styles.reasoningIcon} />
-                                    <Text style={[styles.reasoningLabel, { color: theme.colors.primary }]}>Why this option?</Text>
+                                    <Feather name="info" size={12} color={Acid.lime} style={styles.reasoningIcon} />
+                                    <Text style={[styles.reasoningLabel, { color: Acid.lime }]}>Why this option?</Text>
                                 </View>
-                                <Text style={[styles.reasoningText, { color: theme.colors.textSecondary }]}>
+                                <Text style={[styles.reasoningText, { color: Acid.tx2 }]}>
                                     {suggestion.reasoning}
                                 </Text>
                             </View>
@@ -195,7 +194,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                     <View style={styles.actions}>
                         {isDayComplete ? (
                             <TouchableOpacity
-                                style={[styles.logButton, { backgroundColor: theme.colors.warning || '#f59e0b' }]}
+                                style={[styles.logButton, { backgroundColor: Acid.carbs || '#f59e0b' }]}
                                 onPress={() => fetchSuggestion(true, true)}
                             >
                                 <Feather name="alert-triangle" size={16} color="white" />
@@ -204,7 +203,7 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                         ) : (
                             <TouchableOpacity
                                 style={[styles.logButton, {
-                                    backgroundColor: logState === 'logged' ? (theme.colors.success || '#10B981') : theme.colors.primary,
+                                    backgroundColor: logState === 'logged' ? (Acid.good || Acid.good) : Acid.lime,
                                     opacity: logState === 'logging' ? 0.75 : 1,
                                 }]}
                                 onPress={handleLog}
@@ -232,13 +231,13 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
 
                         <View style={styles.miniActions}>
                             <TouchableOpacity onPress={handleRefresh} style={styles.miniButton}>
-                                <Feather name="refresh-cw" size={14} color={theme.colors.textSecondary} />
-                                <Text style={[styles.miniButtonText, { color: theme.colors.textSecondary }]}>New</Text>
+                                <Feather name="refresh-cw" size={14} color={Acid.tx2} />
+                                <Text style={[styles.miniButtonText, { color: Acid.tx2 }]}>New</Text>
                             </TouchableOpacity>
 
                             <TouchableOpacity onPress={handleClose} style={styles.miniButton}>
-                                <Feather name="x" size={14} color={theme.colors.textSecondary} />
-                                <Text style={[styles.miniButtonText, { color: theme.colors.textSecondary }]}>Close</Text>
+                                <Feather name="x" size={14} color={Acid.tx2} />
+                                <Text style={[styles.miniButtonText, { color: Acid.tx2 }]}>Close</Text>
                             </TouchableOpacity>
                         </View>
                     </View>

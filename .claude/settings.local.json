@@ -16,7 +16,8 @@
       "Bash(grep -n \"activeTab === ''Insights''\" src/screens/NutritionAnalysisScreen.tsx)",
       "Bash(grep -n \"activeTab === ''Insights''\" src/screens/WeightTrackerScreen.tsx)",
       "Bash(PG_URL=\"postgresql://postgres.oljzqoznxqbuocdykmpw:Trackkcal786!@aws-1-ap-northeast-2.pooler.supabase.com:5432/postgres\" node _dbq.cjs)",
-      "Bash(node -e ' *)"
+      "Bash(node -e ' *)",
+      "Bash(node \"C:/Users/Hulexo/AppData/Local/Temp/claude/c--Users-Hulexo-Downloads-journafied-journafied-app/26be0c88-8e46-4a49-9e71-335f36f9a17c/scratchpad/acidify.js\" src/screens/NutritionAnalysisScreen.tsx src/screens/AccountScreen.tsx src/screens/QuickSignupScreen.tsx src/screens/SubscriptionScreen.tsx src/screens/AboutScreen.tsx src/screens/GrocerySuggestionsScreen.tsx src/screens/ReferralScreen.tsx src/screens/IntegrationsScreen.tsx src/screens/AdminPushScreen.tsx src/components/MicronutrientCard.tsx src/components/PremiumBlurredContent.tsx)"
     ]
   }
 }

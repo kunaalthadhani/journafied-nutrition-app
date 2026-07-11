@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Text, TextStyle } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 interface TypingAnimationProps {
   children: string;
@@ -14,9 +14,7 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
   speed = 30,
   style,
   className,
-}) => {
-  const theme = useTheme();
-  const [displayText, setDisplayText] = useState('');
+}) => {  const [displayText, setDisplayText] = useState('');
   const [isComplete, setIsComplete] = useState(false);
 
   useEffect(() => {
@@ -43,7 +41,7 @@ export const TypingAnimation: React.FC<TypingAnimationProps> = ({
     <Text
       style={[
         {
-          color: theme.colors.textPrimary,
+          color: Acid.tx,
         },
         style,
       ]}

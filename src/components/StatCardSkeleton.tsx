@@ -2,12 +2,11 @@ import React, { useEffect, useRef } from 'react';
 import { View, StyleSheet, Platform, Animated } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { Colors } from '../constants/colors';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 // Shown in place of the calorie card while goals are still hydrating, so the
 // user never sees a placeholder number flash to the real one on cold open.
 export const StatCardSkeleton: React.FC = () => {
-  const theme = useTheme();
   const pulse = useRef(new Animated.Value(0.35)).current;
 
   useEffect(() => {
@@ -34,10 +33,10 @@ export const StatCardSkeleton: React.FC = () => {
   );
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card, borderColor: theme.colors.border, shadowColor: theme.colors.shadow }]}>
+    <View style={[styles.container, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair, shadowColor: '#000' }]}>
       <View style={styles.header}>
         <View style={styles.iconContainer}>
-          <Feather name="pie-chart" size={18} color={theme.colors.textTertiary} />
+          <Feather name="pie-chart" size={18} color={Acid.tx3} />
         </View>
         <Box width={70} height={14} />
       </View>
@@ -57,14 +56,14 @@ export const StatCardSkeleton: React.FC = () => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.cardBackground,
+    backgroundColor: Acid.mossDeep,
     borderRadius: 12,
     padding: Platform.OS === 'android' ? 8 : 12,
     marginHorizontal: -16,
     paddingHorizontal: 28,
     borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.shadow,
+    borderColor: Acid.hair,
+    shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 1,
     shadowRadius: 2,

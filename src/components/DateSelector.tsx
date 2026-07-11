@@ -1,9 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Animated } from 'react-native';
 import { format, isSameDay, subDays, startOfDay } from 'date-fns';
-import { Colors } from '../constants/colors';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
 import { DayData } from '../types';
 import { DailySummary } from '../services/dataStorage';
 
@@ -18,7 +17,6 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   selectedDate = new Date(),
   summariesByDate = {},
 }) => {
-  const theme = useTheme();
   const flatListRef = useRef<ScrollView | null>(null);
 
   // Generate the list of dates only once (or if today changes conceptually)
@@ -53,7 +51,7 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
   };
 
   return (
-    <View style={[styles.container, { backgroundColor: theme.colors.card }]}>
+    <View style={styles.container}>
       <Animated.ScrollView
         horizontal
         showsHorizontalScrollIndicator={false}
@@ -81,19 +79,19 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
             >
               <Text style={[
                 styles.dayName,
-                { color: theme.colors.textTertiary },
-                isActive && { color: theme.colors.textPrimary, fontWeight: Typography.fontWeight.semiBold },
+                { color: Acid.tx3 },
+                isActive && { color: Acid.tx, fontWeight: Typography.fontWeight.semiBold },
               ]}>
                 {dateData.dayName}
               </Text>
               <View style={[
                 styles.dayNumberContainer,
-                isActive && [styles.activeBg, { backgroundColor: theme.colors.primary }],
+                isActive && [styles.activeBg, { backgroundColor: Acid.lime }],
               ]}>
                 <Text style={[
                   styles.dayNumber,
-                  { color: theme.colors.textTertiary },
-                  isActive && { color: theme.colors.primaryForeground, fontWeight: Typography.fontWeight.bold },
+                  { color: Acid.tx3 },
+                  isActive && { color: Acid.moss, fontWeight: Typography.fontWeight.bold },
                 ]}>
                   {dateData.dayNumber}
                 </Text>
@@ -104,7 +102,7 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
                 height: 3,
                 borderRadius: 1.5,
                 marginTop: 3,
-                backgroundColor: hasLog ? '#10B981' : (isMissed ? '#EF4444' : 'transparent'),
+                backgroundColor: hasLog ? Acid.good : (isMissed ? Acid.error + '99' : 'transparent'),
               }} />
             </TouchableOpacity>
           )
@@ -116,7 +114,7 @@ export const DateSelector: React.FC<DateSelectorProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: Colors.white,
+    backgroundColor: Acid.moss,
     paddingTop: 0,
     paddingBottom: 8,
   },
@@ -136,7 +134,7 @@ const styles = StyleSheet.create({
   dayName: {
     fontSize: Typography.fontSize.xs,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.tertiaryText,
+    color: Acid.tx3,
     marginBottom: 4,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
@@ -153,6 +151,6 @@ const styles = StyleSheet.create({
   dayNumber: {
     fontSize: Typography.fontSize.lg,
     fontWeight: Typography.fontWeight.medium,
-    color: Colors.tertiaryText,
+    color: Acid.tx3,
   },
 });

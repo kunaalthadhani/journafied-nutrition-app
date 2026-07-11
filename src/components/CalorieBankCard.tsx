@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { CalorieBankCycle, getDayName } from '../utils/calorieBankEngine';
 
 interface CalorieBankCardProps {
@@ -8,8 +8,6 @@ interface CalorieBankCardProps {
 }
 
 export const CalorieBankCard: React.FC<CalorieBankCardProps> = ({ cycle }) => {
-  const theme = useTheme();
-
   const {
     weeklyBudget,
     weeklyActual,
@@ -29,52 +27,52 @@ export const CalorieBankCard: React.FC<CalorieBankCardProps> = ({ cycle }) => {
   const bankedLabel = goalType === 'gain' ? 'Surplus' : 'Banked';
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+    <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
       {/* Header row */}
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Calorie Bank</Text>
-        <Text style={[styles.dayCounter, { color: theme.colors.textSecondary }]}>
+        <Text style={[styles.title, { color: Acid.tx }]}>Calorie Bank</Text>
+        <Text style={[styles.dayCounter, { color: Acid.tx2 }]}>
           Day {dayOfCycle} of {daysInCycle}
         </Text>
       </View>
 
       {/* Progress bar */}
-      <View style={[styles.progressTrack, { backgroundColor: theme.colors.border }]}>
+      <View style={[styles.progressTrack, { backgroundColor: Acid.hair }]}>
         <View
           style={[
             styles.progressFill,
             {
               width: `${progressPct}%`,
-              backgroundColor: progressPct > 100 ? '#EF4444' : theme.colors.primary,
+              backgroundColor: progressPct > 100 ? Acid.error : Acid.lime,
             },
           ]}
         />
       </View>
-      <Text style={[styles.progressLabel, { color: theme.colors.textSecondary }]}>
+      <Text style={[styles.progressLabel, { color: Acid.tx2 }]}>
         {Math.round(weeklyActual).toLocaleString()} / {Math.round(weeklyBudget).toLocaleString()} kcal
       </Text>
 
       {/* Stats row */}
       <View style={styles.statsRow}>
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: bankBalance > 0 ? '#22C55E' : theme.colors.textPrimary }]}>
+          <Text style={[styles.statValue, { color: bankBalance > 0 ? Acid.good : Acid.tx }]}>
             +{Math.round(bankBalance)}
           </Text>
-          <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>{bankedLabel}</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx3 }]}>{bankedLabel}</Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
+        <View style={[styles.statDivider, { backgroundColor: Acid.hair }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.statValue, { color: Acid.tx }]}>
             {Math.round(adjustedTodayTarget).toLocaleString()}
           </Text>
-          <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>Today</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx3 }]}>Today</Text>
         </View>
-        <View style={[styles.statDivider, { backgroundColor: theme.colors.border }]} />
+        <View style={[styles.statDivider, { backgroundColor: Acid.hair }]} />
         <View style={styles.statItem}>
-          <Text style={[styles.statValue, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.statValue, { color: Acid.tx }]}>
             {Math.round(remainingBudget).toLocaleString()}
           </Text>
-          <Text style={[styles.statLabel, { color: theme.colors.textTertiary }]}>Remaining</Text>
+          <Text style={[styles.statLabel, { color: Acid.tx3 }]}>Remaining</Text>
         </View>
       </View>
 
@@ -89,19 +87,19 @@ export const CalorieBankCard: React.FC<CalorieBankCardProps> = ({ cycle }) => {
               ? Math.min(1, day.actual / day.baseTarget)
               : 0;
 
-          let barColor = theme.colors.border;
+          let barColor: string = Acid.hair;
           if (!day.isFuture && day.logged) {
             if (day.actual <= day.adjustedTarget) {
-              barColor = '#22C55E'; // on/under target
+              barColor = Acid.good; // on/under target
             } else {
-              barColor = '#F59E0B'; // over target but within spending cap
-              if (day.spendCapHit) barColor = '#EF4444'; // over spending cap
+              barColor = Acid.carbs; // over target but within spending cap
+              if (day.spendCapHit) barColor = Acid.error; // over spending cap
             }
           }
 
           return (
             <View key={day.date} style={styles.weekBarCol}>
-              <View style={[styles.weekBarTrack, { backgroundColor: theme.colors.border + '40' }]}>
+              <View style={[styles.weekBarTrack, { backgroundColor: Acid.hair + '40' }]}>
                 {!day.isFuture && (
                   <View
                     style={[
@@ -117,7 +115,7 @@ export const CalorieBankCard: React.FC<CalorieBankCardProps> = ({ cycle }) => {
               <Text style={[
                 styles.weekBarLabel,
                 {
-                  color: day.isToday ? theme.colors.textPrimary : theme.colors.textTertiary,
+                  color: day.isToday ? Acid.tx : Acid.tx3,
                   fontWeight: day.isToday ? '700' : '400',
                 },
               ]}>

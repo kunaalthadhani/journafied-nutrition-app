@@ -5,7 +5,7 @@ import { Feather } from '@expo/vector-icons';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Print from 'expo-print';
 import * as Sharing from 'expo-sharing';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { dataStorage } from '../services/dataStorage';
 import {
     generateGrocerySuggestions,
@@ -30,7 +30,7 @@ const CATEGORY_LABELS: Record<string, string> = {
     protein: 'Protein', fiber: 'Fiber & Greens', carbs: 'Carbs & Energy', fats: 'Healthy Fats', micronutrients: 'Vitamins & Minerals',
 };
 const CATEGORY_COLORS: Record<string, string> = {
-    protein: '#6366F1', fiber: '#10B981', carbs: '#F59E0B', fats: '#EC4899', micronutrients: '#8B5CF6',
+    protein: '#6366F1', fiber: Acid.good, carbs: Acid.carbs, fats: '#EC4899', micronutrients: Acid.fat,
 };
 
 // Group the items and return category keys in the one canonical order.
@@ -46,7 +46,6 @@ const groupByCategory = (items: GroceryItem[]): [string, GroceryItem[]][] => {
 };
 
 export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> = ({ onBack }) => {
-    const theme = useTheme();
     const [loading, setLoading] = useState(true);
     const [groceryData, setGroceryData] = useState<GrocerySuggestionResult | null>(null);
     const [explanation, setExplanation] = useState<GroceryCoachExplanation | null>(null);
@@ -203,14 +202,14 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
     };
 
     const renderHeader = (subtitle?: string) => (
-        <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+        <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
             <TouchableOpacity onPress={onBack} style={styles.backButton}>
-                <Feather name="chevron-down" size={24} color={theme.colors.textPrimary} />
+                <Feather name="chevron-down" size={24} color={Acid.tx} />
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
-                <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Grocery List</Text>
+                <Text style={[styles.headerTitle, { color: Acid.tx }]}>Grocery List</Text>
                 {!!subtitle && (
-                    <Text style={{ fontSize: 11, color: theme.colors.textTertiary, marginTop: 1 }}>{subtitle}</Text>
+                    <Text style={{ fontSize: 11, color: Acid.tx3, marginTop: 1 }}>{subtitle}</Text>
                 )}
             </View>
             {groceryData ? (
@@ -231,11 +230,11 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 
     if (loading) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]}>
                 {renderHeader()}
                 <View style={styles.center}>
                     <ActivityIndicator size="large" color="#6366F1" />
-                    <Text style={{ color: theme.colors.textSecondary, marginTop: 16, fontSize: 15 }}>Building your list...</Text>
+                    <Text style={{ color: Acid.tx2, marginTop: 16, fontSize: 15 }}>Building your list...</Text>
                 </View>
             </SafeAreaView>
         );
@@ -243,14 +242,14 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 
     if (error) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]}>
                 {renderHeader()}
                 <View style={styles.center}>
-                    <View style={[styles.bigIcon, { backgroundColor: theme.colors.error + '15' }]}>
-                        <Feather name="alert-circle" size={28} color={theme.colors.error} />
+                    <View style={[styles.bigIcon, { backgroundColor: Acid.error + '15' }]}>
+                        <Feather name="alert-circle" size={28} color={Acid.error} />
                     </View>
-                    <Text style={{ fontSize: 16, fontWeight: '600', color: theme.colors.textPrimary, marginBottom: 6 }}>Something went wrong</Text>
-                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', marginBottom: 24 }}>{error}</Text>
+                    <Text style={{ fontSize: 16, fontWeight: '600', color: Acid.tx, marginBottom: 6 }}>Something went wrong</Text>
+                    <Text style={{ fontSize: 14, color: Acid.tx2, textAlign: 'center', marginBottom: 24 }}>{error}</Text>
                     <TouchableOpacity style={styles.primaryBtn} onPress={loadData}>
                         <Text style={styles.primaryBtnText}>Try Again</Text>
                     </TouchableOpacity>
@@ -261,14 +260,14 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 
     if (isEmpty) {
         return (
-            <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+            <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]}>
                 {renderHeader()}
                 <View style={styles.center}>
                     <View style={[styles.bigIcon, { backgroundColor: '#6366F115' }]}>
                         <Feather name="shopping-cart" size={28} color="#6366F1" />
                     </View>
-                    <Text style={{ fontSize: 17, fontWeight: '700', color: theme.colors.textPrimary, marginBottom: 8, textAlign: 'center' }}>No list to build yet</Text>
-                    <Text style={{ fontSize: 14, color: theme.colors.textSecondary, textAlign: 'center', lineHeight: 21, marginBottom: 28, paddingHorizontal: 8 }}>
+                    <Text style={{ fontSize: 17, fontWeight: '700', color: Acid.tx, marginBottom: 8, textAlign: 'center' }}>No list to build yet</Text>
+                    <Text style={{ fontSize: 14, color: Acid.tx2, textAlign: 'center', lineHeight: 21, marginBottom: 28, paddingHorizontal: 8 }}>
                         Your list is built from the whole foods you log. We could not find enough to work with yet. Log a few staples like chicken, rice, or veg, or start from a healthy template below.
                     </Text>
                     <TouchableOpacity style={styles.primaryBtn} onPress={showStarterList}>
@@ -293,12 +292,12 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
     const totF = s ? Math.round(s.weeklyTotal.f * durationWeeks) : 0;
 
     return (
-        <SafeAreaView style={[styles.container, { backgroundColor: theme.colors.background }]}>
+        <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]}>
             {renderHeader(`${checkedCount} of ${totalItems} checked`)}
 
             {/* Progress bar */}
-            <View style={{ height: 3, backgroundColor: theme.colors.border }}>
-                <View style={{ height: 3, width: `${Math.round(progress * 100)}%`, backgroundColor: '#10B981' }} />
+            <View style={{ height: 3, backgroundColor: Acid.hair }}>
+                <View style={{ height: 3, width: `${Math.round(progress * 100)}%`, backgroundColor: Acid.good }} />
             </View>
 
             <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 16, paddingBottom: 40 }} showsVerticalScrollIndicator={false}>
@@ -306,7 +305,7 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                 {usingStarter && (
                     <View style={{ backgroundColor: '#F59E0B12', borderRadius: 12, padding: 12, marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                         <Feather name="info" size={14} color="#F59E0B" />
-                        <Text style={{ flex: 1, fontSize: 12, color: theme.colors.textSecondary, lineHeight: 17 }}>
+                        <Text style={{ flex: 1, fontSize: 12, color: Acid.tx2, lineHeight: 17 }}>
                             A starter template. Log your own meals and your list will personalize to what you actually eat.
                         </Text>
                     </View>
@@ -318,15 +317,15 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                         <Text style={{ fontSize: 10, fontWeight: '700', color: '#6366F1', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 5 }}>
                             {explanation ? 'Why this list' : 'Focus'}
                         </Text>
-                        <Text style={{ fontSize: 14, color: theme.colors.textPrimary, lineHeight: 20 }}>{focusText}</Text>
+                        <Text style={{ fontSize: 14, color: Acid.tx, lineHeight: 20 }}>{focusText}</Text>
                     </View>
                 )}
 
                 {/* Duration toggle */}
-                <View style={{ flexDirection: 'row', backgroundColor: theme.colors.card, borderRadius: 14, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: theme.colors.border }}>
+                <View style={{ flexDirection: 'row', backgroundColor: Acid.mossDeep, borderRadius: 14, padding: 4, marginBottom: 20, borderWidth: 1, borderColor: Acid.hair }}>
                     {[1, 2].map(w => (
-                        <TouchableOpacity key={w} onPress={() => setDurationWeeks(w)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 11, backgroundColor: durationWeeks === w ? theme.colors.textPrimary : 'transparent' }}>
-                            <Text style={{ fontSize: 14, fontWeight: '700', color: durationWeeks === w ? theme.colors.background : theme.colors.textTertiary }}>
+                        <TouchableOpacity key={w} onPress={() => setDurationWeeks(w)} style={{ flex: 1, paddingVertical: 10, alignItems: 'center', borderRadius: 11, backgroundColor: durationWeeks === w ? Acid.tx : 'transparent' }}>
+                            <Text style={{ fontSize: 14, fontWeight: '700', color: durationWeeks === w ? Acid.moss : Acid.tx3 }}>
                                 {w} Week{w > 1 ? 's' : ''}
                             </Text>
                         </TouchableOpacity>
@@ -335,7 +334,7 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 
                 {/* The list */}
                 {categories.map(([category, catItems]) => {
-                    const color = CATEGORY_COLORS[category] || theme.colors.textSecondary;
+                    const color = CATEGORY_COLORS[category] || Acid.tx2;
                     const icon = CATEGORY_ICONS[category] || 'box';
                     const label = CATEGORY_LABELS[category] || category.charAt(0).toUpperCase() + category.slice(1);
                     return (
@@ -344,11 +343,11 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                                 <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: color + '15', alignItems: 'center', justifyContent: 'center' }}>
                                     <Feather name={icon as any} size={14} color={color} />
                                 </View>
-                                <Text style={{ fontSize: 15, fontWeight: '700', color: theme.colors.textPrimary, marginLeft: 10, flex: 1 }}>{label}</Text>
-                                <Text style={{ fontSize: 12, color: theme.colors.textTertiary }}>{catItems.length}</Text>
+                                <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx, marginLeft: 10, flex: 1 }}>{label}</Text>
+                                <Text style={{ fontSize: 12, color: Acid.tx3 }}>{catItems.length}</Text>
                             </View>
 
-                            <View style={{ backgroundColor: theme.colors.card, borderRadius: 16, borderWidth: 1, borderColor: theme.colors.border, overflow: 'hidden' }}>
+                            <View style={{ backgroundColor: Acid.mossDeep, borderRadius: 16, borderWidth: 1, borderColor: Acid.hair, overflow: 'hidden' }}>
                                 {catItems.map((item, index) => {
                                     const m = item.macros || { p: 0, c: 0, f: 0, kcal: 0 };
                                     const qty = (item.baseQuantity || 1) * durationWeeks;
@@ -358,10 +357,10 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                                     const reason = explanationFor(item.name);
 
                                     return (
-                                        <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderBottomWidth: index < catItems.length - 1 ? 1 : 0, borderBottomColor: theme.colors.border }}>
+                                        <View key={index} style={{ flexDirection: 'row', alignItems: 'flex-start', padding: 14, borderBottomWidth: index < catItems.length - 1 ? 1 : 0, borderBottomColor: Acid.hair }}>
                                             {/* Checkbox (its own tap target) */}
                                             <TouchableOpacity onPress={() => toggleChecked(item.name)} hitSlop={{ top: 10, bottom: 10, left: 10, right: 6 }} style={{ marginRight: 12, marginTop: 1 }}>
-                                                <View style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: isChecked ? '#10B981' : theme.colors.border, backgroundColor: isChecked ? '#10B981' : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
+                                                <View style={{ width: 22, height: 22, borderRadius: 7, borderWidth: 2, borderColor: isChecked ? Acid.good : Acid.hair, backgroundColor: isChecked ? Acid.good : 'transparent', alignItems: 'center', justifyContent: 'center' }}>
                                                     {isChecked && <Feather name="check" size={13} color="#fff" />}
                                                 </View>
                                             </TouchableOpacity>
@@ -369,11 +368,11 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                                             {/* Body (tap to expand details) */}
                                             <TouchableOpacity activeOpacity={0.6} onPress={() => toggleExpanded(item.name)} style={{ flex: 1 }}>
                                                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                                                    <Text style={{ fontSize: 15, fontWeight: '600', color: isChecked ? theme.colors.textTertiary : theme.colors.textPrimary, textDecorationLine: isChecked ? 'line-through' : 'none', flex: 1 }}>
+                                                    <Text style={{ fontSize: 15, fontWeight: '600', color: isChecked ? Acid.tx3 : Acid.tx, textDecorationLine: isChecked ? 'line-through' : 'none', flex: 1 }}>
                                                         {item.name}{item.reason === 'user_favorite' && ' ★'}
                                                     </Text>
-                                                    <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary, marginLeft: 8 }}>{qty} {item.unit || ''}</Text>
-                                                    <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={theme.colors.textTertiary} style={{ marginLeft: 8 }} />
+                                                    <Text style={{ fontSize: 14, fontWeight: '600', color: Acid.tx2, marginLeft: 8 }}>{qty} {item.unit || ''}</Text>
+                                                    <Feather name={isExpanded ? 'chevron-up' : 'chevron-down'} size={15} color={Acid.tx3} style={{ marginLeft: 8 }} />
                                                 </View>
 
                                                 {isExpanded && (
@@ -382,12 +381,12 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                                                             <View style={{ backgroundColor: color + '12', paddingHorizontal: 8, paddingVertical: 2, borderRadius: 10 }}>
                                                                 <Text style={{ fontSize: 11, fontWeight: '600', color }}>{kcal} kcal</Text>
                                                             </View>
-                                                            <Text style={{ fontSize: 11, color: theme.colors.textTertiary }}>
+                                                            <Text style={{ fontSize: 11, color: Acid.tx3 }}>
                                                                 P {Math.round(m.p * durationWeeks)}g · C {Math.round(m.c * durationWeeks)}g · F {Math.round(m.f * durationWeeks)}g
                                                             </Text>
                                                         </View>
                                                         {!!reason && (
-                                                            <Text style={{ fontSize: 12, color: theme.colors.textTertiary, marginTop: 6, lineHeight: 17 }}>{reason}</Text>
+                                                            <Text style={{ fontSize: 12, color: Acid.tx3, marginTop: 6, lineHeight: 17 }}>{reason}</Text>
                                                         )}
                                                     </View>
                                                 )}
@@ -402,20 +401,20 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
 
                 {/* Honest footer summary: calories + macros, no weight projection */}
                 {s && (
-                    <View style={{ backgroundColor: theme.colors.card, borderRadius: 20, borderWidth: 1, borderColor: theme.colors.border, padding: 20, marginTop: 4, marginBottom: 16 }}>
-                        <Text style={{ fontSize: 12, color: theme.colors.textTertiary, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 12 }}>
+                    <View style={{ backgroundColor: Acid.mossDeep, borderRadius: 20, borderWidth: 1, borderColor: Acid.hair, padding: 20, marginTop: 4, marginBottom: 16 }}>
+                        <Text style={{ fontSize: 12, color: Acid.tx3, textTransform: 'uppercase', letterSpacing: 0.4, marginBottom: 12 }}>
                             Your list · {durationWeeks} week{durationWeeks > 1 ? 's' : ''}
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'baseline', marginBottom: 14 }}>
-                            <Text style={{ fontSize: 30, fontWeight: '800', color: theme.colors.textPrimary }}>{totalK.toLocaleString()}</Text>
-                            <Text style={{ fontSize: 14, fontWeight: '600', color: theme.colors.textSecondary, marginLeft: 6 }}>kcal of whole foods</Text>
+                            <Text style={{ fontSize: 30, fontWeight: '800', color: Acid.tx }}>{totalK.toLocaleString()}</Text>
+                            <Text style={{ fontSize: 14, fontWeight: '600', color: Acid.tx2, marginLeft: 6 }}>kcal of whole foods</Text>
                         </View>
                         <View style={{ flexDirection: 'row', gap: 8 }}>
                             <View style={{ backgroundColor: '#6366F115', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
                                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#6366F1' }}>Protein {totP}g</Text>
                             </View>
                             <View style={{ backgroundColor: '#F59E0B15', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
-                                <Text style={{ fontSize: 12, fontWeight: '600', color: '#F59E0B' }}>Carbs {totC}g</Text>
+                                <Text style={{ fontSize: 12, fontWeight: '600', color: Acid.carbs }}>Carbs {totC}g</Text>
                             </View>
                             <View style={{ backgroundColor: '#EC489915', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 20 }}>
                                 <Text style={{ fontSize: 12, fontWeight: '600', color: '#EC4899' }}>Fat {totF}g</Text>
@@ -424,7 +423,7 @@ export const GrocerySuggestionsScreen: React.FC<GrocerySuggestionsScreenProps> =
                     </View>
                 )}
 
-                <Text style={{ textAlign: 'center', fontSize: 11, color: theme.colors.textTertiary, marginTop: 8, lineHeight: 16 }}>
+                <Text style={{ textAlign: 'center', fontSize: 11, color: Acid.tx3, marginTop: 8, lineHeight: 16 }}>
                     Suggestions are based on your nutrition data and are for informational purposes only.
                 </Text>
             </ScrollView>

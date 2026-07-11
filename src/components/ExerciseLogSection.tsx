@@ -6,7 +6,7 @@ import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { ParsedExercise } from '../utils/exerciseParser';
 import { TypingAnimation } from './TypingAnimation';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 export interface ExerciseEntry {
   id: string;
@@ -23,19 +23,16 @@ interface ExerciseLogSectionProps {
 export const ExerciseLogSection: React.FC<ExerciseLogSectionProps> = ({
   entries,
   onDeleteEntry,
-}) => {
-  const theme = useTheme();
-
-  if (!entries.length) {
+}) => {  if (!entries.length) {
     return null;
   }
 
   return (
     <View style={styles.container}>
       {entries.map((entry) => (
-        <View key={entry.id} style={[styles.entryCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-          <View style={[styles.headerRow, { borderBottomColor: theme.colors.border }]}>
-            <Text style={[styles.promptText, { color: theme.colors.textSecondary }]}>
+        <View key={entry.id} style={[styles.entryCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+          <View style={[styles.headerRow, { borderBottomColor: Acid.hair }]}>
+            <Text style={[styles.promptText, { color: Acid.tx2 }]}>
               {entry.prompt}
             </Text>
             {onDeleteEntry && (
@@ -44,7 +41,7 @@ export const ExerciseLogSection: React.FC<ExerciseLogSectionProps> = ({
                 hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
                 onPress={() => onDeleteEntry(entry.id)}
               >
-                <Feather name="trash-2" size={14} color={theme.colors.error} />
+                <Feather name="trash-2" size={14} color={Acid.error} />
               </TouchableOpacity>
             )}
           </View>
@@ -55,18 +52,18 @@ export const ExerciseLogSection: React.FC<ExerciseLogSectionProps> = ({
                 key={exercise.id}
                 style={[
                   styles.exerciseItem,
-                  idx < entry.exercises.length - 1 && { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                  idx < entry.exercises.length - 1 && { borderBottomWidth: 1, borderBottomColor: Acid.hair }
                 ]}
               >
                 <View style={styles.exerciseInfo}>
-                  <Text style={[styles.exerciseName, { color: theme.colors.textPrimary }]}>
+                  <Text style={[styles.exerciseName, { color: Acid.tx }]}>
                     {exercise.name}
                   </Text>
-                  <Text style={[styles.exerciseMeta, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.exerciseMeta, { color: Acid.tx2 }]}>
                     {`${exercise.duration_minutes} min • ${String(exercise.intensity).toUpperCase()}`}
                   </Text>
                 </View>
-                <Text style={[styles.exerciseCalories, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.exerciseCalories, { color: Acid.tx }]}>
                   {`${exercise.calories} kcal`}
                 </Text>
               </View>

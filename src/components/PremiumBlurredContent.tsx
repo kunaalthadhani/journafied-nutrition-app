@@ -2,7 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native';
 import { BlurView } from 'expo-blur';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 
 interface PremiumBlurredContentProps {
@@ -20,7 +20,6 @@ export const PremiumBlurredContent: React.FC<PremiumBlurredContentProps> = ({
     onUnlockPress,
     height = 100
 }) => {
-    const theme = useTheme();
 
     return (
         <View style={[styles.container, { height }]}>
@@ -33,23 +32,23 @@ export const PremiumBlurredContent: React.FC<PremiumBlurredContentProps> = ({
             {Platform.OS !== 'web' && (
                 <BlurView
                     intensity={20}
-                    tint={theme.mode === 'dark' ? 'dark' : 'light'}
+                    tint="dark"
                     style={StyleSheet.absoluteFill}
                 />
             )}
 
             {/* Lock Overlay */}
             <View style={[styles.lockOverlay, Platform.OS === 'web' && styles.webBlur]}>
-                <View style={[styles.lockIcon, { backgroundColor: theme.colors.primary }]}>
+                <View style={[styles.lockIcon, { backgroundColor: Acid.lime }]}>
                     <Feather name="lock" size={20} color="white" />
                 </View>
 
-                <Text style={[styles.lockText, { color: theme.colors.textPrimary }]}>
+                <Text style={[styles.lockText, { color: Acid.tx }]}>
                     Premium Feature
                 </Text>
 
                 <TouchableOpacity
-                    style={[styles.unlockButton, { backgroundColor: theme.colors.primary }]}
+                    style={[styles.unlockButton, { backgroundColor: Acid.lime }]}
                     onPress={onUnlockPress}
                 >
                     <Feather name="unlock" size={14} color="white" style={{ marginRight: 6 }} />

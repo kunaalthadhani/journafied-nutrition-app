@@ -11,7 +11,7 @@ import {
 import { Feather } from '@expo/vector-icons';
 import * as Clipboard from 'expo-clipboard';
 import * as Linking from 'expo-linking';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
 import { ReferralRedemption, ReferralReward, dataStorage } from '../services/dataStorage';
@@ -32,9 +32,7 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
   totalEarnedEntriesFromReferrals,
   onBack,
   onLoginPress,
-}) => {
-  const theme = useTheme();
-  const [redemptions, setRedemptions] = useState<ReferralRedemption[]>([]);
+}) => {  const [redemptions, setRedemptions] = useState<ReferralRedemption[]>([]);
   const [rewards, setRewards] = useState<ReferralReward[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
@@ -100,31 +98,31 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
 
   return (
     <SafeAreaView
-      style={[styles.safeArea, { backgroundColor: theme.colors.background }]}
+      style={[styles.safeArea, { backgroundColor: Acid.moss }]}
       edges={['top', 'bottom']}
     >
-      <View style={[styles.header, { borderBottomColor: theme.colors.border }]}>
+      <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={theme.colors.textPrimary} />
+          <Feather name="arrow-left" size={24} color={Acid.tx} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>Referral</Text>
+        <Text style={[styles.headerTitle, { color: Acid.tx }]}>Referral</Text>
         <View style={styles.headerRight} />
       </View>
 
       {!isLoggedIn || !userEmail ? (
         <View style={styles.centerContent}>
-          <Text style={[styles.loginTitle, { color: theme.colors.textPrimary }]}>
+          <Text style={[styles.loginTitle, { color: Acid.tx }]}>
             You need to be logged in to view your referral code
           </Text>
-          <Text style={[styles.loginSubtitle, { color: theme.colors.textSecondary }]}>
+          <Text style={[styles.loginSubtitle, { color: Acid.tx2 }]}>
             log in to get your code and free entries when friends join
           </Text>
           <TouchableOpacity
-            style={[styles.primaryButton, { backgroundColor: theme.colors.primary }]}
+            style={[styles.primaryButton, { backgroundColor: Acid.lime }]}
             onPress={onLoginPress}
             activeOpacity={0.85}
           >
-            <Text style={[styles.primaryButtonText, { color: theme.colors.primaryForeground }]}>Log in</Text>
+            <Text style={[styles.primaryButtonText, { color: Acid.moss }]}>Log in</Text>
           </TouchableOpacity>
         </View>
       ) : (
@@ -137,32 +135,32 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
           <View
             style={[
               styles.card,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+              { borderColor: Acid.hair, backgroundColor: Acid.mossDeep },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx }]}>
               Your referral code
             </Text>
-            <Text style={[styles.codeText, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.codeText, { color: Acid.tx }]}>
               {referralCode || 'loading'}
             </Text>
-            <Text style={[styles.helper, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.helper, { color: Acid.tx2 }]}>
               share this with friends each friend who logs meals unlocks 3 free premium days for both of you
             </Text>
             <View style={styles.actionsRow}>
               <TouchableOpacity
-                style={[styles.actionButton, { backgroundColor: theme.colors.primary }]}
+                style={[styles.actionButton, { backgroundColor: Acid.lime }]}
                 onPress={handleShareWhatsApp}
                 activeOpacity={0.85}
               >
-                <Feather name="message-circle" size={16} color={theme.colors.primaryForeground} />
-                <Text style={[styles.actionButtonText, { color: theme.colors.primaryForeground }]}>Share on WhatsApp</Text>
+                <Feather name="message-circle" size={16} color={Acid.moss} />
+                <Text style={[styles.actionButtonText, { color: Acid.moss }]}>Share on WhatsApp</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                style={[styles.iconButton, { backgroundColor: theme.colors.input }]}
+                style={[styles.iconButton, { backgroundColor: Acid.mossDeep }]}
                 onPress={handleCopyCode}
               >
-                <Feather name="copy" size={16} color={theme.colors.textPrimary} />
+                <Feather name="copy" size={16} color={Acid.tx} />
               </TouchableOpacity>
             </View>
           </View>
@@ -170,18 +168,18 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
           <View
             style={[
               styles.card,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+              { borderColor: Acid.hair, backgroundColor: Acid.mossDeep },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx }]}>
               Premium Rewards
             </Text>
             <View style={styles.freeRow}>
               <View>
-                <Text style={[styles.freeLabel, { color: theme.colors.textSecondary }]}>
+                <Text style={[styles.freeLabel, { color: Acid.tx2 }]}>
                   Earned Premium Days
                 </Text>
-                <Text style={[styles.freeValue, { color: theme.colors.primary }]}>
+                <Text style={[styles.freeValue, { color: Acid.lime }]}>
                   +{totalEarnedEntriesFromReferrals} Days
                 </Text>
               </View>
@@ -191,36 +189,36 @@ export const ReferralScreen: React.FC<ReferralScreenProps> = ({
           <View
             style={[
               styles.card,
-              { borderColor: theme.colors.border, backgroundColor: theme.colors.card },
+              { borderColor: Acid.hair, backgroundColor: Acid.mossDeep },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: theme.colors.textPrimary }]}>
+            <Text style={[styles.sectionTitle, { color: Acid.tx }]}>
               Referral history
             </Text>
             {isLoading ? (
-              <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+              <Text style={{ color: Acid.tx2, marginTop: 8 }}>
                 loading history
               </Text>
             ) : rows.length === 0 ? (
-              <Text style={{ color: theme.colors.textSecondary, marginTop: 8 }}>
+              <Text style={{ color: Acid.tx2, marginTop: 8 }}>
                 no referrals yet share your code to start earning
               </Text>
             ) : (
               <View style={styles.table}>
                 <View style={styles.tableHeader}>
-                  <Text style={[styles.tableHeaderText, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.tableHeaderText, { color: Acid.tx2 }]}>
                     Friend
                   </Text>
-                  <Text style={[styles.tableHeaderText, { color: theme.colors.textSecondary }]}>
+                  <Text style={[styles.tableHeaderText, { color: Acid.tx2 }]}>
                     Days
                   </Text>
                 </View>
                 {rows.map((row) => (
                   <View key={row.id} style={styles.tableRow}>
-                    <Text style={[styles.tableCellText, { color: theme.colors.textPrimary }]}>
+                    <Text style={[styles.tableCellText, { color: Acid.tx }]}>
                       {row.friendName}
                     </Text>
-                    <Text style={[styles.tableCellText, { color: theme.colors.primary }]}>
+                    <Text style={[styles.tableCellText, { color: Acid.lime }]}>
                       {row.entries > 0 ? `+${row.entries}` : '+0'}
                     </Text>
                   </View>
@@ -301,7 +299,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
   },
   actionButtonText: {
-    color: Colors.white,
+    color: Acid.moss,
     fontSize: Typography.fontSize.sm,
     fontWeight: Typography.fontWeight.semiBold,
   },
@@ -387,7 +385,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 24,
   },
   primaryButtonText: {
-    color: Colors.white,
+    color: Acid.moss,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },

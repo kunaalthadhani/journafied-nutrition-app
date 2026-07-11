@@ -2,7 +2,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { Feather } from '@expo/vector-icons';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 
 interface SmartAdjustmentBannerProps {
@@ -11,29 +11,26 @@ interface SmartAdjustmentBannerProps {
     visible: boolean;
 }
 
-export const SmartAdjustmentBanner: React.FC<SmartAdjustmentBannerProps> = ({ onPress, onClose, visible }) => {
-    const theme = useTheme();
-
-    if (!visible) return null;
+export const SmartAdjustmentBanner: React.FC<SmartAdjustmentBannerProps> = ({ onPress, onClose, visible }) => {    if (!visible) return null;
 
     return (
         <TouchableOpacity
             activeOpacity={0.9}
             onPress={onPress}
-            style={[styles.container, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: theme.colors.primary }]}
+            style={[styles.container, { backgroundColor: 'rgba(59, 130, 246, 0.1)', borderColor: Acid.lime }]}
         >
             <View style={styles.content}>
-                <View style={[styles.iconContainer, { backgroundColor: theme.colors.primary }]}>
+                <View style={[styles.iconContainer, { backgroundColor: Acid.lime }]}>
                     <Feather name="activity" size={18} color="white" />
                 </View>
                 <View style={styles.textContainer}>
-                    <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Smart Plan Update Available</Text>
-                    <Text style={[styles.subtitle, { color: theme.colors.textSecondary }]}>Prevent plateaus with new targets</Text>
+                    <Text style={[styles.title, { color: Acid.tx }]}>Smart Plan Update Available</Text>
+                    <Text style={[styles.subtitle, { color: Acid.tx2 }]}>Prevent plateaus with new targets</Text>
                 </View>
             </View>
 
             <TouchableOpacity onPress={onClose} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-                <Feather name="x" size={18} color={theme.colors.textTertiary} />
+                <Feather name="x" size={18} color={Acid.tx3} />
             </TouchableOpacity>
         </TouchableOpacity>
     );

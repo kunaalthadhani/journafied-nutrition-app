@@ -8,7 +8,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-gesture-handler';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { PasswordRecoveryModal } from './src/components/PasswordRecoveryModal';
-import { Colors } from './src/constants/colors';
+import { Acid } from './src/constants/acid';
 import { ThemeProvider } from './src/constants/theme';
 import { PreferencesProvider } from './src/contexts/PreferencesContext';
 import { UserProvider } from './src/contexts/UserContext';
@@ -79,7 +79,7 @@ export default Sentry.wrap(function App() {
             <NavigationContainer>
               <HomeScreen />
               <PasswordRecoveryModal />
-              <StatusBar style="dark" backgroundColor={Colors.white} />
+              <StatusBar style="light" backgroundColor={Acid.moss} />
             </NavigationContainer>
           </UserProvider>
         </PreferencesProvider>

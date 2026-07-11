@@ -15,7 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { feedbackService, FeedbackCategory } from '../services/feedbackService';
 
 interface FeedbackModalProps {
@@ -30,7 +30,6 @@ const CATEGORIES: Array<{ key: FeedbackCategory; label: string; icon: keyof type
 ];
 
 export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }) => {
-    const theme = useTheme();
     const [category, setCategory] = useState<FeedbackCategory>('general');
     const [message, setMessage] = useState('');
     const [email, setEmail] = useState('');
@@ -74,7 +73,7 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
 
     return (
         <Modal visible={visible} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleDismiss}>
-            <SafeAreaView style={[st.safe, { backgroundColor: theme.colors.background }]} edges={['top', 'bottom']}>
+            <SafeAreaView style={[st.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
                 <KeyboardAvoidingView
                     behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
                     style={{ flex: 1 }}
@@ -82,19 +81,19 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
                 >
                     <View style={st.header}>
                         <TouchableOpacity onPress={handleDismiss} hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}>
-                            <Feather name="x" size={24} color={theme.colors.textTertiary} />
+                            <Feather name="x" size={24} color={Acid.tx3} />
                         </TouchableOpacity>
-                        <Text style={[st.title, { color: theme.colors.textPrimary }]}>Send feedback</Text>
+                        <Text style={[st.title, { color: Acid.tx }]}>Send feedback</Text>
                         <View style={{ width: 24 }} />
                     </View>
 
                     {done ? (
                         <View style={st.successWrap}>
-                            <View style={[st.successIcon, { backgroundColor: theme.colors.success + '15' }]}>
-                                <Feather name="check" size={40} color={theme.colors.success} />
+                            <View style={[st.successIcon, { backgroundColor: Acid.good + '15' }]}>
+                                <Feather name="check" size={40} color={Acid.good} />
                             </View>
-                            <Text style={[st.successTitle, { color: theme.colors.textPrimary }]}>Got it</Text>
-                            <Text style={[st.successSub, { color: theme.colors.textSecondary }]}>Thanks. We read every one.</Text>
+                            <Text style={[st.successTitle, { color: Acid.tx }]}>Got it</Text>
+                            <Text style={[st.successSub, { color: Acid.tx2 }]}>Thanks. We read every one.</Text>
                         </View>
                     ) : (
                         <ScrollView
@@ -103,12 +102,12 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
                             keyboardShouldPersistTaps="handled"
                             showsVerticalScrollIndicator={false}
                         >
-                            <Text style={[st.lede, { color: theme.colors.textSecondary }]}>
+                            <Text style={[st.lede, { color: Acid.tx2 }]}>
                                 Tell us what's working, what isn't, or what you'd love to see.
                             </Text>
 
                             {/* Category picker */}
-                            <Text style={[st.label, { color: theme.colors.textPrimary }]}>What's this about?</Text>
+                            <Text style={[st.label, { color: Acid.tx }]}>What's this about?</Text>
                             <View style={st.categoryRow}>
                                 {CATEGORIES.map((c) => {
                                     const active = category === c.key;
@@ -120,20 +119,20 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
                                             style={[
                                                 st.categoryCard,
                                                 {
-                                                    backgroundColor: active ? theme.colors.primary : theme.colors.card,
-                                                    borderColor: active ? theme.colors.primary : theme.colors.border,
+                                                    backgroundColor: active ? Acid.lime : Acid.mossDeep,
+                                                    borderColor: active ? Acid.lime : Acid.hair,
                                                 },
                                             ]}
                                         >
                                             <Feather
                                                 name={c.icon}
                                                 size={18}
-                                                color={active ? theme.colors.primaryForeground : theme.colors.textPrimary}
+                                                color={active ? Acid.moss : Acid.tx}
                                             />
                                             <Text
                                                 style={[
                                                     st.categoryLabel,
-                                                    { color: active ? theme.colors.primaryForeground : theme.colors.textPrimary },
+                                                    { color: active ? Acid.moss : Acid.tx },
                                                 ]}
                                             >
                                                 {c.label}
@@ -142,40 +141,40 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
                                     );
                                 })}
                             </View>
-                            <Text style={[st.categoryHint, { color: theme.colors.textTertiary }]}>
+                            <Text style={[st.categoryHint, { color: Acid.tx3 }]}>
                                 {CATEGORIES.find((c) => c.key === category)?.description}
                             </Text>
 
                             {/* Message */}
-                            <Text style={[st.label, { color: theme.colors.textPrimary, marginTop: 24 }]}>Your message</Text>
-                            <View style={[st.textareaWrap, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                            <Text style={[st.label, { color: Acid.tx, marginTop: 24 }]}>Your message</Text>
+                            <View style={[st.textareaWrap, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
                                 <TextInput
                                     multiline
                                     value={message}
                                     onChangeText={setMessage}
                                     placeholder="The more specific, the better."
-                                    placeholderTextColor={theme.colors.textTertiary}
-                                    style={[st.textarea, { color: theme.colors.textPrimary }]}
+                                    placeholderTextColor={Acid.tx3}
+                                    style={[st.textarea, { color: Acid.tx }]}
                                     maxLength={4000}
                                     textAlignVertical="top"
                                 />
                             </View>
-                            <Text style={[st.counter, { color: theme.colors.textTertiary }]}>{message.length}/4000</Text>
+                            <Text style={[st.counter, { color: Acid.tx3 }]}>{message.length}/4000</Text>
 
                             {/* Email (optional) */}
-                            <Text style={[st.label, { color: theme.colors.textPrimary, marginTop: 20 }]}>
-                                Email <Text style={{ color: theme.colors.textTertiary, fontWeight: '500' }}>(optional, if you want a reply)</Text>
+                            <Text style={[st.label, { color: Acid.tx, marginTop: 20 }]}>
+                                Email <Text style={{ color: Acid.tx3, fontWeight: '500' }}>(optional, if you want a reply)</Text>
                             </Text>
-                            <View style={[st.inputWrap, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+                            <View style={[st.inputWrap, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
                                 <TextInput
                                     value={email}
                                     onChangeText={setEmail}
                                     placeholder="you@example.com"
-                                    placeholderTextColor={theme.colors.textTertiary}
+                                    placeholderTextColor={Acid.tx3}
                                     keyboardType="email-address"
                                     autoCapitalize="none"
                                     autoCorrect={false}
-                                    style={[st.input, { color: theme.colors.textPrimary }]}
+                                    style={[st.input, { color: Acid.tx }]}
                                 />
                             </View>
 
@@ -184,23 +183,23 @@ export const FeedbackModal: React.FC<FeedbackModalProps> = ({ visible, onClose }
                     )}
 
                     {!done && (
-                        <View style={[st.footer, { borderTopColor: theme.colors.border, backgroundColor: theme.colors.background }]}>
+                        <View style={[st.footer, { borderTopColor: Acid.hair, backgroundColor: Acid.moss }]}>
                             <TouchableOpacity
                                 onPress={handleSubmit}
                                 disabled={!canSubmit}
                                 style={[
                                     st.submitBtn,
                                     {
-                                        backgroundColor: canSubmit ? theme.colors.primary : theme.colors.secondaryBg,
+                                        backgroundColor: canSubmit ? Acid.lime : Acid.mossDeep,
                                         opacity: canSubmit ? 1 : 0.6,
                                     },
                                 ]}
                                 activeOpacity={0.85}
                             >
                                 {submitting ? (
-                                    <ActivityIndicator color={theme.colors.primaryForeground} />
+                                    <ActivityIndicator color={Acid.moss} />
                                 ) : (
-                                    <Text style={[st.submitTxt, { color: canSubmit ? theme.colors.primaryForeground : theme.colors.textTertiary }]}>
+                                    <Text style={[st.submitTxt, { color: canSubmit ? Acid.moss : Acid.tx3 }]}>
                                         Send feedback
                                     </Text>
                                 )}

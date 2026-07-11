@@ -13,7 +13,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 interface SidebarMenuProps {
   visible: boolean;
@@ -39,9 +39,7 @@ interface MenuItemProps {
   isBottom?: boolean;
 }
 
-const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isBottom }) => {
-  const theme = useTheme();
-  const scaleAnim = useRef(new Animated.Value(1)).current;
+const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isBottom }) => {  const scaleAnim = useRef(new Animated.Value(1)).current;
   const [isPressed, setIsPressed] = useState(false);
 
   const handlePressIn = () => {
@@ -69,7 +67,7 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
       <TouchableOpacity
         style={[
           styles.menuItem,
-          (isActive || isPressed) && { backgroundColor: theme.colors.accentBg },
+          (isActive || isPressed) && { backgroundColor: Acid.limeSoft },
           isBottom && styles.bottomMenuItem,
         ]}
         onPress={onPress}
@@ -80,13 +78,13 @@ const MenuItem: React.FC<MenuItemProps> = ({ icon, label, onPress, isActive, isB
         <Feather
           name={icon as any}
           size={20}
-          color={isActive || isPressed ? theme.colors.accent : theme.colors.textPrimary}
+          color={isActive || isPressed ? Acid.lime : Acid.tx}
         />
         <Text
           style={[
             styles.menuText,
             {
-              color: isActive || isPressed ? theme.colors.accent : theme.colors.textPrimary,
+              color: isActive || isPressed ? Acid.lime : Acid.tx,
             },
           ]}
         >
@@ -112,7 +110,6 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
 
   onHowItWorks,
 }) => {
-  const theme = useTheme();
   const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = useWindowDimensions();
   const insets = useSafeAreaInsets();
   const SIDEBAR_WIDTH = SCREEN_WIDTH * 0.75;
@@ -253,8 +250,8 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             styles.sidebar,
             {
               width: SIDEBAR_WIDTH,
-              backgroundColor: theme.colors.card,
-              borderRightColor: theme.colors.border,
+              backgroundColor: Acid.mossDeep,
+              borderRightColor: Acid.hair,
               transform: [{ translateX: slideAnim }],
             },
           ]}
@@ -264,7 +261,7 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
               {/* Header */}
               <View style={styles.header}>
                 <TouchableOpacity onPress={handleSecretTap} activeOpacity={0.7}>
-                  <Text style={[styles.headerTitle, { color: theme.colors.textPrimary }]}>
+                  <Text style={[styles.headerTitle, { color: Acid.tx }]}>
                     Menu
                   </Text>
                 </TouchableOpacity>
@@ -273,12 +270,12 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   style={styles.closeButton}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
-                  <Feather name="x" size={24} color={theme.colors.textPrimary} />
+                  <Feather name="x" size={24} color={Acid.tx} />
                 </TouchableOpacity>
               </View>
 
               {/* Separator */}
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+              <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
 
               {/* Main Menu Items */}
               <View style={styles.menuSection}>
@@ -288,14 +285,14 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
                   onPress={handleSetGoals}
                 />
                 {/* Separator between Set Goals and Weight Tracker */}
-                <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
                 <MenuItem
                   icon="trending-up"
                   label="Weight Tracker"
                   onPress={handleWeightTracker}
                 />
                 {/* Separator between Weight Tracker and Nutrition Analysis */}
-                <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+                <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
                 <MenuItem
                   icon="bar-chart-2"
                   label="Nutrition Analysis"
@@ -305,15 +302,15 @@ export const SidebarMenu: React.FC<SidebarMenuProps> = ({
             </View>
 
             {/* Bottom Menu Items */}
-            <View style={[styles.bottomSection, { borderTopColor: theme.colors.border }]}>
+            <View style={[styles.bottomSection, { borderTopColor: Acid.hair }]}>
               <MenuItem icon="message-circle" label="Send Feedback" onPress={handleFeedback} isBottom />
 
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+              <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
               <MenuItem icon="book-open" label="How it Works" onPress={() => { onHowItWorks?.(); onClose(); }} isBottom />
 
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+              <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
               <MenuItem icon="users" label="Refer Friends" onPress={handleReferral} isBottom />
-              <View style={[styles.separator, { backgroundColor: theme.colors.border }]} />
+              <View style={[styles.separator, { backgroundColor: Acid.hair }]} />
               <MenuItem icon="settings" label="Settings" onPress={handleSettings} isBottom />
             </View>
           </View>

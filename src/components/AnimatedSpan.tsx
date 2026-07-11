@@ -1,6 +1,6 @@
 import React, { useEffect, useRef } from 'react';
 import { Animated, Text, TextStyle, TextProps } from 'react-native';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 interface AnimatedSpanProps {
   children: React.ReactNode;
@@ -19,7 +19,6 @@ export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
   numberOfLines,
   ellipsizeMode,
 }) => {
-  const theme = useTheme();
   const opacity = useRef(new Animated.Value(0)).current;
   const translateY = useRef(new Animated.Value(-10)).current;
 
@@ -47,7 +46,7 @@ export const AnimatedSpan: React.FC<AnimatedSpanProps> = ({
     <Animated.Text
       style={[
         {
-          color: theme.colors.textPrimary,
+          color: Acid.tx,
           opacity,
           transform: [{ translateY }],
         },

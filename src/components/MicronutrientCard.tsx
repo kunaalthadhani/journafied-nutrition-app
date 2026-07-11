@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 import { dataStorage, DailySummary } from '../services/dataStorage';
 import { ChartRange, getRangeWindow, rangeLabel } from '../utils/chartRange';
 import {
@@ -29,11 +29,11 @@ interface Row {
 }
 
 const STATUS_COLORS: Record<MicroStatus, string> = {
-  deficient: '#EF4444',
-  low: '#F59E0B',
-  on_track: '#10B981',
-  over: '#F59E0B',
-  way_over: '#EF4444',
+  deficient: Acid.error,
+  low: Acid.carbs,
+  on_track: Acid.good,
+  over: Acid.carbs,
+  way_over: Acid.error,
 };
 
 const ORDER: Array<{ key: keyof MicroTargetSet; label: string; summaryKey: keyof DailySummary }> = [
@@ -64,7 +64,6 @@ function formatValue(value: number, unit: MicroTarget['unit']): string {
 }
 
 export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesByDate, timeRange }) => {
-  const theme = useTheme();
   const [targets, setTargets] = useState<MicroTargetSet | null>(null);
 
   useEffect(() => {
@@ -135,15 +134,15 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
   }
 
   return (
-    <View style={[styles.card, { backgroundColor: theme.colors.card }]}>
+    <View style={[styles.card, { backgroundColor: Acid.mossDeep }]}>
       <View style={styles.headerRow}>
-        <Text style={[styles.title, { color: theme.colors.textPrimary }]}>Micronutrients</Text>
+        <Text style={[styles.title, { color: Acid.tx }]}>Micronutrients</Text>
         <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={handleInfo}>
-          <Feather name="info" size={13} color={theme.colors.textTertiary} />
+          <Feather name="info" size={13} color={Acid.tx3} />
         </TouchableOpacity>
       </View>
 
-      <Text style={{ fontSize: 12, color: theme.colors.textSecondary, marginBottom: 16 }}>
+      <Text style={{ fontSize: 12, color: Acid.tx2, marginBottom: 16 }}>
         {subtitle}
       </Text>
 
@@ -155,16 +154,16 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
 
           return (
             <View key={row.key} style={styles.row}>
-              <Text style={[styles.rowLabel, { color: theme.colors.textPrimary }]}>{row.label}</Text>
+              <Text style={[styles.rowLabel, { color: Acid.tx }]}>{row.label}</Text>
 
               <View style={{ flex: 1, paddingHorizontal: 10 }}>
-                <View style={[styles.barTrack, { backgroundColor: theme.colors.input }]}>
+                <View style={[styles.barTrack, { backgroundColor: Acid.mossDeep }]}>
                   <View style={[styles.barFill, { width: `${barWidth}%`, backgroundColor: barColor }]} />
                 </View>
               </View>
 
               <View style={styles.rowValue}>
-                <Text style={{ fontSize: 11, color: theme.colors.textSecondary }}>
+                <Text style={{ fontSize: 11, color: Acid.tx2 }}>
                   {formatValue(row.actual, row.target.unit)} / {formatValue(row.target.value, row.target.unit)}{row.target.unit}
                 </Text>
                 <Text style={{ fontSize: 10, fontWeight: '700', color: barColor }}>
@@ -176,7 +175,7 @@ export const MicronutrientCard: React.FC<MicronutrientCardProps> = ({ summariesB
         })}
       </View>
 
-      <Text style={[styles.disclaimer, { color: theme.colors.textTertiary }]}>
+      <Text style={[styles.disclaimer, { color: Acid.tx3 }]}>
         Estimates from your food log. For medical concerns, talk to a doctor.
       </Text>
     </View>

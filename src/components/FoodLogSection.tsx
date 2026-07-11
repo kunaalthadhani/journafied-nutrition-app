@@ -6,7 +6,6 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
 import { ParsedFood } from '../utils/foodNutrition';
-import { useTheme } from '../constants/theme';
 import { Acid } from '../constants/acid';
 import { MealEntry } from '../services/dataStorage';
 import { SavedPrompt } from '../services/dataStorage';
@@ -24,7 +23,7 @@ interface FoodLogSectionProps {
   onUpdateFood?: (mealId: string, updatedFood: ParsedFood) => void;
 }
 
-const AnimatedBookmarkButton = ({ isSaved, onPress, theme }: { isSaved: boolean, onPress: () => void, theme: any }) => {
+const AnimatedBookmarkButton = ({ isSaved, onPress }: { isSaved: boolean, onPress: () => void }) => {
   const scale = React.useRef(new Animated.Value(1)).current;
 
   const handlePress = () => {
@@ -39,9 +38,9 @@ const AnimatedBookmarkButton = ({ isSaved, onPress, theme }: { isSaved: boolean,
     <TouchableOpacity onPress={handlePress} style={styles.iconButton}>
       <Animated.View style={{ transform: [{ scale }] }}>
         {isSaved ? (
-          <BookmarkCheck size={14} color={theme.colors.textPrimary} />
+          <BookmarkCheck size={14} color={Acid.tx} />
         ) : (
-          <BookmarkPlus size={14} color={theme.colors.textSecondary} />
+          <BookmarkPlus size={14} color={Acid.tx2} />
         )}
       </Animated.View>
     </TouchableOpacity>
@@ -91,7 +90,7 @@ const RotatingTitle: React.FC<{ style: any }> = ({ style }) => {
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
 // Macro colors from design system
-const MACRO_COLORS = { protein: '#3B82F6', carbs: '#F59E0B', fat: '#8B5CF6' };
+const MACRO_COLORS = { protein: Acid.protein, carbs: Acid.carbs, fat: Acid.fat };
 
 const NUTRIENT_ROWS: { label: string; key: string; unit: string; isHeader?: boolean; indent?: number }[] = [
   { label: 'Total Carbohydrates', key: 'carbs', unit: 'g', isHeader: true },
@@ -130,9 +129,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
   onToggleSavePrompt,
   onDeleteMeal,
   onUpdateFood,
-}) => {
-  const theme = useTheme();
-  const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
+}) => {  const [selectedFood, setSelectedFood] = useState<ParsedFood | null>(null);
   const [baseFood, setBaseFood] = useState<ParsedFood | null>(null);
   const [selectedMealId, setSelectedMealId] = useState<string | null>(null);
   const [editingMealId, setEditingMealId] = useState<string | null>(null);
@@ -256,22 +253,22 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
       <View style={styles.container}>
         {meals.map((meal) => {
           return (
-            <View key={meal.id} style={[styles.mealCard, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
+            <View key={meal.id} style={styles.mealCard}>
               {/* Header with Prompt / Image */}
-              <View style={[styles.cardHeader, { borderBottomColor: theme.colors.border }]}>
+              <View style={styles.cardHeader}>
                 {meal.imageUri ? (
                   <View style={styles.imageHeader}>
                     <Image
                       source={{ uri: meal.imageUri }}
-                      style={[styles.thumbnail, { borderColor: theme.colors.border }]}
+                      style={[styles.thumbnail, { borderColor: Acid.hair }]}
                       resizeMode="cover"
                     />
                     <View style={styles.imageHeaderText}>
                       {meal.isLoading ? (
-                        <RotatingTitle style={[styles.promptText, { color: theme.colors.textSecondary, fontStyle: 'italic' }]} />
+                        <RotatingTitle style={[styles.promptText, { color: Acid.tx2, fontStyle: 'italic' }]} />
                       ) : (
                         <Text
-                          style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
+                          style={[styles.promptText, { color: Acid.tx, fontStyle: 'italic' }]}
                           numberOfLines={2}
                         >
                           {meal.summary || meal.prompt || "Food from image"}
@@ -284,7 +281,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     {editingMealId === meal.id ? (
                       <View style={styles.editContainer}>
                         <TextInput
-                          style={[styles.promptInput, { color: theme.colors.textPrimary, borderColor: theme.colors.border }]}
+                          style={styles.promptInput} selectionColor={Acid.lime}
                           value={editedPrompt}
                           onChangeText={setEditedPrompt}
                           autoFocus
@@ -292,16 +289,16 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                           returnKeyType="done"
                         />
                         <TouchableOpacity onPress={handleSavePrompt} style={styles.iconButton}>
-                          <Feather name="check" size={16} color={theme.colors.primary} />
+                          <Feather name="check" size={16} color={Acid.lime} />
                         </TouchableOpacity>
                         <TouchableOpacity onPress={handleCancelEditPrompt} style={styles.iconButton}>
-                          <Feather name="x" size={16} color={theme.colors.textTertiary} />
+                          <Feather name="x" size={16} color={Acid.tx3} />
                         </TouchableOpacity>
                       </View>
                     ) : (
                       <View style={styles.promptDisplay}>
                         <Text
-                          style={[styles.promptText, { color: theme.colors.textPrimary, fontStyle: 'italic' }]}
+                          style={[styles.promptText, { color: Acid.tx, fontStyle: 'italic' }]}
                           numberOfLines={2}
                         >
                           {meal.isLoading ? '' : (meal.summary || meal.prompt)}
@@ -312,12 +309,11 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                               <AnimatedBookmarkButton
                                 isSaved={savedPromptLookup.has((meal.prompt || '').trim().toLowerCase())}
                                 onPress={() => onToggleSavePrompt(meal)}
-                                theme={theme}
                               />
                             )}
                             {onEditMealPrompt && (
                               <TouchableOpacity onPress={() => handleStartEditPrompt(meal)} style={styles.iconButton}>
-                                <Feather name="edit-2" size={12} color={theme.colors.textSecondary} />
+                                <Feather name="edit-2" size={12} color={Acid.tx2} />
                               </TouchableOpacity>
                             )}
                           </View>
@@ -331,7 +327,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     onPress={() => onDeleteMeal(meal.id)}
                     style={styles.deleteMealButton}
                   >
-                    <Feather name="trash-2" size={14} color={theme.colors.textTertiary} />
+                    <Feather name="trash-2" size={14} color={Acid.tx3} />
                   </TouchableOpacity>
                 )}
               </View>
@@ -340,11 +336,11 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
               {meal.isLoading ? (
                 <View style={{ padding: 16, gap: 8 }}>
                   <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: theme.colors.border, opacity: 0.5 }} />
+                    <View style={{ width: '60%', height: 12, borderRadius: 6, backgroundColor: Acid.hair, opacity: 0.5 }} />
                   </View>
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <ActivityIndicator size="small" color={theme.colors.primary} />
-                    <Text style={{ fontSize: 12, color: theme.colors.textSecondary, fontStyle: 'italic' }}>
+                    <ActivityIndicator size="small" color={Acid.lime} />
+                    <Text style={{ fontSize: 12, color: Acid.tx2, fontStyle: 'italic' }}>
                       {getParsingMessage()}
                     </Text>
                   </View>
@@ -356,17 +352,17 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                       key={food.id}
                       style={[
                         styles.foodItem,
-                        { borderBottomWidth: 1, borderBottomColor: theme.colors.lightBorder }
+                        { borderBottomWidth: 1, borderBottomColor: Acid.hair }
                       ]}
                       onPress={() => handleFoodPress(meal.id, food)}
                     >
                       <View style={styles.foodInfo}>
-                        <Text style={[styles.foodName, { color: theme.colors.textPrimary }]}>
+                        <Text style={[styles.foodName, { color: Acid.tx }]}>
                           {food.name}
-                          <Text style={[styles.foodWeight, { color: theme.colors.textSecondary }]}> · {food.weight_g}g</Text>
+                          <Text style={[styles.foodWeight, { color: Acid.tx2 }]}> · {food.weight_g}g</Text>
                         </Text>
                         <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap', gap: 6, marginTop: 2 }}>
-                          <Text style={[styles.foodMacros, { color: theme.colors.textSecondary }]}>
+                          <Text style={[styles.foodMacros, { color: Acid.tx2 }]}>
                             {Math.round(food.calories)} kcal ·{' '}
                             <Text style={{ color: MACRO_COLORS.protein }}>P:{Math.round(food.protein)}</Text>{' '}
                             <Text style={{ color: MACRO_COLORS.carbs }}>C:{Math.round(food.carbs)}</Text>{' '}
@@ -379,7 +375,7 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                           />
                         </View>
                       </View>
-                      <Feather name="chevron-right" size={14} color={theme.colors.textTertiary} />
+                      <Feather name="chevron-right" size={14} color={Acid.tx3} />
                     </TouchableOpacity>
                   ))}
                   {/* Meal totals */}
@@ -389,9 +385,9 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
                     const totC = Math.round(meal.foods.reduce((s, f) => s + (f.carbs || 0), 0));
                     const totF = Math.round(meal.foods.reduce((s, f) => s + (f.fat || 0), 0));
                     return (
-                      <View style={[styles.mealTotalRow, { backgroundColor: theme.colors.secondaryBg }]}>
-                        <Text style={[styles.mealTotalCal, { color: theme.colors.textPrimary }]}>{totCal} kcal</Text>
-                        <Text style={[styles.mealTotalMacros, { color: theme.colors.textSecondary }]}>
+                      <View style={styles.mealTotalRow}>
+                        <Text style={[styles.mealTotalCal, { color: Acid.tx }]}>{totCal} kcal</Text>
+                        <Text style={[styles.mealTotalMacros, { color: Acid.tx2 }]}>
                           <Text style={{ color: MACRO_COLORS.protein }}>P:{totP}</Text>{' '}
                           <Text style={{ color: MACRO_COLORS.carbs }}>C:{totC}</Text>{' '}
                           <Text style={{ color: MACRO_COLORS.fat }}>F:{totF}</Text>
@@ -674,17 +670,16 @@ const styles = StyleSheet.create({
   },
   mealCard: {
     marginBottom: Spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
-    overflow: 'hidden',
+    borderBottomWidth: 1,
+    borderBottomColor: Acid.hair,
+    paddingBottom: 4,
   },
   cardHeader: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     justifyContent: 'space-between',
-    padding: 12,
-    backgroundColor: 'rgba(0,0,0,0.02)',
-    borderBottomWidth: 1,
+    paddingVertical: 10,
+    paddingHorizontal: 4,
   },
   imageHeader: {
     flexDirection: 'row',
@@ -711,9 +706,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   promptText: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.medium,
-    lineHeight: 20,
+    fontFamily: Acid.serifItalic,
+    fontSize: 15,
+    lineHeight: 21,
   },
   promptActions: {
     flexDirection: 'row',
@@ -728,10 +723,11 @@ const styles = StyleSheet.create({
   promptInput: {
     flex: 1,
     fontSize: Typography.fontSize.sm,
-    borderWidth: 1,
-    borderRadius: 6,
+    color: Acid.tx,
+    borderBottomWidth: 1.5,
+    borderBottomColor: Acid.lime,
     paddingVertical: 4,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     marginRight: 6,
   },
   iconButton: {
@@ -748,7 +744,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingHorizontal: 4,
     paddingVertical: 12,
   },
   foodInfo: {
@@ -769,14 +765,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 16,
+    paddingHorizontal: 4,
     paddingVertical: 10,
-    borderBottomLeftRadius: 12,
-    borderBottomRightRadius: 12,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Acid.hair,
   },
   mealTotalCal: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: '700' as const,
+    fontFamily: Acid.serif,
+    fontSize: 16,
   },
   mealTotalMacros: {
     fontSize: Typography.fontSize.xs,

@@ -11,7 +11,7 @@ import {
 import { format, addDays, subDays, isSameDay } from 'date-fns';
 import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
-import { useTheme } from '../constants/theme';
+import { Acid } from '../constants/acid';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 const SWIPE_THRESHOLD = SCREEN_WIDTH * 0.3; // 30% of screen width to trigger swipe
@@ -27,9 +27,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
   selectedDate,
   onDateChange,
   children,
-}) => {
-  const theme = useTheme();
-  const translateX = useRef(new Animated.Value(0)).current;
+}) => {  const translateX = useRef(new Animated.Value(0)).current;
   const overlayOpacity = useRef(new Animated.Value(0)).current;
   const contentOpacity = useRef(new Animated.Value(1)).current;
   const [isAnimating, setIsAnimating] = useState(false);
@@ -201,16 +199,16 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
             styles.transitionOverlay,
             {
               opacity: overlayOpacity,
-              backgroundColor: theme.colors.overlay,
+              backgroundColor: 'rgba(0,0,0,0.55)',
             },
           ]}
           pointerEvents="none"
         >
-          <View style={[styles.dateTransition, { backgroundColor: theme.colors.card, borderColor: theme.colors.border }]}>
-            <Text style={[styles.transitionDate, { color: theme.colors.textPrimary }]}>
+          <View style={[styles.dateTransition, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+            <Text style={[styles.transitionDate, { color: Acid.tx }]}>
               {format(pendingDate || selectedDate, 'MMM d, yyyy')}
             </Text>
-            <Text style={[styles.transitionDay, { color: theme.colors.textSecondary }]}>
+            <Text style={[styles.transitionDay, { color: Acid.tx2 }]}>
               {format(pendingDate || selectedDate, 'EEEE')}
             </Text>
           </View>
@@ -219,7 +217,7 @@ export const DaySwiper: React.FC<DaySwiperProps> = ({
 
       {/* Date indicators */}
       <View style={styles.dateIndicator}>
-        <View style={[styles.indicatorDot, { backgroundColor: theme.colors.textTertiary }]} />
+        <View style={[styles.indicatorDot, { backgroundColor: Acid.tx3 }]} />
       </View>
     </View>
   );
