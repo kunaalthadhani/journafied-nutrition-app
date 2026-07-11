@@ -1543,31 +1543,46 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     </View>
                   )}
 
-                  {/* Calories History Table */}
+                  {/* Calories ledger — same anatomy as the weight tracker history */}
                   {caloriesHistory.length > 0 && (
-                    <View style={[styles.historyContainer, { borderColor: Acid.hair }]}>
-                      <Text style={[styles.historyTitle, { color: Acid.tx }]}>
-                        History
-                      </Text>
-                      <View style={styles.historyHeaderSpacer} />
-                      {/* Fixed Spacer issue if needed, but keeping basic structure */}
-                      {caloriesHistory.map((entry) => (
-                        <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
-                          <Text style={[styles.historyCellText, { color: Acid.tx2 }]}>
-                            {format(entry.date, 'd MMM yyyy')}
-                          </Text>
-                          <Text style={[styles.historyCellText, { color: Acid.tx, textAlign: 'right' }]}>
-                            {`${entry.calories.toFixed(0)} Kcal`}
-                          </Text>
-                          <TouchableOpacity
-                            onPress={() => onRequestLogMealForDate?.(entry.date)}
-                            style={{ padding: 4, marginLeft: 6 }}
-                            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                          >
-                            <Feather name="edit-2" size={14} color={Acid.tx2} />
-                          </TouchableOpacity>
-                        </View>
-                      ))}
+                    <View style={styles.historyContainer}>
+                      <View style={styles.ledgerHeaderRow}>
+                        <Text style={styles.ledgerHeaderText}>RECENT DAYS</Text>
+                        <Text style={styles.ledgerHeaderText}>
+                          {`AVG ${Math.round(caloriesHistory.reduce((a, e) => a + e.calories, 0) / caloriesHistory.length).toLocaleString()} KCAL / DAY`}
+                        </Text>
+                      </View>
+                      {caloriesHistory.map((entry) => {
+                        const diff = targetCalories !== undefined ? Math.round(entry.calories - targetCalories) : null;
+                        return (
+                          <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
+                            <Text style={styles.ledgerDate}>
+                              {format(entry.date, 'd MMM')}
+                            </Text>
+                            <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline' }}>
+                              <Text style={styles.ledgerValue}>{entry.calories.toFixed(0)}</Text>
+                              <Text style={styles.ledgerUnit}> kcal</Text>
+                            </View>
+                            {diff !== null && Math.abs(diff) > 0 && (
+                              <Text style={{ fontSize: 12, fontWeight: '600', marginRight: 12, color: diff <= 0 ? Acid.good : Acid.carbs }}>
+                                {`${diff <= 0 ? '▾' : '▴'} ${Math.abs(diff).toLocaleString()}`}
+                              </Text>
+                            )}
+                            <TouchableOpacity
+                              onPress={() => onRequestLogMealForDate?.(entry.date)}
+                              style={{ padding: 4 }}
+                              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                            >
+                              <Feather name="edit-2" size={14} color={Acid.tx3} />
+                            </TouchableOpacity>
+                          </View>
+                        );
+                      })}
+                      <TouchableOpacity onPress={() => onRequestLogMeal?.()} activeOpacity={0.7} style={{ paddingVertical: 16 }}>
+                        <Text style={{ fontSize: 12, letterSpacing: 1.5, color: Acid.lime, fontWeight: '600' }}>
+                          LOG A MEAL →
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
@@ -1936,47 +1951,32 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
                     );
                   })()}
 
-                  {/* Macros History Table */}
+                  {/* Macros ledger — same anatomy as the weight tracker history */}
                   {macrosHistory.length > 0 && (
-                    <View style={[styles.historyContainer, { borderColor: Acid.hair }]}>
-                      <Text style={[styles.historyTitle, { color: Acid.tx }]}>
-                        History
-                      </Text>
-                      <View style={styles.historyHeaderRow}>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, flex: 1.5 }]}>
-                          Date
-                        </Text>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
-                          Protein
-                        </Text>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
-                          Carbs
-                        </Text>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2, textAlign: 'right' }]}>
-                          Fat
-                        </Text>
-                        <View style={{ width: 28 }} />
+                    <View style={styles.historyContainer}>
+                      <View style={styles.ledgerHeaderRow}>
+                        <Text style={styles.ledgerHeaderText}>RECENT DAYS</Text>
+                        <View style={{ flexDirection: 'row' }}>
+                          <Text style={[styles.ledgerColHead, { color: Acid.protein }]}>PROTEIN</Text>
+                          <Text style={[styles.ledgerColHead, { color: Acid.carbs }]}>CARBS</Text>
+                          <Text style={[styles.ledgerColHead, { color: Acid.fat }]}>FAT</Text>
+                          <View style={{ width: 22 }} />
+                        </View>
                       </View>
                       {macrosHistory.map((entry) => (
                         <View key={entry.date.toISOString()} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
-                          <Text style={[styles.historyCellText, { color: Acid.tx2, flex: 1.5 }]}>
-                            {format(entry.date, 'd MMM yyyy')}
+                          <Text style={[styles.ledgerDate, { flex: 1 }]}>
+                            {format(entry.date, 'd MMM')}
                           </Text>
-                          <Text style={[styles.historyCellText, { color: Acid.lime, textAlign: 'right' }]}>
-                            {`${entry.protein.toFixed(0)}g`}
-                          </Text>
-                          <Text style={[styles.historyCellText, { color: Acid.tx2, textAlign: 'right' }]}>
-                            {`${entry.carbs.toFixed(0)}g`}
-                          </Text>
-                          <Text style={[styles.historyCellText, { color: Acid.tx3, textAlign: 'right' }]}>
-                            {`${entry.fat.toFixed(0)}g`}
-                          </Text>
+                          <Text style={styles.ledgerMacro}>{entry.protein.toFixed(0)}g</Text>
+                          <Text style={styles.ledgerMacro}>{entry.carbs.toFixed(0)}g</Text>
+                          <Text style={styles.ledgerMacro}>{entry.fat.toFixed(0)}g</Text>
                           <TouchableOpacity
                             onPress={() => onRequestLogMealForDate?.(entry.date)}
-                            style={{ padding: 4, marginLeft: 6 }}
+                            style={{ padding: 4, width: 22 }}
                             hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
                           >
-                            <Feather name="edit-2" size={14} color={Acid.tx2} />
+                            <Feather name="edit-2" size={14} color={Acid.tx3} />
                           </TouchableOpacity>
                         </View>
                       ))}
@@ -2837,42 +2837,54 @@ const styles = StyleSheet.create({
     marginBottom: 24,
   },
   historyContainer: {
-    marginTop: 8,
-    borderWidth: 1,
-    borderRadius: 12,
+    marginTop: 16,
     paddingVertical: 8,
+    borderTopWidth: 1,
+    borderTopColor: Acid.hair,
   },
-  historyTitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-  },
-  historyHeaderRow: {
+  ledgerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
   },
-  historyHeaderText: {
-    flex: 1,
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.medium,
+  ledgerHeaderText: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: Acid.tx3,
   },
-  historyHeaderSpacer: {
-    width: 40,
-    alignItems: 'flex-end',
+  ledgerColHead: {
+    width: 56,
+    textAlign: 'right',
+    fontSize: 9,
+    letterSpacing: 1,
+  },
+  ledgerDate: {
+    width: 62,
+    fontSize: 12,
+    color: Acid.tx3,
+  },
+  ledgerValue: {
+    fontFamily: Acid.serif,
+    fontSize: 17,
+    color: Acid.tx,
+  },
+  ledgerUnit: {
+    fontSize: 11,
+    color: Acid.tx3,
+  },
+  ledgerMacro: {
+    width: 56,
+    textAlign: 'right',
+    fontFamily: Acid.serif,
+    fontSize: 15,
+    color: Acid.tx,
   },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  historyCellText: {
-    flex: 1,
-    fontSize: Typography.fontSize.sm,
   },
   historyActions: {
     flexDirection: 'row',

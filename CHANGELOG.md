@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.46**
+The calorie and macro history tables under the charts now match the Weight Tracker ledger you liked. Same anatomy everywhere: RECENT DAYS header with your average per day on the right, short dates, serif numbers, and for calories a small arrow showing how far each day landed from your target, green under, amber over. The macros table got serif numbers in each macro color with column labels, and the calories ledger ends with a lime LOG A MEAL line. One ledger language across the whole app now.
+
 **v1.4.45**
 Three touches from your screenshot. The label next to the date now says what it is: LOGGED 5 OF LAST 7 DAYS, your logging consistency this week. The weekly calorie bank became the week of columns from the design board: seven bars, one per day, lime when you were on target, amber when the bank covered an over day, hollow when you did not log, with used, in bank, and left underneath in serif. And the input bar is now genuinely one line tall, the web version was quietly rendering it as a two line text area.
 
