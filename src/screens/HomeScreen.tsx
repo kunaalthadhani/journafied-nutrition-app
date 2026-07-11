@@ -2527,14 +2527,13 @@ export const HomeScreen: React.FC = () => {
             <Feather name="chevron-right" size={20} color={Acid.tx3} />
           </TouchableOpacity>
           <Text style={{ fontSize: 10, letterSpacing: 1.2, color: Acid.tx3, marginLeft: 'auto' }}>
-            {format(selectedDate, 'MMMM').toUpperCase()}
             {(() => {
               let logged = 0;
               for (let i = 0; i < 7; i++) {
                 const key = format(subDays(new Date(), i), 'yyyy-MM-dd');
                 if ((summariesByDate[key]?.entryCount || 0) > 0) logged++;
               }
-              return `  ·  ${logged} OF 7 LOGGED`;
+              return `LOGGED ${logged} OF LAST 7 DAYS`;
             })()}
           </Text>
         </View>
@@ -2664,6 +2663,7 @@ export const HomeScreen: React.FC = () => {
                 weeklyActual={calorieBankCycle?.weeklyLoggedActual || 0}
                 remainingDays={calorieBankCycle?.remainingDays || 0}
                 daysInCycle={calorieBankCycle?.daysInCycle || 7}
+                bankPerDayData={calorieBankCycle?.perDayData}
                 loading={statsLoading}
               />
             )}

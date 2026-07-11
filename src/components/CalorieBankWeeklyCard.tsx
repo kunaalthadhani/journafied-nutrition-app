@@ -1,10 +1,7 @@
 import React from 'react';
-import { View, Text, StyleSheet, Platform } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { Colors } from '../constants/colors';
-import { Typography } from '../constants/typography';
+import { View, Text, StyleSheet } from 'react-native';
 import { Acid } from '../constants/acid';
-import { NumberTicker } from './NumberTicker';
+import { CalorieBankDayData } from '../utils/calorieBankEngine';
 
 interface CalorieBankWeeklyCardProps {
   weeklyBudget: number;
@@ -12,69 +9,89 @@ interface CalorieBankWeeklyCardProps {
   bankBalance: number;
   remainingDays: number;
   daysInCycle: number;
+  perDayData?: CalorieBankDayData[];
 }
 
+// The board's calorie bank: a week of columns. Each day is a vertical bar
+// filled by how much of its adjusted target was eaten — lime on or under
+// target, amber over but covered by the bank, error past the spending cap.
+// Unlogged past days stay hollow; future days are faint stubs.
 export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
-  weeklyBudget = 14000,
-  weeklyActual = 0,
-  bankBalance = 0,
-  remainingDays = 7,
-  daysInCycle = 7,
+  weeklyBudget,
+  weeklyActual,
+  bankBalance,
+  remainingDays,
+  daysInCycle,
+  perDayData,
 }) => {
-  const weeklyRemaining = Math.max(0, weeklyBudget - weeklyActual);
-  const dayOfCycle = daysInCycle - remainingDays + 1;
-  const progressPct = weeklyBudget > 0 ? Math.min(100, (weeklyActual / weeklyBudget) * 100) : 0;
-  const isOver = weeklyActual > weeklyBudget;
+  const weeklyLeft = Math.max(0, Math.round(weeklyBudget - weeklyActual));
+  const dayNumber = Math.max(1, daysInCycle - remainingDays + 1);
 
   return (
-    <View style={[styles.container, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair, shadowColor: '#000' }]}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.iconContainer}>
-          <Feather name="calendar" size={18} color={Acid.tx} />
-        </View>
-        <Text style={[styles.title, { color: Acid.tx }]}>Weekly</Text>
-        <Text style={{ fontSize: 11, color: Acid.tx3, marginLeft: 'auto' }}>
-          Day {dayOfCycle} of {daysInCycle}
-        </Text>
+    <View style={styles.wrap}>
+      <View style={styles.headerRow}>
+        <Text style={styles.headerLabel}>THE WEEK</Text>
+        <Text style={styles.headerLabel}>DAY {dayNumber} OF {daysInCycle}</Text>
       </View>
 
-      {/* Progress bar */}
-      <View style={{ height: 4, borderRadius: 2, backgroundColor: Acid.mossDeep, overflow: 'hidden', marginBottom: 10 }}>
-        <View style={{ height: '100%', borderRadius: 2, width: `${progressPct}%`, backgroundColor: Acid.good }} />
-      </View>
-
-      {/* Three-column stats */}
-      <View style={styles.statsContainer}>
-        <View style={styles.statColumn} accessible accessibilityLabel={`Used, ${Math.round(weeklyActual)} calories`}>
-          <NumberTicker
-            value={Math.round(weeklyActual)}
-            duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: Acid.tx }])}
-          />
-          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Used</Text>
+      {perDayData && perDayData.length > 0 && (
+        <View style={styles.columnsRow}>
+          {perDayData.map(day => {
+            const ratio = day.adjustedTarget > 0 ? day.actual / day.adjustedTarget : 0;
+            const fill = Math.min(1, Math.max(0.04, ratio));
+            let color: string = Acid.hair2;
+            if (day.logged) {
+              if (day.spendCapHit) color = Acid.error;
+              else if (day.actual > day.adjustedTarget) color = Acid.carbs;
+              else color = Acid.lime;
+            } else if (day.isFuture || day.isToday) {
+              color = Acid.hair;
+            }
+            const dayLetter = new Date(day.date + 'T12:00:00')
+              .toLocaleDateString('en-US', { weekday: 'narrow' });
+            return (
+              <View key={day.date} style={styles.column}>
+                <View style={styles.columnTrack}>
+                  <View
+                    style={[
+                      styles.columnFill,
+                      {
+                        height: `${(day.logged ? fill : 0.04) * 100}%`,
+                        backgroundColor: color,
+                      },
+                      day.isToday && day.logged ? {
+                        shadowColor: Acid.lime,
+                        shadowOpacity: 0.6,
+                        shadowRadius: 5,
+                        shadowOffset: { width: 0, height: 0 },
+                        elevation: 3,
+                      } : null,
+                    ]}
+                  />
+                </View>
+                <Text style={[styles.columnLabel, day.isToday ? { color: Acid.lime } : null]}>
+                  {dayLetter}
+                </Text>
+              </View>
+            );
+          })}
         </View>
+      )}
 
-        <View style={[styles.statColumn, styles.middleColumn]} accessible accessibilityLabel={`In bank, ${Math.round(bankBalance)} calories`}>
-          <NumberTicker
-            value={Math.round(bankBalance)}
-            duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: bankBalance > 0 ? Acid.good : Acid.tx3 }])}
-          />
-          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>In Bank</Text>
+      <View style={styles.statsRow}>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{Math.round(weeklyActual).toLocaleString()}</Text>
+          <Text style={styles.statLabel}>USED</Text>
         </View>
-
-        <View
-          style={styles.statColumn}
-          accessible
-          accessibilityLabel={`${isOver ? 'Over budget by' : 'Left'}, ${Math.round(weeklyRemaining)} calories`}
-        >
-          <NumberTicker
-            value={Math.round(weeklyRemaining)}
-            duration={800}
-            style={StyleSheet.flatten([styles.fractionText, { color: isOver ? Acid.error : Acid.good }])}
-          />
-          <Text style={[styles.statLabel, { color: Acid.tx2 }]}>Left</Text>
+        <View style={styles.stat}>
+          <Text style={[styles.statValue, bankBalance > 0 ? { color: Acid.lime } : null]}>
+            {Math.round(bankBalance).toLocaleString()}
+          </Text>
+          <Text style={styles.statLabel}>IN BANK</Text>
+        </View>
+        <View style={styles.stat}>
+          <Text style={styles.statValue}>{weeklyLeft.toLocaleString()}</Text>
+          <Text style={styles.statLabel}>LEFT THIS WEEK</Text>
         </View>
       </View>
     </View>
@@ -82,62 +99,63 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
 };
 
 const styles = StyleSheet.create({
-  container: {
-    backgroundColor: Acid.mossDeep,
-    borderRadius: 12,
-    padding: Platform.OS === 'android' ? 8 : 12,
-    marginHorizontal: -16,
-    paddingHorizontal: 28,
-    borderWidth: 1,
-    borderColor: Acid.hair,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 1,
-    shadowRadius: 2,
-    elevation: 1,
+  wrap: {
+    borderTopWidth: 1,
+    borderTopColor: Acid.hair,
+    paddingTop: 12,
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: Platform.OS === 'android' ? 8 : 12,
-  },
-  iconContainer: {
-    marginRight: 8,
-  },
-  title: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    color: Acid.tx,
-  },
-  statsContainer: {
+  headerRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    minHeight: 50,
+    marginBottom: 12,
   },
-  statColumn: {
-    alignItems: 'center',
+  headerLabel: {
+    fontSize: 10,
+    letterSpacing: 1.5,
+    color: Acid.tx3,
+  },
+  columnsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 12,
+  },
+  column: {
     flex: 1,
-    justifyContent: 'flex-start',
+    alignItems: 'center',
+    gap: 6,
   },
-  middleColumn: {
-    borderLeftWidth: 1,
-    borderRightWidth: 1,
-    borderLeftColor: Acid.hair,
-    borderRightColor: Acid.hair,
-    paddingHorizontal: 8,
+  columnTrack: {
+    width: 14,
+    height: 56,
+    borderRadius: 7,
+    backgroundColor: Acid.hair + '55',
+    overflow: 'hidden',
+    justifyContent: 'flex-end',
   },
-  fractionText: {
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.medium,
+  columnFill: {
+    width: '100%',
+    borderRadius: 7,
+  },
+  columnLabel: {
+    fontSize: 9,
+    letterSpacing: 1,
+    color: Acid.tx3,
+  },
+  statsRow: {
+    flexDirection: 'row',
+  },
+  stat: {
+    flex: 1,
+  },
+  statValue: {
+    fontFamily: Acid.serif,
+    fontSize: 20,
     color: Acid.tx,
-    marginBottom: 6,
   },
   statLabel: {
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.normal,
-    color: Acid.tx2,
-    textAlign: 'center',
-    lineHeight: Typography.lineHeight.tight * Typography.fontSize.xs,
+    fontSize: 9,
+    letterSpacing: 1.2,
+    color: Acid.tx3,
+    marginTop: 2,
   },
 });

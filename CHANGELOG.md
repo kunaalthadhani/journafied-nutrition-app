@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.45**
+Three touches from your screenshot. The label next to the date now says what it is: LOGGED 5 OF LAST 7 DAYS, your logging consistency this week. The weekly calorie bank became the week of columns from the design board: seven bars, one per day, lime when you were on target, amber when the bank covered an over day, hollow when you did not log, with used, in bank, and left underneath in serif. And the input bar is now genuinely one line tall, the web version was quietly rendering it as a two line text area.
+
 **v1.4.44**
 The bottom bar is now truly persistent. Insights, Coach, Body, and Profile no longer slide up as full covers, they appear as pages with the glass pill staying put, and switching between them is instant. Home keeps its state underneath the whole time. The input bar became a compact rounded pill without the camera icon (the lime plus covers photo, voice, and typing). The white strip above the app is genuinely fixed this time: iOS takes the status bar color of an installed web app from a meta tag Expo never emitted, it's injected at deploy now, and you'll need to remove and re-add the app to your home screen once for it to take. This build was adversarially reviewed by 26 agents before shipping; their 23 confirmed findings, including Android's back button quitting the app from the Coach tab, a doubled subscription screen, and tab taps being eaten by a stale cooldown, are all fixed in it.
 

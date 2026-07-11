@@ -212,10 +212,8 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               value={currentText}
               onChangeText={handleTextChange}
               onSubmitEditing={handleSubmit}
-              returnKeyType="default"
-              multiline={true}
-              scrollEnabled={true}
-              blurOnSubmit={false}
+              returnKeyType="send"
+              multiline={false}
               onFocus={() => {
                 setIsFocused(true);
                 if (text.length > 0) {
@@ -331,8 +329,7 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingLeft: 18,
     paddingRight: 6,
-    paddingVertical: 4,
-    minHeight: 48,
+    height: 48,
   },
   leftControls: {
     flexDirection: 'row',
@@ -350,10 +347,9 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    paddingVertical: 6,
+    paddingVertical: 0,
     paddingRight: Spacing.sm,
-    minHeight: 24,
-    maxHeight: 96,
+    height: 40,
     textAlignVertical: 'center',
   },
   inputFieldWrapper: {

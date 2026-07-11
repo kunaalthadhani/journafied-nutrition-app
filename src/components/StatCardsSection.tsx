@@ -4,6 +4,7 @@ import { Acid } from '../constants/acid';
 import { MacroData } from '../types';
 import { NumberTicker } from './NumberTicker';
 import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
+import { CalorieBankDayData } from '../utils/calorieBankEngine';
 import { StatCardSkeleton } from './StatCardSkeleton';
 
 interface StatCardsSectionProps {
@@ -18,6 +19,7 @@ interface StatCardsSectionProps {
   weeklyActual?: number;
   remainingDays?: number;
   daysInCycle?: number;
+  bankPerDayData?: CalorieBankDayData[];
   loading?: boolean;
 }
 
@@ -51,6 +53,7 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
   weeklyActual,
   remainingDays,
   daysInCycle,
+  bankPerDayData,
   loading,
 }) => {
   if (loading) {
@@ -101,6 +104,7 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
             bankBalance={calorieBankBalance || 0}
             remainingDays={remainingDays || 0}
             daysInCycle={daysInCycle || 7}
+            perDayData={bankPerDayData}
           />
         </View>
       )}
