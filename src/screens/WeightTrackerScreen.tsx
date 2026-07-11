@@ -683,15 +683,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
     };
   }, [hasGraphData, minWeight, maxWeight]);
 
-  const dateRange = useMemo(() => {
-    // Never fall back to the all-time span: an empty range must not show a
-    // full-history label next to a "no data in range" card.
-    if (filteredData.length === 0) return '';
-    const start = filteredData[0].date;
-    const end = filteredData[filteredData.length - 1].date;
-    return `${format(start, 'd MMM yyyy')} - ${format(end, 'd MMM yyyy')}`;
-  }, [filteredData]);
-
   // Full history table (all entries, newest first)
   const historyEntries = useMemo(
     () => [...weightEntries].sort((a, b) => b.date.getTime() - a.date.getTime()),
@@ -708,6 +699,43 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       return { x, y, data: entry };
     });
   }, [graphData, axisMinWeight, axisWeightRange, innerWidth, innerHeight]);
+
+  // A few evenly spaced date labels along the X axis, month names for long
+  // ranges, day + month for short ones.
+  const xAxisLabels = useMemo(() => {
+    if (graphPoints.length === 0) return [] as { x: number; label: string }[];
+    const fmt = timeRange === '1W' || timeRange === '1M' ? 'd MMM' : 'MMM';
+    if (graphPoints.length === 1) {
+      return [{ x: graphPoints[0].x, label: format(graphData[0].date, fmt).toUpperCase() }];
+    }
+    const count = Math.min(graphPoints.length, timeRange === '1W' ? 3 : 4);
+    const labels: { x: number; label: string }[] = [];
+    const seen = new Set<string>();
+    for (let i = 0; i < count; i++) {
+      const idx = Math.round((i / (count - 1)) * (graphPoints.length - 1));
+      const label = format(graphData[idx].date, fmt).toUpperCase();
+      if (seen.has(label)) continue;
+      seen.add(label);
+      labels.push({ x: graphPoints[idx].x, label });
+    }
+    return labels;
+  }, [graphPoints, graphData, timeRange]);
+
+  // Where the goal line sits, but only when the target falls inside the axis
+  // window. A far-away goal gets a corner annotation instead of flattening the
+  // whole chart.
+  const goalLineY = useMemo(() => {
+    if (!targetWeightValue || !hasGraphData) return null;
+    if (targetWeightValue < axisMinWeight || targetWeightValue > axisMaxWeight) return null;
+    const ratio = (targetWeightValue - axisMinWeight) / axisWeightRange;
+    return graphPadding + innerHeight - ratio * innerHeight;
+  }, [targetWeightValue, hasGraphData, axisMinWeight, axisMaxWeight, axisWeightRange, innerHeight]);
+
+  // Trend over the weigh-ins in view, for the ledger header.
+  const ledgerTrend = useMemo(() => {
+    const pts = graphData.filter(e => !e.seeded).map(e => ({ date: e.date, value: e.weight }));
+    return weeklyTrendSlope(pts);
+  }, [graphData]);
 
   const [scrubbingIndex, setScrubbingIndex] = useState<number | null>(null);
 
@@ -943,6 +971,21 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   const timeRanges: TimeRange[] = [...CHART_RANGES];
 
+  const handleLogPress = () => {
+    const today = new Date();
+    const todayKey = format(today, 'yyyy-MM-dd');
+    const alreadyLogged = weightEntries.some(e => !e.seeded && format(e.date, 'yyyy-MM-dd') === todayKey);
+    if (alreadyLogged) {
+      Alert.alert(
+        'Weight Already Logged',
+        "You've already logged today's weight.\nYou can edit it anytime if you need to make a change.",
+        [{ text: 'OK' }]
+      );
+      return;
+    }
+    setShowLogModal(true);
+  };
+
   // Generate the trend sentence from the visible range. It used to be cached
   // once per day, which froze it on whichever range happened to be open first.
   // It is cheap local math, so it now follows the pills like everything else.
@@ -1114,82 +1157,70 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
       >
-        {/* Header - Drag to close */}
+        {/* Header chrome - Drag to close */}
         <View
-          style={[styles.header, { borderBottomColor: Acid.hair }]}
+          style={styles.header}
           {...panResponder.panHandlers}
         >
           <TouchableOpacity onPress={handleClose} style={styles.backButton}>
-            <Feather name="chevron-down" size={24} color={Acid.tx} />
+            <Feather name="chevron-down" size={24} color={Acid.tx2} />
           </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
-            Weight Tracker
-          </Text>
+          <View />
           <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerRight}>
-            <Feather name="info" size={20} color={Acid.tx2} />
+            <Feather name="info" size={20} color={Acid.tx3} />
           </TouchableOpacity>
         </View>
 
         <View style={{ flex: 1 }}>
-        {/* Weight Summary - Hero Cards (above tabs) */}
-        {hasEntries && (
-          <View style={{ flexDirection: 'row', gap: 10, paddingHorizontal: 16, marginBottom: 12, marginTop: 8 }}>
-            {/* Current Weight Hero */}
-            <View style={styles.heroCard}>
-              <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>CURRENT</Text>
-              <Text style={[styles.heroValue, { color: Acid.tx }]}>
-                {currentWeight !== null
-                  ? `${convertWeightToDisplay(currentWeight).toFixed(1)}`
-                  : '--'}
-              </Text>
-              <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>{weightUnit === 'kg' ? 'Kilograms' : 'Pounds'}</Text>
-            </View>
-
-            {/* Change Hero */}
-            <View style={styles.heroCard}>
-              <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>{changeLabel.toUpperCase()}</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                {changeValue !== null && changeValue > 0.05 && (
-                  <Feather name="trending-up" size={16} color={isGainGoal ? Acid.good : Acid.error} />
-                )}
-                {changeValue !== null && changeValue < -0.05 && (
-                  <Feather name="trending-down" size={16} color={isGainGoal ? Acid.error : Acid.good} />
-                )}
-                <Text style={[styles.heroValue, { color: Acid.tx }]}>
-                  {changeValue !== null
-                    ? `${convertWeightToDisplay(Math.abs(changeValue)).toFixed(1)}`
-                    : '--'}
-                </Text>
-              </View>
-              {/* This hero is all-time, while the chart below follows the range
-                  pills. Naming the span here is what keeps the two from looking
-                  like they disagree. */}
-              <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>
-                {weightEntries.length > 0
-                  ? `${getWeightUnitLabel()} · since ${format(new Date(weightEntries[0].date), 'd MMM')}`
-                  : (weightUnit === 'kg' ? 'Kilograms' : 'Pounds')}
-              </Text>
-            </View>
-
-            {/* Target Hero */}
-            <View style={styles.heroCard}>
-              <Text style={[styles.heroLabel, { color: Acid.tx2 }]}>TARGET</Text>
-              {targetWeightValue > 0 ? (
-                <>
-                  <Text style={[styles.heroValue, { color: Acid.tx }]}>
-                    {`${convertWeightToDisplay(targetWeightValue).toFixed(1)}`}
-                  </Text>
-                  <Text style={[styles.heroUnit, { color: Acid.tx3 }]}>{weightUnit === 'kg' ? 'Kilograms' : 'Pounds'}</Text>
-                </>
-              ) : (
+        {/* Title row: serif wordmark left, range words right */}
+        <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', paddingHorizontal: 20, marginBottom: 10 }}>
+          <Text style={{ fontFamily: Acid.serif, fontSize: 32, lineHeight: 38, color: Acid.tx }}>Weight</Text>
+          {hasEntries && activeTab === 'Tracker' && (
+            <View style={{ flexDirection: 'row', gap: 14, paddingBottom: 6 }}>
+              {timeRanges.map((range) => (
                 <TouchableOpacity
-                  onPress={() => onRequestSetGoals?.()}
-                  activeOpacity={0.7}
+                  key={range}
+                  onPress={() => handleTimeRangeChange(range)}
+                  style={{ borderBottomWidth: 2, borderBottomColor: timeRange === range ? Acid.lime : 'transparent', paddingBottom: 2 }}
                 >
-                  <Text style={{ color: Acid.lime, fontWeight: '600', marginTop: 4 }}>Set Goal</Text>
+                  <Text style={{ fontSize: 11, letterSpacing: 1, fontWeight: '600', color: timeRange === range ? Acid.lime : Acid.tx3 }}>
+                    {range}
+                  </Text>
                 </TouchableOpacity>
-              )}
+              ))}
             </View>
+          )}
+        </View>
+
+        {/* Hero: current weight huge, the story in one line under it */}
+        {hasEntries && (
+          <View style={{ paddingHorizontal: 20, marginBottom: 12 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+              <Text style={{ fontFamily: Acid.serif, fontSize: 56, lineHeight: 62, color: Acid.tx }}>
+                {currentWeight !== null ? convertWeightToDisplay(currentWeight).toFixed(1) : '--'}
+              </Text>
+              <Text style={{ fontSize: 20, color: Acid.tx3, marginLeft: 6 }}>{getWeightUnitLabel()}</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 6, flexWrap: 'wrap' }}>
+              {changeValue !== null && Math.abs(changeValue) > 0.05 && (
+                <Feather
+                  name={changeValue < 0 ? 'trending-down' : 'trending-up'}
+                  size={13}
+                  color={(changeValue < 0) !== isGainGoal ? Acid.good : Acid.error}
+                />
+              )}
+              <Text style={{ fontSize: 11, letterSpacing: 1.2, color: Acid.tx2 }}>
+                {changeValue !== null
+                  ? `${convertWeightToDisplay(Math.abs(changeValue)).toFixed(1)} ${getWeightUnitLabel().toUpperCase()} ${changeLabel.toUpperCase()} SINCE ${format(new Date(weightEntries[0].date), 'd MMM').toUpperCase()}`
+                  : 'FIRST WEIGH-IN'}
+                {`  ·  ${realEntries.length} WEIGH-IN${realEntries.length === 1 ? '' : 'S'}`}
+              </Text>
+            </View>
+            {!targetWeightValue && (
+              <TouchableOpacity onPress={() => onRequestSetGoals?.()} activeOpacity={0.7}>
+                <Text style={{ fontSize: 11, letterSpacing: 1.5, color: Acid.lime, fontWeight: '600', marginTop: 8 }}>SET A GOAL →</Text>
+              </TouchableOpacity>
+            )}
           </View>
         )}
 
@@ -1372,6 +1403,56 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           );
                         })}
 
+                        {/* Goal on the horizon: dashed line when the target is
+                            inside the axis window, corner note when it is not */}
+                        {goalLineY !== null && (
+                          <>
+                            <Line
+                              x1={paddingLeft}
+                              y1={goalLineY}
+                              x2={graphWidth - graphPadding}
+                              y2={goalLineY}
+                              stroke={Acid.lime + '66'}
+                              strokeWidth={1}
+                              strokeDasharray="6,4"
+                            />
+                            <SvgText
+                              x={graphWidth - graphPadding}
+                              y={goalLineY - 5}
+                              fontSize={9}
+                              fill={Acid.tx3}
+                              textAnchor="end"
+                            >
+                              {`GOAL ${convertWeightToDisplay(targetWeightValue).toFixed(1)}`}
+                            </SvgText>
+                          </>
+                        )}
+                        {targetWeightValue > 0 && goalLineY === null && (
+                          <SvgText
+                            x={graphWidth - graphPadding}
+                            y={targetWeightValue < axisMinWeight ? graphHeight - graphPadding - 4 : graphPadding + 8}
+                            fontSize={9}
+                            fill={Acid.tx3}
+                            textAnchor="end"
+                          >
+                            {`GOAL ${convertWeightToDisplay(targetWeightValue).toFixed(1)} ${targetWeightValue < axisMinWeight ? '↓' : '↑'}`}
+                          </SvgText>
+                        )}
+
+                        {/* X-axis date labels */}
+                        {xAxisLabels.map((l, i) => (
+                          <SvgText
+                            key={`x-${i}`}
+                            x={l.x}
+                            y={graphHeight - 2}
+                            fontSize={9}
+                            fill={Acid.tx3}
+                            textAnchor="middle"
+                          >
+                            {l.label}
+                          </SvgText>
+                        ))}
+
                         {/* Line path with solid color and left-to-right draw animation */}
                         {graphPath ? (
                           <AnimatedPath
@@ -1406,6 +1487,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           );
                         })}
 
+                        {/* The latest weigh-in gets a solid lime endpoint */}
+                        {graphPoints.length > 0 && (
+                          <Circle
+                            cx={graphPoints[graphPoints.length - 1].x}
+                            cy={graphPoints[graphPoints.length - 1].y}
+                            r={4.5}
+                            fill={Acid.lime}
+                          />
+                        )}
+
                         {/* Scrubber Active Cursor - Highlighted Line and Big Dot */}
                         {scrubbingIndex !== null && graphPoints[scrubbingIndex] && (
                           <>
@@ -1435,30 +1526,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <NoRangeDataCard />
                   )}
 
-                  {/* Time Range Selector */}
-                  <View style={{ flexDirection: 'row', gap: 22, alignSelf: 'center', marginBottom: 8 }}>
-                    {timeRanges.map((range) => (
-                      <TouchableOpacity
-                        key={range}
-                        onPress={() => handleTimeRangeChange(range)}
-                        style={{
-                          paddingVertical: 6,
-                          borderBottomWidth: 2,
-                          borderBottomColor: timeRange === range ? Acid.lime : 'transparent',
-                        }}
-                      >
-                        <Text style={{ fontSize: 12, fontWeight: '600', letterSpacing: 1, color: timeRange === range ? Acid.lime : Acid.tx3 }}>
-                          {range}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </View>
-
-                  {/* Date Range */}
-                  <Text style={[styles.dateRange, { color: Acid.tx2 }]}>
-                    {dateRange}
-                  </Text>
-
                   {/* What the chart shows. Seeded onboarding weight is plotted
                       but is not a real weigh-in, so it stays out of the count. */}
                   {hasGraphData && (() => {
@@ -1487,27 +1554,25 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     </View>
                   )}
 
-                  {/* History Table */}
+                  {/* Weigh-in ledger */}
                   {historyEntries.length > 0 && (
-                    <View style={[styles.historyContainer, { borderColor: Acid.hair }]}>
-                      <Text style={[styles.historyTitle, { color: Acid.tx }]}>
-                        History
-                      </Text>
-                      <View style={styles.historyHeaderRow}>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2 }]}>
-                          Date
-                        </Text>
-                        <Text style={[styles.historyHeaderText, { color: Acid.tx2 }]}>
-                          Weight
-                        </Text>
-                        <View style={styles.historyHeaderSpacer} />
+                    <View style={styles.historyContainer}>
+                      <View style={styles.ledgerHeaderRow}>
+                        <Text style={styles.ledgerHeaderText}>RECENT WEIGH-INS</Text>
+                        {ledgerTrend !== null && (
+                          <Text style={styles.ledgerHeaderText}>
+                            {`TREND ${ledgerTrend < -0.005 ? '▾' : ledgerTrend > 0.005 ? '▴' : '·'} ${convertWeightToDisplay(Math.abs(ledgerTrend)).toFixed(2)} ${getWeightUnitLabel().toUpperCase()} / WEEK`}
+                          </Text>
+                        )}
                       </View>
                       {historyEntries.map((entry, index) => {
                         const isEditing = editingEntryIndex === index;
+                        const older = historyEntries[index + 1];
+                        const delta = older ? entry.weight - older.weight : null;
                         return (
                           <View key={entry.id || index} style={[styles.historyRow, { borderTopColor: Acid.hair }]}>
-                            <Text style={[styles.historyCellText, { color: Acid.tx2 }]}>
-                              {format(entry.date, 'd MMM yyyy')}
+                            <Text style={{ width: 62, fontSize: 12, color: Acid.tx3 }}>
+                              {format(entry.date, 'd MMM')}
                             </Text>
                             {isEditing ? (
                               <TextInput
@@ -1518,8 +1583,16 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                                 keyboardType="decimal-pad"
                               />
                             ) : (
-                              <Text style={[styles.historyCellText, { color: Acid.tx }]}>
-                                {`${convertWeightToDisplay(entry.weight).toFixed(1)} ${getWeightUnitLabel()}`}
+                              <View style={{ flex: 1, flexDirection: 'row', alignItems: 'baseline' }}>
+                                <Text style={{ fontFamily: Acid.serif, fontSize: 17, color: Acid.tx }}>
+                                  {convertWeightToDisplay(entry.weight).toFixed(1)}
+                                </Text>
+                                <Text style={{ fontSize: 11, color: Acid.tx3, marginLeft: 4 }}>{getWeightUnitLabel()}</Text>
+                              </View>
+                            )}
+                            {!isEditing && delta !== null && Math.abs(delta) > 0.001 && (
+                              <Text style={{ fontSize: 12, fontWeight: '600', marginRight: 12, color: (delta < 0) !== isGainGoal ? Acid.good : Acid.carbs }}>
+                                {`${delta < 0 ? '▾' : '▴'} ${convertWeightToDisplay(Math.abs(delta)).toFixed(1)}`}
                               </Text>
                             )}
                             <View style={styles.historyActions}>
@@ -1562,6 +1635,12 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                           </View>
                         );
                       })}
+                      {/* Log link at the foot of the ledger, mock style */}
+                      <TouchableOpacity onPress={handleLogPress} activeOpacity={0.7} style={{ paddingVertical: 18 }}>
+                        <Text style={{ fontSize: 12, letterSpacing: 1.5, color: Acid.lime, fontWeight: '600' }}>
+                          LOG TODAY'S WEIGHT →
+                        </Text>
+                      </TouchableOpacity>
                     </View>
                   )}
                 </View>
@@ -2120,31 +2199,6 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
           </ScrollView>
         </KeyboardAvoidingView>
 
-        {/* Log Weight Button - only show on Tracker tab */}
-        {activeTab === 'Tracker' && (
-        <View style={styles.buttonContainer}>
-          <TouchableOpacity
-            style={[styles.logButton, { backgroundColor: Acid.lime }]}
-            onPress={() => {
-              const today = new Date();
-              const todayKey = format(today, 'yyyy-MM-dd');
-              const alreadyLogged = weightEntries.some(e => !e.seeded && format(e.date, 'yyyy-MM-dd') === todayKey);
-
-              if (alreadyLogged) {
-                Alert.alert(
-                  'Weight Already Logged',
-                  "You've already logged today's weight.\nYou can edit it anytime if you need to make a change.",
-                  [{ text: 'OK' }]
-                );
-                return;
-              }
-              setShowLogModal(true);
-            }}
-          >
-            <Text style={[styles.logButtonText, { color: Acid.moss }]}>Log Weight</Text>
-          </TouchableOpacity>
-        </View>
-        )}
         </View>
 
         {/* Log Weight Modal */}
@@ -2254,45 +2308,16 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    paddingVertical: 10,
   },
   backButton: {
     padding: 8,
-  },
-  headerTitle: {
-    fontFamily: Acid.serifItalic,
-    fontSize: 22,
   },
   headerRight: {
     width: 40,
     height: 40,
     alignItems: 'center' as const,
     justifyContent: 'center' as const,
-  },
-  heroCard: {
-    paddingHorizontal: 12,
-    paddingVertical: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flex: 1,
-    minHeight: 88,
-  },
-  heroLabel: {
-    fontSize: 10,
-    marginBottom: 4,
-    letterSpacing: 1.5,
-  },
-  heroValue: {
-    fontFamily: Acid.serif,
-    fontSize: 30,
-    lineHeight: 34,
-    minHeight: 34,
-  },
-  heroUnit: {
-    fontSize: 12,
-    fontWeight: Typography.fontWeight.medium,
-    marginTop: 2,
   },
   content: {
     flex: 1,
@@ -2311,11 +2336,6 @@ const styles = StyleSheet.create({
   graph: {
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  dateRange: {
-    textAlign: 'center',
-    fontSize: Typography.fontSize.sm,
-    marginBottom: 12,
   },
   insightBox: {
     flexDirection: 'row',
@@ -2336,37 +2356,22 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: Acid.hair,
   },
-  historyTitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
-    paddingHorizontal: 16,
-    paddingBottom: 4,
-  },
-  historyHeaderRow: {
+  ledgerHeaderRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 4,
+    justifyContent: 'space-between',
+    paddingVertical: 10,
   },
-  historyHeaderText: {
-    flex: 1,
-    fontSize: Typography.fontSize.xs,
-    fontWeight: Typography.fontWeight.medium,
-  },
-  historyHeaderSpacer: {
-    width: 40,
-    alignItems: 'flex-end',
+  ledgerHeaderText: {
+    fontSize: 10,
+    letterSpacing: 1.2,
+    color: Acid.tx3,
   },
   historyRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 6,
+    paddingVertical: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-  },
-  historyCellText: {
-    flex: 1,
-    fontSize: Typography.fontSize.sm,
   },
   historyActions: {
     flexDirection: 'row',
@@ -2409,24 +2414,6 @@ const styles = StyleSheet.create({
   },
   emptyStateButtonText: {
     fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  buttonContainer: {
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-  },
-  logButton: {
-    paddingVertical: 16,
-    borderRadius: 999,
-    alignItems: 'center',
-    shadowColor: Acid.lime,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.35,
-    shadowRadius: 16,
-    elevation: 6,
-  },
-  logButtonText: {
-    fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
   },
   modalOverlay: {

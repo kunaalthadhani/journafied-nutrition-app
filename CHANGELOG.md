@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.40**
+The Weight Tracker rebuilt to match the design board properly, not just recolored. Your current weight is now a huge serif number at the top with the whole story in one line under it: how much you've dropped since your first weigh-in and how many weigh-ins you've logged. The range picker moved up beside the serif "Weight" title. The chart gained what the mock promised: your goal as a dashed lime line when it's in view (or a corner note pointing toward it when it's far), date labels along the bottom, and a solid lime dot on your latest weigh-in. History became the mock's ledger: date, serif weight, and a per-entry change showing how much each weigh-in moved from the one before, with the trend per week in the header. The big bottom button is gone, logging is now the lime "LOG TODAY'S WEIGHT" line at the foot of the ledger. Same math, same editing, same protections.
+
 **v1.4.39**
 The Weight Tracker joins the new look, the biggest data screen so far. Your weight chart is now a lime line on open moss with no card around it, the hero numbers (current, change, target) are serif columns instead of bordered boxes, and the Tracker and Insights tabs plus the time range picker became underlined words. Editing a history entry shows a lime underline, the log weight sheet went dark with a serif input and a glowing lime save, and every insight card converted to a dark panel with the chart colors mapped to the app's data palette: green for good, amber for caution, sky and lilac for informational. All the chart math, scrubbing, insights logic, and the data protections from earlier versions are untouched.
 
