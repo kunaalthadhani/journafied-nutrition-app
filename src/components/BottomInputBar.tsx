@@ -8,7 +8,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Camera, Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
+import { Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { Spacing } from '../constants/spacing';
@@ -21,7 +21,6 @@ interface QuickPrompt {
 
 interface BottomInputBarProps {
   onSubmit?: (text: string) => void;
-  onPlusPress?: () => void;
   onMicPress?: () => void;
   placeholder?: string;
   isLoading?: boolean;
@@ -38,7 +37,6 @@ interface BottomInputBarProps {
 
 export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onSubmit,
-  onPlusPress,
   onMicPress,
   placeholder = "Describe your meal",
   isLoading = false,
@@ -183,15 +181,6 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </View>
         )}
         <View style={[styles.inputContainer, { backgroundColor: Acid.mossDeep }]}>
-          <TouchableOpacity
-            onPress={onPlusPress}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-            disabled={isLoading || isRecording || isTranscribing}
-            style={styles.plusIconButton}
-          >
-            <Camera color={Acid.tx2} size={20} strokeWidth={2} />
-          </TouchableOpacity>
-
           <TouchableOpacity
             style={styles.inputFieldWrapper}
             activeOpacity={1}
@@ -338,11 +327,12 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-end',
-    borderRadius: 26,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    minHeight: 52,
+    alignItems: 'center',
+    borderRadius: 24,
+    paddingLeft: 18,
+    paddingRight: 6,
+    paddingVertical: 4,
+    minHeight: 48,
   },
   leftControls: {
     flexDirection: 'row',
@@ -360,10 +350,10 @@ const styles = StyleSheet.create({
     flex: 1,
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.normal,
-    paddingVertical: 8,
-    paddingHorizontal: Spacing.sm,
-    minHeight: 36,
-    maxHeight: 120,
+    paddingVertical: 6,
+    paddingRight: Spacing.sm,
+    minHeight: 24,
+    maxHeight: 96,
     textAlignVertical: 'center',
   },
   inputFieldWrapper: {
@@ -379,7 +369,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     justifyContent: 'center',
-    paddingLeft: Spacing.sm, // Align with input text
   },
   customPlaceholder: {
     fontSize: Typography.fontSize.md,
@@ -414,12 +403,5 @@ const styles = StyleSheet.create({
     borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-  },
-  plusIconButton: {
-    width: 36,
-    height: 36,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 4,
   },
 });

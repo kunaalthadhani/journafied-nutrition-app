@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.44**
+The bottom bar is now truly persistent. Insights, Coach, Body, and Profile no longer slide up as full covers, they appear as pages with the glass pill staying put, and switching between them is instant. Home keeps its state underneath the whole time. The input bar became a compact rounded pill without the camera icon (the lime plus covers photo, voice, and typing). The white strip above the app is genuinely fixed this time: iOS takes the status bar color of an installed web app from a meta tag Expo never emitted, it's injected at deploy now, and you'll need to remove and re-add the app to your home screen once for it to take. This build was adversarially reviewed by 26 agents before shipping; their 23 confirmed findings, including Android's back button quitting the app from the Coach tab, a doubled subscription screen, and tab taps being eaten by a stale cooldown, are all fixed in it.
+
 **v1.4.43**
 Home gets its final polish from the design review. The side menu is gone: everything it held now lives where it belongs. Nutrition Goals, Send Feedback, and About are rows in Settings (Profile tab), and the hidden admin console moved to tapping the version number in Settings seven times. The bottom bar is now a floating glass pill in the Apple style you pointed to, with a lime plus button beside it that opens a quick log sheet: Type it, Snap it, or Say it. The white strip above the app on your iPhone is fixed, it was the web app's theme color still set to the old paper white, now moss. The sign-in reminder lost its box, and the splash screen goes dark to match.
 

@@ -10,10 +10,10 @@ import {
     Platform,
     ActivityIndicator,
     Alert,
-    SafeAreaView,
     Modal,
     ScrollView,
 } from 'react-native';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Acid } from '../constants/acid';
 import { Feather } from '@expo/vector-icons';
 import { chatCoachService, ChatCoachContext } from '../services/chatCoachService';
@@ -98,6 +98,7 @@ function buildStarterQuestions(ctx: ChatCoachContext | null): string[] {
 }
 
 export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPremium = false }) => {
+    const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<Message[]>([]);
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
@@ -184,7 +185,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     const isInsufficient = context?.dataQuality === 'insufficient';
 
     return (
-        <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }} edges={['top']}>
             {/* Header */}
             <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
                 <TouchableOpacity onPress={onClose} style={styles.headerBtn}>
@@ -205,7 +206,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 60 : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 70 + Math.max(insets.bottom, 12) : 0}
             >
                 <FlatList
                     ref={flatListRef}
@@ -300,7 +301,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                 presentationStyle="pageSheet"
                 onRequestClose={() => setShowInfo(false)}
             >
-                <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }}>
+                <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }} edges={['top', 'bottom']}>
                     <View style={[styles.infoHeader, { borderBottomColor: Acid.hair }]}>
                         <View style={styles.headerBtn} />
                         <Text style={styles.headerTitle}>About AI Nutritionist</Text>

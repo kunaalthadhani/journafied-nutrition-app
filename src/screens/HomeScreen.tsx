@@ -76,7 +76,7 @@ import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
-import { AcidTabBar } from '../components/AcidTabBar';
+import { AcidTabBar, AcidTabId } from '../components/AcidTabBar';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
@@ -403,13 +403,11 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleWeightTracker = () => {
-    if (!canNavigate('weightTracker')) return;
     analyticsService.trackWeightTrackerOpen();
     setShowWeightTracker(true);
   };
 
   const handleNutritionAnalysis = () => {
-    if (!canNavigate('nutritionAnalysis')) return;
     analyticsService.trackNutritionAnalysisOpen();
     setShowNutritionAnalysis(true);
   };
@@ -432,7 +430,6 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handleSettings = async () => {
-    if (!canNavigate('settings')) return;
     setShowSettings(true);
     // Reload referral data to ensure it's up to date
     try {
@@ -563,14 +560,18 @@ export const HomeScreen: React.FC = () => {
 
 
 
+  // Where grocery was opened from decides where its back lands.
+  const groceryFromSettingsRef = useRef(false);
+
   const handleGrocerySuggestions = () => {
+    groceryFromSettingsRef.current = showSettings;
     setShowSettings(false);
     setShowGrocerySuggestions(true);
   };
 
   const handleGrocerySuggestionsBack = () => {
     setShowGrocerySuggestions(false);
-    setShowSettings(true);
+    if (groceryFromSettingsRef.current) setShowSettings(true);
   };
 
 
@@ -1288,7 +1289,11 @@ export const HomeScreen: React.FC = () => {
         return true;
       }
       if (showSettings) {
-        setShowSettings(false);
+        handleSettingsBack();
+        return true;
+      }
+      if (showChatCoach) {
+        setShowChatCoach(false);
         return true;
       }
       if (showIntegrations) {
@@ -1296,11 +1301,11 @@ export const HomeScreen: React.FC = () => {
         return true;
       }
       if (showWeightTracker) {
-        setShowWeightTracker(false);
+        handleWeightTrackerBack();
         return true;
       }
       if (showNutritionAnalysis) {
-        setShowNutritionAnalysis(false);
+        handleNutritionAnalysisBack();
         return true;
       }
       if (showSetGoals) {
@@ -1340,6 +1345,7 @@ export const HomeScreen: React.FC = () => {
     showSetGoals,
     showAccount,
     showAbout,
+    showChatCoach,
   ]);
 
   useEffect(() => {
@@ -2351,72 +2357,6 @@ export const HomeScreen: React.FC = () => {
 
   /* WeightTracker and NutritionAnalysis moved to Modals below to prevent HomeScreen unmount */
 
-  if (showSettings) {
-    return (
-      <Modal visible={showSettings} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleSettingsBack}>
-        <SettingsScreen
-          onBack={handleSettingsBack}
-          plan={isPremium ? 'premium' : 'free'}
-          onOpenSubscription={handleOpenSubscription}
-          onLogin={handleAccount}
-          onDowngradeToFree={handleDowngradeToFree}
-          onGrocerySuggestions={handleGrocerySuggestions}
-          onSetGoals={() => { setShowSettings(false); handleSetGoals(); }}
-          onOpenAbout={handleAbout}
-          onOpenFeedback={() => { setShowSettings(false); setShowFeedback(true); }}
-          onAdminPush={handleAdminPush}
-          onHowItWorks={() => {
-            setShowSettings(false);
-            setWalkthroughHideOffer(false);
-            setShowWalkthrough(true);
-          }}
-          renderAccountScreen={(onBack) => (
-            <AccountScreen
-              onBack={onBack}
-              onRequestSync={handleSyncAccount}
-              initialAccountInfo={accountInfo}
-              initialEntryCount={entryCount}
-              initialPlan={isPremium ? 'premium' : 'free'}
-              initialGoals={savedGoals}
-              initialReferralCode={referralCode}
-              initialTotalEarnedEntries={totalEarnedEntries}
-              initialStreakFreeze={streakFreeze}
-              initialFrozenDates={streakFreeze?.usedOnDates}
-            />
-          )}
-          onAccountClose={async () => {
-            try {
-              const info = await dataStorage.loadAccountInfo();
-              await refreshUserContext();
-              if (!info?.email) {
-                setEntryCount(0);
-                setReferralCode(null);
-                setTotalEarnedEntries(0);
-                const count = await dataStorage.loadEntryCount();
-                setEntryCount(count);
-              } else {
-                const code = await dataStorage.getReferralCode(info.email);
-                setReferralCode(code?.code || null);
-                const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
-                setTotalEarnedEntries(earned);
-              }
-            } catch (e) {
-              if (__DEV__) console.error('Error reloading account data:', e);
-            }
-          }}
-        />
-        <Modal
-          visible={showSubscription}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={handleSubscriptionBack}
-        >
-          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
-        </Modal>
-      </Modal>
-    );
-  }
-
   if (showGrocerySuggestions) {
     return (
       <Modal visible={showGrocerySuggestions} animationType="slide" presentationStyle="pageSheet" onRequestClose={handleGrocerySuggestionsBack}>
@@ -2513,9 +2453,33 @@ export const HomeScreen: React.FC = () => {
     setShowSmartAdjustmentModal(false);
   };
 
+  // Phase 2 of the board's navigation: the four destinations render as pages
+  // with the tab bar persistent. Home stays mounted (display:none) so its
+  // state and scroll survive tab hops. Closing runs each page's existing back
+  // handler so their reload-on-exit side effects keep firing.
+  const tabPageActive = showWeightTracker || showNutritionAnalysis || showChatCoach || showSettings;
+  const activeTabId: AcidTabId = showNutritionAnalysis ? 'insights'
+    : showChatCoach ? 'coach'
+    : showWeightTracker ? 'body'
+    : showSettings ? 'profile'
+    : 'home';
+  const switchTab = (tab: AcidTabId) => {
+    if (tab === activeTabId) return;
+    if (showSettings) handleSettingsBack();
+    if (showWeightTracker) handleWeightTrackerBack();
+    if (showNutritionAnalysis) handleNutritionAnalysisBack();
+    if (showChatCoach) setShowChatCoach(false);
+    if (tab === 'insights') handleNutritionAnalysis();
+    else if (tab === 'coach') setShowChatCoach(true);
+    else if (tab === 'body') handleWeightTracker();
+    else if (tab === 'profile') handleSettings();
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={[]}>
       <View style={[styles.container, { backgroundColor: Acid.moss }]}>
+        {/* Home page — hidden, not unmounted, while a tab page is open */}
+        <View style={{ flex: 1, display: tabPageActive ? 'none' : 'flex' }}>
         {/* Fixed Top Navigation */}
         <TopNavigationBar
           onCalendarPress={handleCalendarPress}
@@ -2931,7 +2895,6 @@ export const HomeScreen: React.FC = () => {
           {/* Bottom Input Bar */}
           <BottomInputBar
             onSubmit={handleInputSubmit}
-            onPlusPress={handlePlusPress}
             onMicPress={handleMicPress}
             isLoading={isAnalyzingFood}
             isRecording={isRecording}
@@ -2972,18 +2935,138 @@ export const HomeScreen: React.FC = () => {
             </View>
           )}
         </KeyboardAvoidingView>
+        </View>
+
+        {/* Tab pages — persistent bottom bar stays below */}
+        {showWeightTracker && (
+          <View style={styles.tabScreen}>
+            <WeightTrackerScreen
+            onBack={handleWeightTrackerBack}
+            initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
+            targetWeightKg={savedGoals.targetWeightKg ?? undefined}
+            onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
+            isPremium={isPremium}
+            insightUnlocks={insightUnlocks}
+            visible={showWeightTracker}
+            initialTab={openWeightOnInsights ? 'Insights' : undefined}
+            scrollToInsight={scrollToInsightId}
+            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
+          />
+          </View>
+        )}
+        {showNutritionAnalysis && (
+          <View style={styles.tabScreen}>
+            <NutritionAnalysisScreen
+            onBack={handleNutritionAnalysisBack}
+            onRequestLogMeal={handleRequestLogMeal}
+            onRequestLogMealForDate={handleRequestLogMealForDate}
+            onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
+            mealsByDate={mealsByDate}
+            summariesByDate={summariesByDate}
+            targetCalories={goalsSet ? savedGoals.calories : undefined}
+            targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
+            targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
+            targetFat={goalsSet ? savedGoals.fatGrams : undefined}
+            isPremium={isPremium}
+            calorieBankData={calorieBankCycle && calorieBankConfig?.enabled ? {
+              enabled: true,
+              weeklyBudget: calorieBankCycle.weeklyBudget,
+              // Logged total, same as the home bank card. weeklyActual silently
+              // adds the full base target for every unlogged past day, so the
+              // two screens showed different "used" numbers for the same week.
+              weeklyActual: calorieBankCycle.weeklyLoggedActual,
+              bankBalance: calorieBankCycle.bankBalance,
+              bankUtilization: calculateBankUtilization(calorieBankCycle.perDayData),
+              expiredCalories: 0,
+              dailyCapPercent: calorieBankConfig.dailyCapPercent,
+              cycleStartDay: getDayName(calorieBankConfig.cycleStartDay),
+              cycleStartDayNum: calorieBankConfig.cycleStartDay,
+              perDayBreakdown: calorieBankCycle.perDayData.map(d => ({
+                day: d.date,
+                base: d.baseTarget,
+                adjusted: d.adjustedTarget,
+                actual: d.actual,
+                banked: d.banked,
+                spent: d.spent,
+              })),
+              capHitDays: calorieBankCycle.perDayData.filter(d => d.capHit).length,
+              spendCapHitDays: calorieBankCycle.perDayData.filter(d => d.spendCapHit).length,
+            } : null}
+            insightUnlocks={insightUnlocks}
+            visible={showNutritionAnalysis}
+            initialTab={openNutritionOnInsights ? 'Insights' : undefined}
+            scrollToInsight={scrollToInsightId}
+            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
+          />
+          </View>
+        )}
+        {showChatCoach && (
+          <View style={styles.tabScreen}>
+            <ChatCoachScreen onClose={() => setShowChatCoach(false)} isPremium={isPremium} />
+          </View>
+        )}
+        {showSettings && (
+          <View style={styles.tabScreen}>
+            <SettingsScreen
+          onBack={handleSettingsBack}
+          plan={isPremium ? 'premium' : 'free'}
+          onOpenSubscription={handleOpenSubscription}
+          onLogin={handleAccount}
+          onDowngradeToFree={handleDowngradeToFree}
+          onGrocerySuggestions={handleGrocerySuggestions}
+          onSetGoals={() => { setShowSettings(false); handleSetGoals(); }}
+          onOpenAbout={handleAbout}
+          onOpenFeedback={() => { setShowSettings(false); setShowFeedback(true); }}
+          onAdminPush={handleAdminPush}
+          onHowItWorks={() => {
+            setShowSettings(false);
+            setWalkthroughHideOffer(false);
+            setShowWalkthrough(true);
+          }}
+          renderAccountScreen={(onBack) => (
+            <AccountScreen
+              onBack={onBack}
+              onRequestSync={handleSyncAccount}
+              initialAccountInfo={accountInfo}
+              initialEntryCount={entryCount}
+              initialPlan={isPremium ? 'premium' : 'free'}
+              initialGoals={savedGoals}
+              initialReferralCode={referralCode}
+              initialTotalEarnedEntries={totalEarnedEntries}
+              initialStreakFreeze={streakFreeze}
+              initialFrozenDates={streakFreeze?.usedOnDates}
+            />
+          )}
+          onAccountClose={async () => {
+            try {
+              const info = await dataStorage.loadAccountInfo();
+              await refreshUserContext();
+              if (!info?.email) {
+                setEntryCount(0);
+                setReferralCode(null);
+                setTotalEarnedEntries(0);
+                const count = await dataStorage.loadEntryCount();
+                setEntryCount(count);
+              } else {
+                const code = await dataStorage.getReferralCode(info.email);
+                setReferralCode(code?.code || null);
+                const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(info.email);
+                setTotalEarnedEntries(earned);
+              }
+            } catch (e) {
+              if (__DEV__) console.error('Error reloading account data:', e);
+            }
+          }}
+        />
+          </View>
+        )}
 
         {/* Bottom tab bar — phase 1 of the board's navigation. Home is this
             screen; the rest open the existing full-screen surfaces. */}
         <AcidTabBar
-          active="home"
-          onPlus={() => setShowQuickLog(true)}
-          onPress={(tab) => {
-            if (tab === 'insights') handleNutritionAnalysis();
-            else if (tab === 'coach') { if (canNavigate('chatCoach')) setShowChatCoach(true); }
-            else if (tab === 'body') handleWeightTracker();
-            else if (tab === 'profile') handleSettings();
-          }}
+          active={activeTabId}
+          onPlus={() => { switchTab('home'); setShowQuickLog(true); }}
+          onPress={switchTab}
         />
 
         {/* Quick log sheet, opened by the tab bar's plus */}
@@ -3079,82 +3162,12 @@ export const HomeScreen: React.FC = () => {
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
         {/* Animation handled by iOS. No internal slideAnim. */}
         <Modal
-          visible={showWeightTracker}
-          animationType="slide"
-          presentationStyle="fullScreen"
-          onRequestClose={handleWeightTrackerBack}
-        >
-          <WeightTrackerScreen
-            onBack={handleWeightTrackerBack}
-            initialCurrentWeightKg={savedGoals.currentWeightKg ?? undefined}
-            targetWeightKg={savedGoals.targetWeightKg ?? undefined}
-            onRequestSetGoals={handleOpenSetGoalsFromWeightTracker}
-            isPremium={isPremium}
-            insightUnlocks={insightUnlocks}
-            visible={showWeightTracker}
-            initialTab={openWeightOnInsights ? 'Insights' : undefined}
-            scrollToInsight={scrollToInsightId}
-            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
-          />
-        </Modal>
-
-        <Modal
-          visible={showNutritionAnalysis}
-          animationType="slide"
-          presentationStyle="fullScreen"
-          onRequestClose={handleNutritionAnalysisBack}
-        >
-          <NutritionAnalysisScreen
-            onBack={handleNutritionAnalysisBack}
-            onRequestLogMeal={handleRequestLogMeal}
-            onRequestLogMealForDate={handleRequestLogMealForDate}
-            onRequestSetGoals={handleOpenSetGoalsFromNutritionAnalysis}
-            mealsByDate={mealsByDate}
-            summariesByDate={summariesByDate}
-            targetCalories={goalsSet ? savedGoals.calories : undefined}
-            targetProtein={goalsSet ? savedGoals.proteinGrams : undefined}
-            targetCarbs={goalsSet ? savedGoals.carbsGrams : undefined}
-            targetFat={goalsSet ? savedGoals.fatGrams : undefined}
-            isPremium={isPremium}
-            calorieBankData={calorieBankCycle && calorieBankConfig?.enabled ? {
-              enabled: true,
-              weeklyBudget: calorieBankCycle.weeklyBudget,
-              // Logged total, same as the home bank card. weeklyActual silently
-              // adds the full base target for every unlogged past day, so the
-              // two screens showed different "used" numbers for the same week.
-              weeklyActual: calorieBankCycle.weeklyLoggedActual,
-              bankBalance: calorieBankCycle.bankBalance,
-              bankUtilization: calculateBankUtilization(calorieBankCycle.perDayData),
-              expiredCalories: 0,
-              dailyCapPercent: calorieBankConfig.dailyCapPercent,
-              cycleStartDay: getDayName(calorieBankConfig.cycleStartDay),
-              cycleStartDayNum: calorieBankConfig.cycleStartDay,
-              perDayBreakdown: calorieBankCycle.perDayData.map(d => ({
-                day: d.date,
-                base: d.baseTarget,
-                adjusted: d.adjustedTarget,
-                actual: d.actual,
-                banked: d.banked,
-                spent: d.spent,
-              })),
-              capHitDays: calorieBankCycle.perDayData.filter(d => d.capHit).length,
-              spendCapHitDays: calorieBankCycle.perDayData.filter(d => d.spendCapHit).length,
-            } : null}
-            insightUnlocks={insightUnlocks}
-            visible={showNutritionAnalysis}
-            initialTab={openNutritionOnInsights ? 'Insights' : undefined}
-            scrollToInsight={scrollToInsightId}
-            onScrollToInsightConsumed={() => setScrollToInsightId(null)}
-          />
-        </Modal>
-
-        <Modal
-          visible={showChatCoach}
+          visible={showSubscription}
           animationType="slide"
           presentationStyle="pageSheet"
-          onRequestClose={() => setShowChatCoach(false)}
+          onRequestClose={handleSubscriptionBack}
         >
-          <ChatCoachScreen onClose={() => setShowChatCoach(false)} isPremium={isPremium} />
+          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
         </Modal>
 
         <CalendarModal
@@ -3196,14 +3209,6 @@ export const HomeScreen: React.FC = () => {
           hideOffer={walkthroughHideOffer || isPremium}
         />
 
-        <Modal
-          visible={showSubscription}
-          animationType="slide"
-          presentationStyle="pageSheet"
-          onRequestClose={handleSubscriptionBack}
-        >
-          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
-        </Modal>
       </View>
     </SafeAreaView>
   );
@@ -3213,6 +3218,9 @@ const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
     backgroundColor: Acid.moss,
+  },
+  tabScreen: {
+    flex: 1,
   },
   container: {
     flex: 1,

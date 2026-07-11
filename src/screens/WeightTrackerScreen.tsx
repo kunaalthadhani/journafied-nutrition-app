@@ -1152,7 +1152,7 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   return (
     <SafeAreaView
       style={[styles.safeArea, { backgroundColor: Acid.moss }]}
-      edges={['top', 'bottom']}
+      edges={['top']}
     >
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}

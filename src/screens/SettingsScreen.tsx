@@ -299,7 +299,7 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top']}>
       {/* Header */}
       <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
         <TouchableOpacity onPress={onBack} style={styles.backButton}>

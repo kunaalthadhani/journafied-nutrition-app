@@ -1135,7 +1135,7 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   };
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
+    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top']}>
       <Animated.View
         style={{ flex: 1, transform: [{ translateY: slideAnim }] }}
       >
