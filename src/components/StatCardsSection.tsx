@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Acid } from '../constants/acid';
 import { MacroData } from '../types';
 import { NumberTicker } from './NumberTicker';
@@ -21,6 +21,9 @@ interface StatCardsSectionProps {
   remainingDays?: number;
   daysInCycle?: number;
   bankPerDayData?: CalorieBankDayData[];
+  waterMl?: number;
+  waterTargetMl?: number;
+  onWaterPress?: () => void;
   loading?: boolean;
 }
 
@@ -55,6 +58,9 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
   remainingDays,
   daysInCycle,
   bankPerDayData,
+  waterMl,
+  waterTargetMl,
+  onWaterPress,
   loading,
 }) => {
   if (loading) {
@@ -94,6 +100,17 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
           <MacroRow label="PROTEIN" color={Acid.protein} current={macrosData.protein.current} target={macrosData.protein.target} />
           <MacroRow label="CARBS" color={Acid.carbs} current={macrosData.carbs.current} target={macrosData.carbs.target} />
           <MacroRow label="FAT" color={Acid.fat} current={macrosData.fat.current} target={macrosData.fat.target} />
+          {(waterTargetMl || 0) > 0 && (
+            <TouchableOpacity style={styles.macroRow} onPress={onWaterPress} activeOpacity={0.6}>
+              <Text style={styles.macroLabel}>WATER</Text>
+              <View style={styles.macroTrack}>
+                <AnimatedFill pct={Math.min(1, (waterMl || 0) / (waterTargetMl || 1)) * 100} color={Acid.protein} style={styles.macroFill} />
+              </View>
+              <Text style={styles.macroValue}>
+                {((waterMl || 0) / 1000).toFixed(1)}<Text style={styles.macroTarget}> / {((waterTargetMl || 0) / 1000).toFixed(1)}L</Text>
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       )}
 

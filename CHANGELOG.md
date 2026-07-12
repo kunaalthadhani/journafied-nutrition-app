@@ -4,6 +4,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ---
 
+## Proactive
+
+**v1.4.51**
+Two additions that make the app speak first. The coach line on Home is now the daily brief: it picks the one most useful thing to tell you from everything the app knows, your streak at risk in the evening, a protein gap after 3pm, an over day your bank quietly covered, banked calories about to expire, a pattern it spotted in your habits, or simply your pace for the day. One sentence, chosen by priority, honest when there is nothing dramatic to say. And water logging arrived the way water should be logged: one tap. A Water option in the lime plus and a tappable WATER bar under your macros open a counter with glass, bottle, and litre buttons. Typing "2 glasses of water" in the meal bar counts it too, without waking the AI. Water is stored on this device for now; cloud sync follows.
+
 ## Redesign
 
 **v1.4.50**

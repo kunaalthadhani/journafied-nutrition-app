@@ -78,6 +78,7 @@ import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
 import { AcidTabBar, AcidTabId } from '../components/AcidTabBar';
 import { AnimatedFill } from '../components/AnimatedFill';
+import { buildBrief } from '../utils/briefEngine';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
@@ -103,6 +104,19 @@ export const HomeScreen: React.FC = () => {
   const [showAccount, setShowAccount] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [showWaterSheet, setShowWaterSheet] = useState(false);
+  const [waterByDate, setWaterByDate] = useState<Record<string, number>>({});
+  const WATER_TARGET_ML = 2500;
+
+  useEffect(() => {
+    dataStorage.loadWaterLog().then(setWaterByDate).catch(() => {});
+  }, []);
+
+  const handleAddWater = async (deltaMl: number) => {
+    const key = format(selectedDate, 'yyyy-MM-dd');
+    const next = await dataStorage.addWater(key, deltaMl);
+    setWaterByDate(prev => ({ ...prev, [key]: next }));
+  };
   const [weightLogRequest, setWeightLogRequest] = useState(false);
   const [showAdminPush, setShowAdminPush] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
@@ -1443,6 +1457,20 @@ export const HomeScreen: React.FC = () => {
     const trimmed = text.trim();
     if (!trimmed) return;
 
+    // "2 glasses of water" is a tap-counter event, not a meal. Catch clearly
+    // water-only phrases before they cost an AI call.
+    const waterMatch = trimmed.match(/^(\d+(?:\.\d+)?)?\s*(glass(?:es)?|cup(?:s)?|bottle(?:s)?|ml|l|liter(?:s)?|litre(?:s)?)?\s*(?:of\s+)?water$/i);
+    if (waterMatch) {
+      const qty = parseFloat(waterMatch[1] || '1');
+      const unit = (waterMatch[2] || 'glass').toLowerCase();
+      const perUnit = unit.startsWith('glass') || unit.startsWith('cup') ? 250
+        : unit.startsWith('bottle') ? 500
+        : unit === 'ml' ? 1
+        : 1000; // l / liter / litre
+      await handleAddWater(Math.round(qty * perUnit));
+      return true;
+    }
+
     // Enforce 3/day limit
     if (!canAddEntry()) {
       Alert.alert(
@@ -2666,6 +2694,9 @@ export const HomeScreen: React.FC = () => {
                 remainingDays={calorieBankCycle?.remainingDays || 0}
                 daysInCycle={calorieBankCycle?.daysInCycle || 7}
                 bankPerDayData={calorieBankCycle?.perDayData}
+                waterMl={waterByDate[format(selectedDate, 'yyyy-MM-dd')] || 0}
+                waterTargetMl={WATER_TARGET_ML}
+                onWaterPress={() => setShowWaterSheet(true)}
                 loading={statsLoading}
               />
             )}
@@ -2866,17 +2897,23 @@ export const HomeScreen: React.FC = () => {
             {isSameDay(selectedDate, new Date()) && (
               <View style={{ paddingHorizontal: 20, paddingTop: 16, paddingBottom: 4 }}>
                 <Text style={{ fontFamily: Acid.serifItalic, fontSize: 16, lineHeight: 24, color: Acid.tx }}>
-                  {(() => {
-                    const remaining = Math.round(macros2Data?.fat?.current ?? 0);
-                    const h = new Date().getHours();
-                    const phrase = h < 12 ? 'the whole day ahead' : h < 17 ? 'the afternoon ahead' : 'the evening to go';
-                    const nothingLogged = currentDayMeals.length === 0 && currentDayExercises.length === 0;
-                    if (!goalsSet) return "Tell me what you ate or how you moved and I'll handle the rest.";
-                    if (nothingLogged) return "Nothing logged yet. Tell me your first meal and I'll pace your day.";
-                    if (currentDayMeals.length === 0) return "Workout logged. Tell me what you eat and I'll balance the day.";
-                    if (remaining < 0) return `${Math.abs(remaining).toLocaleString()} kcal over today. Tomorrow starts a clean page.`;
-                    return `${remaining.toLocaleString()} kcal left with ${phrase}.`;
-                  })()}
+                  {buildBrief({
+                    goalsSet,
+                    remaining: Math.round(macros2Data?.fat?.current ?? 0),
+                    mealsToday: currentDayMeals.length,
+                    exercisesToday: currentDayExercises.length,
+                    hourOfDay: new Date().getHours(),
+                    proteinSoFar: macrosData?.protein?.current,
+                    proteinTarget: macrosData?.protein?.target,
+                    bankActive: calorieBankActive,
+                    bankBalance: calorieBankCycle?.bankBalance,
+                    bankRemainingDays: calorieBankCycle?.remainingDays,
+                    patternTitle: detectedPatterns[0]?.title,
+                    patternFix: detectedPatterns[0]?.fix,
+                    streak: currentStreak,
+                    waterMl: waterByDate[format(new Date(), 'yyyy-MM-dd')] || 0,
+                    waterTargetMl: WATER_TARGET_ML,
+                  }).text}
                 </Text>
                 {isPremium && (
                   <TouchableOpacity
@@ -3088,6 +3125,7 @@ export const HomeScreen: React.FC = () => {
                 { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', action: () => handlePlusPress() },
                 { icon: 'mic', label: 'Say it', hint: 'Speak and we transcribe', action: () => handleMicPress() },
                 { icon: 'activity', label: 'Weigh in', hint: "Log today's weight", action: () => { setWeightLogRequest(true); handleWeightTracker(); } },
+                { icon: 'droplet', label: 'Water', hint: 'Count your glasses', action: () => setShowWaterSheet(true) },
               ].map(row => (
                 <TouchableOpacity
                   key={row.label}
@@ -3106,6 +3144,53 @@ export const HomeScreen: React.FC = () => {
                 onPress={() => setShowQuickLog(false)}
               >
                 <Text style={{ fontSize: 15, color: Acid.tx2 }}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+          </TouchableOpacity>
+        </Modal>
+
+        {/* Water sheet: a tap counter, nothing more */}
+        <Modal
+          visible={showWaterSheet}
+          transparent
+          animationType="fade"
+          onRequestClose={() => setShowWaterSheet(false)}
+        >
+          <TouchableOpacity
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'flex-end' }}
+            activeOpacity={1}
+            onPress={() => setShowWaterSheet(false)}
+          >
+            <View style={{ backgroundColor: Acid.moss, borderTopLeftRadius: 24, borderTopRightRadius: 24, paddingHorizontal: 24, paddingTop: 20, paddingBottom: 34 }}>
+              <Text style={{ fontFamily: Acid.serifItalic, fontSize: 20, color: Acid.tx }}>Water</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 10, marginBottom: 18 }}>
+                <Text style={{ fontFamily: Acid.serif, fontSize: 44, lineHeight: 50, color: Acid.tx }}>
+                  {((waterByDate[format(selectedDate, 'yyyy-MM-dd')] || 0) / 1000).toFixed(2)}
+                </Text>
+                <Text style={{ fontSize: 15, color: Acid.tx3, marginLeft: 6 }}>of {(WATER_TARGET_ML / 1000).toFixed(1)} L</Text>
+              </View>
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {[
+                  { label: '+ Glass', hint: '250 ml', ml: 250 },
+                  { label: '+ Bottle', hint: '500 ml', ml: 500 },
+                  { label: '+ Litre', hint: '1000 ml', ml: 1000 },
+                ].map(o => (
+                  <TouchableOpacity
+                    key={o.ml}
+                    style={{ flex: 1, alignItems: 'center', paddingVertical: 14, borderRadius: 16, borderWidth: 1, borderColor: Acid.protein + '66' }}
+                    onPress={() => handleAddWater(o.ml)}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.protein }}>{o.label}</Text>
+                    <Text style={{ fontSize: 11, color: Acid.tx3, marginTop: 2 }}>{o.hint}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity
+                style={{ paddingVertical: 16, marginTop: 8, borderTopWidth: 1, borderTopColor: Acid.hair }}
+                onPress={() => setShowWaterSheet(false)}
+              >
+                <Text style={{ fontSize: 15, color: Acid.tx2 }}>Done</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>

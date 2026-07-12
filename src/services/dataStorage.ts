@@ -3723,6 +3723,28 @@ export const dataStorage = {
     }
   },
 
+  // ── Water log (local-first; cloud sync pending a water table) ─────
+  // One map of yyyy-MM-dd -> milliliters. Kept intentionally simple: water is
+  // a tap-counter habit, not a ledger of entries.
+  async loadWaterLog(): Promise<Record<string, number>> {
+    try {
+      const raw = await AsyncStorage.getItem('@trackkal:waterLog');
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  },
+
+  async addWater(dateKey: string, deltaMl: number): Promise<number> {
+    const log = await this.loadWaterLog();
+    const next = Math.max(0, Math.round((log[dateKey] || 0) + deltaMl));
+    log[dateKey] = next;
+    try {
+      await AsyncStorage.setItem('@trackkal:waterLog', JSON.stringify(log));
+    } catch { /* keep the in-memory value; next write retries */ }
+    return next;
+  },
+
   async loadCalorieBankConfig(): Promise<CalorieBankConfig | null> {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.CALORIE_BANK_CONFIG);
