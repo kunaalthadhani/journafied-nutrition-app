@@ -391,11 +391,15 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
       category = 'Obese';
       categoryColor = Acid.error; // red
     }
-    // Position on the bar (scale 15-40)
+    // Position on the scale (15-40)
     const barMin = 15;
     const barMax = 40;
     const position = Math.max(0, Math.min(1, (bmi - barMin) / (barMax - barMin)));
-    return { bmi, category, categoryColor, position };
+    // The healthy BMI band translated into kg for this height, so the card
+    // can say what weight the band actually means.
+    const healthyLowKg = 18.5 * heightM * heightM;
+    const healthyHighKg = 24.9 * heightM * heightM;
+    return { bmi, category, categoryColor, position, healthyLowKg, healthyHighKg };
   }, [currentWeight, heightCm]);
 
   // Goal progress calculation
@@ -2157,15 +2161,13 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                             <Feather name="info" size={13} color={Acid.tx3} />
                           </TouchableOpacity>
                         </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 8 }}>
-                          <Text style={[styles.bmiGaugeValue, { color: bmiData.categoryColor }]}>
+                        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10 }}>
+                          <Text style={[styles.bmiGaugeValue, { color: Acid.tx }]}>
                             {bmiData.bmi.toFixed(1)}
                           </Text>
-                          <View style={[styles.bmiCategoryBadge, { backgroundColor: bmiData.categoryColor + '15' }]}>
-                            <Text style={[styles.bmiCategoryText, { color: bmiData.categoryColor }]}>
-                              {bmiData.category}
-                            </Text>
-                          </View>
+                          <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: bmiData.categoryColor }}>
+                            {bmiData.category.toUpperCase()}
+                          </Text>
                         </View>
                       </View>
                       <View style={{ alignItems: 'flex-end' }}>
@@ -2180,32 +2182,52 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.bmiBarSection}>
-                      <View style={[styles.bmiPointerRow, { left: `${bmiData.position * 100}%` }]}>
-                        <View style={[styles.bmiPointerTriangle, { borderTopColor: bmiData.categoryColor }]} />
+                    {/* The scale: muted zone bands, a lime needle at your BMI,
+                        boundary numbers underneath. No legend row, the bands
+                        and the category word above carry it. */}
+                    <View style={{ paddingTop: 10 }}>
+                      <View style={{ height: 26, justifyContent: 'center' }}>
+                        <View style={{ flexDirection: 'row', height: 5, borderRadius: 2.5, overflow: 'hidden' }}>
+                          <View style={{ flex: 3.5, backgroundColor: Acid.protein + '45' }} />
+                          <View style={{ flex: 6.5, backgroundColor: Acid.good + '55' }} />
+                          <View style={{ flex: 5, backgroundColor: Acid.carbs + '45' }} />
+                          <View style={{ flex: 10, backgroundColor: Acid.error + '40' }} />
+                        </View>
+                        <View
+                          style={{
+                            position: 'absolute',
+                            left: `${bmiData.position * 100}%`,
+                            marginLeft: -1.5,
+                            width: 3,
+                            height: 20,
+                            borderRadius: 1.5,
+                            backgroundColor: Acid.lime,
+                            shadowColor: Acid.lime,
+                            shadowOpacity: 0.8,
+                            shadowRadius: 5,
+                            shadowOffset: { width: 0, height: 0 },
+                            elevation: 3,
+                          }}
+                        />
                       </View>
-                      <View style={styles.bmiBar}>
-                        <View style={[styles.bmiBarSegment, { flex: 3.5, backgroundColor: Acid.protein, borderTopLeftRadius: 6, borderBottomLeftRadius: 6 }]} />
-                        <View style={[styles.bmiBarSegment, { flex: 6.5, backgroundColor: Acid.good }]} />
-                        <View style={[styles.bmiBarSegment, { flex: 5, backgroundColor: Acid.carbs }]} />
-                        <View style={[styles.bmiBarSegment, { flex: 10, backgroundColor: Acid.error, borderTopRightRadius: 6, borderBottomRightRadius: 6 }]} />
+                      <View style={{ height: 14 }}>
+                        <Text style={{ position: 'absolute', left: '14%', marginLeft: -10, fontSize: 9, color: Acid.tx3 }}>18.5</Text>
+                        <Text style={{ position: 'absolute', left: '40%', marginLeft: -7, fontSize: 9, color: Acid.tx3 }}>25</Text>
+                        <Text style={{ position: 'absolute', left: '60%', marginLeft: -7, fontSize: 9, color: Acid.tx3 }}>30</Text>
                       </View>
-                      <View style={styles.bmiLegendRow}>
-                        {[
-                          { color: Acid.protein, label: 'Under', range: '<18.5' },
-                          { color: Acid.good, label: 'Normal', range: '18.5–24.9' },
-                          { color: Acid.carbs, label: 'Over', range: '25–29.9' },
-                          { color: Acid.error, label: 'Obese', range: '30+' },
-                        ].map((item) => (
-                          <View key={item.label} style={styles.bmiLegendItem}>
-                            <View style={[styles.bmiLegendDot, { backgroundColor: item.color }]} />
-                            <View>
-                              <Text style={[styles.bmiLegendLabel, { color: Acid.tx }]}>{item.label}</Text>
-                              <Text style={[styles.bmiLegendRange, { color: Acid.tx3 }]}>{item.range}</Text>
-                            </View>
-                          </View>
-                        ))}
-                      </View>
+                      {/* BMI translated into weight, so the number is actionable */}
+                      <Text style={{ fontSize: 12, color: Acid.tx2, lineHeight: 18, marginTop: 10 }}>
+                        Healthy for your height: {convertWeightToDisplay(bmiData.healthyLowKg).toFixed(1)}–{convertWeightToDisplay(bmiData.healthyHighKg).toFixed(1)} {getWeightUnitLabel()}
+                      </Text>
+                      {targetWeightValue > 0 && heightCm && heightCm > 0 && (() => {
+                        const tb = targetWeightValue / ((heightCm / 100) * (heightCm / 100));
+                        const tCat = tb < 18.5 ? { w: 'Underweight', c: Acid.protein } : tb < 25 ? { w: 'Normal', c: Acid.good } : tb < 30 ? { w: 'Overweight', c: Acid.carbs } : { w: 'Obese', c: Acid.error };
+                        return (
+                          <Text style={{ fontSize: 12, color: Acid.tx3, lineHeight: 18, marginTop: 2 }}>
+                            Your target {convertWeightToDisplay(targetWeightValue).toFixed(1)} {getWeightUnitLabel()} lands at BMI {tb.toFixed(1)} · <Text style={{ color: tCat.c, fontWeight: '600' }}>{tCat.w}</Text>
+                          </Text>
+                        );
+                      })()}
                     </View>
                   </View>
                 )}
@@ -2566,58 +2588,6 @@ const styles = StyleSheet.create({
   bmiCategoryText: {
     fontSize: 12,
     fontWeight: '600',
-  },
-  bmiBarSection: {
-    position: 'relative',
-    paddingTop: 14,
-  },
-  bmiPointerRow: {
-    position: 'absolute',
-    top: 0,
-    marginLeft: -6,
-    zIndex: 1,
-  },
-  bmiPointerTriangle: {
-    width: 0,
-    height: 0,
-    borderLeftWidth: 6,
-    borderRightWidth: 6,
-    borderTopWidth: 8,
-    borderLeftColor: 'transparent',
-    borderRightColor: 'transparent',
-  },
-  bmiBar: {
-    flexDirection: 'row',
-    height: 14,
-    borderRadius: 7,
-    overflow: 'hidden',
-  },
-  bmiBarSegment: {
-    height: '100%',
-  },
-  bmiLegendRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    marginTop: 14,
-  },
-  bmiLegendItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  bmiLegendDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-  },
-  bmiLegendLabel: {
-    fontSize: 11,
-    fontWeight: '600',
-    lineHeight: 14,
-  },
-  bmiLegendRange: {
-    fontSize: 9,
-    lineHeight: 12,
   },
   bmiEmptyText: {
     fontSize: 13,

@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.48**
+The BMI card grew up. Instead of a rainbow bar with a triangle pointer and a four-item legend, it is now a quiet scale with muted zone bands, a lime needle at your number, and the boundaries written underneath. The number is bone with the category beside it in its zone color. And it finally answers the question BMI never answers on its own: it shows the healthy range in actual kilograms for your height, and where your target weight lands on the scale.
+
 **v1.4.47**
 Logging your weight no longer means scrolling to the bottom of the page. The lime plus in the tab bar now has a Weigh in option that jumps you straight into the log sheet from anywhere. And the sheet itself became a meter: your weight in big serif with a tape measure under it that you drag left and right, snapping to every 0.1, prefilled at your last weigh-in so most days you just nudge it and save.
 
