@@ -3,6 +3,11 @@ import { generateId } from '../utils/uuid';
 import { invokeAI } from './aiProxyService';
 import { sanitizeObjectForAI } from '../utils/sanitizeAI';
 import { format } from 'date-fns';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+
+// Run marker independent of results: a run that finds zero patterns must
+// still count as a run, or every app open re-fires the paid call.
+const LAST_RUN_KEY = '@trackkal:lastPatternRun';
 
 /**
  * Pattern Detection Service
@@ -143,6 +148,10 @@ export const patternDetectionService = {
                 call_type: 'pattern-detection',
             });
 
+            // The call itself succeeded: stamp the run before parsing, so a
+            // zero-pattern result does not re-trigger a paid call every launch.
+            await AsyncStorage.setItem(LAST_RUN_KEY, new Date().toISOString());
+
             const content = data.choices[0]?.message?.content;
 
             if (!content) return [];
@@ -194,15 +203,18 @@ export const patternDetectionService = {
      * Run at most once per week
      */
     async shouldRunDetection(): Promise<boolean> {
-        const patterns = await dataStorage.getDetectedPatterns();
-        if (patterns.length === 0) return true;
-
-        const lastDetection = patterns.reduce((latest, p) => {
-            const pDate = new Date(p.detectedAt);
-            return pDate > latest ? pDate : latest;
-        }, new Date(0));
-
-        const daysSince = Math.floor((Date.now() - lastDetection.getTime()) / (1000 * 60 * 60 * 24));
+        // Primary: the explicit run marker. Fallback for pre-marker installs:
+        // the newest stored pattern's timestamp.
+        const marker = await AsyncStorage.getItem(LAST_RUN_KEY);
+        let lastRun = marker ? new Date(marker) : new Date(0);
+        if (!marker) {
+            const patterns = await dataStorage.getDetectedPatterns();
+            lastRun = patterns.reduce((latest, p) => {
+                const pDate = new Date(p.detectedAt);
+                return pDate > latest ? pDate : latest;
+            }, new Date(0));
+        }
+        const daysSince = Math.floor((Date.now() - lastRun.getTime()) / (1000 * 60 * 60 * 24));
         return daysSince >= 7;
     },
 
