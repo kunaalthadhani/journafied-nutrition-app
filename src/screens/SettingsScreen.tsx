@@ -920,6 +920,20 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
                     </Text>
                   </View>
 
+                  <View style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: Acid.hair }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: Acid.tx, marginBottom: 4 }}>Breakfasts that predict your day</Text>
+                    <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 20 }}>
+                      Checks whether days that start with a low protein breakfast end over target more often than days that start strong.
+                    </Text>
+                  </View>
+
+                  <View style={{ paddingVertical: 12, borderTopWidth: 1, borderTopColor: Acid.hair }}>
+                    <Text style={{ fontSize: 14, fontWeight: '700', color: Acid.tx, marginBottom: 4 }}>Rebound after skipped days</Text>
+                    <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 20 }}>
+                      Spots when days right after an unlogged day run heavier than your normal, a common blind spot.
+                    </Text>
+                  </View>
+
                   <View style={{ paddingVertical: 12, marginBottom: 16, borderTopWidth: 1, borderTopColor: Acid.hair }}>
                     <Text style={{ fontSize: 14, fontWeight: '700', color: Acid.tx, marginBottom: 4 }}>Consistency streaks</Text>
                     <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 20 }}>

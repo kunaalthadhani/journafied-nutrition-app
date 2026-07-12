@@ -66,15 +66,17 @@ export interface CalorieBankCompletedCycle {
 
 // Premium: Detected Pattern
 export interface DetectedPattern {
-  id: string;
+  id: string; // stable 'det:<detector-key>' since the deterministic engine
   type: 'correlation' | 'trigger' | 'outcome';
-  title: string; // e.g., "Low-protein breakfasts lead to evening overeating"
+  title: string;
   description: string; // Free user sees this
   fix?: string; // Premium-only actionable advice
-  confidence: number; // 0-100, only show if >70
-  dataPoints: number; // How many days/meals support this pattern
+  confidence: number; // computed by patternEngine from sample size and effect
+  dataPoints: number; // How many days support this pattern
+  priority?: number; // engine ranking, higher shows first
   detectedAt: string; // ISO timestamp
   dismissed?: boolean;
+  dismissedAt?: string; // ISO timestamp, anchors the dismissal hold
 }
 
 // Premium: Weekly Action Plan
@@ -3568,17 +3570,19 @@ export const dataStorage = {
   },
 
   // Premium: Detected Patterns
-  async saveDetectedPattern(pattern: DetectedPattern): Promise<void> {
-    const existing = await this.getDetectedPatterns();
-    const updated = [...existing.filter(p => p.id !== pattern.id), pattern];
-    await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+  // Replaces the whole stored set in one locked write and one cloud push, so
+  // a detection run never races a dismissal or fans out partial upserts.
+  async replaceDetectedPatterns(patterns: DetectedPattern[]): Promise<void> {
+    return withWriteLock(STORAGE_KEYS.DETECTED_PATTERNS, async () => {
+      await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(patterns));
 
-    const accountInfo = await getCachedAccountInfo();
-    if (accountInfo?.supabaseUserId) {
-      void supabaseDataService.upsertDetectedPatterns(accountInfo, updated).catch((err) => {
-        if (__DEV__) console.warn('detected patterns sync failed', err);
-      });
-    }
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        void supabaseDataService.upsertDetectedPatterns(accountInfo, patterns).catch((err) => {
+          if (__DEV__) console.warn('detected patterns sync failed', err);
+        });
+      }
+    });
   },
 
   async getDetectedPatterns(): Promise<DetectedPattern[]> {
@@ -3587,9 +3591,21 @@ export const dataStorage = {
   },
 
   async dismissPattern(patternId: string): Promise<void> {
-    const patterns = await this.getDetectedPatterns();
-    const updated = patterns.map(p => p.id === patternId ? { ...p, dismissed: true } : p);
-    await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+    return withWriteLock(STORAGE_KEYS.DETECTED_PATTERNS, async () => {
+      const data = await AsyncStorage.getItem(STORAGE_KEYS.DETECTED_PATTERNS);
+      const patterns: DetectedPattern[] = data ? JSON.parse(data) : [];
+      const updated = patterns.map(p =>
+        p.id === patternId ? { ...p, dismissed: true, dismissedAt: new Date().toISOString() } : p
+      );
+      await AsyncStorage.setItem(STORAGE_KEYS.DETECTED_PATTERNS, JSON.stringify(updated));
+
+      const accountInfo = await getCachedAccountInfo();
+      if (accountInfo?.supabaseUserId) {
+        void supabaseDataService.upsertDetectedPatterns(accountInfo, updated).catch((err) => {
+          if (__DEV__) console.warn('detected patterns sync failed', err);
+        });
+      }
+    });
   },
 
   // Premium: Weekly Action Plan

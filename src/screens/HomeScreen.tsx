@@ -2909,7 +2909,7 @@ export const HomeScreen: React.FC = () => {
                     bankBalance: calorieBankCycle?.bankBalance,
                     bankRemainingDays: calorieBankCycle?.remainingDays,
                     patternTitle: detectedPatterns[0]?.title,
-                    patternFix: detectedPatterns[0]?.fix,
+                    patternFix: isPremium ? detectedPatterns[0]?.fix : undefined,
                     streak: currentStreak,
                     waterMl: waterByDate[format(new Date(), 'yyyy-MM-dd')] || 0,
                     waterTargetMl: WATER_TARGET_ML,

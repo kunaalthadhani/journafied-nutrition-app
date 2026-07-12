@@ -1,183 +1,136 @@
-import { dataStorage, DetectedPattern } from './dataStorage';
-import { generateId } from '../utils/uuid';
-import { invokeAI } from './aiProxyService';
-import { sanitizeObjectForAI } from '../utils/sanitizeAI';
-import { format } from 'date-fns';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-
-// Run marker independent of results: a run that finds zero patterns must
-// still count as a run, or every app open re-fires the paid call.
-const LAST_RUN_KEY = '@trackkal:lastPatternRun';
+import { format } from 'date-fns';
+import { dataStorage, DetectedPattern } from './dataStorage';
+import { detectPatterns, EngineDay } from '../utils/patternEngine';
 
 /**
  * Pattern Detection Service
- * Analyzes user's meal logs to detect meaningful behavioral patterns
- * Only surfaces patterns with high confidence (>70%)
+ * Deterministic: patterns come from src/utils/patternEngine.ts, computed
+ * directly from the user's logs. No AI call, so detection is free and
+ * refreshes daily instead of weekly. Every count shown to the user is real.
  */
 
-const PATTERN_DETECTION_PROMPT = `
-You are a behavioral pattern analyst for nutrition data.
+// Run marker: detection refreshes at most once a day.
+const LAST_RUN_KEY = '@trackkal:lastPatternRun';
+const RUN_INTERVAL_MS = 20 * 60 * 60 * 1000; // 20h, so it lands once per calendar day
 
-Your task is to find STATISTICALLY MEANINGFUL patterns in a user's eating behavior.
+// How long a dismissal holds. After this, a pattern that is STILL true in the
+// data may resurface with fresh numbers.
+const DISMISS_HOLD_MS = 30 * 24 * 60 * 60 * 1000;
 
-### Rules:
-1. **Only report patterns with HIGH CONFIDENCE** (supported by multiple data points)
-2. **Focus on actionable correlations**, not obvious facts
-3. **Be specific** about the relationship (e.g., "Low-protein breakfasts → evening overeating")
-4. **Provide a concrete fix** that the user can implement
+// Detection runs every 20h, so anything not re-confirmed within 48h stopped
+// being true and must drop from every surface.
+const ACTIVE_MAX_AGE_MS = 48 * 60 * 60 * 1000;
 
-### Input Format:
-You will receive an array of daily summaries with:
-- Date
-- Meals (with macros and timing)
-- Total calories, protein, carbs, fat
-- Whether they exceeded their goal
+const WINDOW_DAYS = 21;
+const MIN_LOGGED_DAYS = 14;
 
-### Your Analysis Should Find:
-- **Trigger Patterns:** What meal characteristics lead to overeating?
-- **Correlation Patterns:** What foods/macros correlate with goal adherence?
-- **Outcome Patterns:** What behaviors predict success vs. failure days?
-
-### Output Format (JSON):
-{
-  "patterns": [
-    {
-      "type": "correlation",
-      "title": "Low-protein breakfasts trigger evening overeating",
-      "description": "On 8 out of 10 days when breakfast had <20g protein, you exceeded your calorie goal by dinnertime.",
-      "fix": "Add Greek yogurt (150g) to your usual breakfast. This adds 15g protein and reduces evening cravings by ~40% based on your history.",
-      "confidence": 80,
-      "dataPoints": 10
-    }
-  ]
-}
-
-**Important:** If calorieBankEnabled is true in the input data, the user is using weekly calorie banking (flexible daily targets). On banking days, eating under target is INTENTIONAL (they are saving calories for later). Do NOT flag intentional under-eating on banking days as restriction or a concern. Only flag if the pattern looks like genuine restrict-then-binge cycles (e.g., severe restriction for multiple days followed by extreme overeating).
-
-**Return empty array if no strong patterns found.**
-`;
-
-const PATTERN_DETECTION_SCHEMA = {
-  type: 'object',
-  properties: {
-    patterns: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          type: { type: 'string', enum: ['correlation', 'trigger', 'outcome'] },
-          title: { type: 'string' },
-          description: { type: 'string' },
-          fix: { type: 'string' },
-          confidence: { type: 'number' },
-          dataPoints: { type: 'number' },
-        },
-        required: ['type', 'title', 'description', 'fix', 'confidence', 'dataPoints'],
-        additionalProperties: false,
-      },
-    },
-  },
-  required: ['patterns'],
-  additionalProperties: false,
-};
+// Meals logged onto a past date, or dumped in one batch session, carry the
+// logging time not the eating time. Those hours must not feed time detectors.
+const BATCH_LOG_SPAN_MS = 45 * 60 * 1000;
 
 export const patternDetectionService = {
     /**
-     * Analyze user's meal data and detect patterns
-     * Only triggers if user has 14+ days of data
+     * Compute patterns from the last 21 days (today excluded, it is live
+     * and unsettled) and store them under stable per-detector ids.
      */
     async analyzePatterns(): Promise<DetectedPattern[]> {
         try {
-            // 1. Load user goals for accurate goal-adherence analysis
             const goals = await dataStorage.loadGoals();
-            const calorieTarget = goals?.calories || 0;
+            const bankConfig = await dataStorage.loadCalorieBankConfig();
 
-            // 2. Gather last 21 days of data
-            const dailyData = [];
+            // A day only counts once enough of it was logged to be meaningful.
+            const settledFloor = Math.max(500, (goals?.calories || 0) * 0.4);
+
+            const days: EngineDay[] = [];
             const today = new Date();
 
-            for (let i = 0; i < 21; i++) {
+            for (let i = WINDOW_DAYS; i >= 1; i--) {
                 const date = new Date(today);
                 date.setDate(today.getDate() - i);
-                // LOCAL day key, matching how daily logs are stored. The UTC key
-                // shifted the whole 21-day AI window near midnight.
                 const dateKey = format(date, 'yyyy-MM-dd');
 
                 const meals = await dataStorage.getDailyLog(dateKey);
+                if (meals.length === 0) continue;
 
-                if (meals.length > 0) {
-                    const totalCalories = meals.reduce((sum, m) => sum + m.foods.reduce((s, f) => s + f.calories, 0), 0);
-                    dailyData.push({
-                        date: dateKey,
-                        meals: meals.map(m => ({
-                            timestamp: m.timestamp,
-                            totalCalories: m.foods.reduce((sum, f) => sum + f.calories, 0),
-                            totalProtein: m.foods.reduce((sum, f) => sum + f.protein, 0),
-                            foods: m.foods.map(f => f.name)
-                        })),
-                        totalCalories,
-                        exceededGoal: calorieTarget > 0 ? totalCalories > calorieTarget : null,
-                    });
-                }
+                const timestamps = meals.map(m => m.timestamp);
+                const batchLogged = meals.length >= 2 &&
+                    Math.max(...timestamps) - Math.min(...timestamps) <= BATCH_LOG_SPAN_MS;
+
+                const mapped = meals.map(m => {
+                    const loggedSameDay = format(new Date(m.timestamp), 'yyyy-MM-dd') === dateKey;
+                    return {
+                        hour: loggedSameDay && !batchLogged ? new Date(m.timestamp).getHours() : -1,
+                        calories: m.foods.reduce((s, f) => s + (Number.isFinite(f.calories) ? f.calories : 0), 0),
+                        protein: m.foods.reduce((s, f) => s + (Number.isFinite(f.protein) ? f.protein : 0), 0),
+                        foods: m.foods.map(f => ({ name: f.name, protein: Number.isFinite(f.protein) ? f.protein : 0 })),
+                    };
+                });
+
+                const totalCalories = mapped.reduce((s, m) => s + m.calories, 0);
+                if (totalCalories < settledFloor) continue;
+
+                days.push({
+                    date: dateKey,
+                    weekday: date.getDay(),
+                    meals: mapped,
+                    totalCalories,
+                    totalProtein: mapped.reduce((s, m) => s + m.protein, 0),
+                });
             }
 
-            // Need at least 14 days of data
-            if (dailyData.length < 14) {
-                return [];
-            }
-
-            // 3. Check if calorie banking is active
-            const bankConfig = await dataStorage.loadCalorieBankConfig();
-
-            // 4. Call AI for pattern detection
-            const data = await invokeAI({
-                model: 'gpt-4o-mini',
-                messages: [
-                    { role: 'system', content: PATTERN_DETECTION_PROMPT },
-                    { role: 'user', content: JSON.stringify(sanitizeObjectForAI({
-                        dailyCalorieTarget: calorieTarget || undefined,
-                        dailyData: dailyData.slice(0, 14),
-                        calorieBankEnabled: bankConfig?.enabled || false,
-                    })) }
-                ],
-                temperature: 0.3,
-                response_format: {
-                    type: 'json_schema',
-                    json_schema: { name: 'pattern_detection', strict: true, schema: PATTERN_DETECTION_SCHEMA },
-                },
-                call_type: 'pattern-detection',
-            });
-
-            // The call itself succeeded: stamp the run before parsing, so a
-            // zero-pattern result does not re-trigger a paid call every launch.
+            // Stamp the run whatever happens next: under-data users must not
+            // re-run on every launch.
             await AsyncStorage.setItem(LAST_RUN_KEY, new Date().toISOString());
 
-            const content = data.choices[0]?.message?.content;
+            if (days.length < MIN_LOGGED_DAYS) return [];
 
-            if (!content) return [];
+            const stored = await dataStorage.getDetectedPatterns();
+            const now = Date.now();
 
-            const parsed = JSON.parse(content);
-            const patterns: DetectedPattern[] = (parsed.patterns || [])
-                .filter((p: any) => p.confidence >= 70) // Only high-confidence patterns
-                .map((p: any) => ({
-                    id: generateId(),
-                    type: p.type || 'correlation',
-                    title: p.title,
-                    description: p.description,
-                    fix: p.fix,
-                    confidence: p.confidence,
-                    dataPoints: p.dataPoints,
-                    detectedAt: new Date().toISOString(),
-                    dismissed: false
-                }));
+            // Drop AI-era rows (random uuid ids); the deterministic engine owns
+            // this store now and the bulk write below scrubs the cloud copy too.
+            const cleaned = stored.filter(p => p.id.startsWith('det:'));
 
-            // 3. Save patterns
-            for (const pattern of patterns) {
-                await dataStorage.saveDetectedPattern(pattern);
+            // Detectors under a dismissal hold are excluded BEFORE the top-3
+            // cut so they never block a live finding from surfacing.
+            const held = new Set(
+                cleaned
+                    .filter(p => p.dismissed &&
+                        now - new Date(p.dismissedAt || p.detectedAt).getTime() < DISMISS_HOLD_MS)
+                    .map(p => p.id.slice(4))
+            );
+
+            const findings = detectPatterns({
+                days,
+                windowDays: WINDOW_DAYS,
+                calorieTarget: goals?.calories || undefined,
+                proteinTarget: goals?.proteinGrams || undefined,
+                bankEnabled: bankConfig?.enabled || false,
+            }, held);
+
+            const fresh: DetectedPattern[] = findings.map(f => ({
+                id: `det:${f.key}`,
+                type: f.type,
+                title: f.title,
+                description: f.description,
+                fix: f.fix,
+                confidence: f.confidence,
+                dataPoints: f.dataPoints,
+                priority: f.priority,
+                detectedAt: new Date().toISOString(),
+                dismissed: false,
+            }));
+
+            const freshIds = new Set(fresh.map(p => p.id));
+            const finalSet = [...cleaned.filter(p => !freshIds.has(p.id)), ...fresh];
+
+            const changed = fresh.length > 0 || finalSet.length !== stored.length;
+            if (changed) {
+                await dataStorage.replaceDetectedPatterns(finalSet);
             }
 
-            return patterns;
-
+            return fresh;
         } catch (error) {
             console.error('Pattern detection error:', error);
             return [];
@@ -185,58 +138,28 @@ export const patternDetectionService = {
     },
 
     /**
-     * Get active (non-dismissed) patterns, excluding stale ones (>14 days old)
+     * Active patterns: engine-owned, not dismissed, re-confirmed within 48h,
+     * strongest first.
      */
     async getActivePatterns(): Promise<DetectedPattern[]> {
         const all = await dataStorage.getDetectedPatterns();
         const now = Date.now();
-        const MAX_AGE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
-        return all.filter(p => {
-            if (p.dismissed) return false;
-            const age = now - new Date(p.detectedAt).getTime();
-            return age <= MAX_AGE_MS;
-        });
+        return all
+            .filter(p => {
+                if (!p.id.startsWith('det:')) return false;
+                if (p.dismissed) return false;
+                return now - new Date(p.detectedAt).getTime() <= ACTIVE_MAX_AGE_MS;
+            })
+            .sort((a, b) => (b.priority ?? 0) - (a.priority ?? 0));
     },
 
     /**
-     * Check if enough time has passed since last pattern detection
-     * Run at most once per week
+     * Detection is free now, so it refreshes daily. The marker also covers
+     * runs that found nothing.
      */
     async shouldRunDetection(): Promise<boolean> {
-        // Primary: the explicit run marker. Fallback for pre-marker installs:
-        // the newest stored pattern's timestamp.
         const marker = await AsyncStorage.getItem(LAST_RUN_KEY);
-        let lastRun = marker ? new Date(marker) : new Date(0);
-        if (!marker) {
-            const patterns = await dataStorage.getDetectedPatterns();
-            lastRun = patterns.reduce((latest, p) => {
-                const pDate = new Date(p.detectedAt);
-                return pDate > latest ? pDate : latest;
-            }, new Date(0));
-        }
-        const daysSince = Math.floor((Date.now() - lastRun.getTime()) / (1000 * 60 * 60 * 24));
-        return daysSince >= 7;
+        if (!marker) return true;
+        return Date.now() - new Date(marker).getTime() >= RUN_INTERVAL_MS;
     },
-
-    /**
-     * 🧪 TEST FUNCTION: Inject a demo pattern for UI testing
-     * Call this from your app to see the pattern card immediately
-     */
-    async injectDemoPattern(): Promise<DetectedPattern> {
-        const demoPattern: DetectedPattern = {
-            id: generateId(),
-            type: 'correlation',
-            title: 'Low-protein breakfasts lead to evening overeating',
-            description: 'On 8 out of 10 days when your breakfast had less than 20g protein, you exceeded your calorie goal by dinner time. This pattern has been consistent over the past 2 weeks.',
-            fix: 'Add Greek yogurt (150g) to your usual breakfast. This adds 15g protein and historically reduces your evening cravings by ~40%.',
-            confidence: 82,
-            dataPoints: 10,
-            detectedAt: new Date().toISOString(),
-            dismissed: false
-        };
-
-        await dataStorage.saveDetectedPattern(demoPattern);
-        console.log('✅ Demo pattern injected! Reload the app to see it.');
-        return demoPattern;
-    }
 };

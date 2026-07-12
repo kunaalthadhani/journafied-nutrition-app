@@ -76,6 +76,7 @@ interface TopPriorityItem {
   actionLabel: string | null;
   actionText: string | null;
   canLogMeal: boolean;
+  dataPoints?: number;
 }
 
 interface DailyNutrition {
@@ -214,7 +215,11 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           <Text style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: '600', color: tone.color }}>{tone.badge}</Text>
           {/* Fixed window, unlike the range-driven cards below it. Saying so
               stops it reading as a summary of whatever range is selected. */}
-          <Text style={{ fontSize: 9, letterSpacing: 1.2, color: Acid.tx3 }}>LAST 7 LOGGED DAYS</Text>
+          <Text style={{ fontSize: 9, letterSpacing: 1.2, color: Acid.tx3 }}>
+            {topPriority.kind === 'pattern' && topPriority.dataPoints
+              ? `FROM ${topPriority.dataPoints} LOGGED DAYS`
+              : 'LAST 7 LOGGED DAYS'}
+          </Text>
         </View>
         <Text style={{ fontFamily: Acid.serifItalic, fontSize: 17, lineHeight: 25, color: Acid.tx }}>{topPriority.title}</Text>
         <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 19, marginTop: 6 }}>{topPriority.description}</Text>
@@ -312,8 +317,9 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
             title: p.title,
             description: p.description,
             actionLabel: 'Try this',
-            actionText: p.fix ?? null,
+            actionText: p.fix || null,
             canLogMeal: true,
+            dataPoints: p.dataPoints,
           });
         }
 

@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.4.53**
+Pattern detection is now real math instead of an AI guess. Six detectors read your last 21 days directly: weekend lift, late night calories, protein gaps, low protein breakfasts predicting over days, rebound after skipped days, and consistency wins. Every count on a pattern card is computed from your actual logs, so nothing can be made up, and the fixes name foods you already eat instead of generic advice. Detection runs daily now, free, no AI call. It also got smarter about dirty data: half logged days do not count, backfilled and batch logged meals do not pollute the time based patterns, and eating past midnight finally counts as late night. Old AI era patterns are purged, dismissing a pattern now sticks for 30 days across devices, and the strongest pattern always wins the Home card. The card itself joined the ledger design, and the Pattern Detection page in Settings now lists all six detectors.
+
 **v1.4.52**
 The Top Priority card on the Insights tab dropped its alarm-red stripe, icon circle, and badge chip for the coach voice: a quiet colored word for its kind, the finding as a serif italic sentence, the next step under a hairline, and a lime LOG A MEAL link. Warnings are amber now, red stays reserved for destructive things. The water table SQL is in docs/sql, ready to run.
 
