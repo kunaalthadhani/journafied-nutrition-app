@@ -193,47 +193,42 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     </View>
   );
 
+  // Amber for priorities, never red: a nutrition nudge is not an emergency,
+  // and red is reserved for destructive moments everywhere else in the app.
   const toneForPriority = (kind: TopPriorityItem['kind']) => {
-    if (kind === 'pattern') return { color: Acid.lime, icon: 'zap', badge: 'PATTERN' };
-    if (kind === 'warning') return { color: Acid.error, icon: 'alert-triangle', badge: 'PRIORITY' };
-    if (kind === 'pattern-rule') return { color: Acid.carbs, icon: 'trending-up', badge: 'PATTERN' };
-    if (kind === 'achievement') return { color: Acid.good, icon: 'award', badge: 'WIN' };
-    return { color: Acid.lime, icon: 'target', badge: 'SUGGESTED' };
+    if (kind === 'pattern') return { color: Acid.lime, badge: 'PATTERN' };
+    if (kind === 'warning') return { color: Acid.carbs, badge: 'PRIORITY' };
+    if (kind === 'pattern-rule') return { color: Acid.carbs, badge: 'PATTERN' };
+    if (kind === 'achievement') return { color: Acid.good, badge: 'WIN' };
+    return { color: Acid.lime, badge: 'SUGGESTED' };
   };
 
-  // The headline card on the Insights tab: one thing to act on, with a concrete
-  // next step. Self-hides when no insight or pattern is firing.
+  // The headline of the Insights tab, in the coach's voice: one thing to act
+  // on, said as a sentence. Self-hides when nothing is firing.
   const TopPriorityCard = () => {
     if (!topPriority) return null;
     const tone = toneForPriority(topPriority.kind);
     return (
-      <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 18, borderLeftWidth: 3, borderLeftColor: tone.color }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-          <View style={{ width: 28, height: 28, borderRadius: 14, backgroundColor: `${tone.color}15`, alignItems: 'center', justifyContent: 'center' }}>
-            <Feather name={tone.icon as any} size={14} color={tone.color} />
-          </View>
-          <Text style={{ fontSize: 15, fontWeight: '700', color: Acid.tx, flex: 1 }}>{topPriority.title}</Text>
-          <View style={{ backgroundColor: `${tone.color}20`, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 }}>
-            <Text style={{ fontSize: 10, fontWeight: '700', color: tone.color }}>{tone.badge}</Text>
-          </View>
+      <View style={[styles.graphCard, { backgroundColor: Acid.mossDeep, padding: 18 }]}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+          <Text style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: '600', color: tone.color }}>{tone.badge}</Text>
+          {/* Fixed window, unlike the range-driven cards below it. Saying so
+              stops it reading as a summary of whatever range is selected. */}
+          <Text style={{ fontSize: 9, letterSpacing: 1.2, color: Acid.tx3 }}>LAST 7 LOGGED DAYS</Text>
         </View>
-        <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 19 }}>{topPriority.description}</Text>
-        {/* Fixed window, unlike the range-driven cards below it. Saying so stops
-            it reading as a summary of whatever range pill is selected. */}
-        <Text style={{ fontSize: 11, color: Acid.tx3, marginTop: 6 }}>
-          Based on your last 7 logged days
-        </Text>
+        <Text style={{ fontFamily: Acid.serifItalic, fontSize: 17, lineHeight: 25, color: Acid.tx }}>{topPriority.title}</Text>
+        <Text style={{ fontSize: 13, color: Acid.tx2, lineHeight: 19, marginTop: 6 }}>{topPriority.description}</Text>
         {topPriority.actionText && (
-          <View style={{ marginTop: 12, backgroundColor: Acid.mossDeep, borderRadius: 10, padding: 12 }}>
+          <View style={{ marginTop: 14, paddingTop: 12, borderTopWidth: 1, borderTopColor: Acid.hair }}>
             {topPriority.actionLabel && (
-              <Text style={{ fontSize: 12, fontWeight: '700', color: tone.color, marginBottom: 3 }}>{topPriority.actionLabel}</Text>
+              <Text style={{ fontSize: 10, letterSpacing: 1.5, fontWeight: '600', color: tone.color, marginBottom: 4 }}>{topPriority.actionLabel.toUpperCase()}</Text>
             )}
             <Text style={{ fontSize: 13, color: Acid.tx, lineHeight: 19 }}>{topPriority.actionText}</Text>
           </View>
         )}
         {topPriority.canLogMeal && onRequestLogMeal && (
-          <TouchableOpacity onPress={onRequestLogMeal} activeOpacity={0.85} style={{ marginTop: 12, backgroundColor: tone.color, borderRadius: 10, paddingVertical: 10, alignItems: 'center' }}>
-            <Text style={{ fontSize: 14, fontWeight: '700', color: '#FFFFFF' }}>Log a meal</Text>
+          <TouchableOpacity onPress={onRequestLogMeal} activeOpacity={0.7} style={{ marginTop: 14 }}>
+            <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: Acid.lime }}>LOG A MEAL →</Text>
           </TouchableOpacity>
         )}
       </View>
