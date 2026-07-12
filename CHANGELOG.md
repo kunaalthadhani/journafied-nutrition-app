@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.49**
+Two more insight charts rebuilt. Weight vs Calories dropped the two-scales-on-one-chart overlay for two clean lanes on a shared timeline: your weight as a lime line on top with its change over the window, and each day's calories as columns below, green at or under your recent average, amber above it. Heavy days visibly feed the line above them. Logging Consistency traded its seven gray dots for the week-of-columns look from the calorie bank: a lime column for every day you weighed in, today glowing.
+
 **v1.4.48**
 The BMI card grew up. Instead of a rainbow bar with a triangle pointer and a four-item legend, it is now a quiet scale with muted zone bands, a lime needle at your number, and the boundaries written underneath. The number is bone with the category beside it in its zone color. And it finally answers the question BMI never answers on its own: it shows the healthy range in actual kilograms for your height, and where your target weight lands on the scale.
 

@@ -1902,62 +1902,74 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                   <View style={[styles.bmiCard, { backgroundColor: Acid.mossDeep, shadowColor: '#0F172A' }]}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                       <Text style={[styles.bmiTitle, { color: Acid.tx }]}>Weight vs Calories</Text>
-                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight vs Calories', 'Overlays your daily calorie intake (blue bars) with your weight trend (green line) on the same chart. This helps you see the direct relationship between what you eat and what the scale shows. If calories drop but weight stays flat, it may take a few more days to show, or water retention could be masking progress.')}>
+                      <TouchableOpacity hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }} onPress={() => Alert.alert('Weight vs Calories', 'Two lanes, one timeline. The top lane is your weight; the bottom lane is what you ate that day, green when at or under your recent average, amber when above it. Read them together: heavy days feeding into the line above. If calories drop but weight stays flat, give it a few days, water retention masks progress.')}>
                         <Feather name="info" size={13} color={Acid.tx3} />
                       </TouchableOpacity>
                     </View>
-                    <Text style={{ fontSize: 12, color: Acid.tx2, marginTop: 2, marginBottom: 12 }}>
+                    <Text style={{ fontSize: 12, color: Acid.tx2, marginTop: 2, marginBottom: 14 }}>
                       {calorieCorrelation.days.length} {calorieCorrelation.days.length === 1 ? 'day' : 'days'} with both a weigh-in and logged food in the last 14 days · today excluded
                     </Text>
-                    <View style={{ height: 120 }}>
-                      <Svg width="100%" height="120">
-                        {calorieCorrelation.days.map((d, i) => {
-                          const barWidth = (100 / calorieCorrelation.days.length) * 0.6;
-                          const x = (i / calorieCorrelation.days.length) * 100 + (100 / calorieCorrelation.days.length) * 0.2;
-                          const calRange = calorieCorrelation.maxCalories - calorieCorrelation.minCalories || 1;
-                          const barH = ((d.calories - calorieCorrelation.minCalories) / calRange) * 80 + 10;
-                          return (
-                            <Path
-                              key={`bar-${i}`}
-                              d={`M${x}%,${110 - barH} L${x}%,110 L${x + barWidth}%,110 L${x + barWidth}%,${110 - barH} Z`}
-                              fill={Acid.protein + '20'}
-                              stroke={Acid.protein}
-                              strokeWidth={0.5}
-                            />
-                          );
-                        })}
+
+                    {/* Lane 1: weight line */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 9, letterSpacing: 1.2, color: Acid.tx3 }}>WEIGHT</Text>
+                      {(() => {
+                        const d = calorieCorrelation.days;
+                        const delta = d[d.length - 1].weight - d[0].weight;
+                        const goodDir = (delta < 0) !== isGainGoal;
+                        return (
+                          <Text style={{ fontSize: 10, fontWeight: '600', color: Math.abs(delta) < 0.05 ? Acid.tx3 : goodDir ? Acid.good : Acid.carbs }}>
+                            {delta <= 0 ? '▾' : '▴'} {convertWeightToDisplay(Math.abs(delta)).toFixed(1)} {getWeightUnitLabel()}
+                          </Text>
+                        );
+                      })()}
+                    </View>
+                    <View style={{ height: 56, marginBottom: 14 }}>
+                      <Svg width="100%" height="56">
                         {calorieCorrelation.days.length > 1 && (
                           <Path
                             d={calorieCorrelation.days.map((d, i) => {
-                              // Bar-center positions so each day's weight dot sits
-                              // over that day's calorie bar.
                               const x = ((i + 0.5) / calorieCorrelation.days.length) * 100;
                               const wRange = calorieCorrelation.maxWeight - calorieCorrelation.minWeight || 1;
-                              const y = 100 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 80 - 5;
+                              const y = 50 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 42;
                               return `${i === 0 ? 'M' : 'L'}${x}%,${y}`;
                             }).join(' ')}
-                            stroke={Acid.good}
+                            stroke={Acid.lime}
                             strokeWidth={2}
                             fill="none"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
                           />
                         )}
                         {calorieCorrelation.days.map((d, i) => {
                           const x = ((i + 0.5) / calorieCorrelation.days.length) * 100;
                           const wRange = calorieCorrelation.maxWeight - calorieCorrelation.minWeight || 1;
-                          const y = 100 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 80 - 5;
-                          return <Circle key={`dot-${i}`} cx={`${x}%`} cy={y} r={3} fill={Acid.good} />;
+                          const y = 50 - ((d.weight - calorieCorrelation.minWeight) / wRange) * 42;
+                          const last = i === calorieCorrelation.days.length - 1;
+                          return <Circle key={`dot-${i}`} cx={`${x}%`} cy={y} r={last ? 4 : 2.5} fill={last ? Acid.lime : Acid.moss} stroke={Acid.lime} strokeWidth={last ? 0 : 1.5} />;
                         })}
                       </Svg>
                     </View>
-                    <View style={{ flexDirection: 'row', justifyContent: 'center', gap: 20, marginTop: 8 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Acid.protein }} />
-                        <Text style={{ fontSize: 11, color: Acid.tx2 }}>Calories (avg {Math.round(calorieCorrelation.avgCalories)})</Text>
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
-                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: Acid.good }} />
-                        <Text style={{ fontSize: 11, color: Acid.tx2 }}>Weight ({getWeightUnitLabel()})</Text>
-                      </View>
+
+                    {/* Lane 2: calorie columns on the same timeline */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 9, letterSpacing: 1.2, color: Acid.tx3 }}>CALORIES</Text>
+                      <Text style={{ fontSize: 10, color: Acid.tx3 }}>AVG {Math.round(calorieCorrelation.avgCalories).toLocaleString()}</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 46 }}>
+                      {calorieCorrelation.days.map((d, i) => {
+                        const h = 8 + (d.calories / (calorieCorrelation.maxCalories || 1)) * 38;
+                        const over = d.calories > calorieCorrelation.avgCalories;
+                        return (
+                          <View key={`col-${i}`} style={{ flex: 1, alignItems: 'center' }}>
+                            <View style={{ width: '55%', maxWidth: 16, height: h, borderRadius: 5, backgroundColor: over ? Acid.carbs : Acid.good }} />
+                          </View>
+                        );
+                      })}
+                    </View>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 8 }}>
+                      <Text style={{ fontSize: 9, color: Acid.tx3 }}>{format(new Date(calorieCorrelation.days[0].date + 'T12:00:00'), 'd MMM')}</Text>
+                      <Text style={{ fontSize: 9, color: Acid.tx3 }}>{format(new Date(calorieCorrelation.days[calorieCorrelation.days.length - 1].date + 'T12:00:00'), 'd MMM')}</Text>
                     </View>
                   </View>
                 )}
@@ -2103,7 +2115,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         </Text>
                       </View>
                     </View>
-                    <View style={styles.consistencyDotsRow}>
+                    {/* The week as columns, same language as the calorie bank */}
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 }}>
                       {['M', 'T', 'W', 'T', 'F', 'S', 'S'].map((day, i) => {
                         const now = new Date();
                         const dayOfWeek = now.getDay();
@@ -2118,17 +2131,24 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                         const isFuture = dayDate > now;
                         const isToday = dayDate.toDateString() === now.toDateString();
                         return (
-                          <View key={i} style={styles.consistencyDayItem}>
-                            <View style={[
-                              styles.consistencyDot,
-                              logged
-                                ? { backgroundColor: Acid.good }
-                                : isFuture
-                                ? { backgroundColor: Acid.hair, opacity: 0.4 }
-                                : { backgroundColor: Acid.hair },
-                              isToday && { borderWidth: 2, borderColor: Acid.tx },
-                            ]} />
-                            <Text style={{ fontSize: 10, color: Acid.tx3, marginTop: 4 }}>{day}</Text>
+                          <View key={i} style={{ flex: 1, alignItems: 'center', gap: 6 }}>
+                            <View style={{
+                              width: 14, height: 40, borderRadius: 7,
+                              backgroundColor: Acid.hair + (isFuture ? '35' : '55'),
+                              overflow: 'hidden', justifyContent: 'flex-end',
+                            }}>
+                              {logged && (
+                                <View style={{
+                                  height: '100%', borderRadius: 7, backgroundColor: Acid.lime,
+                                  shadowColor: Acid.lime,
+                                  shadowOpacity: isToday ? 0.6 : 0,
+                                  shadowRadius: 5,
+                                  shadowOffset: { width: 0, height: 0 },
+                                  elevation: isToday ? 3 : 0,
+                                }} />
+                              )}
+                            </View>
+                            <Text style={{ fontSize: 9, letterSpacing: 1, color: isToday ? Acid.lime : Acid.tx3 }}>{day}</Text>
                           </View>
                         );
                       })}
@@ -2623,18 +2643,6 @@ const styles = StyleSheet.create({
   goalStatValue: {
     fontSize: 15,
     fontWeight: '600',
-  },
-  consistencyDotsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  consistencyDayItem: {
-    alignItems: 'center',
-  },
-  consistencyDot: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
   },
 });
 
