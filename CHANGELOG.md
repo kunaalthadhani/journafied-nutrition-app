@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.47**
+Logging your weight no longer means scrolling to the bottom of the page. The lime plus in the tab bar now has a Weigh in option that jumps you straight into the log sheet from anywhere. And the sheet itself became a meter: your weight in big serif with a tape measure under it that you drag left and right, snapping to every 0.1, prefilled at your last weigh-in so most days you just nudge it and save.
+
 **v1.4.46**
 The calorie and macro history tables under the charts now match the Weight Tracker ledger you liked. Same anatomy everywhere: RECENT DAYS header with your average per day on the right, short dates, serif numbers, and for calories a small arrow showing how far each day landed from your target, green under, amber over. The macros table got serif numbers in each macro color with column labels, and the calories ledger ends with a lime LOG A MEAL line. One ledger language across the whole app now.
 

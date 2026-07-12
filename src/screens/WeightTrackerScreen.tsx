@@ -26,6 +26,7 @@ import { useUser } from '../contexts/UserContext';
 import { format, subDays, subMonths, subYears, startOfDay, endOfDay } from 'date-fns';
 import { ChartRange, CHART_RANGES, getRangeWindow, isInRange, rangeLabel, weeklyTrendSlope } from '../utils/chartRange';
 import Svg, { Path, Circle, Line, Text as SvgText } from 'react-native-svg';
+import { WeightRuler } from '../components/WeightRuler';
 import { dataStorage, DailySummary } from '../services/dataStorage';
 import { analyticsService } from '../services/analyticsService';
 import { invokeAI } from '../services/aiProxyService';
@@ -41,6 +42,8 @@ interface WeightTrackerScreenProps {
   insightUnlocks?: InsightUnlocks;
   visible?: boolean;
   initialTab?: 'Tracker' | 'Insights';
+  openLogRequest?: boolean;
+  onLogRequestConsumed?: () => void;
   scrollToInsight?: InsightId | null;
   onScrollToInsightConsumed?: () => void;
 }
@@ -86,6 +89,8 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   insightUnlocks = {},
   visible = false,
   initialTab: initialTabProp,
+  openLogRequest,
+  onLogRequestConsumed,
   scrollToInsight = null,
   onScrollToInsightConsumed,
 }) => {
@@ -971,7 +976,18 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
 
   const timeRanges: TimeRange[] = [...CHART_RANGES];
 
+  // The tab bar's plus menu can ask this page to open the log sheet directly.
+  useEffect(() => {
+    if (openLogRequest && isReady) {
+      onLogRequestConsumed?.();
+      handleLogPress();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [openLogRequest, isReady]);
+
   const handleLogPress = () => {
+    // Prefill the meter at the latest weigh-in so logging is one nudge, not a hunt.
+    if (currentWeight !== null) setLogWeight(convertWeightToDisplay(currentWeight).toFixed(1));
     const today = new Date();
     const todayKey = format(today, 'yyyy-MM-dd');
     const alreadyLogged = weightEntries.some(e => !e.seeded && format(e.date, 'yyyy-MM-dd') === todayKey);
@@ -2225,16 +2241,23 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
                     <Feather name="x" size={24} color={Acid.tx} />
                   </TouchableOpacity>
                 </View>
-                <TextInput
-                  style={styles.weightInput}
-                  placeholder={`Enter weight (${getWeightUnitLabel()})`}
-                  placeholderTextColor={Acid.tx3}
-                  selectionColor={Acid.lime}
-                  value={logWeight}
-                  onChangeText={setLogWeight}
-                  keyboardType="decimal-pad"
-                  autoFocus
-                />
+                {/* The meter: readout in serif, tape below, drag to set */}
+                <View style={{ alignItems: 'center', marginBottom: 8 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+                    <Text style={{ fontFamily: Acid.serif, fontSize: 54, lineHeight: 60, color: Acid.tx }}>
+                      {logWeight || '--'}
+                    </Text>
+                    <Text style={{ fontSize: 16, color: Acid.tx3, marginLeft: 6 }}>{getWeightUnitLabel()}</Text>
+                  </View>
+                </View>
+                <View style={{ marginBottom: 20 }}>
+                  <WeightRuler
+                    min={weightUnit === 'kg' ? 30 : 66}
+                    max={weightUnit === 'kg' ? 250 : 550}
+                    initialValue={parseFloat(logWeight) || (currentWeight !== null ? convertWeightToDisplay(currentWeight) : (weightUnit === 'kg' ? 70 : 154))}
+                    onChange={(v) => setLogWeight(v.toFixed(1))}
+                  />
+                </View>
                 <TouchableOpacity
                   style={[styles.modalButton, { backgroundColor: Acid.lime }]}
                   onPress={handleLogWeight}
@@ -2436,16 +2459,6 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontFamily: Acid.serifItalic,
     fontSize: 22,
-  },
-  weightInput: {
-    fontFamily: Acid.serif,
-    fontSize: 26,
-    color: Acid.tx,
-    textAlign: 'center',
-    borderBottomWidth: 1.5,
-    borderBottomColor: Acid.hair2,
-    paddingVertical: 12,
-    marginBottom: 24,
   },
   modalButton: {
     paddingVertical: 16,

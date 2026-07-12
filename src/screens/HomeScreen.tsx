@@ -102,6 +102,7 @@ export const HomeScreen: React.FC = () => {
   const [showAccount, setShowAccount] = useState(false);
   const [showAbout, setShowAbout] = useState(false);
   const [showQuickLog, setShowQuickLog] = useState(false);
+  const [weightLogRequest, setWeightLogRequest] = useState(false);
   const [showAdminPush, setShowAdminPush] = useState(false);
   const [showFeedback, setShowFeedback] = useState(false);
   const [referralCode, setReferralCode] = useState<string | null>(null);
@@ -2949,6 +2950,8 @@ export const HomeScreen: React.FC = () => {
             insightUnlocks={insightUnlocks}
             visible={showWeightTracker}
             initialTab={openWeightOnInsights ? 'Insights' : undefined}
+            openLogRequest={weightLogRequest}
+            onLogRequestConsumed={() => setWeightLogRequest(false)}
             scrollToInsight={scrollToInsightId}
             onScrollToInsightConsumed={() => setScrollToInsightId(null)}
           />
@@ -3087,6 +3090,7 @@ export const HomeScreen: React.FC = () => {
                 { icon: 'type', label: 'Type it', hint: 'Describe your meal in words', action: () => setShouldFocusInput(true) },
                 { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', action: () => handlePlusPress() },
                 { icon: 'mic', label: 'Say it', hint: 'Speak and we transcribe', action: () => handleMicPress() },
+                { icon: 'activity', label: 'Weigh in', hint: "Log today's weight", action: () => { setWeightLogRequest(true); handleWeightTracker(); } },
               ].map(row => (
                 <TouchableOpacity
                   key={row.label}
