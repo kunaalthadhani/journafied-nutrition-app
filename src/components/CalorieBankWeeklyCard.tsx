@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Acid } from '../constants/acid';
 import { CalorieBankDayData } from '../utils/calorieBankEngine';
+import { AnimatedFill } from './AnimatedFill';
 
 interface CalorieBankWeeklyCardProps {
   weeklyBudget: number;
@@ -52,21 +53,12 @@ export const CalorieBankWeeklyCard: React.FC<CalorieBankWeeklyCardProps> = ({
             return (
               <View key={day.date} style={styles.column}>
                 <View style={styles.columnTrack}>
-                  <View
-                    style={[
-                      styles.columnFill,
-                      {
-                        height: `${(day.logged ? fill : 0.04) * 100}%`,
-                        backgroundColor: color,
-                      },
-                      day.isToday && day.logged ? {
-                        shadowColor: Acid.lime,
-                        shadowOpacity: 0.6,
-                        shadowRadius: 5,
-                        shadowOffset: { width: 0, height: 0 },
-                        elevation: 3,
-                      } : null,
-                    ]}
+                  <AnimatedFill
+                    axis="y"
+                    pct={(day.logged ? fill : 0.04) * 100}
+                    color={color}
+                    style={styles.columnFill}
+                    glowAlways={day.isToday && day.logged}
                   />
                 </View>
                 <Text style={[styles.columnLabel, day.isToday ? { color: Acid.lime } : null]}>

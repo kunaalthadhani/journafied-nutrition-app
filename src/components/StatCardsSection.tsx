@@ -6,6 +6,7 @@ import { NumberTicker } from './NumberTicker';
 import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
 import { CalorieBankDayData } from '../utils/calorieBankEngine';
 import { StatCardSkeleton } from './StatCardSkeleton';
+import { AnimatedFill } from './AnimatedFill';
 
 interface StatCardsSectionProps {
   isToday?: boolean;
@@ -29,7 +30,7 @@ const MacroRow = ({ label, color, current, target }: { label: string; color: str
     <View style={styles.macroRow}>
       <Text style={styles.macroLabel}>{label}</Text>
       <View style={styles.macroTrack}>
-        <View style={[styles.macroFill, { width: `${pct * 100}%`, backgroundColor: color }]} />
+        <AnimatedFill pct={pct * 100} color={color} style={styles.macroFill} />
       </View>
       <Text style={styles.macroValue}>
         {Math.round(current)}<Text style={styles.macroTarget}> / {Math.round(target)}g</Text>

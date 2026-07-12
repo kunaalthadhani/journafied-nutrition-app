@@ -77,6 +77,7 @@ import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
 import { AcidTabBar, AcidTabId } from '../components/AcidTabBar';
+import { AnimatedFill } from '../components/AnimatedFill';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
@@ -2922,17 +2923,13 @@ export const HomeScreen: React.FC = () => {
           {goalsSet && (
             <View pointerEvents="none" style={{ position: 'absolute', right: 3, top: 4, bottom: 78, width: 4 }}>
               <View style={{ ...StyleSheet.absoluteFillObject, borderRadius: 2, backgroundColor: Acid.hair, opacity: 0.6 }} />
-              <View style={{
-                position: 'absolute', bottom: 0, left: 0, right: 0,
-                height: `${Math.min(100, Math.max(3, ((macros2Data?.carbs?.current || 0) / Math.max(1, bankAdjustedCalories || 1)) * 100))}%`,
-                borderRadius: 2,
-                backgroundColor: Acid.lime,
-                shadowColor: Acid.lime,
-                shadowOpacity: 0.8,
-                shadowRadius: 6,
-                shadowOffset: { width: 0, height: 0 },
-                elevation: 4,
-              }} />
+              <AnimatedFill
+                axis="y"
+                pct={Math.min(100, Math.max(3, ((macros2Data?.carbs?.current || 0) / Math.max(1, bankAdjustedCalories || 1)) * 100))}
+                color={Acid.lime}
+                glowAlways
+                style={{ position: 'absolute', bottom: 0, left: 0, right: 0, borderRadius: 2 }}
+              />
             </View>
           )}
         </KeyboardAvoidingView>

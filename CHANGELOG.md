@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Redesign
 
+**v1.4.50**
+The bars move now. Log a meal and the protein, carbs, and fat bars ease to their new fill instead of jumping, the column on the right edge rises smoothly, and the weekly bank columns grow into place, all with a soft glow while they travel. Numbers already ticked; now everything that fills, flows.
+
 **v1.4.49**
 Two more insight charts rebuilt. Weight vs Calories dropped the two-scales-on-one-chart overlay for two clean lanes on a shared timeline: your weight as a lime line on top with its change over the window, and each day's calories as columns below, green at or under your recent average, amber above it. Heavy days visibly feed the line above them. Logging Consistency traded its seven gray dots for the week-of-columns look from the calorie bank: a lime column for every day you weighed in, today glowing.
 
