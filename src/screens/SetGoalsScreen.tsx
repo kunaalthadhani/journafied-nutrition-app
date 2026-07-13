@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   TouchableOpacity,
   ScrollView,
@@ -114,6 +115,20 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'very' | undefined>(initialGoals?.activityLevel);
 
   const [isEditingMacros, setIsEditingMacros] = useState(false);
+  const [isEditingCalories, setIsEditingCalories] = useState(false);
+  const [calDraft, setCalDraft] = useState('');
+
+  const startCalorieEdit = () => {
+    setCalDraft(String(calories));
+    setIsEditingCalories(true);
+  };
+
+  const commitCalorieEdit = () => {
+    const n = parseInt(calDraft, 10);
+    // grams recompute from the new number automatically; Save persists it
+    if (!isNaN(n)) setCalories(Math.max(800, Math.min(6000, n)));
+    setIsEditingCalories(false);
+  };
 
   // What was last persisted. Used to catch unsaved macro tweaks on exit.
   const lastSavedRef = React.useRef<string | null>(
@@ -309,16 +324,40 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           {activityLabel}{activityRate ? ` · ${fmtPace(activityRate, weightUnit)}/week` : ''}
         </Text>
 
-        {/* Calorie hero */}
+        {/* Calorie hero: tap the number (or Edit) to type your own target,
+            Recalculate reruns the wizard */}
         <View style={st.calCard}>
           <View style={st.calRow}>
-            <Text style={st.calNum}>{calories}</Text>
+            {isEditingCalories ? (
+              <TextInput
+                style={[st.calNum, st.calInput]}
+                value={calDraft}
+                onChangeText={t => setCalDraft(t.replace(/[^0-9]/g, ''))}
+                keyboardType="number-pad"
+                maxLength={4}
+                autoFocus
+                selectTextOnFocus
+                onBlur={commitCalorieEdit}
+                onSubmitEditing={commitCalorieEdit}
+                returnKeyType="done"
+              />
+            ) : (
+              <TouchableOpacity onPress={startCalorieEdit} activeOpacity={0.7}>
+                <Text style={st.calNum}>{calories}</Text>
+              </TouchableOpacity>
+            )}
             <Text style={st.calUnit}>kcal/day</Text>
           </View>
-          <TouchableOpacity style={st.recalcBtn} onPress={() => setShowCalculator(true)}>
-            <Feather name="refresh-cw" size={14} color={Acid.lime} />
-            <Text style={st.recalcTxt}>Recalculate</Text>
-          </TouchableOpacity>
+          <View style={st.calActions}>
+            <TouchableOpacity style={st.recalcBtn} onPress={startCalorieEdit}>
+              <Feather name="edit-2" size={14} color={Acid.lime} />
+              <Text style={st.recalcTxt}>Edit</Text>
+            </TouchableOpacity>
+            <TouchableOpacity style={st.recalcBtn} onPress={() => setShowCalculator(true)}>
+              <Feather name="refresh-cw" size={14} color={Acid.lime} />
+              <Text style={st.recalcTxt}>Recalculate</Text>
+            </TouchableOpacity>
+          </View>
         </View>
 
         {/* Macro section */}
@@ -410,6 +449,8 @@ const st = StyleSheet.create({
   calRow: { flexDirection: 'row', alignItems: 'baseline', marginBottom: 12 },
   calNum: { fontFamily: Acid.serif, fontSize: 56, lineHeight: 60, color: Acid.tx },
   calUnit: { fontSize: Typography.fontSize.lg, color: Acid.tx3, marginLeft: 8 },
+  calActions: { flexDirection: 'row', alignItems: 'center', gap: 4 },
+  calInput: { minWidth: 150, textAlign: 'center', paddingVertical: 0 },
   recalcBtn: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingHorizontal: 14, paddingVertical: 8 },
   recalcTxt: { fontSize: 12, letterSpacing: 1, color: Acid.lime },
 

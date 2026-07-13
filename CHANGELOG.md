@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.4.54**
+You can finally type your own calorie target. In Nutrition Goals, tap the big number (or the new Edit link next to Recalculate) and enter any target from 800 to 6000. Your macro grams re-derive from the new number instantly, and saving flows the change everywhere: the Home hero, macro targets, the calorie bank's weekly budget, the coach, insights, and pattern detection. Recalculate still runs the full wizard when you want the math done for you.
+
 **v1.4.53**
 Pattern detection is now real math instead of an AI guess. Six detectors read your last 21 days directly: weekend lift, late night calories, protein gaps, low protein breakfasts predicting over days, rebound after skipped days, and consistency wins. Every count on a pattern card is computed from your actual logs, so nothing can be made up, and the fixes name foods you already eat instead of generic advice. Detection runs daily now, free, no AI call. It also got smarter about dirty data: half logged days do not count, backfilled and batch logged meals do not pollute the time based patterns, and eating past midnight finally counts as late night. Old AI era patterns are purged, dismissing a pattern now sticks for 30 days across devices, and the strongest pattern always wins the Home card. The card itself joined the ledger design, and the Pattern Detection page in Settings now lists all six detectors.
 
