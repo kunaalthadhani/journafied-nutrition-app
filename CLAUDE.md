@@ -152,6 +152,8 @@ Edge Function: [supabase/functions/ai-proxy/index.ts](supabase/functions/ai-prox
 
 ## References
 
+[DESIGN.md](DESIGN.md) is the design system constitution. Read it before any UI work. Never invent a color, font, radius, or motion curve. It is also the file that travels to every future app built in this design.
+
 Project memory lives at `memory/TrackKcal-MEMORY.md` and related files. Read these for accumulated context about goals, decisions, and history.
 
 Docs in [docs/](docs/). Notable: [TrackKCal-Complete-Documentation.md](docs/TrackKCal-Complete-Documentation.md) is the full technical and product spec. [AI-System-Prompts-Audit.md](docs/AI-System-Prompts-Audit.md) is the verbatim audit of every LLM prompt with ratings.
