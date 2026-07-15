@@ -46,10 +46,14 @@ export const AcidTabBar: React.FC<AcidTabBarProps> = ({ active, onPress, onPlus 
     </View>
   );
 
+  // Web always reports a zero bottom inset (no viewport-fit=cover, on
+  // purpose: it breaks the top inset on iOS standalone), so the PWA gets a
+  // hard 34 floor matching the native home-indicator height. Native keeps
+  // its real inset with a 24 floor for old home-button devices.
+  const bottomFloor = Platform.OS === 'web' ? 34 : 24;
+
   return (
-    // Floor of 24: on the PWA the safe-area inset reports 0, which sat the
-    // pill against the very bottom edge. Native devices report ~34 and win.
-    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 24) }]}>
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, bottomFloor) }]}>
       <View style={styles.pill}>
         {Platform.OS === 'ios' ? (
           <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />
