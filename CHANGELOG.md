@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.4.55**
+The app opens fast now. Everything you look at first, the calorie hero, the macro bars, the weekly bank, loads together in one parallel pass the moment the app boots, instead of queueing behind analytics, device telemetry, and account sync. That background work still happens, just after you can already see your day. On the PWA this cuts the staged 5 to 7 second trickle to roughly the boot time of the app itself. The bottom tab bar also sits properly above the bottom edge on the PWA now, matching how it looks in the native builds.
+
 **v1.4.54**
 You can finally type your own calorie target. In Nutrition Goals, tap the big number (or the new Edit link next to Recalculate) and enter any target from 800 to 6000. Your macro grams re-derive from the new number instantly, and saving flows the change everywhere: the Home hero, macro targets, the calorie bank's weekly budget, the coach, insights, and pattern detection. Recalculate still runs the full wizard when you want the math done for you.
 

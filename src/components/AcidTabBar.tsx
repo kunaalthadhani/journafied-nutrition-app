@@ -47,7 +47,9 @@ export const AcidTabBar: React.FC<AcidTabBarProps> = ({ active, onPress, onPlus 
   );
 
   return (
-    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 12) }]}>
+    // Floor of 24: on the PWA the safe-area inset reports 0, which sat the
+    // pill against the very bottom edge. Native devices report ~34 and win.
+    <View style={[styles.wrap, { paddingBottom: Math.max(insets.bottom, 24) }]}>
       <View style={styles.pill}>
         {Platform.OS === 'ios' ? (
           <BlurView intensity={40} tint="dark" style={StyleSheet.absoluteFill} />

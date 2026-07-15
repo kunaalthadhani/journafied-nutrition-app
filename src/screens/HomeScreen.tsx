@@ -891,209 +891,70 @@ export const HomeScreen: React.FC = () => {
     return freezeData;
   };
 
+  // Two stages. Stage 1 is everything the first paint needs: local reads,
+  // in parallel, including the calorie bank math. Stage 2 is everything else,
+  // analytics, engines, network, and runs after paint. Awaiting loadAllData()
+  // still waits for both stages, so the account-sync and apply-adjustment
+  // callers keep their full-reload semantics; the mount call ignores the
+  // promise and paints at stage 1 speed.
   const loadAllData = async () => {
+    let stored: string | null = null;
+    let savedSummaries: Record<string, DailySummary> = {};
+    let savedExercises: Record<string, ExerciseEntry[]> = {};
+    // Guards the stage-2 steps that COMPUTE from stage-1 data. If stage 1
+    // failed, summaries are empty and the freeze engine and entry-count
+    // reconcile would persist wrong results (a zeroed count even syncs to
+    // the cloud). The old single-try code aborted instead; this preserves that.
+    let stage1Ok = false;
+
     try {
-      // Initialize analytics
-      await analyticsService.initialize();
-      await analyticsService.trackAppOpen();
-      analyticsService.trackOnboardingStarted();
+      // Cheap no-ops in steady state; must precede the summaries read on the
+      // first launch after a legacy install.
+      await dataStorage.migrateLegacyMealsToShards();
+      await dataStorage.migrateMealsToSummaries();
 
-      // Load entry count
-      const stored = await AsyncStorage.getItem(ENTRY_COUNT_KEY);
-      if (stored) setEntryCount(parseInt(stored, 10) || 0);
-      else {
-        const count = await dataStorage.loadEntryCount();
-        setEntryCount(count);
-      }
+      const startKey = getDateKey(selectedDate);
+      const [plan, goalsData, summaries, exercises, todaysMeals, entryStored, prefs, patterns, bankConfig] = await Promise.all([
+        dataStorage.loadUserPlan(),
+        dataStorage.loadGoals(),
+        dataStorage.loadDailySummaries(),
+        dataStorage.loadExercises(),
+        dataStorage.getDailyLog(startKey),
+        AsyncStorage.getItem(ENTRY_COUNT_KEY),
+        dataStorage.loadPreferences(),
+        patternDetectionService.getActivePatterns(),
+        dataStorage.loadCalorieBankConfig(),
+      ]);
+      stored = entryStored;
+      savedSummaries = summaries;
+      savedExercises = exercises;
 
-      // Check if user unlocked AI Coach
-      await chatCoachService.checkUnlockStatus();
-
-      // Load user plan
-      const plan = await dataStorage.loadUserPlan();
       setUserPlan(plan);
-
-      // Load goals
-      const savedGoalsData = await dataStorage.loadGoals();
-      if (savedGoalsData) {
-        setSavedGoals(savedGoalsData);
-        setDailyCalories(savedGoalsData.calories);
+      if (goalsData) {
+        setSavedGoals(goalsData);
+        setDailyCalories(goalsData.calories);
         setGoalsSet(true);
       }
-
-      // Load Summaries (New) & Migrate if needed
-      await dataStorage.migrateLegacyMealsToShards(); // Ensure legacy turned to shards
-      await dataStorage.migrateMealsToSummaries(); // Ensure summaries exist
-
-      const savedSummaries = await dataStorage.loadDailySummaries();
-      setSummariesByDate(savedSummaries);
-
-      // Load today's meals initially
-      const startKey = getDateKey(selectedDate);
-      const todaysMeals = await dataStorage.getDailyLog(startKey);
+      setSummariesByDate(summaries);
       setMealsByDate({ [startKey]: todaysMeals });
-
-      // Load exercises
-      const savedExercises = await dataStorage.loadExercises();
-      if (Object.keys(savedExercises).length > 0) {
-        setExercisesByDate(savedExercises);
+      if (Object.keys(exercises).length > 0) {
+        setExercisesByDate(exercises);
       }
-
-      // Load Freeze Data
-      const currentMonthStart = format(new Date(), 'yyyy-MM-01');
-      let freezeData = await dataStorage.loadStreakFreeze();
-
-      // Reset if new month
-      if (!freezeData || freezeData.lastResetDate !== currentMonthStart) {
-        freezeData = {
-          freezesAvailable: 2, // Reset to 2 every month
-          lastResetDate: currentMonthStart,
-          usedOnDates: freezeData ? freezeData.usedOnDates : [] // Keep history, just reset counter
-        };
-        await dataStorage.saveStreakFreeze(freezeData);
-      }
-
-      // Check for missed days to auto-freeze
-      // Use summaries
-      const updatedFreezeData = await checkMissedDaysAndFreeze(savedSummaries, freezeData);
-      setStreakFreeze(updatedFreezeData);
-
-      // Check for Smart Adjustments
-      const history = await dataStorage.loadAdjustmentHistory();
-      setAdjustmentHistory(history);
-
-      const availableAdjustment = await dataStorage.checkAndGenerateAdjustment(isPremium);
-
-      if (availableAdjustment && availableAdjustment.status === 'pending') {
-        setAdjustmentAvailable(availableAdjustment);
-      }
-
-
-      // Validate entry count matches actual log count (via summaries)
-      let actualLogCount = 0;
-      Object.values(savedSummaries).forEach(s => {
-        actualLogCount += s.entryCount;
-      });
-
-      // Example check if we need to fix
-      if (actualLogCount > 0 && (!stored || parseInt(stored) < actualLogCount)) {
-        // We could fix it here, but let's just trust for now or update it
-      }
-
-      Object.values(savedExercises).forEach(entries => {
-        actualLogCount += entries.length;
-      });
-
-      const storedCount = await dataStorage.loadEntryCount();
-
-      if (actualLogCount !== storedCount) {
-        if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
-        await dataStorage.saveEntryCount(actualLogCount);
-        await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualLogCount));
-        setEntryCount(actualLogCount);
-      }
-
-      // Load saved prompts
-      const storedPrompts = await dataStorage.loadSavedPrompts();
-      if (storedPrompts.length > 0) {
-        setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
-      }
-
-
-
-      // DEVICE INFO
-      const deviceInfo = {
-        deviceName: Device.deviceName || 'Unknown',
-        modelName: Device.modelName || 'Unknown',
-        osName: Device.osName || 'Unknown',
-        osVersion: Device.osVersion || 'Unknown',
-        platform: Platform.OS,
-        appVersion: Constants.expoConfig?.version || '1.0.0',
-        timestamp: new Date().toISOString(),
-      };
-      await dataStorage.saveDeviceInfo(deviceInfo);
-
-      // ACCOUNT / REFERRAL info
-      const accountInfo = await dataStorage.loadAccountInfo();
-      await refreshUserContext();
-
-      // Identify user in Mixpanel
-      if (accountInfo?.supabaseUserId || accountInfo?.email) {
-        analyticsService.identifyUser(
-          accountInfo.supabaseUserId || accountInfo.email!,
-          { name: accountInfo.name, email: accountInfo.email, plan: isPremium ? 'premium' : 'free' }
-        );
-      }
-
-      if (accountInfo?.email) {
-        let code = await dataStorage.getReferralCode(accountInfo.email);
-        if (!code) {
-          await referralService.getOrCreateReferralCode(accountInfo.email);
-          code = await dataStorage.getReferralCode(accountInfo.email);
-        }
-        setReferralCode(code?.code || null);
-        const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-        setTotalEarnedEntries(earned);
-      } else {
-        setReferralCode(null);
-        setTotalEarnedEntries(0);
-      }
-
-      // Load Preferences
-      const prefs = await dataStorage.loadPreferences();
+      if (entryStored) setEntryCount(parseInt(entryStored, 10) || 0);
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
-
-      // Load Pattern Detection (Premium Feature)
-      const patterns = await patternDetectionService.getActivePatterns();
       setDetectedPatterns(patterns);
 
-      // Trigger background pattern detection if needed (non-blocking)
-      if (isPremium) {
-        const shouldRun = await patternDetectionService.shouldRunDetection();
-        if (shouldRun) {
-          patternDetectionService.analyzePatterns().then(async () => {
-            // Always refresh from storage — clears stale patterns even if none detected
-            const fresh = await patternDetectionService.getActivePatterns();
-            setDetectedPatterns(fresh);
-          }).catch(err => console.error('Pattern detection failed:', err));
-        }
-      }
-
-      // Check grocery unlock (non-blocking)
-      if (isPremium) {
-        dataStorage.isGroceryUnlocked().then(async (unlocked) => {
-          if (!unlocked) {
-            const { eligible } = await dataStorage.checkGroceryUnlockEligibility();
-            if (eligible) {
-              await dataStorage.setGroceryUnlocked();
-              const seen = await dataStorage.isGroceryUnlockSeen();
-              if (!seen) setShowGroceryUnlockCard(true);
-            }
-          }
-        }).catch(() => {});
-      }
-
-      // Schedule smart reminders (non-blocking)
-      smartReminderService.scheduleAllReminders()
-        .catch(err => console.error('Smart reminder scheduling failed:', err));
-
-      // Check for insight unlocks (non-blocking)
-      checkInsightUnlocks(savedSummaries).catch(() => {});
-
-      // Calorie Bank: ALWAYS load the config (do not gate on the cold `plan`
-      // variable, which is stale='free' on PWA cold open before the session
-      // rehydrates). The calorieBankCycle effect re-gates on isPremium, so the
-      // card stays hidden for non-premium and recomputes once isPremium flips
-      // true. Gating only the load behind plan was why the bank stayed dark
-      // until the Settings poke. Mirrors checkInsightUnlocks' unconditional load.
+      // Calorie Bank: paint it with the bars, it is pure local math. ALWAYS
+      // load the config (do not gate on the cold `plan` variable, which is
+      // stale='free' on PWA cold open before the session rehydrates). The
+      // calorieBankCycle effect re-gates on isPremium, so the card stays
+      // hidden for non-premium and recomputes once isPremium flips true.
       try {
-        const bankConfig = await dataStorage.loadCalorieBankConfig();
         setCalorieBankConfig(bankConfig);
-        if (bankConfig && bankConfig.enabled && savedGoalsData) {
-          const { config: updatedConfig, didReset } = await checkAndResetCycle(savedSummaries, savedGoalsData, isPremium);
+        if (bankConfig && bankConfig.enabled && goalsData) {
+          const { config: updatedConfig, didReset } = await checkAndResetCycle(summaries, goalsData, isPremium);
           if (updatedConfig) setCalorieBankConfig(updatedConfig);
 
-          // If a reset just happened, show the cycle reset card
           if (didReset) {
             const cycles = await dataStorage.loadCompletedCycles();
             if (cycles.length > 0) {
@@ -1107,16 +968,162 @@ export const HomeScreen: React.FC = () => {
           }
 
           // Calculate current cycle. The render gate (isPremium) decides visibility.
-          const cycle = calculateCurrentCycle(updatedConfig || bankConfig, savedSummaries, savedGoalsData);
+          const cycle = calculateCurrentCycle(updatedConfig || bankConfig, summaries, goalsData);
           setCalorieBankCycle(cycle);
         }
       } catch (err) {
         if (__DEV__) console.error('Calorie bank init failed:', err);
       }
-
+      stage1Ok = true;
     } catch (e) {
       console.error("Failed to load home screen data", e);
     }
+
+    // Stage 2: never blocks the paint. Errors are contained so the floating
+    // mount call cannot produce an unhandled rejection.
+    return (async () => {
+      try {
+        await analyticsService.initialize();
+        await analyticsService.trackAppOpen();
+        analyticsService.trackOnboardingStarted();
+
+        if (!stored) {
+          const count = await dataStorage.loadEntryCount();
+          setEntryCount(count);
+        }
+
+        // Check if user unlocked AI Coach
+        await chatCoachService.checkUnlockStatus();
+
+        // Freeze data: monthly reset, then retroactive auto-freeze check.
+        // The retroactive check reads the summaries and would falsely burn a
+        // freeze on an empty set, so it requires a clean stage 1.
+        const currentMonthStart = format(new Date(), 'yyyy-MM-01');
+        let freezeData = await dataStorage.loadStreakFreeze();
+        if (!freezeData || freezeData.lastResetDate !== currentMonthStart) {
+          freezeData = {
+            freezesAvailable: 2, // Reset to 2 every month
+            lastResetDate: currentMonthStart,
+            usedOnDates: freezeData ? freezeData.usedOnDates : [] // Keep history, just reset counter
+          };
+          await dataStorage.saveStreakFreeze(freezeData);
+        }
+        if (stage1Ok) {
+          const updatedFreezeData = await checkMissedDaysAndFreeze(savedSummaries, freezeData);
+          setStreakFreeze(updatedFreezeData);
+        } else {
+          setStreakFreeze(freezeData);
+        }
+
+        // Smart Adjustments
+        const history = await dataStorage.loadAdjustmentHistory();
+        setAdjustmentHistory(history);
+        const availableAdjustment = await dataStorage.checkAndGenerateAdjustment(isPremium);
+        if (availableAdjustment && availableAdjustment.status === 'pending') {
+          setAdjustmentAvailable(availableAdjustment);
+        }
+
+        // Validate entry count matches actual log count (via summaries).
+        // Only against a cleanly loaded stage 1: reconciling against empty
+        // summaries would zero the persisted count and sync the zero up.
+        if (stage1Ok) {
+          let actualLogCount = 0;
+          Object.values(savedSummaries).forEach(s => {
+            actualLogCount += s.entryCount;
+          });
+          Object.values(savedExercises).forEach(entries => {
+            actualLogCount += entries.length;
+          });
+          const storedCount = await dataStorage.loadEntryCount();
+          if (actualLogCount !== storedCount) {
+            if (__DEV__) console.warn(`Entry count mismatch: stored=${storedCount}, actual=${actualLogCount}`);
+            await dataStorage.saveEntryCount(actualLogCount);
+            await AsyncStorage.setItem(ENTRY_COUNT_KEY, String(actualLogCount));
+            setEntryCount(actualLogCount);
+          }
+        }
+
+        // Load saved prompts
+        const storedPrompts = await dataStorage.loadSavedPrompts();
+        if (storedPrompts.length > 0) {
+          setSavedPrompts(storedPrompts.slice(0, MAX_SAVED_PROMPTS));
+        }
+
+        // Device info is telemetry with a cloud write inside; never worth
+        // waiting for. Fire and forget.
+        const deviceInfo = {
+          deviceName: Device.deviceName || 'Unknown',
+          modelName: Device.modelName || 'Unknown',
+          osName: Device.osName || 'Unknown',
+          osVersion: Device.osVersion || 'Unknown',
+          platform: Platform.OS,
+          appVersion: Constants.expoConfig?.version || '1.0.0',
+          timestamp: new Date().toISOString(),
+        };
+        void dataStorage.saveDeviceInfo(deviceInfo);
+
+        // ACCOUNT / REFERRAL info
+        const accountInfo = await dataStorage.loadAccountInfo();
+        await refreshUserContext();
+
+        // Identify user in Mixpanel
+        if (accountInfo?.supabaseUserId || accountInfo?.email) {
+          analyticsService.identifyUser(
+            accountInfo.supabaseUserId || accountInfo.email!,
+            { name: accountInfo.name, email: accountInfo.email, plan: isPremium ? 'premium' : 'free' }
+          );
+        }
+
+        if (accountInfo?.email) {
+          let code = await dataStorage.getReferralCode(accountInfo.email);
+          if (!code) {
+            await referralService.getOrCreateReferralCode(accountInfo.email);
+            code = await dataStorage.getReferralCode(accountInfo.email);
+          }
+          setReferralCode(code?.code || null);
+          const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+          setTotalEarnedEntries(earned);
+        } else {
+          setReferralCode(null);
+          setTotalEarnedEntries(0);
+        }
+
+        // Trigger background pattern detection if needed (non-blocking)
+        if (isPremium) {
+          const shouldRun = await patternDetectionService.shouldRunDetection();
+          if (shouldRun) {
+            patternDetectionService.analyzePatterns().then(async () => {
+              // Always refresh from storage — clears stale patterns even if none detected
+              const fresh = await patternDetectionService.getActivePatterns();
+              setDetectedPatterns(fresh);
+            }).catch(err => console.error('Pattern detection failed:', err));
+          }
+        }
+
+        // Check grocery unlock (non-blocking)
+        if (isPremium) {
+          dataStorage.isGroceryUnlocked().then(async (unlocked) => {
+            if (!unlocked) {
+              const { eligible } = await dataStorage.checkGroceryUnlockEligibility();
+              if (eligible) {
+                await dataStorage.setGroceryUnlocked();
+                const seen = await dataStorage.isGroceryUnlockSeen();
+                if (!seen) setShowGroceryUnlockCard(true);
+              }
+            }
+          }).catch(() => {});
+        }
+
+        // Schedule smart reminders (non-blocking)
+        smartReminderService.scheduleAllReminders()
+          .catch(err => console.error('Smart reminder scheduling failed:', err));
+
+        // Check for insight unlocks (non-blocking)
+        checkInsightUnlocks(savedSummaries).catch(() => {});
+      } catch (e) {
+        console.error('Failed to load deferred home data', e);
+      }
+    })();
   };
 
   // Show account wall on app open if 5+ logs and no account

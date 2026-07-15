@@ -206,7 +206,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
             <KeyboardAvoidingView
                 behavior={Platform.OS === 'ios' ? 'padding' : undefined}
                 style={{ flex: 1 }}
-                keyboardVerticalOffset={Platform.OS === 'ios' ? 70 + Math.max(insets.bottom, 12) : 0}
+                keyboardVerticalOffset={Platform.OS === 'ios' ? 70 + Math.max(insets.bottom, 24) : 0}
             >
                 <FlatList
                     ref={flatListRef}
