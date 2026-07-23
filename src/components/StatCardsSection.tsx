@@ -3,8 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { Acid } from '../constants/acid';
 import { MacroData } from '../types';
 import { NumberTicker } from './NumberTicker';
-import { CalorieBankWeeklyCard } from './CalorieBankWeeklyCard';
-import { CalorieBankDayData } from '../utils/calorieBankEngine';
 import { StatCardSkeleton } from './StatCardSkeleton';
 import { AnimatedFill } from './AnimatedFill';
 
@@ -15,12 +13,6 @@ interface StatCardsSectionProps {
   dailyCalories?: number;
   onScrollEnable?: (enabled: boolean) => void;
   calorieBankActive?: boolean;
-  calorieBankBalance?: number;
-  weeklyBudget?: number;
-  weeklyActual?: number;
-  remainingDays?: number;
-  daysInCycle?: number;
-  bankPerDayData?: CalorieBankDayData[];
   waterMl?: number;
   waterTargetMl?: number;
   onWaterPress?: () => void;
@@ -52,12 +44,6 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
   macros2Data,
   dailyCalories = 1500,
   calorieBankActive,
-  calorieBankBalance,
-  weeklyBudget,
-  weeklyActual,
-  remainingDays,
-  daysInCycle,
-  bankPerDayData,
   waterMl,
   waterTargetMl,
   onWaterPress,
@@ -114,18 +100,6 @@ export const StatCardsSection: React.FC<StatCardsSectionProps> = ({
         </View>
       )}
 
-      {calorieBankActive && (
-        <View style={{ marginTop: 16 }}>
-          <CalorieBankWeeklyCard
-            weeklyBudget={weeklyBudget || 0}
-            weeklyActual={weeklyActual || 0}
-            bankBalance={calorieBankBalance || 0}
-            remainingDays={remainingDays || 0}
-            daysInCycle={daysInCycle || 7}
-            perDayData={bankPerDayData}
-          />
-        </View>
-      )}
     </View>
   );
 };

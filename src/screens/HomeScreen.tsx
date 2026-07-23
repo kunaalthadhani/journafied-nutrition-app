@@ -42,6 +42,7 @@ import { FoodLogSection } from '../components/FoodLogSection';
 import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary, isPremiumEntitled } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { CalorieBankCard } from '../components/CalorieBankCard';
+import { CalorieBankWeeklyCard } from '../components/CalorieBankWeeklyCard';
 import { CycleResetCard } from '../components/CycleResetCard';
 import { CalorieBankConfig, CalorieBankCompletedCycle } from '../services/dataStorage';
 import { calculateCurrentCycle, CalorieBankCycle, getDayName, calculateBankUtilization } from '../utils/calorieBankEngine';
@@ -2695,12 +2696,6 @@ export const HomeScreen: React.FC = () => {
                 macros2Data={macros2Data}
                 dailyCalories={bankAdjustedCalories}
                 calorieBankActive={calorieBankActive}
-                calorieBankBalance={calorieBankCycle?.bankBalance || 0}
-                weeklyBudget={calorieBankCycle?.weeklyBudget || 0}
-                weeklyActual={calorieBankCycle?.weeklyLoggedActual || 0}
-                remainingDays={calorieBankCycle?.remainingDays || 0}
-                daysInCycle={calorieBankCycle?.daysInCycle || 7}
-                bankPerDayData={calorieBankCycle?.perDayData}
                 waterMl={waterByDate[format(selectedDate, 'yyyy-MM-dd')] || 0}
                 waterTargetMl={WATER_TARGET_ML}
                 onWaterPress={() => setShowWaterSheet(true)}
@@ -2931,6 +2926,21 @@ export const HomeScreen: React.FC = () => {
                     <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: Acid.lime }}>ASK COACH →</Text>
                   </TouchableOpacity>
                 )}
+              </View>
+            )}
+
+            {/* The week, moved to the foot of the page: the day is the hero
+                up top, the week is the epilogue */}
+            {calorieBankActive && calorieBankCycle && (
+              <View style={{ paddingHorizontal: 20, marginTop: 28 }}>
+                <CalorieBankWeeklyCard
+                  weeklyBudget={calorieBankCycle.weeklyBudget || 0}
+                  weeklyActual={calorieBankCycle.weeklyLoggedActual || 0}
+                  bankBalance={calorieBankCycle.bankBalance || 0}
+                  remainingDays={calorieBankCycle.remainingDays || 0}
+                  daysInCycle={calorieBankCycle.daysInCycle || 7}
+                  perDayData={calorieBankCycle.perDayData}
+                />
               </View>
             )}
 

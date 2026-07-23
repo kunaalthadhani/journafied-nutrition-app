@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.4.56**
+The weekly bank chart moved from the top of Home to the foot of the page, after your food log and the coach line. The day is the hero up top; the week reads as the epilogue. Nothing else about the chart changed.
+
 **v1.4.55**
 The app opens fast now. Everything you look at first, the calorie hero, the macro bars, the weekly bank, loads together in one parallel pass the moment the app boots, instead of queueing behind analytics, device telemetry, and account sync. That background work still happens, just after you can already see your day. On the PWA this cuts the staged 5 to 7 second trickle to roughly the boot time of the app itself. The bottom tab bar also sits properly above the bottom edge on the PWA now, matching how it looks in the native builds.
 
