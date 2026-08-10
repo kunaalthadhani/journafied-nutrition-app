@@ -2,6 +2,14 @@ import "https://deno.land/x/xhr@0.3.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.86.0";
 
+// The brain is Moonshot, the family's one AI account. Text parsing rides
+// the reasoning model, food photos ride kimi-k3 which actually has eyes.
+// Whisper transcription stays OpenAI only and optional: no OPENAI_API_KEY
+// means voice returns a clear error while everything else works.
+const MOONSHOT_API_KEY = Deno.env.get("MOONSHOT_API_KEY");
+const MOONSHOT_MODEL = Deno.env.get("MOONSHOT_MODEL") ?? "kimi-k2.6";
+const MOONSHOT_VISION_MODEL = Deno.env.get("MOONSHOT_VISION_MODEL") ?? "kimi-k3";
+const MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -80,13 +88,6 @@ serve(async (req) => {
     return new Response("ok", { headers: corsHeaders });
   }
 
-  if (!OPENAI_API_KEY) {
-    return new Response(
-      JSON.stringify({ error: "OPENAI_API_KEY not configured" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  }
-
   try {
     const body = await req.json();
 
@@ -141,8 +142,11 @@ serve(async (req) => {
       return jsonError("Too many requests. Slow down and try again shortly.", 429);
     }
 
-    // ── Whisper transcription ──
+    // ── Whisper transcription (OpenAI only, optional) ──
     if (body.type === "transcription") {
+      if (!OPENAI_API_KEY) {
+        return jsonError("Voice input is not configured yet. Type it instead.", 501);
+      }
       const model = body.model || "whisper-1";
       if (!TRANSCRIBE_MODEL_ALLOWLIST.has(model)) {
         return jsonError("Unsupported transcription model.", 400);
@@ -193,9 +197,15 @@ serve(async (req) => {
       });
     }
 
-    // ── Chat completions (GPT-4o-mini, vision, etc.) ──
-    const model = body.model || "gpt-4o-mini";
-    if (!CHAT_MODEL_ALLOWLIST.has(model)) {
+    // ── Chat completions, served by Moonshot ──
+    // The client still speaks its old model names; the proxy translates so
+    // the app never changes. A message carrying an image routes to the
+    // vision model, kimi-k3 has eyes, the reasoning model does not.
+    if (!MOONSHOT_API_KEY) {
+      return jsonError("MOONSHOT_API_KEY not configured", 500);
+    }
+    const requested = body.model || "gpt-4o-mini";
+    if (!CHAT_MODEL_ALLOWLIST.has(requested)) {
       return jsonError("Unsupported model.", 400);
     }
     if (!Array.isArray(body.messages) || body.messages.length === 0) {
@@ -208,36 +218,63 @@ serve(async (req) => {
       return jsonError("Request payload is too large.", 413);
     }
 
-    const openaiBody: Record<string, unknown> = {
+    const hasImage = body.messages.some(
+      (m: { content?: unknown }) =>
+        Array.isArray(m?.content) &&
+        (m.content as { type?: string }[]).some((part) => part?.type === "image_url"),
+    );
+    const model = hasImage ? MOONSHOT_VISION_MODEL : MOONSHOT_MODEL;
+
+    const chatBody: Record<string, unknown> = {
       model,
       messages: body.messages,
     };
 
-    if (body.temperature !== undefined) openaiBody.temperature = body.temperature;
+    if (body.temperature !== undefined) chatBody.temperature = body.temperature;
     if (body.max_tokens !== undefined) {
-      openaiBody.max_tokens = Math.min(
-        Math.max(1, Number(body.max_tokens) || 1),
+      // the reasoning model thinks before it answers, and thinking spends
+      // tokens. The client's old 150 to 600 budgets would starve the actual
+      // answer, so the floor is high and the cap still holds
+      chatBody.max_tokens = Math.min(
+        Math.max(2048, Number(body.max_tokens) || 1),
         MAX_OUTPUT_TOKENS
       );
     }
-    if (body.response_format) openaiBody.response_format = body.response_format;
+    // Moonshot speaks json_object but returns garbage on strict json_schema.
+    // Downgrade: enforce json_object and hand the schema to the model in
+    // words, which kimi follows well. The client's parser stays unchanged
+    if (body.response_format?.type === "json_schema") {
+      chatBody.response_format = { type: "json_object" };
+      const schema = body.response_format.json_schema?.schema;
+      if (schema) {
+        chatBody.messages = [
+          ...(body.messages as unknown[]),
+          {
+            role: "system",
+            content: `Respond with a single JSON object that strictly matches this JSON Schema, no extra keys, no prose: ${JSON.stringify(schema)}`,
+          },
+        ];
+      }
+    } else if (body.response_format) {
+      chatBody.response_format = body.response_format;
+    }
 
-    const chatRes = await fetch("https://api.openai.com/v1/chat/completions", {
+    const chatRes = await fetch(MOONSHOT_URL, {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${OPENAI_API_KEY}`,
+        Authorization: `Bearer ${MOONSHOT_API_KEY}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(openaiBody),
+      body: JSON.stringify(chatBody),
       // When the client closes the connection (timeout / user backs out)
-      // req.signal fires and OpenAI stops billing once the upstream socket dies.
+      // req.signal fires and the upstream fetch aborts with it.
       signal: req.signal,
     });
 
     if (!chatRes.ok) {
       const err = await chatRes.text();
       return new Response(
-        JSON.stringify({ error: `OpenAI error: ${err}` }),
+        JSON.stringify({ error: `AI error: ${err}` }),
         { status: chatRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }

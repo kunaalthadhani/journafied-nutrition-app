@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.1**
+The AI brain moved to Moonshot. Food parsing from text runs on the kimi reasoning model, food photos run on kimi-k3 which genuinely sees, and the app itself changed nothing, the proxy translates. No OpenAI account needed anymore. Voice input is parked until a speech option is picked; the mic now says so politely instead of failing. Under the hood the proxy also learned that Moonshot returns garbage for strict JSON schemas, so it enforces JSON object mode and hands the schema to the model in words, verified on a real meal end to end.
+
 **v1.5.0**
 TrackKcal joins the Track family database. Your account now lives on the same project as TrackLifts: one email, one body, every Track app. Weigh in here and TrackLifts sees it; weigh in there and your chart here already knows the day. Your name, height, weight, goal weight, and weight unit live on one shared profile, so the next Track app starts already knowing you. Meals, goals, and insights are unchanged on the surface, they moved house underneath. If you were signed in before, sign in again once, the old account system is retired.
 

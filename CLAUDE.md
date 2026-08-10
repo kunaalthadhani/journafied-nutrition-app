@@ -80,6 +80,12 @@ Deploy Edge Function: `supabase functions deploy ai-proxy`. Only do this on requ
 
 ---
 
+## The Track family
+
+TrackKcal lives on the family Supabase project shared with TrackLifts (and Femm later). The contract is FAMILY.md in the TrackLifts repo, read it before touching anything that syncs. The laws in short: the auth uid is the only identity, email is a login credential never a join key. Kcal owns the kcal_ prefixed tables. Shared journals (weight_log, water_log) are keyed by user, date, and app: write only kcal rows, read everyone's, never delete a sibling app's row. Shared facts (name, gender, age, height, weight, goal weight, weight unit) live on the profiles row, push when kcal learns them fresher. kcal_daily_summaries must keep its typed calories and protein_g columns in step with the payload, TrackLifts reads them. Premium truth is entitlements.kcal_premium, server written, never client written. New cross app reads get a line in FAMILY.md before they get code. The AI proxy is the kcal-proxy edge function on the family project: Moonshot for text and vision, model names translated server side, the client never changes.
+
+---
+
 ## Architectural non negotiables
 
 **Premium gating.** A feature is premium if and only if `isPremium === true`, which requires both a `premium` plan AND a signed in account with email. Never gate premium on plan alone. See [src/screens/HomeScreen.tsx](src/screens/HomeScreen.tsx) for the canonical check.
