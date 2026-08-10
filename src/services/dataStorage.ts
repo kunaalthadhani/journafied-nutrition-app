@@ -1160,24 +1160,29 @@ const diffWeightEntries = (
   return { upserts, deletions };
 };
 
+// keyed by DAY, not by id: the family weight_log holds one row per day, so
+// a local full-ISO id and a remote date row for the same day must collide
+// here instead of duplicating. Freshest updatedAt wins the day
 const mergeWeightEntries = (remote: WeightEntry[], local: WeightEntry[]): WeightEntry[] => {
+  const dayOf = (entry: WeightEntry) => (entry.date || '').slice(0, 10);
   const mergedMap = new Map<string, WeightEntry>();
   local.forEach((entry) => {
     const normalized = normalizeWeightEntry(entry);
-    mergedMap.set(normalized.id!, normalized);
+    mergedMap.set(dayOf(normalized), normalized);
   });
 
   remote.forEach((entry) => {
     const normalized = normalizeWeightEntry(entry);
-    const existing = mergedMap.get(normalized.id!);
+    const key = dayOf(normalized);
+    const existing = mergedMap.get(key);
     if (!existing) {
-      mergedMap.set(normalized.id!, normalized);
+      mergedMap.set(key, normalized);
       return;
     }
     const existingUpdated = existing.updatedAt || '';
     const remoteUpdated = normalized.updatedAt || '';
     if (!existingUpdated || remoteUpdated > existingUpdated) {
-      mergedMap.set(normalized.id!, normalized);
+      mergedMap.set(key, normalized);
     }
   });
 
@@ -1736,17 +1741,20 @@ export const dataStorage = {
     try {
       const raw = await AsyncStorage.getItem(STORAGE_KEYS.WEIGHT_ENTRIES);
       const list: WeightEntry[] = raw ? JSON.parse(raw) : [];
+      // the family weight_log is keyed by day, so the cloud delete targets
+      // the entry's date. Capture it before the entry leaves the list
+      const target = list.find((e) => e.id === id)?.date ?? id;
       await AsyncStorage.setItem(STORAGE_KEYS.WEIGHT_ENTRIES, JSON.stringify(list.filter((e) => e.id !== id)));
 
       const accountInfo = await getCachedAccountInfo();
       if (accountInfo?.supabaseUserId || accountInfo?.email) {
         try {
-          await supabaseDataService.deleteWeightEntries(accountInfo, [id]);
+          await supabaseDataService.deleteWeightEntries(accountInfo, [target]);
         } catch (error) {
-          await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } });
+          await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id: target } });
         }
       } else {
-        await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id } });
+        await enqueueSyncOperation({ entity: 'weight', action: 'delete', payload: { id: target } });
       }
     } catch (error) {
       if (__DEV__) console.warn('deleteWeightEntry failed', error);

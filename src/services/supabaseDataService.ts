@@ -22,18 +22,27 @@ import type {
   DailySummary,
 } from './dataStorage';
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExerciseEntry } from '../components/ExerciseLogSection';
-import { AppUser, SupabaseFoodLog, SupabaseWeightEntry } from '../types';
+import { AppUser, SupabaseFoodLog } from '../types';
+import { generateId } from '../utils/uuid';
 
-const mapAppUser = (record: any): AppUser => ({
-  id: record.id,
-  authUserId: record.auth_user_id ?? undefined,
-  email: record.email ?? undefined,
-  displayName: record.display_name ?? undefined,
-  phoneNumber: record.phone_number ?? undefined,
-  createdAt: record.created_at,
-  updatedAt: record.updated_at,
-});
+// one anonymous install id per device, the family analytics key
+const INSTALL_ID_KEY = '@trackkal:installId';
+let cachedInstallId: string | null = null;
+async function getInstallId(): Promise<string> {
+  if (cachedInstallId) return cachedInstallId;
+  let id: string | null = null;
+  try {
+    id = await AsyncStorage.getItem(INSTALL_ID_KEY);
+  } catch { /* mint fresh below */ }
+  if (!id) {
+    id = generateId();
+    try { await AsyncStorage.setItem(INSTALL_ID_KEY, id); } catch { /* keep in memory */ }
+  }
+  cachedInstallId = id;
+  return id;
+}
 
 const sumNutrient = (foods: MealEntry['foods'], key: 'calories' | 'protein' | 'carbs' | 'fat') =>
   foods.reduce((total, food) => total + (food[key] || 0), 0);
@@ -43,127 +52,57 @@ const formatDate = (timestamp: number) => {
   return date.toISOString().slice(0, 10);
 };
 
+// The family identity: the auth uid is the only key. app_users is gone,
+// every table on the family project references auth.users directly, and
+// the profiles row (created by a server trigger on signup) carries the
+// shared name. Reading the session every time keeps RLS happy and survives
+// cache wipes, same as before, minus the email joins.
 async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUser | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
 
-  // Source of truth is the live session. accountInfo can be stale, empty after sign-out,
-  // or missing the supabaseUserId for a brand-new sign-in. Reading the session every time
-  // makes RLS happy (auth.uid() = auth_user_id) and lets us recover from orphan rows
-  // that earlier lookups missed.
   const { data: sessionData } = await supabase.auth.getSession();
-  const currentAuthUid = sessionData?.session?.user?.id ?? null;
-  const sessionEmail = sessionData?.session?.user?.email ?? null;
+  const authUser = sessionData?.session?.user;
+  if (!authUser?.id) return null;
 
-  if (!currentAuthUid) return null;
+  let displayName: string | undefined;
+  try {
+    const { data } = await supabase
+      .from('profiles')
+      .select('name')
+      .eq('id', authUser.id)
+      .maybeSingle();
+    displayName = (data?.name as string | null) ?? undefined;
+  } catch { /* the name is enrichment, never a gate */ }
 
-  let emailToUse = sessionEmail || accountInfo?.email || null;
-  if (!emailToUse) {
+  // a fresher local name lands on the shared profile, so the next family
+  // app greets her by name
+  if (accountInfo?.name && accountInfo.name !== displayName) {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (user?.email) emailToUse = user.email;
-    } catch (error) {
-      console.error('Error fetching auth user email:', error);
-    }
+      await supabase
+        .from('profiles')
+        .update({ name: accountInfo.name, updated_at: new Date().toISOString() })
+        .eq('id', authUser.id);
+      displayName = accountInfo.name;
+    } catch { /* best effort */ }
   }
 
-  // Look up by auth_user_id first (canonical), then by email (orphan recovery —
-  // catches rows whose auth_user_id link is missing or stale).
-  let existing: any = null;
-  {
-    const { data, error } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('auth_user_id', currentAuthUid)
-      .maybeSingle();
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error looking up app_users by auth_user_id:', error);
-    }
-    if (data) existing = data;
-  }
-  if (!existing && emailToUse) {
-    const { data, error } = await supabase
-      .from('app_users')
-      .select('*')
-      .eq('email', emailToUse.trim().toLowerCase())
-      .maybeSingle();
-    if (error && error.code !== 'PGRST116') {
-      console.error('Error looking up app_users by email:', error);
-    }
-    if (data) existing = data;
-  }
-
-  if (existing) {
-    const needsUpdate =
-      (accountInfo?.name && existing.display_name !== accountInfo.name) ||
-      (accountInfo?.phoneNumber && existing.phone_number !== accountInfo.phoneNumber) ||
-      (existing.auth_user_id !== currentAuthUid) ||
-      (emailToUse && existing.email !== emailToUse.trim().toLowerCase());
-
-    if (needsUpdate) {
-      const { data: updated, error: updateError } = await supabase
-        .from('app_users')
-        .update({
-          display_name: accountInfo?.name ?? existing.display_name,
-          phone_number: accountInfo?.phoneNumber ?? existing.phone_number,
-          auth_user_id: currentAuthUid,
-          email: emailToUse ? emailToUse.trim().toLowerCase() : existing.email,
-        })
-        .eq('id', existing.id)
-        .select()
-        .single();
-      if (updateError) {
-        console.error('Error updating app_users row:', updateError);
-        return mapAppUser(existing);
-      }
-      return mapAppUser(updated);
-    }
-    return mapAppUser(existing);
-  }
-
-  if (!emailToUse) {
-    console.error('Cannot create app_users row: no email on session or accountInfo');
-    return null;
-  }
-
-  // Nothing found by auth_user_id or email. Use upsert on email so that if a row
-  // exists but our SELECT missed it (race condition, RLS visibility quirk, etc),
-  // we update it instead of failing on the unique-email constraint.
-  const { data, error } = await supabase
-    .from('app_users')
-    .upsert(
-      {
-        email: emailToUse.trim().toLowerCase(),
-        display_name: accountInfo?.name ?? null,
-        phone_number: accountInfo?.phoneNumber ?? null,
-        auth_user_id: currentAuthUid,
-      },
-      { onConflict: 'email' },
-    )
-    .select()
-    .single();
-
-  if (error) {
-    console.error('Error upserting app_users row:', error);
-    return null;
-  }
-  return data ? mapAppUser(data) : null;
+  return {
+    id: authUser.id,
+    authUserId: authUser.id,
+    email: authUser.email ?? accountInfo?.email ?? undefined,
+    displayName,
+    phoneNumber: undefined,
+    createdAt: authUser.created_at ?? new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
 }
 
 async function getUserByEmail(email: string): Promise<AppUser | null> {
-  if (!isSupabaseConfigured() || !supabase) return null;
-
-  const { data, error } = await supabase
-    .from('app_users')
-    .select('*')
-    .eq('email', email.trim().toLowerCase())
-    .maybeSingle();
-
-  if (error && error.code !== 'PGRST116') {
-    console.error('Error retrieving user by email:', error);
-    return null;
-  }
-
-  return data ? mapAppUser(data) : null;
+  // email is a login credential now, never a join key. The only account
+  // this client can see is the signed in one; anyone else is null
+  const user = await getOrCreateUser(null);
+  if (!user?.email || !email) return null;
+  return user.email.toLowerCase() === email.trim().toLowerCase() ? user : null;
 }
 
 function mapFoodLogRowToMeals(records: SupabaseFoodLog[]): Record<string, MealEntry[]> {
@@ -219,28 +158,28 @@ function mealPayloadToRow(userId: string, payload: { meal: MealEntry; dateKey: s
   };
 }
 
-function mapWeightRows(records: SupabaseWeightEntry[]): WeightEntry[] {
-  return records
-    .filter((record) => !record.deleted_at)
-    .map((record) => ({
-      id: record.id || record.logged_date,
-      date: record.logged_date,
-      weight: record.weight_kg ?? 0,
-      updatedAt: record.updated_at || record.created_at || new Date().toISOString(),
-    }));
-}
-
-function weightPayloadToRow(userId: string, payload: WeightSyncPayload): SupabaseWeightEntry {
-  return {
-    id: payload.id,
-    user_id: userId,
-    logged_date: payload.date.slice(0, 10),
-    weight_kg: payload.weight,
-    notes: null,
-    created_at: payload.date,
-    updated_at: payload.updatedAt,
-    deleted_at: null,
-  };
+// weights live in the shared family weight_log now: one row per user per
+// day per app. Kcal writes its own rows and reads the whole family, so a
+// weigh in from TrackLifts shows up here. One account, one body. Her own
+// kcal row wins a day; a sibling row fills a day she skipped
+function mapWeightRows(records: { date: string; weight_kg: number; source_app: string; created_at?: string }[]): WeightEntry[] {
+  const byDate = new Map<string, { entry: WeightEntry; own: boolean }>();
+  for (const r of records) {
+    const date = String(r.date);
+    const own = r.source_app === 'kcal';
+    const existing = byDate.get(date);
+    if (existing && (existing.own || !own)) continue;
+    byDate.set(date, {
+      own,
+      entry: {
+        id: date,
+        date,
+        weight: Number(r.weight_kg) || 0,
+        updatedAt: r.created_at || new Date().toISOString(),
+      },
+    });
+  }
+  return [...byDate.values()].map((x) => x.entry).sort((a, b) => (a.date < b.date ? -1 : 1));
 }
 
 export const supabaseDataService = {
@@ -262,7 +201,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     const rows = payloads.map((payload) => mealPayloadToRow(user.id, payload));
-    const { error } = await supabase.from('food_logs').upsert(rows, { onConflict: 'id' });
+    const { error } = await supabase.from('kcal_food_logs').upsert(rows, { onConflict: 'id' });
     if (error) {
       throw error;
     }
@@ -276,7 +215,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
-      .from('food_logs')
+      .from('kcal_food_logs')
       .update({ deleted_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .in('id', mealIds);
@@ -292,7 +231,7 @@ export const supabaseDataService = {
     if (!user) return {};
 
     const { data, error } = await supabase
-      .from('food_logs')
+      .from('kcal_food_logs')
       .select('*')
       .eq('user_id', user.id)
       .is('deleted_at', null)
@@ -313,8 +252,19 @@ export const supabaseDataService = {
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
 
-    const rows = payloads.map((payload) => weightPayloadToRow(user.id, payload));
-    const { error } = await supabase.from('weight_entries').upsert(rows, { onConflict: 'id' });
+    // one row per day: dedupe the batch by date, last write wins, because a
+    // single upsert statement cannot touch the same key twice
+    const byDate = new Map<string, WeightSyncPayload>();
+    for (const p of payloads) byDate.set(p.date.slice(0, 10), p);
+    const rows = [...byDate.entries()].map(([date, p]) => ({
+      user_id: user.id,
+      date,
+      weight_kg: p.weight,
+      source_app: 'kcal',
+    }));
+    const { error } = await supabase
+      .from('weight_log')
+      .upsert(rows, { onConflict: 'user_id,date,source_app' });
     if (error) {
       throw error;
     }
@@ -326,11 +276,19 @@ export const supabaseDataService = {
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
+
+    // local ids are date based, so a delete targets days. Only kcal's own
+    // rows die: a sibling app's weigh in is never deleted from here
+    const dates = ids
+      .map((id) => (/^\d{4}-\d{2}-\d{2}/.test(id) ? id.slice(0, 10) : null))
+      .filter((d): d is string => d !== null);
+    if (dates.length === 0) return;
     const { error } = await supabase
-      .from('weight_entries')
-      .update({ deleted_at: new Date().toISOString() })
+      .from('weight_log')
+      .delete()
       .eq('user_id', user.id)
-      .in('id', ids);
+      .eq('source_app', 'kcal')
+      .in('date', dates);
     if (error) {
       throw error;
     }
@@ -342,11 +300,10 @@ export const supabaseDataService = {
     if (!user) return [];
 
     const { data, error } = await supabase
-      .from('weight_entries')
-      .select('*')
+      .from('weight_log')
+      .select('date, weight_kg, source_app, created_at')
       .eq('user_id', user.id)
-      .is('deleted_at', null)
-      .order('logged_date', { ascending: true });
+      .order('date', { ascending: true });
 
     if (error) {
       console.error('Error fetching weight entries from Supabase:', error);
@@ -370,7 +327,7 @@ export const supabaseDataService = {
 
     // First, deactivate all existing active goals for this user
     const { error: deactivateError } = await supabase
-      .from('nutrition_goals')
+      .from('kcal_goals')
       .update({ is_active: false })
       .eq('user_id', user.id)
       .eq('is_active', true);
@@ -382,7 +339,7 @@ export const supabaseDataService = {
 
     // Insert the new active goal with all profile data
     const { error: insertError } = await supabase
-      .from('nutrition_goals')
+      .from('kcal_goals')
       .insert({
         user_id: user.id,
         calories_target: goals.calories || null,
@@ -408,6 +365,20 @@ export const supabaseDataService = {
       console.error('Error saving nutrition goals to Supabase:', insertError);
       throw insertError;
     }
+
+    // ring 1: the body facts the goal was built from land on the shared
+    // profile, so TrackLifts and Femm start already knowing her. The goal
+    // row above keeps its own snapshot for history, profiles holds the
+    // live truth. prefer_not_to_say stays private, the family column is null
+    try {
+      const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
+      if (goals.gender === 'male' || goals.gender === 'female') p.gender = goals.gender;
+      if (goals.age) p.age = goals.age;
+      if (goals.heightCm) p.height_cm = goals.heightCm;
+      if (goals.currentWeightKg) p.weight_kg = goals.currentWeightKg;
+      if (goals.targetWeightKg) p.goal_weight_kg = goals.targetWeightKg;
+      await supabase.from('profiles').update(p).eq('id', user.id);
+    } catch { /* profile push is enrichment, the goal is already saved */ }
   },
 
   async fetchNutritionGoals(accountInfo: AccountInfo | null): Promise<ExtendedGoalData | null> {
@@ -416,7 +387,7 @@ export const supabaseDataService = {
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('nutrition_goals')
+      .from('kcal_goals')
       .select('*')
       .eq('user_id', user.id)
       .eq('is_active', true)
@@ -484,7 +455,7 @@ export const supabaseDataService = {
       };
     });
 
-    const { error } = await supabase.from('exercise_logs').upsert(rows, { onConflict: 'id' });
+    const { error } = await supabase.from('kcal_exercise_logs').upsert(rows, { onConflict: 'id' });
     if (error) {
       console.error('Error upserting exercises to Supabase:', error);
       throw error;
@@ -499,7 +470,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
-      .from('exercise_logs')
+      .from('kcal_exercise_logs')
       .update({ deleted_at: new Date().toISOString() })
       .eq('user_id', user.id)
       .in('id', ids);
@@ -516,7 +487,7 @@ export const supabaseDataService = {
     if (!user) return {};
 
     const { data, error } = await supabase
-      .from('exercise_logs')
+      .from('kcal_exercise_logs')
       .select('*')
       .eq('user_id', user.id)
       .is('deleted_at', null)
@@ -558,6 +529,7 @@ export const supabaseDataService = {
       .upsert(
         {
           user_id: user.id,
+          app: 'kcal',
           expo_token: token,
           device_info: deviceInfo || null,
           revoked_at: null,
@@ -617,12 +589,12 @@ export const supabaseDataService = {
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
 
-    const { error } = await supabase.from('push_history').insert({
+    const { error } = await supabase.from('kcal_push_history').insert({
       id: record.id,
       user_id: user.id,
       title: record.title,
       message: record.message,
-      timestamp: record.timestamp,
+      client_ts: record.timestamp,
       target_count: record.targetCount,
       success_count: record.successCount,
       failure_count: record.failureCount,
@@ -646,7 +618,7 @@ export const supabaseDataService = {
 
     // Note: Supabase doesn't support raw SQL in update, so we fetch, increment, and update
     const { data: existing } = await supabase
-      .from('push_history')
+      .from('kcal_push_history')
       .select('click_count')
       .eq('id', id)
       .eq('user_id', user.id)
@@ -654,7 +626,7 @@ export const supabaseDataService = {
 
     if (existing) {
       const { error } = await supabase
-        .from('push_history')
+        .from('kcal_push_history')
         .update({
           clicked: true,
           clicked_at: new Date().toISOString(),
@@ -676,10 +648,10 @@ export const supabaseDataService = {
     if (!user) return [];
 
     const { data, error } = await supabase
-      .from('push_history')
+      .from('kcal_push_history')
       .select('*')
       .eq('user_id', user.id)
-      .order('timestamp', { ascending: false });
+      .order('client_ts', { ascending: false });
 
     if (error) {
       console.error('Error fetching push history from Supabase:', error);
@@ -691,7 +663,7 @@ export const supabaseDataService = {
         id: row.id,
         title: row.title,
         message: row.message,
-        timestamp: row.timestamp,
+        timestamp: row.client_ts || row.sent_at,
         targetCount: row.target_count || 0,
         successCount: row.success_count || 0,
         failureCount: row.failure_count || 0,
@@ -709,7 +681,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
-      .from('saved_prompts')
+      .from('kcal_saved_prompts')
       .upsert(
         {
           id: prompt.id,
@@ -734,7 +706,7 @@ export const supabaseDataService = {
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
 
-    const { error } = await supabase.from('saved_prompts').delete().eq('id', id).eq('user_id', user.id);
+    const { error } = await supabase.from('kcal_saved_prompts').delete().eq('id', id).eq('user_id', user.id);
 
     if (error) {
       console.error('Error deleting saved prompt from Supabase:', error);
@@ -748,7 +720,7 @@ export const supabaseDataService = {
     if (!user) return [];
 
     const { data, error } = await supabase
-      .from('saved_prompts')
+      .from('kcal_saved_prompts')
       .select('*')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false });
@@ -776,11 +748,10 @@ export const supabaseDataService = {
     if (!user) throw new Error('savePreferences: could not resolve app user');
 
     const { error } = await supabase
-      .from('user_preferences')
+      .from('kcal_prefs')
       .upsert(
         {
           user_id: user.id,
-          weight_unit: prefs.weightUnit,
           notifications_enabled: prefs.notificationsEnabled,
           meal_reminders: prefs.mealReminders,
         },
@@ -791,6 +762,18 @@ export const supabaseDataService = {
       console.error('Error saving preferences to Supabase:', error);
       throw error;
     }
+
+    // the weight unit is a ring 1 fact on the shared profile, every Track
+    // app reads and writes the same one. Family speaks kg/lb, kcal lbs
+    try {
+      await supabase
+        .from('profiles')
+        .update({
+          weight_unit: prefs.weightUnit === 'lbs' ? 'lb' : 'kg',
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user.id);
+    } catch { /* the unit is enrichment, prefs already saved */ }
   },
 
   async fetchPreferences(accountInfo: AccountInfo | null): Promise<Preferences | null> {
@@ -799,7 +782,7 @@ export const supabaseDataService = {
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('user_preferences')
+      .from('kcal_prefs')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -811,8 +794,19 @@ export const supabaseDataService = {
 
     if (!data) return null;
 
+    // the unit lives on the shared profile, ring 1
+    let unit: 'kg' | 'lbs' = 'kg';
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('weight_unit')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (prof?.weight_unit === 'lb') unit = 'lbs';
+    } catch { /* default kg */ }
+
     return {
-      weightUnit: (data.weight_unit as 'kg' | 'lbs') || 'kg',
+      weightUnit: unit,
       notificationsEnabled: data.notifications_enabled ?? true,
       mealReminders: (data.meal_reminders as Preferences['mealReminders']) || {
         breakfast: { enabled: false, hour: 8, minute: 0 },
@@ -837,11 +831,12 @@ export const supabaseDataService = {
 
     const updateData: any = {};
     if (settings.entryCount !== undefined) updateData.entry_count = settings.entryCount;
-    if (settings.userPlan !== undefined) updateData.user_plan = settings.userPlan;
+    // userPlan is deliberately dropped: entitlements is the family's only
+    // premium truth, written by the server, never by a phone
     if (settings.deviceInfo !== undefined) updateData.device_info = settings.deviceInfo;
 
     const { error } = await supabase
-      .from('user_settings')
+      .from('kcal_settings')
       .upsert(
         {
           user_id: user.id,
@@ -866,7 +861,7 @@ export const supabaseDataService = {
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('user_settings')
+      .from('kcal_settings')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -878,9 +873,20 @@ export const supabaseDataService = {
 
     if (!data) return null;
 
+    // premium comes from the family entitlements table, the only truth
+    let userPlan: 'free' | 'premium' = 'free';
+    try {
+      const { data: ent } = await supabase
+        .from('entitlements')
+        .select('kcal_premium, track_plus')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (ent?.kcal_premium || ent?.track_plus) userPlan = 'premium';
+    } catch { /* free until proven premium */ }
+
     return {
       entryCount: data.entry_count || 0,
-      userPlan: (data.user_plan as 'free' | 'premium') || 'free',
+      userPlan,
       deviceInfo: data.device_info || null,
     };
   },
@@ -894,7 +900,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     const { error } = await supabase
-      .from('referral_codes')
+      .from('kcal_referral_codes')
       .upsert(
         {
           user_id: user.id,
@@ -919,7 +925,7 @@ export const supabaseDataService = {
     if (!user) return null;
 
     const { data, error } = await supabase
-      .from('referral_codes')
+      .from('kcal_referral_codes')
       .select('*')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -944,7 +950,7 @@ export const supabaseDataService = {
     if (!isSupabaseConfigured() || !supabase) return null;
 
     const { data, error } = await supabase
-      .from('referral_codes')
+      .from('kcal_referral_codes')
       .select('*')
       .eq('code', code.toUpperCase())
       .maybeSingle();
@@ -969,7 +975,7 @@ export const supabaseDataService = {
   async saveReferralRedemption(accountInfo: AccountInfo | null, redemption: ReferralRedemption): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
 
-    const { error } = await supabase.from('referral_redemptions').insert({
+    const { error } = await supabase.from('kcal_referral_redemptions').insert({
       id: redemption.id,
       referral_code: redemption.referralCode.toUpperCase(),
       referrer_email: redemption.referrerEmail.toLowerCase(),
@@ -998,7 +1004,7 @@ export const supabaseDataService = {
     const column = type === 'referrer' ? 'referrer_email' : 'referee_email';
 
     const { data, error } = await supabase
-      .from('referral_redemptions')
+      .from('kcal_referral_redemptions')
       .select('*')
       .eq(column, email)
       .order('redeemed_at', { ascending: false });
@@ -1032,7 +1038,7 @@ export const supabaseDataService = {
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
 
-    const { error } = await supabase.from('referral_rewards').insert({
+    const { error } = await supabase.from('kcal_referral_rewards').insert({
       id: reward.id,
       user_id: user.id,
       related_redemption_id: reward.relatedRedemptionId,
@@ -1051,7 +1057,7 @@ export const supabaseDataService = {
     if (!isSupabaseConfigured() || !supabase) return [];
 
     const { data, error } = await supabase
-      .from('referral_rewards')
+      .from('kcal_referral_rewards')
       .select('*')
       .eq('user_id', userId)
       .order('earned_at', { ascending: false });
@@ -1082,7 +1088,7 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     try {
-      const { error } = await supabase.from('streak_freezes').upsert(
+      const { error } = await supabase.from('kcal_streak_freezes').upsert(
         {
           user_id: user.id,
           freezes_available: freeze.freezesAvailable,
@@ -1096,7 +1102,8 @@ export const supabaseDataService = {
     } catch (e) { console.error('Exception saving streak freeze:', e); }
   },
 
-  // Analytics
+  // Analytics: the family table is write only by design, install_id keyed,
+  // app tagged. A leaked client key can add a row and never read one back
   async logAnalyticsEvent(accountInfo: AccountInfo | null, event: AnalyticsEvent): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
@@ -1106,10 +1113,12 @@ export const supabaseDataService = {
 
     try {
       const { error } = await supabase.from('analytics_events').insert({
+        install_id: await getInstallId(),
         user_id: user.id,
-        event_name: event.eventName,
-        properties: event.properties || null,
-        timestamp: event.timestamp
+        app: 'kcal',
+        name: event.eventName.slice(0, 64),
+        props: event.properties || {},
+        client_ts: event.timestamp,
       });
       if (error) console.warn('Failed to log analytics event:', error);
     } catch (e) { }
@@ -1128,7 +1137,7 @@ export const supabaseDataService = {
       payload: i as unknown as Record<string, unknown>,
       updated_at: new Date().toISOString(),
     }));
-    const { error } = await supabase.from('insights').upsert(rows, { onConflict: 'id' });
+    const { error } = await supabase.from('kcal_insights').upsert(rows, { onConflict: 'user_id,id' });
     if (error) throw error;
   },
 
@@ -1137,7 +1146,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
-      .from('insights')
+      .from('kcal_insights')
       .select('payload')
       .eq('user_id', user.id)
       .order('updated_at', { ascending: false })
@@ -1153,7 +1162,7 @@ export const supabaseDataService = {
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
-    const { error } = await supabase.from('detected_patterns').upsert(
+    const { error } = await supabase.from('kcal_detected_patterns').upsert(
       {
         user_id: user.id,
         payload: { patterns } as unknown as Record<string, unknown>,
@@ -1170,7 +1179,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
-      .from('detected_patterns')
+      .from('kcal_detected_patterns')
       .select('payload')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -1186,7 +1195,7 @@ export const supabaseDataService = {
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
-    const { error } = await supabase.from('weekly_action_plans').upsert(
+    const { error } = await supabase.from('kcal_weekly_action_plans').upsert(
       {
         user_id: user.id,
         payload: plan as unknown as Record<string, unknown>,
@@ -1203,7 +1212,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
     const { data, error } = await supabase
-      .from('weekly_action_plans')
+      .from('kcal_weekly_action_plans')
       .select('payload')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -1230,7 +1239,7 @@ export const supabaseDataService = {
     }));
     if (rows.length === 0) return;
     const { error } = await supabase
-      .from('insight_unlocks')
+      .from('kcal_insight_unlocks')
       .upsert(rows, { onConflict: 'user_id,insight_id' });
     if (error) throw error;
   },
@@ -1242,7 +1251,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};
     const { data, error } = await supabase
-      .from('insight_unlocks')
+      .from('kcal_insight_unlocks')
       .select('insight_id, unlocked_at, seen_at')
       .eq('user_id', user.id);
     if (error) { console.error('fetchInsightUnlocks error:', error); return {}; }
@@ -1266,15 +1275,20 @@ export const supabaseDataService = {
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
+    // the typed columns are the cross app contract: TrackLifts reads
+    // calories and protein_g so its coach can speak to the other half.
+    // They must never drift from the payload, written together always
     const rows = Object.entries(summaries).map(([dateKey, summary]) => ({
       user_id: user.id,
       summary_date: dateKey,
       payload: summary as unknown as Record<string, unknown>,
+      calories: summary.totalCalories ?? null,
+      protein_g: summary.totalProtein ?? null,
       updated_at: summary.updatedAt || new Date().toISOString(),
     }));
     if (rows.length === 0) return;
     const { error } = await supabase
-      .from('daily_summaries')
+      .from('kcal_daily_summaries')
       .upsert(rows, { onConflict: 'user_id,summary_date' });
     if (error) throw error;
   },
@@ -1286,7 +1300,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return {};
     const { data, error } = await supabase
-      .from('daily_summaries')
+      .from('kcal_daily_summaries')
       .select('summary_date, payload')
       .eq('user_id', user.id);
     if (error) { console.error('fetchDailySummaries error:', error); return {}; }
@@ -1308,7 +1322,7 @@ export const supabaseDataService = {
     // success and dequeues the op forever. See the goals-sync postmortem.
     if (!user) throw new Error('could not resolve app user for cloud write');
     const { error } = await supabase
-      .from('user_settings')
+      .from('kcal_settings')
       .upsert(
         { user_id: user.id, calorie_bank_config: config as unknown as Record<string, unknown> },
         { onConflict: 'user_id' },
@@ -1323,7 +1337,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return null;
     const { data, error } = await supabase
-      .from('user_settings')
+      .from('kcal_settings')
       .select('calorie_bank_config')
       .eq('user_id', user.id)
       .maybeSingle();
@@ -1348,8 +1362,8 @@ export const supabaseDataService = {
       completed_at: cycle.endDate || new Date().toISOString(),
     }));
     const { error } = await supabase
-      .from('calorie_bank_completed_cycles')
-      .upsert(rows, { onConflict: 'id' });
+      .from('kcal_calorie_bank_cycles')
+      .upsert(rows, { onConflict: 'user_id,id' });
     if (error) throw error;
   },
 
@@ -1360,7 +1374,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     if (!user) return [];
     const { data, error } = await supabase
-      .from('calorie_bank_completed_cycles')
+      .from('kcal_calorie_bank_cycles')
       .select('payload')
       .eq('user_id', user.id)
       .order('completed_at', { ascending: true });
@@ -1376,34 +1390,36 @@ export const supabaseDataService = {
     if (!user) throw new Error('could not resolve app user for cloud write');
 
     try {
-      // Delete from all tables where user_id is the foreign key
+      // Every kcal owned table, then kcal's rows in the shared journals.
+      // The auth record itself dies in the edge function afterwards, and
+      // its cascade sweeps anything left. Note the family reality: deleting
+      // the account deletes the Track account, every family app's data goes
+      // with it, one account, one deletion.
       const tables = [
-        'food_logs',
-        'weight_entries',
-        'exercise_logs',
-        'nutrition_goals',
-        'push_tokens',
-        'push_history',
-        'saved_prompts',
-        'user_preferences',
-        'referral_codes',
-        'referral_redemptions',
-        'referral_rewards',
-        'streak_freezes',
-        'analytics_events'
+        'kcal_food_logs',
+        'kcal_exercise_logs',
+        'kcal_goals',
+        'kcal_prefs',
+        'kcal_settings',
+        'kcal_saved_prompts',
+        'kcal_insights',
+        'kcal_detected_patterns',
+        'kcal_weekly_action_plans',
+        'kcal_insight_unlocks',
+        'kcal_daily_summaries',
+        'kcal_calorie_bank_cycles',
+        'kcal_streak_freezes',
+        'kcal_referral_codes',
+        'kcal_referral_rewards',
+        'kcal_push_history',
       ];
 
-      // Execute deletions in parallel or sequence
-      // Note: Some might fail if tables don't exist or RLS prevents it, but we try our best.
-      await Promise.all(
-        tables.map(table =>
-          supabase!.from(table).delete().eq('user_id', user.id)
-        )
-      );
-
-      // Finally delete the app_user record itself
-      await supabase.from('app_users').delete().eq('id', user.id);
-
+      await Promise.all([
+        ...tables.map(table => supabase!.from(table).delete().eq('user_id', user.id)),
+        supabase.from('weight_log').delete().eq('user_id', user.id).eq('source_app', 'kcal'),
+        supabase.from('water_log').delete().eq('user_id', user.id),
+        supabase.from('push_tokens').delete().eq('user_id', user.id).eq('app', 'kcal'),
+      ]);
     } catch (error) {
       console.error('Error deleting user data from Supabase:', error);
       throw error;

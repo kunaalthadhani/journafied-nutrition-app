@@ -127,7 +127,9 @@ export const authService = {
       // 2. Admin delete of the auth.users record via the edge function.
       // functions.invoke resolves with { error } on a 4xx/5xx, it does NOT throw,
       // so we have to check it explicitly.
-      const { error } = await supabase!.functions.invoke('ai-proxy', {
+      // kcal-proxy on the family project: the family's ai-proxy belongs to
+      // TrackLifts, kcal's rides beside it under its own name
+      const { error } = await supabase!.functions.invoke('kcal-proxy', {
         body: { type: 'delete_user' },
       });
       if (error) {

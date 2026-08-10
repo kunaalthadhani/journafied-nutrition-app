@@ -14,9 +14,8 @@ import { invalidateMealsCache } from './dataStorage';
  * already invalidated by the local save, so the extra re-fetch is redundant but
  * harmless — it just reconciles whatever the server stored back into local.
  *
- * Requires the food_logs table to be in the supabase_realtime publication on
- * the server. Run once in Supabase SQL editor if not already done:
- *   ALTER PUBLICATION supabase_realtime ADD TABLE public.food_logs;
+ * Requires kcal_food_logs in the supabase_realtime publication on the
+ * family project. Done in migration 20260810000002_kcal_client_reality.
  */
 
 let activeChannel: RealtimeChannel | null = null;
@@ -33,13 +32,13 @@ export function subscribeMealsForUser(supabaseUserId: string, onChange: () => vo
 
   activeUserId = supabaseUserId;
   activeChannel = supabase
-    .channel(`food_logs:user:${supabaseUserId}`)
+    .channel(`kcal_food_logs:user:${supabaseUserId}`)
     .on(
       'postgres_changes',
       {
         event: '*',
         schema: 'public',
-        table: 'food_logs',
+        table: 'kcal_food_logs',
         filter: `user_id=eq.${supabaseUserId}`,
       },
       () => {

@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.0**
+TrackKcal joins the Track family database. Your account now lives on the same project as TrackLifts: one email, one body, every Track app. Weigh in here and TrackLifts sees it; weigh in there and your chart here already knows the day. Your name, height, weight, goal weight, and weight unit live on one shared profile, so the next Track app starts already knowing you. Meals, goals, and insights are unchanged on the surface, they moved house underneath. If you were signed in before, sign in again once, the old account system is retired.
+
 **v1.4.56**
 The weekly bank chart moved from the top of Home to the foot of the page, after your food log and the coach line. The day is the hero up top; the week reads as the epilogue. Nothing else about the chart changed.
 

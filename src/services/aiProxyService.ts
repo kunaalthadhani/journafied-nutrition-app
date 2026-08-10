@@ -73,7 +73,7 @@ export async function invokeAI(request: AIRequest): Promise<AIResponse> {
   let data: any = null;
   let error: any = null;
   try {
-    const result = await supabase.functions.invoke('ai-proxy', {
+    const result = await supabase.functions.invoke('kcal-proxy', {
       body: {
         model: request.model,
         messages: request.messages,
@@ -190,7 +190,7 @@ export async function invokeWhisper(audioBase64: string, options?: { timeout_ms?
   let data: any = null;
   let error: any = null;
   try {
-    const result = await supabase.functions.invoke('ai-proxy', {
+    const result = await supabase.functions.invoke('kcal-proxy', {
       body: {
         type: 'transcription',
         audio_base64: audioBase64,

@@ -31,8 +31,8 @@ function detectUserAgent(): string | undefined {
 export const feedbackService = {
     async submit(input: FeedbackSubmission): Promise<void> {
         const message = input.message.trim();
-        if (!message) throw new Error('Message is required.');
-        if (message.length > 4000) throw new Error('Message is too long.');
+        if (message.length < 3) throw new Error('Say a little more, three characters at least.');
+        if (message.length > 2000) throw new Error('Message is too long.');
 
         const accountInfo = await dataStorage.loadAccountInfo();
         const email = input.email?.trim() || accountInfo?.email || null;
@@ -40,12 +40,13 @@ export const feedbackService = {
 
         if (!supabase) throw new Error('Backend unavailable. Try again later.');
 
+        // the family feedback table: app tagged, body is the message, email
+        // stays the practical contact key
         const { error } = await supabase.from('feedback').insert({
-            // user_id linkage is best-effort. Email is the practical key for
-            // contacting people. user_id is filled in async by a Supabase
-            // trigger if the email matches an app_users row.
+            app: 'kcal',
+            user_id: accountInfo?.supabaseUserId || null,
             email,
-            message,
+            body: message,
             category: input.category,
             source: detectSource(),
             screen: input.screen || null,
