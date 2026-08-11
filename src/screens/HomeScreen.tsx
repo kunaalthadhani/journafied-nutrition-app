@@ -145,9 +145,12 @@ export const HomeScreen: React.FC = () => {
   const [exercisesByDate, setExercisesByDate] = useState<Record<string, ExerciseEntry[]>>({});
   const [isAnalyzingFood, setIsAnalyzingFood] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
-  const [isRecording, setIsRecording] = useState(false);
-  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [isListening, setIsListening] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
+  // Decided once, at render time, without touching permissions. False on a
+  // build made before on-device speech shipped, which hides the mic instead
+  // of offering a button that cannot work.
+  const [micAvailable] = useState(() => voiceService.isSupported());
   const [uploadStatusVisible, setUploadStatusVisible] = useState(false);
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
   const [uploadFileName, setUploadFileName] = useState('');
@@ -1869,50 +1872,32 @@ export const HomeScreen: React.FC = () => {
     setPhotoModalVisible(true);
   };
 
+  // Tap to talk, tap again to stop, and silence stops it too. The words land
+  // in the meal field for her to fix before anything is parsed. Voice never
+  // submits on its own: "too eggs" deserves an edit first.
   const handleMicPress = async () => {
-    if (isRecording) {
-      // Stop recording and transcribe
-      setIsRecording(false);
-      setIsTranscribing(true);
-
-      try {
-        const transcription = await voiceService.stopRecording();
-        if (transcription) {
-          setTranscribedText(transcription);
-          if (__DEV__) console.log('Transcription received:', transcription);
-        } else {
-          if (__DEV__) console.log('No transcription received');
-          alert('No transcription received. Please try again.');
-        }
-      } catch (error) {
-        if (__DEV__) console.error('Error stopping recording:', error);
-        alert('Failed to transcribe audio. Please try typing instead.');
-      } finally {
-        setIsTranscribing(false);
-      }
-    } else {
-      // Start recording
-      try {
-        const success = await voiceService.startRecording();
-        if (success) {
-          setIsRecording(true);
-          analyticsService.trackVoiceRecording();
-          if (__DEV__) console.log('Recording started successfully');
-        } else {
-          if (__DEV__) console.log('Failed to start recording');
-          alert('Failed to start recording. Please check microphone permissions.');
-        }
-      } catch (error) {
-        if (__DEV__) console.error('Error starting recording:', error);
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-        if (errorMessage.includes('permission')) {
-          alert('Microphone permission is required. Please enable it in your device settings.');
-        } else {
-          alert('Failed to start recording. Please try again.');
-        }
-      }
+    if (isListening) {
+      voiceService.stop();
+      return;
     }
+
+    setTranscribedText('');
+    setIsListening(true);
+
+    const started = await voiceService.start({
+      onTranscript: (text) => setTranscribedText(text),
+      onEnd: () => setIsListening(false),
+      onError: (message, failure) => {
+        if (failure !== 'silent') Alert.alert('Voice', message);
+      },
+    });
+
+    if (started) analyticsService.trackVoiceRecording();
+    else setIsListening(false);
   };
+
+  // Never leave the mic open behind a torn down screen.
+  useEffect(() => () => voiceService.cancel(), []);
 
   const handleTakePhoto = () => {
     if (isOpeningCameraRef.current || pendingActionRef.current) {
@@ -2952,9 +2937,9 @@ export const HomeScreen: React.FC = () => {
           <BottomInputBar
             onSubmit={handleInputSubmit}
             onMicPress={handleMicPress}
+            micAvailable={micAvailable}
             isLoading={isAnalyzingFood}
-            isRecording={isRecording}
-            isTranscribing={isTranscribing}
+            isListening={isListening}
             transcribedText={transcribedText}
             onTranscribedTextChange={setTranscribedText}
             onUserTyping={() => {
@@ -2966,9 +2951,8 @@ export const HomeScreen: React.FC = () => {
             onQuickPromptRemove={handleRemoveSavedPrompt}
             placeholder={
               isAnalyzingFood ? "Analyzing your entry..." :
-                isRecording ? "Recording..." :
-                  isTranscribing ? "Transcribing..." :
-                    "Describe your meal"
+                isListening ? "Listening..." :
+                  "Describe your meal"
             }
           />
 
@@ -3140,7 +3124,9 @@ export const HomeScreen: React.FC = () => {
               {[
                 { icon: 'type', label: 'Type it', hint: 'Describe your meal in words', action: () => setShouldFocusInput(true) },
                 { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', action: () => handlePlusPress() },
-                { icon: 'mic', label: 'Say it', hint: 'Speak and we transcribe', action: () => handleMicPress() },
+                ...(micAvailable
+                  ? [{ icon: 'mic', label: 'Say it', hint: 'Speak, then check the words', action: () => handleMicPress() }]
+                  : []),
                 { icon: 'activity', label: 'Weigh in', hint: "Log today's weight", action: () => { setWeightLogRequest(true); handleWeightTracker(); } },
                 { icon: 'droplet', label: 'Water', hint: 'Count your glasses', action: () => setShowWaterSheet(true) },
               ].map(row => (

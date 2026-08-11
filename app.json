@@ -72,7 +72,14 @@
           }
         }
       ],
-      "expo-font"
+      "expo-font",
+      [
+        "expo-speech-recognition",
+        {
+          "microphonePermission": "TrackKcal uses the microphone so you can say your meal instead of typing it.",
+          "speechRecognitionPermission": "TrackKcal turns your speech into text so you can log a meal by voice."
+        }
+      ]
     ],
     "extra": {
       "eas": {

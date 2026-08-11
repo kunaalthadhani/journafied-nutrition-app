@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.2**
+Voice logging is back, and now your phone does the listening. Tap the mic, say your meal, and the words appear in the box as you speak. Nothing is sent anywhere to be transcribed, the phone turns speech into text by itself, so it is free and it works the same whether you are on wifi or not. It stops when you stop talking, or you can tap to stop it. The words always land in the meal box first so you can fix "too eggs" to "two eggs" before anything gets counted. If you had already typed something, speaking adds to it instead of wiping it. On a phone or browser that cannot do speech, the mic simply is not there rather than sitting on screen doing nothing. Android and iPhone need the next app build for this, the web app has it now.
+
 **v1.5.1**
 The AI brain moved to Moonshot. Food parsing from text runs on the kimi reasoning model, food photos run on kimi-k3 which genuinely sees, and the app itself changed nothing, the proxy translates. No OpenAI account needed anymore. Voice input is parked until a speech option is picked; the mic now says so politely instead of failing. Under the hood the proxy also learned that Moonshot returns garbage for strict JSON schemas, so it enforces JSON object mode and hands the schema to the model in words, verified on a real meal end to end.
 

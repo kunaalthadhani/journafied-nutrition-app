@@ -8,7 +8,7 @@ import {
   Platform,
   ScrollView,
 } from 'react-native';
-import { Mic, Send, Loader, StopCircle, X } from 'lucide-react-native';
+import { Mic, Send, StopCircle, X } from 'lucide-react-native';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { Spacing } from '../constants/spacing';
@@ -22,12 +22,14 @@ interface QuickPrompt {
 interface BottomInputBarProps {
   onSubmit?: (text: string) => void;
   onMicPress?: () => void;
+  /** False on devices with no speech recognition: the mic hides entirely. */
+  micAvailable?: boolean;
   placeholder?: string;
   isLoading?: boolean;
-  isRecording?: boolean;
+  isListening?: boolean;
+  /** The live transcript while she speaks. Lands in the field, never submits. */
   transcribedText?: string;
   onTranscribedTextChange?: (text: string) => void;
-  isTranscribing?: boolean;
   onUserTyping?: () => void;
   autoFocus?: boolean;
   quickPrompts?: QuickPrompt[];
@@ -38,12 +40,12 @@ interface BottomInputBarProps {
 export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   onSubmit,
   onMicPress,
+  micAvailable = false,
   placeholder = "Describe your meal",
   isLoading = false,
-  isRecording = false,
+  isListening = false,
   transcribedText = '',
   onTranscribedTextChange,
-  isTranscribing = false,
   onUserTyping,
   autoFocus = false,
   quickPrompts = [],
@@ -55,6 +57,8 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const [isFocused, setIsFocused] = React.useState(false);
   const typingTimeoutRef = React.useRef<NodeJS.Timeout | null>(null);
   const inputRef = React.useRef<TextInput>(null);
+  // What was in the field when she started talking.
+  const baseTextRef = React.useRef('');
 
   const currentText = text;
   const hasText = currentText.trim().length > 0;
@@ -62,7 +66,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
   const showCustomPlaceholder = Platform.OS === 'ios' && !isFocused && !hasText;
 
   const handleSubmit = () => {
-    if (currentText.trim() && onSubmit && !isLoading && !isRecording && !isTranscribing) {
+    if (currentText.trim() && onSubmit && !isLoading && !isListening) {
       onSubmit(currentText.trim());
       setText('');
       setIsUserTyping(false);
@@ -97,12 +101,18 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
     }, 1000);
   };
 
-  // Sync transcribedText to local state when it changes (only if text is empty)
+  // Anything already typed is kept and spoken words are added to it, so
+  // tapping the mic mid sentence never wipes what she wrote.
   useEffect(() => {
-    if (text.length === 0 && transcribedText && transcribedText.trim().length > 0) {
-      setText(transcribedText);
-    }
-  }, [transcribedText, text.length]);
+    if (isListening) baseTextRef.current = text.trim() ? text.trim() + ' ' : '';
+  }, [isListening]);
+
+  // The transcript mirrors into the field as she speaks. It stops updating the
+  // moment listening ends, so her edits afterwards are safe.
+  useEffect(() => {
+    if (!transcribedText) return;
+    setText(baseTextRef.current + transcribedText);
+  }, [transcribedText]);
 
   // Cleanup timeouts on unmount
   useEffect(() => {
@@ -148,7 +158,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               >
                 <TouchableOpacity
                   onPress={() => onQuickPromptPress?.(prompt)}
-                  disabled={isLoading || isRecording || isTranscribing}
+                  disabled={isLoading || isListening}
                   style={styles.quickPromptTextWrapper}
                 >
                   <Text
@@ -170,7 +180,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             ))}
           </ScrollView>
         )}
-        {isRecording && (
+        {isListening && (
           <View style={[styles.visualizerContainer, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair2 }]}>
             <BarVisualizer
               state="listening"
@@ -186,7 +196,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
             activeOpacity={1}
             onPress={() => {
               // FIXED: Explicitly focus TextInput on Android when wrapper is tapped
-              if (Platform.OS === 'android' && inputRef.current && !isLoading && !isRecording && !isTranscribing) {
+              if (Platform.OS === 'android' && inputRef.current && !isLoading && !isListening) {
                 inputRef.current.focus();
               }
             }}
@@ -205,7 +215,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 {
                   color: Acid.tx,
                 },
-                (isLoading || isRecording || isTranscribing) && styles.textInputDisabled,
+                (isLoading || isListening) && styles.textInputDisabled,
               ]}
               placeholder={showCustomPlaceholder ? '' : placeholder}
               placeholderTextColor={Acid.tx3}
@@ -227,7 +237,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
                 }, 200);
               }}
               maxLength={500}
-              editable={!isLoading && !isRecording && !isTranscribing}
+              editable={!isLoading && !isListening}
               keyboardType="default"
               textContentType="none"
               autoCorrect={true}
@@ -236,7 +246,7 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
               showSoftInputOnFocus={true}
               focusable={true}
               onPressIn={() => {
-                if (Platform.OS === 'android' && inputRef.current && !isLoading && !isRecording && !isTranscribing) {
+                if (Platform.OS === 'android' && inputRef.current && !isLoading && !isListening) {
                   inputRef.current.focus();
                 }
               }}
@@ -244,39 +254,34 @@ export const BottomInputBar: React.FC<BottomInputBarProps> = ({
           </TouchableOpacity>
 
           <View style={styles.rightControls}>
-            {isRecording ? (
-              // Stop recording button
+            {isListening ? (
               <TouchableOpacity
-                style={[
-                  styles.circleButton,
-                  { backgroundColor: Acid.error }
-                ]}
+                style={[styles.circleButton, { backgroundColor: Acid.error }]}
                 onPress={onMicPress}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                disabled={isLoading || isTranscribing}
+                disabled={isLoading}
               >
                 <StopCircle size={18} color={Acid.moss} strokeWidth={2.4} />
               </TouchableOpacity>
-            ) : (
-              // Send or mic button
+            ) : hasText ? (
               <TouchableOpacity
-                style={[
-                  styles.circleButton,
-                  { backgroundColor: hasText ? Acid.lime : 'transparent' }
-                ]}
-                onPress={hasText ? handleSubmit : onMicPress}
+                style={[styles.circleButton, { backgroundColor: Acid.lime }]}
+                onPress={handleSubmit}
                 hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                disabled={isLoading || isTranscribing}
+                disabled={isLoading}
               >
-                {isTranscribing ? (
-                  <Loader size={18} color={hasText ? Acid.moss : Acid.tx2} strokeWidth={2.4} />
-                ) : hasText ? (
-                  <Send size={18} color={Acid.moss} strokeWidth={2.4} />
-                ) : (
-                  <Mic size={19} color={Acid.tx2} strokeWidth={2.2} />
-                )}
+                <Send size={18} color={Acid.moss} strokeWidth={2.4} />
               </TouchableOpacity>
-            )}
+            ) : micAvailable ? (
+              <TouchableOpacity
+                style={[styles.circleButton, { backgroundColor: 'transparent' }]}
+                onPress={onMicPress}
+                hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                disabled={isLoading}
+              >
+                <Mic size={19} color={Acid.tx2} strokeWidth={2.2} />
+              </TouchableOpacity>
+            ) : null}
           </View>
         </View>
       </View>
