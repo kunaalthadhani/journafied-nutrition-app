@@ -188,22 +188,18 @@ export interface AccountInfo {
 
 // ... existing code ...
 
-// Checks the stored PLAN string only. This is NOT an entitlement check: real
-// premium also requires a signed-in email and respects FREE_PREMIUM_LAUNCH.
-// Always wrap this with the account check (see smartReminderService) or use the
-// canonical isPremium in HomeScreen. Named isPlanPremium so nobody mistakes it
-// for the entitlement gate.
-export const isPlanPremium = (plan: string, premiumUntil?: string): boolean => {
-  if (plan === 'premium') return true;
-  if (!premiumUntil) return false;
-  return new Date(premiumUntil) > new Date();
-};
-
-// Canonical premium entitlement. A feature is premium ONLY when the user is
-// signed in (has an email) and, once paid tiers ship (FREE_PREMIUM_LAUNCH off),
-// is actually on a premium plan. Mirrors the HomeScreen check. Gate the engines
-// with this so a stale stored flag can never keep a premium feature running for
-// a free or signed-out user.
+// The only premium gate in the app. Every screen and every engine asks this
+// question and nothing computes its own answer.
+//
+// Where the truth comes from: `plan` is whatever loadUserPlan() last resolved,
+// and loadUserPlan resolves it from supabaseDataService.fetchUserSettings,
+// which reads the family entitlements row and says premium when kcal_premium
+// OR track_plus is true. So a Track Plus subscriber who never bought TrackKcal
+// passes every gate here exactly like a kcal_premium subscriber. Nothing on
+// this device can write that truth, it can only cache it.
+//
+// Sign-in is still required: a signed-out phone holding a cached premium plan
+// is not premium.
 export const isPremiumEntitled = (accountInfo: AccountInfo | null, plan?: string): boolean => {
   if (!accountInfo?.email) return false;
   if (FREE_PREMIUM_LAUNCH) return true;
@@ -856,7 +852,7 @@ type SyncOperation =
   | { entity: 'saved_prompt'; action: 'upsert'; payload: SavedPrompt }
   | { entity: 'saved_prompt'; action: 'delete'; payload: { id: string } }
   | { entity: 'preferences'; action: 'upsert'; payload: Preferences }
-  | { entity: 'settings'; action: 'upsert'; payload: { entryCount?: number; userPlan?: 'free' | 'premium'; deviceInfo?: any } }
+  | { entity: 'settings'; action: 'upsert'; payload: { entryCount?: number; deviceInfo?: any } }
   | { entity: 'referral_code'; action: 'upsert'; payload: ReferralCode }
   | { entity: 'referral_redemption'; action: 'upsert'; payload: ReferralRedemption }
   | { entity: 'referral_reward'; action: 'upsert'; payload: ReferralReward }
@@ -1916,25 +1912,14 @@ export const dataStorage = {
     }
   },
 
-  // Save user plan
-  async saveUserPlan(plan: 'free' | 'premium'): Promise<void> {
+  // There is no saveUserPlan. This device cannot grant itself premium: the
+  // family entitlements row is the truth and only the server writes it. All
+  // this can do is forget the cached answer so the next load asks again.
+  async clearCachedPlan(): Promise<void> {
     try {
-      await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, plan);
-
-      // Sync to Supabase if user is logged in
-      const accountInfo = await getCachedAccountInfo();
-      if (accountInfo?.supabaseUserId) {
-        try {
-          await supabaseDataService.saveUserSettings(accountInfo, { userPlan: plan });
-        } catch (error) {
-          console.error('Error syncing user plan to Supabase:', error);
-          await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { userPlan: plan } });
-        }
-      } else {
-        await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { userPlan: plan } });
-      }
+      await AsyncStorage.removeItem(STORAGE_KEYS.USER_PLAN);
     } catch (error) {
-      console.error('Error saving user plan:', error);
+      console.error('Error clearing cached plan:', error);
     }
   },
 

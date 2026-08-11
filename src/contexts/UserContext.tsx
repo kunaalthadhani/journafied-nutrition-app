@@ -58,6 +58,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 loadedAccount,
                 loadedStreak,
                 loadedFreeze,
+                loadedPlan,
             ] = await Promise.all([
                 dataStorage.loadGoals(),
                 dataStorage.loadMeals(),
@@ -65,6 +66,10 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 dataStorage.getAccountInfo(),
                 dataStorage.getStreak(),
                 dataStorage.loadStreakFreeze(),
+                // Refreshes the cached plan from the entitlements row when
+                // signed in. Without it the gates below fall back to the
+                // launch flag and would deny a real subscriber the day it flips.
+                dataStorage.loadUserPlan(),
             ]);
 
             setGoals(loadedGoals);
@@ -90,7 +95,8 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Check for retroactive freezes logic. Premium-gated on the real
             // entitlement: streak freezes are a premium feature and the engine
             // must not spend tokens for signed-out or free users.
-            const updatedFreeze = isPremiumEntitled(loadedAccount)
+            const entitled = isPremiumEntitled(loadedAccount, loadedPlan);
+            const updatedFreeze = entitled
                 ? await checkMissedDaysAndFreeze(loadedMeals, currentFreeze, loadedGoals)
                 : currentFreeze;
             setStreakFreeze(updatedFreeze);
@@ -98,7 +104,7 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
             // Smart Adjustment Check
             // We do this AFTER goals/weights are loaded. Gate on premium so the
             // engine never runs on a stale flag for a free or signed-out user.
-            const adjustment = await dataStorage.checkAndGenerateAdjustment(isPremiumEntitled(loadedAccount));
+            const adjustment = await dataStorage.checkAndGenerateAdjustment(entitled);
             if (adjustment && adjustment.status === 'pending') {
                 setAdjustmentAvailable(adjustment);
             } else {

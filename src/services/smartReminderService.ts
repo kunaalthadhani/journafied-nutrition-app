@@ -9,11 +9,10 @@ import {
   MealTimingPattern,
   ReminderPatternCache,
   ScheduledReminder,
-  isPlanPremium,
+  isPremiumEntitled,
 } from './dataStorage';
 import { generateId } from '../utils/uuid';
 import { analyticsService } from './analyticsService';
-import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 
 const STORAGE_KEYS = {
   CACHE: '@trackkal:smartReminderCache',
@@ -330,11 +329,11 @@ export const smartReminderService = {
    */
   async scheduleAllReminders(): Promise<ScheduledReminder[]> {
     try {
-      // Self-contained premium check (no closure dependency). Launch mode treats
-      // every signed-in user as premium; flip FREE_PREMIUM_LAUNCH off when paid tiers go live.
+      // Self-contained premium check (no closure dependency), through the one
+      // shared gate so entitlements, Track Plus included, decide this too.
       const plan = await dataStorage.loadUserPlan();
       const accountInfo = await dataStorage.getAccountInfo();
-      const isPremium = !!accountInfo?.email && (FREE_PREMIUM_LAUNCH || isPlanPremium(plan, accountInfo?.premiumUntil));
+      const isPremium = isPremiumEntitled(accountInfo, plan);
 
       // Load preferences
       const prefs = await dataStorage.loadPreferences();

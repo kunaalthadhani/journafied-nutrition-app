@@ -851,8 +851,11 @@ export const supabaseDataService = {
     }
   },
 
+  // entryCount is undefined when this user has no settings row yet, so callers
+  // keep their local value instead of being reset to zero. userPlan is always
+  // answered: it comes from entitlements, which exists independently.
   async fetchUserSettings(accountInfo: AccountInfo | null): Promise<{
-    entryCount: number;
+    entryCount?: number;
     userPlan: 'free' | 'premium';
     deviceInfo: any;
   } | null> {
@@ -871,9 +874,11 @@ export const supabaseDataService = {
       return null;
     }
 
-    if (!data) return null;
-
-    // premium comes from the family entitlements table, the only truth
+    // premium comes from the family entitlements table, the only truth.
+    // Read before the settings row is considered: someone who bought Track
+    // Plus in TrackLifts and then installed this app has an entitlements row
+    // and no kcal_settings row yet. Returning early on the missing settings
+    // row used to hand that person a free plan.
     let userPlan: 'free' | 'premium' = 'free';
     try {
       const { data: ent } = await supabase
@@ -885,9 +890,9 @@ export const supabaseDataService = {
     } catch { /* free until proven premium */ }
 
     return {
-      entryCount: data.entry_count || 0,
+      entryCount: data ? (data.entry_count || 0) : undefined,
       userPlan,
-      deviceInfo: data.device_info || null,
+      deviceInfo: data?.device_info || null,
     };
   },
 

@@ -1,141 +1,219 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Acid } from '../constants/acid';
-import { Typography } from '../constants/typography';
-import { Colors } from '../constants/colors';
-
-type Plan = 'annual' | 'monthly';
+import {
+  BillingCycle,
+  PRICES,
+  ANNUAL_SAVING_PERCENT,
+  formatPrice,
+  priceOf,
+  secondAppDelta,
+} from '../config/pricing';
 
 interface SubscriptionScreenProps {
   onBack: () => void;
-  onSubscribe: (plan: Plan) => void;
   onRestore?: () => void;
 }
 
-export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, onSubscribe, onRestore }) => {
-  const [selectedPlan, setSelectedPlan] = useState<Plan>('annual');
+const KCAL_FEATURES = [
+  'Log a meal by typing, by photo, or by voice',
+  'The calorie bank, one weekly budget instead of seven daily ones',
+  'Insights and pattern detection over your own logs',
+  'The weekly action plan',
+  'Every device in step, your food history follows the account',
+];
+
+const PLUS_FEATURES = [
+  'Everything in TrackLifts',
+  'An AI training coach that writes each week from what you actually lifted',
+  'Race prep programs',
+  'One account, one body: weigh in anywhere and both apps already know',
+];
+
+// Purchases arrive with the store release. Until then this screen sells the
+// plan and says so plainly rather than pretending to take money.
+const STORE_NOTE = 'Buying arrives with the app store release. Everything premium is free until then.';
+
+const FeatureRow = ({ text }: { text: string }) => (
+  <View style={st.featureRow}>
+    <Feather name="check" size={14} color={Acid.tx3} style={{ marginTop: 3 }} />
+    <Text style={st.featureText}>{text}</Text>
+  </View>
+);
+
+export const SubscriptionScreen: React.FC<SubscriptionScreenProps> = ({ onBack, onRestore }) => {
+  const [cycle, setCycle] = useState<BillingCycle>('annual');
+
+  const per = cycle === 'annual' ? 'a year' : 'a month';
+  const showStoreNote = () => Alert.alert('Not yet', STORE_NOTE);
 
   return (
-    <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
-        <TouchableOpacity onPress={onBack} style={styles.backButton}>
-          <Feather name="arrow-left" size={24} color={Acid.tx} />
+    <SafeAreaView style={st.safe} edges={['top']}>
+      <View style={st.header}>
+        <TouchableOpacity onPress={onBack} style={st.back} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+          <Feather name="arrow-left" size={22} color={Acid.tx2} />
         </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: Acid.tx }]}>Premium</Text>
-        <View style={styles.headerRight} />
+        <Text style={st.headerTitle}>Track Plus</Text>
+        <View style={{ width: 32 }} />
       </View>
 
-      <ScrollView
-        style={styles.content}
-        contentContainerStyle={{ flexGrow: 1 }}
-        showsVerticalScrollIndicator={false}
-        removeClippedSubviews={false}
-      >
-        {/* Intro Card */}
-        <View style={[styles.introCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
-          <Text style={[styles.title, { color: Acid.tx }]}>Unlock TrackKcal Premium</Text>
-          <Text style={[styles.subtitle, { color: Acid.tx2 }]}>Ad-free. Unlimited entries. Cancel anytime.</Text>
+      <ScrollView style={st.content} contentContainerStyle={{ paddingBottom: 48 }} showsVerticalScrollIndicator={false}>
+        <Text style={st.hero}>Your food knows your training. Your training knows your food.</Text>
 
-          <View style={styles.features}>
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={Acid.lime} />
-              <Text style={[styles.featureText, { color: Acid.tx }]}>Ad-Free Experience</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={Acid.lime} />
-              <Text style={[styles.featureText, { color: Acid.tx }]}>Unlimited Entries & History</Text>
-            </View>
-            <View style={styles.featureRow}>
-              <Feather name="check-circle" size={18} color={Acid.lime} />
-              <Text style={[styles.featureText, { color: Acid.tx }]}>Priority Features & Updates</Text>
-            </View>
+        {/* Billing toggle */}
+        <View style={st.toggleRow}>
+          <TouchableOpacity onPress={() => setCycle('monthly')} style={st.toggleItem} activeOpacity={0.7}>
+            <Text style={[st.toggleText, cycle === 'monthly' && st.toggleTextOn]}>MONTHLY</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => setCycle('annual')} style={st.toggleItem} activeOpacity={0.7}>
+            <Text style={[st.toggleText, cycle === 'annual' && st.toggleTextOn]}>
+              {`ANNUAL · SAVE ${ANNUAL_SAVING_PERCENT}%`}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* Track Plus, the anchor */}
+        <View style={st.block}>
+          <View style={st.blockHead}>
+            <Text style={st.bestValue}>BEST VALUE</Text>
+            <Text style={st.blockMeta}>BOTH APPS</Text>
           </View>
-        </View>
 
-        {/* Plan Selector */}
-        <View style={styles.planGroup}>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setSelectedPlan('annual')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'annual' ? Acid.lime : Acid.hair, backgroundColor: Acid.mossDeep }]}
-          >
-            <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'annual' ? Acid.lime : Acid.hair, backgroundColor: selectedPlan === 'annual' ? Acid.lime : 'transparent' }]} />
-              <Text style={[styles.planTitle, { color: Acid.tx }]}>Annual</Text>
-              <View style={[styles.badge, { backgroundColor: Acid.lime }]}>
-                <Text style={[styles.badgeText, { color: Acid.moss }]}>Best Value</Text>
-              </View>
-            </View>
-            <Text style={[styles.planPrice, { color: Acid.tx }]}>AED7.50/mo</Text>
-            <Text style={[styles.planSubText, { color: Acid.tx2 }]}>Billed AED89.99 annually</Text>
-          </TouchableOpacity>
+          <Text style={st.planName}>Track Plus</Text>
+          <View style={st.priceRow}>
+            <Text style={st.price}>{formatPrice(priceOf('trackPlus', cycle))}</Text>
+            <Text style={st.priceUnit}>{` ${per}`}</Text>
+          </View>
+          <Text style={st.planLine}>
+            {`TrackKcal and TrackLifts together. The second app costs ${formatPrice(secondAppDelta(cycle))} more, about half its own price.`}
+          </Text>
 
-          <TouchableOpacity
-            activeOpacity={0.9}
-            onPress={() => setSelectedPlan('monthly')}
-            style={[styles.planOption, { borderColor: selectedPlan === 'monthly' ? Acid.lime : Acid.hair, backgroundColor: Acid.mossDeep }]}
-          >
-            <View style={styles.planHeaderRow}>
-              <View style={[styles.radio, { borderColor: selectedPlan === 'monthly' ? Acid.lime : Acid.hair, backgroundColor: selectedPlan === 'monthly' ? Acid.lime : 'transparent' }]} />
-              <Text style={[styles.planTitle, { color: Acid.tx }]}>Monthly</Text>
-            </View>
-            <Text style={[styles.planPrice, { color: Acid.tx }]}>AED24.99/mo</Text>
-            <Text style={[styles.planSubText, { color: Acid.tx2 }]}>Billed monthly</Text>
+          <TouchableOpacity style={st.primaryButton} onPress={showStoreNote} activeOpacity={0.85}>
+            <Text style={st.primaryButtonText}>GET TRACK PLUS</Text>
           </TouchableOpacity>
         </View>
 
-        <View style={{ height: 120 }} />
+        {/* TrackKcal alone */}
+        <View style={st.block}>
+          <View style={st.blockHead}>
+            <Text style={st.blockMeta}>THIS APP ONLY</Text>
+          </View>
+
+          <Text style={st.planName}>TrackKcal Premium</Text>
+          <View style={st.priceRow}>
+            <Text style={st.price}>{formatPrice(priceOf('kcal', cycle))}</Text>
+            <Text style={st.priceUnit}>{` ${per}`}</Text>
+          </View>
+          <Text style={st.planLine}>Everything below, food only.</Text>
+
+          <TouchableOpacity onPress={showStoreNote} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={st.secondaryAction}>GET TRACKKCAL PREMIUM</Text>
+          </TouchableOpacity>
+        </View>
+
+        <Text style={st.storeNote}>{STORE_NOTE}</Text>
+
+        {/* What the money buys */}
+        <Text style={st.sectionLabel}>WHAT TRACKKCAL PREMIUM GIVES YOU</Text>
+        <View style={st.featureList}>
+          {KCAL_FEATURES.map(f => <FeatureRow key={f} text={f} />)}
+        </View>
+
+        <Text style={st.sectionLabel}>WHAT TRACK PLUS ADDS</Text>
+        <View style={st.featureList}>
+          {PLUS_FEATURES.map(f => <FeatureRow key={f} text={f} />)}
+        </View>
+
+        <Text style={st.finePrint}>
+          {`Prices in ${PRICES.currency}. Cancel any time. Your premium comes from your Track account, so it follows you to every device you sign in on.`}
+        </Text>
+
+        {onRestore && (
+          <TouchableOpacity onPress={onRestore} style={{ alignSelf: 'flex-start', marginTop: 20 }} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+            <Text style={st.restore}>RESTORE PURCHASES</Text>
+          </TouchableOpacity>
+        )}
       </ScrollView>
-
-      {/* Sticky bottom actions */}
-      <View style={[styles.stickyFooter, { backgroundColor: Acid.moss, borderTopColor: Acid.hair }]}>
-        <TouchableOpacity style={[styles.ctaButton, { backgroundColor: Acid.lime }]} activeOpacity={0.9} onPress={() => onSubscribe(selectedPlan)}>
-          <Text style={[styles.ctaText, { color: Acid.moss }]}>Continue</Text>
-        </TouchableOpacity>
-        <TouchableOpacity style={styles.restoreButton} onPress={onRestore}>
-          <Text style={[styles.restoreText, { color: Acid.tx2 }]}>Restore purchases</Text>
-        </TouchableOpacity>
-      </View>
     </SafeAreaView>
   );
 };
 
-const styles = StyleSheet.create({
-  safeArea: { flex: 1 },
+const st = StyleSheet.create({
+  safe: { flex: 1, backgroundColor: Acid.moss },
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
-    borderBottomWidth: 1,
+    height: 52,
   },
-  backButton: { padding: 8 },
-  headerTitle: { fontSize: Typography.fontSize.xl, fontWeight: Typography.fontWeight.semiBold },
-  headerRight: { width: 40 },
-  content: { paddingHorizontal: 16 },
-  introCard: { borderWidth: 1, borderRadius: 12, padding: 16, marginTop: 16 },
-  title: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold },
-  subtitle: { marginTop: 4, fontSize: Typography.fontSize.sm },
-  features: { gap: 10, marginTop: 12 },
-  featureRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  featureText: { fontSize: Typography.fontSize.md },
-  planGroup: { marginTop: 16, gap: 12 },
-  planOption: { borderWidth: 1, borderRadius: 12, padding: 14 },
-  planHeaderRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  planTitle: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold },
-  planPrice: { fontSize: Typography.fontSize.lg, fontWeight: Typography.fontWeight.semiBold, marginTop: 4 },
-  planSubText: { fontSize: Typography.fontSize.xs },
-  radio: { width: 18, height: 18, borderRadius: 9, borderWidth: 2 },
-  badge: { marginLeft: 'auto', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 999 },
-  badgeText: { fontSize: Typography.fontSize.xs, fontWeight: Typography.fontWeight.semiBold },
-  stickyFooter: { position: 'absolute', left: 0, right: 0, bottom: 0, paddingHorizontal: 16, paddingTop: 10, paddingBottom: 16, borderTopWidth: 1 },
-  ctaButton: { paddingVertical: 14, borderRadius: 12, alignItems: 'center' },
-  ctaText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
-  restoreButton: { alignItems: 'center', marginTop: 10 },
-  restoreText: { fontSize: Typography.fontSize.sm },
-});
+  back: { padding: 4 },
+  headerTitle: { fontFamily: Acid.serifItalic, fontSize: 19, color: Acid.tx },
+  content: { flex: 1, paddingHorizontal: 20 },
 
+  hero: {
+    fontFamily: Acid.serifItalic,
+    fontSize: 22,
+    lineHeight: 31,
+    color: Acid.tx,
+    marginTop: 12,
+    marginBottom: 24,
+  },
+
+  toggleRow: {
+    flexDirection: 'row',
+    gap: 20,
+    paddingBottom: 14,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Acid.hair,
+  },
+  toggleItem: {},
+  toggleText: { fontSize: 10, letterSpacing: 1.5, fontWeight: '700', color: Acid.tx3 },
+  toggleTextOn: { color: Acid.lime },
+
+  block: {
+    paddingTop: 20,
+    paddingBottom: 22,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderColor: Acid.hair,
+  },
+  blockHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 },
+  bestValue: { fontSize: 10, letterSpacing: 1.5, fontWeight: '700', color: Acid.lime },
+  blockMeta: { fontSize: 10, letterSpacing: 1.2, color: Acid.tx3, marginLeft: 'auto' },
+
+  planName: { fontFamily: Acid.serifItalic, fontSize: 17, color: Acid.tx },
+  priceRow: { flexDirection: 'row', alignItems: 'baseline', marginTop: 6 },
+  price: { fontFamily: Acid.serif, fontSize: 34, color: Acid.tx },
+  priceUnit: { fontSize: 13, color: Acid.tx3 },
+  planLine: { fontSize: 13, lineHeight: 19, color: Acid.tx2, marginTop: 8 },
+
+  primaryButton: {
+    marginTop: 16,
+    backgroundColor: Acid.lime,
+    borderRadius: 26,
+    height: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  primaryButtonText: { fontSize: 12, letterSpacing: 1.5, fontWeight: '700', color: Acid.moss },
+  secondaryAction: {
+    marginTop: 16,
+    fontSize: 11,
+    letterSpacing: 1.5,
+    fontWeight: '700',
+    color: Acid.tx,
+    textDecorationLine: 'underline',
+  },
+
+  storeNote: { fontSize: 12, lineHeight: 18, color: Acid.tx3, marginTop: 16 },
+
+  sectionLabel: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginTop: 30, marginBottom: 12 },
+  featureList: { gap: 12 },
+  featureRow: { flexDirection: 'row', gap: 10, alignItems: 'flex-start' },
+  featureText: { flex: 1, fontSize: 14, lineHeight: 20, color: Acid.tx },
+
+  finePrint: { fontSize: 12, lineHeight: 18, color: Acid.tx3, marginTop: 30 },
+  restore: { fontSize: 10, letterSpacing: 1.5, fontWeight: '700', color: Acid.tx3, textDecorationLine: 'underline' },
+});

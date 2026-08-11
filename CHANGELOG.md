@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.3**
+Real prices, and premium that follows your Track account. The upgrade screen was rebuilt around Track Plus: both apps together for AED 44 a month or 299 a year, with TrackKcal on its own at 29 or 199 under it. A monthly and annual switch sits at the top, annual chosen for you because it saves 43 percent. Each plan says exactly what it gives you, and the buttons tell the truth: buying arrives with the app store release, everything is free until then. Underneath, premium now reads only from your Track account entitlement, so if you subscribe in TrackLifts and open TrackKcal, premium is simply on. Nothing on your phone can grant or remove it any more. Two places that quietly disagreed about who counts as premium, your insight unlocks and your streak freezes, now ask the same question as the rest of the app.
+
 **v1.5.2**
 Voice logging is back, and now your phone does the listening. Tap the mic, say your meal, and the words appear in the box as you speak. Nothing is sent anywhere to be transcribed, the phone turns speech into text by itself, so it is free and it works the same whether you are on wifi or not. It stops when you stop talking, or you can tap to stop it. The words always land in the meal box first so you can fix "too eggs" to "two eggs" before anything gets counted. If you had already typed something, speaking adds to it instead of wiping it. On a phone or browser that cannot do speech, the mic simply is not there rather than sitting on screen doing nothing. Android and iPhone need the next app build for this, the web app has it now.
 

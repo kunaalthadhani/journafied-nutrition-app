@@ -32,7 +32,6 @@ import { SettingsScreen } from './SettingsScreen';
 import { SubscriptionScreen } from './SubscriptionScreen';
 import { AccountScreen } from './AccountScreen';
 import { AboutScreen } from './AboutScreen';
-import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 import { AdminPushScreen } from './AdminPushScreen';
 import { IntegrationsScreen } from './IntegrationsScreen';
 import { Colors } from '../constants/colors';
@@ -185,17 +184,13 @@ export const HomeScreen: React.FC = () => {
 
   // Derived Premium — requires sign-in
   const isSignedIn = !!accountInfo?.email;
-  const isPremium = React.useMemo(() => {
-    if (!accountInfo?.email) return false; // MUST be signed in
-    // Launch mode: every signed-in user gets premium. Flip FREE_PREMIUM_LAUNCH to false
-    // when paid tiers + RevenueCat go live.
-    if (FREE_PREMIUM_LAUNCH) return true;
-    if (userPlan === 'premium') return true;
-    if (accountInfo?.premiumUntil) {
-      return new Date(accountInfo.premiumUntil) > new Date();
-    }
-    return false;
-  }, [userPlan, accountInfo]);
+  // userPlan here is the cached answer from the family entitlements row, so
+  // kcal_premium and track_plus both land as 'premium'. One gate, no local copy
+  // of the rules.
+  const isPremium = React.useMemo(
+    () => isPremiumEntitled(accountInfo, userPlan),
+    [userPlan, accountInfo],
+  );
 
 
 
@@ -485,11 +480,7 @@ export const HomeScreen: React.FC = () => {
         setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
         setCalorieBankConfig(bankConfig);
 
-        const isFreshPremium = !!freshAccount?.email && (
-          FREE_PREMIUM_LAUNCH ||
-          freshPlan === 'premium' ||
-          (!!freshAccount?.premiumUntil && new Date(freshAccount.premiumUntil) > new Date())
-        );
+        const isFreshPremium = isPremiumEntitled(freshAccount, freshPlan);
         if (isFreshPremium && bankConfig?.enabled && savedGoals) {
           const summaries = await dataStorage.loadDailySummaries();
           setSummariesByDate(summaries);
@@ -518,11 +509,10 @@ export const HomeScreen: React.FC = () => {
   const handleSubscriptionBack = () => {
     setShowSubscription(false);
   };
-  const handleSubscribe = async (plan: 'annual' | 'monthly') => {
-    setUserPlan('premium');
-    await dataStorage.saveUserPlan('premium');
+  // Nothing here grants premium. Buying happens in the store and the server
+  // writes the entitlement; the screen says so and this closes it.
+  const handleSubscriptionDone = () => {
     setShowSubscription(false);
-    setShowSettings(true);
   };
 
   const handleWeightTrackerBack = () => {
@@ -748,10 +738,12 @@ export const HomeScreen: React.FC = () => {
       const existingUnlocks = await dataStorage.loadInsightUnlocks();
       setInsightUnlocks(existingUnlocks);
 
-      // Only premium users get NEW unlocks computed and saved.
+      // Only premium users get NEW unlocks computed and saved. Same gate as
+      // everywhere else: this used to test the plan string alone, which said
+      // no to launch-mode and Track Plus users the rest of the app said yes to.
       const plan = await dataStorage.loadUserPlan();
       const account = await dataStorage.loadAccountInfo();
-      const isPremiumNow = plan === 'premium' && !!account?.email;
+      const isPremiumNow = isPremiumEntitled(account, plan);
       if (!isPremiumNow) {
         const unseen = getFirstUnseenUnlock(existingUnlocks);
         if (unseen) setPendingUnlockAnnouncement(unseen.definition);
@@ -848,10 +840,12 @@ export const HomeScreen: React.FC = () => {
     freezeData: StreakFreezeData | null
   ): Promise<StreakFreezeData | null> => {
     if (!freezeData) return freezeData;
-    // Premium check on the real entitlement, not the cached plan alone: a
-    // signed-out device with a stale premium plan must not spend freezes.
+    // Premium check on the real entitlement: signed in, and the plan the
+    // entitlements row resolved to. Passing the plan matters for the day
+    // FREE_PREMIUM_LAUNCH goes off, or a paying user stops earning freezes.
     const account = await dataStorage.getAccountInfo();
-    if (!isPremiumEntitled(account)) return freezeData;
+    const plan = await dataStorage.loadUserPlan();
+    if (!isPremiumEntitled(account, plan)) return freezeData;
 
     const today = new Date();
     const yesterday = subDays(today, 1);
@@ -2370,12 +2364,14 @@ export const HomeScreen: React.FC = () => {
     );
   }
 
+  // Dev tool. Drops the cached plan so the next load asks the entitlements
+  // row again. It cannot take premium away from someone who really has it.
   const handleDowngradeToFree = async () => {
     setUserPlan('free');
-    await dataStorage.saveUserPlan('free');
-    // Rebuild reminders under the new (free) entitlement so premium ones stop.
+    await dataStorage.clearCachedPlan();
+    // Rebuild reminders under the new entitlement so premium ones stop.
     smartReminderService.scheduleAllReminders().catch(() => {});
-    Alert.alert('Plan Reset', 'You are now on the Free plan.');
+    Alert.alert('Cached plan cleared', 'The next load reads your entitlement again.');
   };
 
   /* WeightTracker and NutritionAnalysis moved to Modals below to prevent HomeScreen unmount */
@@ -3256,7 +3252,7 @@ export const HomeScreen: React.FC = () => {
           presentationStyle="pageSheet"
           onRequestClose={handleSubscriptionBack}
         >
-          <SubscriptionScreen onBack={handleSubscriptionBack} onSubscribe={handleSubscribe} />
+          <SubscriptionScreen onBack={handleSubscriptionBack} />
         </Modal>
 
         <CalendarModal
