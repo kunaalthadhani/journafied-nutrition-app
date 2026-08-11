@@ -82,7 +82,7 @@ import { buildBrief } from '../utils/briefEngine';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
-import { DetectedPattern } from '../services/dataStorage';
+import { DetectedPattern, LiftsDay } from '../services/dataStorage';
 import { useUser } from '../contexts/UserContext';
 
 export const HomeScreen: React.FC = () => {
@@ -205,6 +205,10 @@ export const HomeScreen: React.FC = () => {
 
   // Premium: Pattern Detection
   const [detectedPatterns, setDetectedPatterns] = useState<DetectedPattern[]>([]);
+
+  // Published by TrackLifts. Read only, and the burn estimate never touches
+  // the eating budget
+  const [liftsDays, setLiftsDays] = useState<LiftsDay[]>([]);
 
 
   // Streak Freeze State
@@ -393,6 +397,30 @@ export const HomeScreen: React.FC = () => {
     protein: { current: totalExerciseCalories, target: 0, unit: 'cal' }, // Exercise calories
     fat: { current: remainingCalories, target: 0, unit: 'cal' } // Remaining calories
   };
+  // The training line. Reads TrackLifts' published day and says it plainly.
+  // The burn is printed as an estimate and never enters remainingCalories
+  const trainingLine = React.useMemo(() => {
+    const trained = liftsDays.filter(d => d.sessions > 0);
+    if (trained.length === 0) return null;
+    const todayKey = format(new Date(), 'yyyy-MM-dd');
+    const latest = trained[0];
+    const ageDays = Math.round(
+      (new Date(todayKey).getTime() - new Date(latest.date).getTime()) / 86400000,
+    );
+    if (!(ageDays >= 0) || ageDays > 3) return null;
+    const stats = [
+      latest.minutes ? `${latest.minutes} MIN` : null,
+      latest.sets ? `${latest.sets} SETS` : null,
+      latest.volumeKg ? `${Math.round(latest.volumeKg).toLocaleString()} KG` : null,
+      latest.caloriesBurnedEstimate ? `~${latest.caloriesBurnedEstimate} KCAL EST` : null,
+    ].filter(Boolean).join('  ·  ');
+    return {
+      label: ageDays === 0 ? 'TRAINED TODAY' : ageDays === 1 ? 'TRAINED YESTERDAY' : `TRAINED ${ageDays} DAYS AGO`,
+      highlight: latest.highlight,
+      stats,
+    };
+  }, [liftsDays]);
+
   const handleStreakPress = () => {
     setShowStreakWidget(true);
   };
@@ -912,7 +940,7 @@ export const HomeScreen: React.FC = () => {
       await dataStorage.migrateMealsToSummaries();
 
       const startKey = getDateKey(selectedDate);
-      const [plan, goalsData, summaries, exercises, todaysMeals, entryStored, prefs, patterns, bankConfig] = await Promise.all([
+      const [plan, goalsData, summaries, exercises, todaysMeals, entryStored, prefs, patterns, bankConfig, liftsCached] = await Promise.all([
         dataStorage.loadUserPlan(),
         dataStorage.loadGoals(),
         dataStorage.loadDailySummaries(),
@@ -922,6 +950,7 @@ export const HomeScreen: React.FC = () => {
         dataStorage.loadPreferences(),
         patternDetectionService.getActivePatterns(),
         dataStorage.loadCalorieBankConfig(),
+        dataStorage.loadLiftsDays(),
       ]);
       stored = entryStored;
       savedSummaries = summaries;
@@ -941,6 +970,7 @@ export const HomeScreen: React.FC = () => {
       if (entryStored) setEntryCount(parseInt(entryStored, 10) || 0);
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
       setDetectedPatterns(patterns);
+      setLiftsDays(liftsCached);
 
       // Calorie Bank: paint it with the bars, it is pure local math. ALWAYS
       // load the config (do not gate on the cold `plan` variable, which is
@@ -1040,6 +1070,11 @@ export const HomeScreen: React.FC = () => {
             setEntryCount(actualLogCount);
           }
         }
+
+        // TrackLifts' training ledger. Signed out or sibling absent, this is
+        // an empty list and the training line simply never appears
+        const freshLifts = await dataStorage.refreshLiftsDays();
+        setLiftsDays(freshLifts);
 
         // Load saved prompts
         const storedPrompts = await dataStorage.loadSavedPrompts();
@@ -2874,6 +2909,27 @@ export const HomeScreen: React.FC = () => {
               entries={currentDayExercises}
               onDeleteEntry={handleDeleteExerciseEntry}
             />
+
+            {/* Training, published by TrackLifts. A ledger line, never a card.
+                The burn is printed as an estimate and is never spendable */}
+            {isSameDay(selectedDate, new Date()) && trainingLine && (
+              <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+                <View style={{ height: 1, backgroundColor: Acid.hair, marginBottom: 12 }} />
+                <Text style={{ fontSize: 10, letterSpacing: 2, fontWeight: '600', color: Acid.tx3 }}>
+                  {trainingLine.label}
+                </Text>
+                {!!trainingLine.highlight && (
+                  <Text style={{ fontFamily: Acid.serifItalic, fontSize: 15, lineHeight: 22, color: Acid.tx, marginTop: 6 }}>
+                    {trainingLine.highlight}
+                  </Text>
+                )}
+                {!!trainingLine.stats && (
+                  <Text style={{ fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginTop: 6 }}>
+                    {trainingLine.stats}
+                  </Text>
+                )}
+              </View>
+            )}
 
             {/* The coach line: one serif italic sentence about the day, with
                 the door to the coach. Deterministic copy, no AI call. */}

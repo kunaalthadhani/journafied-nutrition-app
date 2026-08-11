@@ -86,6 +86,18 @@ export interface ChatCoachContext {
         weeklyBudget: number;
         remainingBudget: number;
     };
+    // Present only when TrackLifts has published training days for this person.
+    // burnEstimate is a 4 MET estimate from the sibling app. It is context and
+    // never currency: it must never be added to a calorie budget or spoken of
+    // as calories she has earned back
+    training?: {
+        trainedToday: boolean;
+        sessionsLast7: number;
+        lastSessionDate: string | null;
+        lastHighlight: string | null;
+        todayBurnEstimate: number | null;
+        avgMinutesPerSession: number | null;
+    };
 }
 
 // The snapshot stores goal as 'lose' | 'maintain' | 'gain', but the coach
@@ -112,6 +124,7 @@ You will be provided with a JSON "Context" containing the user's stats, recent a
 - **Current Status:** Look at \`todaysLog\` to see what they have ALREADY eaten.
 - **Goal Gap:** Look at \`remainingMacros\` to see exactly what is left.
 - **The Menu:** \`topFoods\` is the list of foods the user actually eats.
+- **Training:** If \`training\` is present, she also uses TrackLifts and it published these days. Speak to the whole athlete: a hard session earns protein and carbs, not a smaller plate. \`training.lastHighlight\` is a ready sentence you may quote. **HARD RULE:** \`training.todayBurnEstimate\` is an estimate from the other app and it is context, never currency. Never add it to her budget, never say she earned calories back, never tell her to eat more because of it. \`remainingMacros\` is already the whole truth about what is left.
 - **Calorie Bank:** If \`calorieBank\` is present, the user flexes calories across the week. \`remainingMacros.calories\` already reflects today's adjusted budget, so trust it. \`calorieBank.bankBalance\` is calories saved for the rest of the week and \`calorieBank.remainingDays\` is how many days are left. When they ask if they can afford something, answer against today's budget and mention banked headroom if it is relevant. Never tell them to eat below their target just because they banked.
 
 ### STRICT MENU-MATCHING PROTOCOL
@@ -285,8 +298,35 @@ export const chatCoachService = {
             }
         } catch { /* bank context is best-effort; never block the coach */ }
 
+        // 4c. Training, published by TrackLifts. Read from cache so the coach
+        // never waits on a sibling app's network call
+        let training: ChatCoachContext['training'] = undefined;
+        try {
+            const liftsDays = await dataStorage.loadLiftsDays();
+            const trained = liftsDays.filter(d => d.sessions > 0);
+            if (trained.length > 0) {
+                const weekAgo = new Date();
+                weekAgo.setDate(weekAgo.getDate() - 7);
+                const weekKey = localDateKey(weekAgo);
+                const last7 = trained.filter(d => d.date >= weekKey);
+                const today = trained.find(d => d.date === todayKey);
+                const withMinutes = trained.filter(d => d.minutes && d.minutes > 0);
+                training = {
+                    trainedToday: !!today,
+                    sessionsLast7: last7.reduce((s, d) => s + d.sessions, 0),
+                    lastSessionDate: trained[0]?.date || null,
+                    lastHighlight: trained[0]?.highlight || null,
+                    todayBurnEstimate: today?.caloriesBurnedEstimate ?? null,
+                    avgMinutesPerSession: withMinutes.length
+                        ? Math.round(withMinutes.reduce((s, d) => s + (d.minutes || 0), 0) / withMinutes.length)
+                        : null,
+                };
+            }
+        } catch { /* the sibling is a bonus, never a dependency */ }
+
         // 5. Construct the full robust context
         return {
+            training,
             userProfile: {
                 weight: snapshot.weightTrend.current || 0,
                 goalWeight: snapshot.userGoals.targetWeightKg ?? undefined,

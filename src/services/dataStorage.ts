@@ -116,6 +116,8 @@ const STORAGE_KEYS = {
   ADJUSTMENT_HISTORY: '@trackkal:adjustmentHistory',
   ANALYTICS_FEEDBACK: '@trackkal:analyticsFeedback',
   SUMMARIES: '@trackkal:summaries',
+  // TrackLifts' training ledger, cached so the home paints without a network wait
+  LIFTS_DAYS: '@trackkal:liftsDays',
   // Premium
   DETECTED_PATTERNS: '@trackkal:detectedPatterns',
   WEEKLY_ACTION_PLAN: '@trackkal:weeklyActionPlan',
@@ -328,6 +330,12 @@ export interface DailySummary {
   entryCount: number;
   updatedAt: string;
 
+  // What the day was aimed at, stamped when the day is written. Part of the
+  // family contract: TrackLifts reads calories beside the goal they were
+  // measured against, so a number never travels without its target
+  goalCalories?: number;
+  goalProtein?: number;
+
   // ── Micros and detailed macros (all optional, may be missing on older summaries) ──
   totalFiber?: number;
   totalSugar?: number;
@@ -345,6 +353,29 @@ export interface DailySummary {
   totalVitaminC?: number;
   totalVitaminD?: number;
   totalVitaminB12?: number;
+}
+
+// ---- The family contract ----
+
+// What kcal publishes about her habits. Plain sentences, six at most, read by
+// the TrackLifts coach so it can speak about food without guessing
+export interface HabitSignal {
+  text: string;
+  kind: 'trigger' | 'correlation' | 'outcome';
+}
+
+// What TrackLifts publishes about her training. Read only here.
+// calories_burned is a 4 MET estimate and is context, never currency: it must
+// never enter the eating budget. FAMILY.md carries that rule
+export interface LiftsDay {
+  date: string; // YYYY-MM-DD
+  sessions: number;
+  sets: number | null;
+  volumeKg: number | null;
+  minutes: number | null;
+  caloriesBurnedEstimate: number | null;
+  highlight: string | null;
+  updatedAt: string;
 }
 
 // ---- Smart Reminder Types ----
@@ -2798,6 +2829,47 @@ export const dataStorage = {
     }
   },
 
+  // ---- The family wall, kcal side ----
+
+  async loadLiftsDays(): Promise<LiftsDay[]> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.LIFTS_DAYS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  // Pulls TrackLifts' published days and caches them. Signed out, or with the
+  // sibling never installed, this is an empty list and everything downstream
+  // simply has nothing to say
+  async refreshLiftsDays(days = 30): Promise<LiftsDay[]> {
+    try {
+      const accountInfo = await getCachedAccountInfo();
+      if (!accountInfo?.supabaseUserId) return this.loadLiftsDays();
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+      const fetched = await supabaseDataService.fetchLiftsDays(accountInfo, format(since, 'yyyy-MM-dd'));
+      await AsyncStorage.setItem(STORAGE_KEYS.LIFTS_DAYS, JSON.stringify(fetched));
+      return fetched;
+    } catch (e) {
+      if (__DEV__) console.warn('refreshLiftsDays failed', e);
+      return this.loadLiftsDays();
+    }
+  },
+
+  // Publishes her habits for the lifts coach to read. Best effort, never
+  // blocks anything, and silent when signed out
+  async publishHabitSignals(signals: HabitSignal[]): Promise<void> {
+    try {
+      const accountInfo = await getCachedAccountInfo();
+      if (!accountInfo?.supabaseUserId) return;
+      await supabaseDataService.upsertHabitSignals(accountInfo, signals);
+    } catch (e) {
+      if (__DEV__) console.warn('publishHabitSignals failed', e);
+    }
+  },
+
   recalculateDailySummary(date: string, mealsOrFoods: MealEntry[] | any[]): DailySummary {
     // This helper can take full daily meals and produce the summary
     // Needs to handle both MealEntry (which has ParsedFood[])
@@ -2867,10 +2939,16 @@ export const dataStorage = {
   },
 
   async updateSummaryForDate(dateKey: string, mealsForDay: MealEntry[]): Promise<void> {
+    const goals = await this.loadGoals().catch(() => null);
     return withWriteLock('summaries', async () => {
       try {
         const summaries = await this.loadDailySummaries();
         const newSummary = this.recalculateDailySummary(dateKey, mealsForDay);
+        // Keep the goal a day already carried. Re-editing an old meal must not
+        // rewrite history with today's target
+        const prior = summaries[dateKey];
+        newSummary.goalCalories = prior?.goalCalories ?? (goals?.calories || undefined);
+        newSummary.goalProtein = prior?.goalProtein ?? (goals?.proteinGrams || undefined);
         summaries[dateKey] = newSummary;
         await this.saveDailySummaries(summaries);
       } catch (e) {

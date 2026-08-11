@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.4**
+TrackKcal can see your training. If you use TrackLifts, the day you trained now shows up on Home under your food, with the session in one line and the numbers beside it. Your coach knows about it too, so it can talk about your food and your training as one thing instead of guessing at half the picture. One deliberate decision: the calories TrackLifts estimates you burned are shown as an estimate and nothing more. They never get added to what you can eat. An estimate that buys food is how people quietly eat back a workout that was never that big. Going the other way, TrackKcal now publishes what you were aiming at each day, not just what you ate, and a short list of your habits, so the TrackLifts coach can speak about food without guessing. Everything here is off unless you are signed in and using both apps.
+
 **v1.5.3**
 Real prices, and premium that follows your Track account. The upgrade screen was rebuilt around Track Plus: both apps together for AED 44 a month or 299 a year, with TrackKcal on its own at 29 or 199 under it. A monthly and annual switch sits at the top, annual chosen for you because it saves 43 percent. Each plan says exactly what it gives you, and the buttons tell the truth: buying arrives with the app store release, everything is free until then. Underneath, premium now reads only from your Track account entitlement, so if you subscribe in TrackLifts and open TrackKcal, premium is simply on. Nothing on your phone can grant or remove it any more. Two places that quietly disagreed about who counts as premium, your insight unlocks and your streak freezes, now ask the same question as the rest of the app.
 

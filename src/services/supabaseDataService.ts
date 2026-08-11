@@ -20,6 +20,8 @@ import type {
   CalorieBankConfig,
   CalorieBankCompletedCycle,
   DailySummary,
+  HabitSignal,
+  LiftsDay,
 } from './dataStorage';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1270,6 +1272,52 @@ export const supabaseDataService = {
     return out;
   },
 
+  // ---- The family wall ----
+  // Two calls cross to a sibling app. Both are named in FAMILY.md before they
+  // were written. Kcal owns kcal_habit_signals and only reads lifts' ledger
+
+  async upsertHabitSignals(
+    accountInfo: AccountInfo | null,
+    signals: HabitSignal[],
+  ): Promise<void> {
+    if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
+    const user = await getOrCreateUser(accountInfo);
+    if (!user) throw new Error('could not resolve app user for cloud write');
+    // Six is a schema constraint on the other side, not a suggestion
+    const capped = signals.slice(0, 6);
+    const { error } = await supabase
+      .from('kcal_habit_signals')
+      .upsert({ user_id: user.id, signals: capped, computed_at: new Date().toISOString() }, { onConflict: 'user_id' });
+    if (error) throw error;
+  },
+
+  async fetchLiftsDays(
+    accountInfo: AccountInfo | null,
+    sinceDate: string,
+  ): Promise<LiftsDay[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const { data, error } = await supabase
+      .from('lifts_daily_summaries')
+      .select('summary_date, session_count, total_sets, total_volume_kg, duration_min, calories_burned, highlight, updated_at')
+      .eq('user_id', accountInfo.supabaseUserId)
+      .gte('summary_date', sinceDate)
+      .order('summary_date', { ascending: false });
+    // A sibling that has not shipped its writer yet is not an error worth noise
+    if (error) { if (__DEV__) console.warn('fetchLiftsDays error:', error.message); return []; }
+    return (data || []).map((row) => ({
+      date: row.summary_date as string,
+      sessions: row.session_count ?? 0,
+      sets: row.total_sets ?? null,
+      volumeKg: row.total_volume_kg ?? null,
+      minutes: row.duration_min ?? null,
+      // An estimate. Context, never currency: this number never enters the
+      // eating budget. FAMILY.md carries the rule
+      caloriesBurnedEstimate: row.calories_burned ?? null,
+      highlight: typeof row.highlight === 'string' ? row.highlight.slice(0, 200) : null,
+      updatedAt: row.updated_at as string,
+    }));
+  },
+
   // Daily Summaries
   async upsertDailySummaries(
     accountInfo: AccountInfo | null,
@@ -1289,6 +1337,8 @@ export const supabaseDataService = {
       payload: summary as unknown as Record<string, unknown>,
       calories: summary.totalCalories ?? null,
       protein_g: summary.totalProtein ?? null,
+      calorie_goal: summary.goalCalories ?? null,
+      protein_goal_g: summary.goalProtein ?? null,
       updated_at: summary.updatedAt || new Date().toISOString(),
     }));
     if (rows.length === 0) return;

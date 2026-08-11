@@ -130,6 +130,12 @@ export const patternDetectionService = {
                 await dataStorage.replaceDetectedPatterns(finalSet);
             }
 
+            // Publish her habits for the TrackLifts coach. Titles only: they are
+            // already one plain sentence each, and the fix is kcal's business
+            void dataStorage.publishHabitSignals(
+                findings.slice(0, 6).map(f => ({ text: f.title, kind: f.type })),
+            );
+
             return fresh;
         } catch (error) {
             console.error('Pattern detection error:', error);
