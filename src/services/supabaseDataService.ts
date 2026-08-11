@@ -1298,7 +1298,7 @@ export const supabaseDataService = {
     if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
     const { data, error } = await supabase
       .from('lifts_daily_summaries')
-      .select('summary_date, session_count, total_sets, total_volume_kg, duration_min, calories_burned, highlight, updated_at')
+      .select('summary_date, session_count, total_sets, total_volume_kg, duration_min, calories_burned, highlight, first_started_at, last_finished_at, updated_at')
       .eq('user_id', accountInfo.supabaseUserId)
       .gte('summary_date', sinceDate)
       .order('summary_date', { ascending: false });
@@ -1314,6 +1314,10 @@ export const supabaseDataService = {
       // eating budget. FAMILY.md carries the rule
       caloriesBurnedEstimate: row.calories_burned ?? null,
       highlight: typeof row.highlight === 'string' ? row.highlight.slice(0, 200) : null,
+      // Clocks are often null: a backfilled session never had them. A day with
+      // totals and no clocks was trained at an unknown hour, never assume one
+      startedAt: row.first_started_at ?? null,
+      finishedAt: row.last_finished_at ?? null,
       updatedAt: row.updated_at as string,
     }));
   },
@@ -1337,6 +1341,8 @@ export const supabaseDataService = {
       payload: summary as unknown as Record<string, unknown>,
       calories: summary.totalCalories ?? null,
       protein_g: summary.totalProtein ?? null,
+      carbs_g: summary.totalCarbs ?? null,
+      fat_g: summary.totalFat ?? null,
       calorie_goal: summary.goalCalories ?? null,
       protein_goal_g: summary.goalProtein ?? null,
       updated_at: summary.updatedAt || new Date().toISOString(),

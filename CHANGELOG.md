@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.5**
+Your coach can now talk about protein after training. When TrackLifts records what time you finished, TrackKcal knows how long ago that was and how much protein you have eaten since, so the advice is about this session rather than the day in general. When the time is not recorded it says nothing about timing instead of guessing, because a workout at an unknown hour is not a workout at midnight. TrackKcal also started publishing your carbs and fat each day alongside calories and protein, which is what TrackLifts uses to tell a fuelled session from an empty one.
+
 **v1.5.4**
 TrackKcal can see your training. If you use TrackLifts, the day you trained now shows up on Home under your food, with the session in one line and the numbers beside it. Your coach knows about it too, so it can talk about your food and your training as one thing instead of guessing at half the picture. One deliberate decision: the calories TrackLifts estimates you burned are shown as an estimate and nothing more. They never get added to what you can eat. An estimate that buys food is how people quietly eat back a workout that was never that big. Going the other way, TrackKcal now publishes what you were aiming at each day, not just what you ate, and a short list of your habits, so the TrackLifts coach can speak about food without guessing. Everything here is off unless you are signed in and using both apps.
 

@@ -97,6 +97,12 @@ export interface ChatCoachContext {
         lastHighlight: string | null;
         todayBurnEstimate: number | null;
         avgMinutesPerSession: number | null;
+        // Clocks, when the sibling had them. Null means the hour is unknown,
+        // never that she trained at midnight
+        todayFinishedAtHour: number | null;
+        hoursSinceTodaysSession: number | null;
+        proteinSinceTodaysSession: number | null;
+        usualTrainingHour: number | null;
     };
 }
 
@@ -124,7 +130,7 @@ You will be provided with a JSON "Context" containing the user's stats, recent a
 - **Current Status:** Look at \`todaysLog\` to see what they have ALREADY eaten.
 - **Goal Gap:** Look at \`remainingMacros\` to see exactly what is left.
 - **The Menu:** \`topFoods\` is the list of foods the user actually eats.
-- **Training:** If \`training\` is present, she also uses TrackLifts and it published these days. Speak to the whole athlete: a hard session earns protein and carbs, not a smaller plate. \`training.lastHighlight\` is a ready sentence you may quote. **HARD RULE:** \`training.todayBurnEstimate\` is an estimate from the other app and it is context, never currency. Never add it to her budget, never say she earned calories back, never tell her to eat more because of it. \`remainingMacros\` is already the whole truth about what is left.
+- **Training:** If \`training\` is present, she also uses TrackLifts and it published these days. Speak to the whole athlete: a hard session earns protein and carbs, not a smaller plate. \`training.lastHighlight\` is a ready sentence you may quote. On timing: when \`training.proteinSinceTodaysSession\` and \`training.hoursSinceTodaysSession\` are present you may talk about protein since she finished. When they are null the hour is simply unknown, so say nothing about timing rather than assuming one. **HARD RULE:** \`training.todayBurnEstimate\` is an estimate from the other app and it is context, never currency. Never add it to her budget, never say she earned calories back, never tell her to eat more because of it. \`remainingMacros\` is already the whole truth about what is left.
 - **Calorie Bank:** If \`calorieBank\` is present, the user flexes calories across the week. \`remainingMacros.calories\` already reflects today's adjusted budget, so trust it. \`calorieBank.bankBalance\` is calories saved for the rest of the week and \`calorieBank.remainingDays\` is how many days are left. When they ask if they can afford something, answer against today's budget and mention banked headroom if it is relevant. Never tell them to eat below their target just because they banked.
 
 ### STRICT MENU-MATCHING PROTOCOL
@@ -311,6 +317,25 @@ export const chatCoachService = {
                 const last7 = trained.filter(d => d.date >= weekKey);
                 const today = trained.find(d => d.date === todayKey);
                 const withMinutes = trained.filter(d => d.minutes && d.minutes > 0);
+
+                // Protein since she racked the last weight. Only computable
+                // when the sibling published a clock, so it stays null rather
+                // than guessing an hour
+                const finishedMs = today?.finishedAt ? new Date(today.finishedAt).getTime() : null;
+                const validFinish = finishedMs !== null && !Number.isNaN(finishedMs);
+                const proteinSince = validFinish
+                    ? Math.round(
+                          todaysMeals
+                              .filter(m => new Date(m.timestamp).getTime() >= finishedMs)
+                              .reduce((s, m) => s + m.foods.reduce((a, f) => a + (f.protein || 0), 0), 0),
+                      )
+                    : null;
+
+                // Her usual training hour, only from days that carried a clock
+                const startHours = trained
+                    .map(d => (d.startedAt ? new Date(d.startedAt).getHours() : null))
+                    .filter((h): h is number => h !== null && !Number.isNaN(h));
+
                 training = {
                     trainedToday: !!today,
                     sessionsLast7: last7.reduce((s, d) => s + d.sessions, 0),
@@ -319,6 +344,14 @@ export const chatCoachService = {
                     todayBurnEstimate: today?.caloriesBurnedEstimate ?? null,
                     avgMinutesPerSession: withMinutes.length
                         ? Math.round(withMinutes.reduce((s, d) => s + (d.minutes || 0), 0) / withMinutes.length)
+                        : null,
+                    todayFinishedAtHour: validFinish ? new Date(finishedMs).getHours() : null,
+                    hoursSinceTodaysSession: validFinish
+                        ? Math.max(0, Math.round(((Date.now() - finishedMs) / 3600000) * 10) / 10)
+                        : null,
+                    proteinSinceTodaysSession: proteinSince,
+                    usualTrainingHour: startHours.length >= 3
+                        ? Math.round(startHours.reduce((s, h) => s + h, 0) / startHours.length)
                         : null,
                 };
             }

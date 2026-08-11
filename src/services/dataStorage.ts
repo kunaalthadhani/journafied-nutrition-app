@@ -375,6 +375,10 @@ export interface LiftsDay {
   minutes: number | null;
   caloriesBurnedEstimate: number | null;
   highlight: string | null;
+  // The day's first session start and last session end. Null is common and
+  // honest: a backfilled session never set a clock
+  startedAt: string | null;
+  finishedAt: string | null;
   updatedAt: string;
 }
 
