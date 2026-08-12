@@ -405,7 +405,10 @@ const AGENTIC_RESPONSE_SCHEMA = {
   additionalProperties: false,
 };
 
-export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string }> {
+// aiUnavailable says the call never landed. Without it a proxy outage looks
+// exactly like "we did not recognise your food", which blames the user for
+// our own downtime and teaches them to distrust a parser that never ran
+export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string, aiUnavailable?: boolean }> {
   try {
     if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
 
@@ -519,9 +522,11 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
 
   } catch (error) {
     if (__DEV__) console.error('Error in agentic food analysis:', error);
-    // Fallback to local parsing
+    // Fallback to local parsing. When even that finds nothing, say the AI was
+    // unreachable rather than letting the caller blame the food
     const { parseFoodInput } = require('../utils/foodNutrition');
-    return { foods: parseFoodInput(foodInput) };
+    const local: ParsedFood[] = parseFoodInput(foodInput);
+    return { foods: local, aiUnavailable: local.length === 0 };
   }
 }
 

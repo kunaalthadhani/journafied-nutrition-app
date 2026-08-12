@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.6**
+Food logging works again. The AI model changed a rule on its side and started rejecting every request the app made, so nothing could be parsed: not typed meals, not photos, not the coach. That is fixed on the server, so it is already working for everyone with no update needed. The second half of the fix is here in the app: when the AI cannot be reached, it now says exactly that and leaves your meal sitting in the box so you can try again. Before, an outage came back as "No Entry Detected", which read like your food was the problem when the request had never even arrived.
+
 **v1.5.5**
 Your coach can now talk about protein after training. When TrackLifts records what time you finished, TrackKcal knows how long ago that was and how much protein you have eaten since, so the advice is about this session rather than the day in general. When the time is not recorded it says nothing about timing instead of guessing, because a workout at an unknown hour is not a workout at midnight. TrackKcal also started publishing your carbs and fat each day alongside calories and protein, which is what TrackLifts uses to tell a fuelled session from an empty one.
 

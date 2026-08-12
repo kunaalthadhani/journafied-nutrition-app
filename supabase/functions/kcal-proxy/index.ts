@@ -230,7 +230,9 @@ serve(async (req) => {
       messages: body.messages,
     };
 
-    if (body.temperature !== undefined) chatBody.temperature = body.temperature;
+    // kimi rejects any temperature but 1 with a 400, and the client sends 0.3
+    // to 0.7 on every prompt. Drop it here rather than rewrite six call sites:
+    // the proxy already translates model names, it translates this too
     if (body.max_tokens !== undefined) {
       // the reasoning model thinks before it answers, and thinking spends
       // tokens. The client's old 150 to 600 budgets would starve the actual

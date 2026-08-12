@@ -1577,6 +1577,20 @@ export const HomeScreen: React.FC = () => {
           return;
         }
 
+        // The call never landed. Say so, and keep her words in the box so
+        // nothing she typed is lost to our downtime
+        if (analysisResult.aiUnavailable) {
+          removePendingMeal(currentDateKey, pendingId);
+          setTranscribedText(trimmed);
+          setShouldFocusInput(true);
+          Alert.alert(
+            'Could not reach the food AI',
+            'Your meal is still in the box. Check your connection and try again in a moment.',
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+
         parsedFoods = analysisResult.foods;
         summary = analysisResult.summary;
 
@@ -1745,6 +1759,15 @@ export const HomeScreen: React.FC = () => {
           Alert.alert(
             'Clarification Needed',
             analysisResult.clarificationQuestion,
+            [{ text: 'OK' }]
+          );
+          return;
+        }
+        if (analysisResult.aiUnavailable) {
+          setIsAnalyzingFood(false);
+          Alert.alert(
+            'Could not reach the food AI',
+            'Your edit was not saved. Check your connection and try again in a moment.',
             [{ text: 'OK' }]
           );
           return;
