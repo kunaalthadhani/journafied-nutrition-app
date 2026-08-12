@@ -7,7 +7,15 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.86.0";
 // Whisper transcription stays OpenAI only and optional: no OPENAI_API_KEY
 // means voice returns a clear error while everything else works.
 const MOONSHOT_API_KEY = Deno.env.get("MOONSHOT_API_KEY");
-const MOONSHOT_MODEL = Deno.env.get("MOONSHOT_MODEL") ?? "kimi-k2.6";
+// k2.6 spends its whole budget thinking and never writes the answer, measured
+// at every cap from 2048 to unbounded. k2.7-code truncates on any multi item
+// meal. k3 answers all of them, so one model now serves text and vision.
+// The env override still works, except for models proven to never answer: the
+// MOONSHOT_MODEL secret still says k2.6 and that alone kept food logging dead
+// after the code was fixed. Delete the secret and this list stops mattering
+const DEAD_TEXT_MODELS = new Set(["kimi-k2.6"]);
+const ENV_MODEL = Deno.env.get("MOONSHOT_MODEL");
+const MOONSHOT_MODEL = ENV_MODEL && !DEAD_TEXT_MODELS.has(ENV_MODEL) ? ENV_MODEL : "kimi-k3";
 const MOONSHOT_VISION_MODEL = Deno.env.get("MOONSHOT_VISION_MODEL") ?? "kimi-k3";
 const MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
@@ -233,15 +241,13 @@ serve(async (req) => {
     // kimi rejects any temperature but 1 with a 400, and the client sends 0.3
     // to 0.7 on every prompt. Drop it here rather than rewrite six call sites:
     // the proxy already translates model names, it translates this too
-    if (body.max_tokens !== undefined) {
-      // the reasoning model thinks before it answers, and thinking spends
-      // tokens. The client's old 150 to 600 budgets would starve the actual
-      // answer, so the floor is high and the cap still holds
-      chatBody.max_tokens = Math.min(
-        Math.max(2048, Number(body.max_tokens) || 1),
-        MAX_OUTPUT_TOKENS
-      );
-    }
+    // The model thinks before it answers, and thinking spends tokens. The
+    // client's old 150 to 600 budgets would starve the actual answer, so the
+    // floor is high. ALWAYS set a cap: food analysis sends none, and uncapped
+    // the model ran past the gateway's own limit and died at 150 seconds
+    chatBody.max_tokens = body.max_tokens === undefined
+      ? MAX_OUTPUT_TOKENS
+      : Math.min(Math.max(2048, Number(body.max_tokens) || 1), MAX_OUTPUT_TOKENS);
     // Moonshot speaks json_object but returns garbage on strict json_schema.
     // Downgrade: enforce json_object and hand the schema to the model in
     // words, which kimi follows well. The client's parser stays unchanged

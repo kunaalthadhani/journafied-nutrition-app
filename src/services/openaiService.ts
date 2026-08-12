@@ -438,6 +438,10 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
         json_schema: { name: 'food_analysis', strict: true, schema: AGENTIC_RESPONSE_SCHEMA },
       },
       call_type: 'food-analysis',
+      // kimi thinks before it answers. Measured across real meals it lands
+      // between 40 and 80 seconds, so the old 60 second default was cutting
+      // off answers that were on their way
+      timeout_ms: 120_000,
     });
 
     const content = data.choices[0]?.message?.content;

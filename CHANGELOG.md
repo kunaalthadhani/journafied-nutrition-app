@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.7**
+Meals parse again, properly this time. The last fix stopped the errors but left the app talking to a model that thinks itself in circles and never actually answers, so every meal came back as "could not reach the food AI" after a minute of waiting. The brain behind food logging has been changed to one that answers, and it is a good one: "chicken shawarma wrap and a small fries" comes back as pita, shawarma chicken, garlic sauce, pickles and fries, priced separately. It is slower than it should be, up to about a minute and a half for a complicated meal, so the app now waits properly instead of giving up early. Photos already used this model and were never affected.
+
 **v1.5.6**
 Food logging works again. The AI model changed a rule on its side and started rejecting every request the app made, so nothing could be parsed: not typed meals, not photos, not the coach. That is fixed on the server, so it is already working for everyone with no update needed. The second half of the fix is here in the app: when the AI cannot be reached, it now says exactly that and leaves your meal sitting in the box so you can try again. Before, an outage came back as "No Entry Detected", which read like your food was the problem when the request had never even arrived.
 
