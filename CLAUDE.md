@@ -52,7 +52,7 @@ For small fixes skip this. For features, refactors, prompt changes, schema chang
 You describe what you intended to do, not always what you did. So always:
 
 - Diff the actual changes before saying it is done.
-- Run `npx tsc --noEmit` after any code edit. Pre existing Deno errors in `supabase/functions/ai-proxy/index.ts` are unrelated and can be ignored.
+- Run `npx tsc --noEmit` after any code edit. Plain `tsc` stack overflows on this project, so use `node --stack-size=8000 ./node_modules/typescript/lib/tsc.js --noEmit`. Pre existing Deno errors in `supabase/functions/kcal-proxy/index.ts` are unrelated and can be ignored.
 - For UI changes, say explicitly that you have not visually tested. Do not claim the UX works without me running the app.
 - For prompt changes, note that they are untested in prod and the first user log will be the real test.
 
@@ -76,7 +76,7 @@ Typecheck: `npx tsc --noEmit`.
 
 Push to GitHub: I will ask explicitly. Do not push without being asked.
 
-Deploy Edge Function: `supabase functions deploy ai-proxy`. Only do this on request.
+Deploy Edge Function: `supabase functions deploy kcal-proxy --project-ref kmyjtnswchlkupuqdjew`. Only do this on request. Always pass the ref, never trust the local link. The family project also hosts TrackLifts' `ai-proxy`, which is not ours to touch.
 
 ---
 
@@ -152,7 +152,7 @@ Pure logic in [src/utils/](src/utils/). [calorieBankEngine.ts](src/utils/calorie
 
 State via Context: [src/contexts/UserContext.tsx](src/contexts/UserContext.tsx), [src/contexts/PreferencesContext.tsx](src/contexts/PreferencesContext.tsx).
 
-Edge Function: [supabase/functions/ai-proxy/index.ts](supabase/functions/ai-proxy/index.ts) is the Deno runtime that proxies OpenAI calls.
+Edge Function: [supabase/functions/kcal-proxy/index.ts](supabase/functions/kcal-proxy/index.ts) is the Deno runtime that proxies AI calls to Moonshot. It translates the client's old OpenAI model names, floors max_tokens for the reasoning model, downgrades strict json_schema to json_object, and drops temperature because kimi rejects anything but 1. The client never changes when the brain does.
 
 ---
 
