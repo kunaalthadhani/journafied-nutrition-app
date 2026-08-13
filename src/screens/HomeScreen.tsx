@@ -2965,6 +2965,13 @@ export const HomeScreen: React.FC = () => {
                 <Text style={{ fontSize: 10, letterSpacing: 2, fontWeight: '600', color: Acid.tx3 }}>
                   FROM TRACKLIFTS
                 </Text>
+                {/* Until the counting pass lands, say so. A number on her day
+                    that she assumes is counted is worse than no number */}
+                {(supplementLine.kcal != null || supplementLine.protein != null) && (
+                  <Text style={{ fontSize: 10, letterSpacing: 1, color: Acid.tx3, marginTop: 4, fontStyle: 'italic' }}>
+                    not counted in today's total yet
+                  </Text>
+                )}
                 {supplementLine.rows.map((r, i) => (
                   <View key={`${r.name}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
                     <Text style={{ flex: 1, fontSize: 14, color: Acid.tx }}>
