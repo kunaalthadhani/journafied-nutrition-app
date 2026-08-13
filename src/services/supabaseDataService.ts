@@ -23,6 +23,7 @@ import type {
   FamilyProfile,
   HabitSignal,
   LiftsDay,
+  LiftsSupplement,
 } from './dataStorage';
 
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -1381,6 +1382,27 @@ export const supabaseDataService = {
       startedAt: row.first_started_at ?? null,
       finishedAt: row.last_finished_at ?? null,
       updatedAt: row.updated_at as string,
+    }));
+  },
+
+  async fetchLiftsSupplements(
+    accountInfo: AccountInfo | null,
+    sinceDate: string,
+  ): Promise<LiftsSupplement[]> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return [];
+    const { data, error } = await supabase
+      .from('supplement_log')
+      .select('taken_on, name, dose_label, kcal, protein_g')
+      .eq('user_id', accountInfo.supabaseUserId)
+      .gte('taken_on', sinceDate)
+      .order('taken_on', { ascending: false });
+    if (error) { if (__DEV__) console.warn('fetchLiftsSupplements error:', error.message); return []; }
+    return (data || []).map((row) => ({
+      date: row.taken_on as string,
+      name: (row.name as string) || '',
+      doseLabel: (row.dose_label as string) || null,
+      kcal: typeof row.kcal === 'number' ? row.kcal : null,
+      proteinG: typeof row.protein_g === 'number' ? row.protein_g : null,
     }));
   },
 

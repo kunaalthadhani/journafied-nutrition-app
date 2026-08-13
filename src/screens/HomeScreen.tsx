@@ -82,7 +82,7 @@ import { buildBrief } from '../utils/briefEngine';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
-import { DetectedPattern, LiftsDay } from '../services/dataStorage';
+import { DetectedPattern, LiftsDay, LiftsSupplement } from '../services/dataStorage';
 import { useUser } from '../contexts/UserContext';
 
 export const HomeScreen: React.FC = () => {
@@ -209,6 +209,7 @@ export const HomeScreen: React.FC = () => {
   // Published by TrackLifts. Read only, and the burn estimate never touches
   // the eating budget
   const [liftsDays, setLiftsDays] = useState<LiftsDay[]>([]);
+  const [liftsSupplements, setLiftsSupplements] = useState<LiftsSupplement[]>([]);
 
 
   // Streak Freeze State
@@ -420,6 +421,22 @@ export const HomeScreen: React.FC = () => {
       stats,
     };
   }, [liftsDays]);
+
+  // Supplements ticked in TrackLifts, for the day being viewed. Each number is
+  // independent: creatine carries neither, a shake carries both, a vitamin
+  // carries nothing. Sum only what is actually there
+  const supplementLine = React.useMemo(() => {
+    const key = getDateKey(selectedDate);
+    const rows = liftsSupplements.filter(s => s.date === key);
+    if (rows.length === 0) return null;
+    const kcal = rows.reduce((s, r) => s + (r.kcal ?? 0), 0);
+    const protein = rows.reduce((s, r) => s + (r.proteinG ?? 0), 0);
+    return {
+      rows,
+      kcal: kcal > 0 ? Math.round(kcal) : null,
+      protein: protein > 0 ? Math.round(protein) : null,
+    };
+  }, [liftsSupplements, selectedDate]);
 
   const handleStreakPress = () => {
     setShowStreakWidget(true);
@@ -940,7 +957,7 @@ export const HomeScreen: React.FC = () => {
       await dataStorage.migrateMealsToSummaries();
 
       const startKey = getDateKey(selectedDate);
-      const [plan, goalsData, summaries, exercises, todaysMeals, entryStored, prefs, patterns, bankConfig, liftsCached] = await Promise.all([
+      const [plan, goalsData, summaries, exercises, todaysMeals, entryStored, prefs, patterns, bankConfig, liftsCached, suppsCached] = await Promise.all([
         dataStorage.loadUserPlan(),
         dataStorage.loadGoals(),
         dataStorage.loadDailySummaries(),
@@ -951,6 +968,7 @@ export const HomeScreen: React.FC = () => {
         patternDetectionService.getActivePatterns(),
         dataStorage.loadCalorieBankConfig(),
         dataStorage.loadLiftsDays(),
+        dataStorage.loadLiftsSupplements(),
       ]);
       stored = entryStored;
       savedSummaries = summaries;
@@ -971,6 +989,7 @@ export const HomeScreen: React.FC = () => {
       setSmartSuggestEnabled(prefs?.smartSuggestEnabled === true);
       setDetectedPatterns(patterns);
       setLiftsDays(liftsCached);
+      setLiftsSupplements(suppsCached);
 
       // Calorie Bank: paint it with the bars, it is pure local math. ALWAYS
       // load the config (do not gate on the cold `plan` variable, which is
@@ -1073,8 +1092,12 @@ export const HomeScreen: React.FC = () => {
 
         // TrackLifts' training ledger. Signed out or sibling absent, this is
         // an empty list and the training line simply never appears
-        const freshLifts = await dataStorage.refreshLiftsDays();
+        const [freshLifts, freshSupps] = await Promise.all([
+          dataStorage.refreshLiftsDays(),
+          dataStorage.refreshLiftsSupplements(),
+        ]);
         setLiftsDays(freshLifts);
+        setLiftsSupplements(freshSupps);
 
         // Load saved prompts
         const storedPrompts = await dataStorage.loadSavedPrompts();
@@ -2933,6 +2956,30 @@ export const HomeScreen: React.FC = () => {
               entries={currentDayExercises}
               onDeleteEntry={handleDeleteExerciseEntry}
             />
+
+            {/* Her shelf, ticked in TrackLifts. A labeled line of its own, never
+                merged into the food log, because she did not log it here */}
+            {supplementLine && (
+              <View style={{ paddingHorizontal: 20, paddingTop: 20 }}>
+                <View style={{ height: 1, backgroundColor: Acid.hair, marginBottom: 12 }} />
+                <Text style={{ fontSize: 10, letterSpacing: 2, fontWeight: '600', color: Acid.tx3 }}>
+                  FROM TRACKLIFTS
+                </Text>
+                {supplementLine.rows.map((r, i) => (
+                  <View key={`${r.name}-${i}`} style={{ flexDirection: 'row', alignItems: 'baseline', marginTop: 8 }}>
+                    <Text style={{ flex: 1, fontSize: 14, color: Acid.tx }}>
+                      {r.name}
+                      {r.doseLabel ? <Text style={{ color: Acid.tx3 }}>{`  ${r.doseLabel}`}</Text> : null}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: Acid.tx3 }}>
+                      {[r.kcal != null ? `${Math.round(r.kcal)} kcal` : null,
+                        r.proteinG != null ? `${Math.round(r.proteinG)}g protein` : null]
+                        .filter(Boolean).join('  ·  ') || '—'}
+                    </Text>
+                  </View>
+                ))}
+              </View>
+            )}
 
             {/* Training, published by TrackLifts. A ledger line, never a card.
                 The burn is printed as an estimate and is never spendable */}

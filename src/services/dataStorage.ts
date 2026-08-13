@@ -118,6 +118,7 @@ const STORAGE_KEYS = {
   SUMMARIES: '@trackkal:summaries',
   // TrackLifts' training ledger, cached so the home paints without a network wait
   LIFTS_DAYS: '@trackkal:liftsDays',
+  LIFTS_SUPPLEMENTS: '@trackkal:liftsSupplements',
   // Premium
   DETECTED_PATTERNS: '@trackkal:detectedPatterns',
   WEEKLY_ACTION_PLAN: '@trackkal:weeklyActionPlan',
@@ -398,6 +399,18 @@ export interface LiftsDay {
   startedAt: string | null;
   finishedAt: string | null;
   updatedAt: string;
+}
+
+// What TrackLifts records off her shelf. Read only, one row per supplement per
+// day. Each number is independent: a null kcal means this is not food, creatine
+// or a vitamin or a pen, and it must never touch a calorie total. A row can
+// carry protein with no calories. Count what is there, ignore what is not
+export interface LiftsSupplement {
+  date: string; // YYYY-MM-DD
+  name: string;
+  doseLabel: string | null; // display only, never parsed
+  kcal: number | null;
+  proteinG: number | null;
 }
 
 // ---- Smart Reminder Types ----
@@ -2898,6 +2911,32 @@ export const dataStorage = {
     } catch (e) {
       if (__DEV__) console.warn('refreshLiftsDays failed', e);
       return this.loadLiftsDays();
+    }
+  },
+
+  async loadLiftsSupplements(): Promise<LiftsSupplement[]> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.LIFTS_SUPPLEMENTS);
+      return raw ? JSON.parse(raw) : [];
+    } catch {
+      return [];
+    }
+  },
+
+  // A full replace, not a merge: an unticked supplement is a deleted row, and
+  // a merge would keep showing a line she removed in the other app
+  async refreshLiftsSupplements(days = 30): Promise<LiftsSupplement[]> {
+    try {
+      const accountInfo = await getCachedAccountInfo();
+      if (!accountInfo?.supabaseUserId) return this.loadLiftsSupplements();
+      const since = new Date();
+      since.setDate(since.getDate() - days);
+      const fetched = await supabaseDataService.fetchLiftsSupplements(accountInfo, format(since, 'yyyy-MM-dd'));
+      await AsyncStorage.setItem(STORAGE_KEYS.LIFTS_SUPPLEMENTS, JSON.stringify(fetched));
+      return fetched;
+    } catch (e) {
+      if (__DEV__) console.warn('refreshLiftsSupplements failed', e);
+      return this.loadLiftsSupplements();
     }
   },
 

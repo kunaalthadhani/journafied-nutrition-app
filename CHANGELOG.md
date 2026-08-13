@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.1**
+Supplements you tick in TrackLifts now show up on your day here, under their own "from TrackLifts" heading with whatever each one actually carries. Creatine shows as creatine and nothing else, because it is not food. A protein shake shows its calories and its protein. Untick something there and the line disappears here. They are shown separately from your food log on purpose: you logged them in the other app, and the number you see here should always tell you where it came from.
+
 **v1.6.0**
 If you already use TrackLifts, TrackKcal stops asking you things it can look up. Sign in and the setup skips your sex, height, weight, goal weight and name, shows you what it found in one card, and lets you correct any line with a tap. It also starts your activity level from how often you actually train, and tells you why it picked that so you can change it. If you are not signed in nothing changes, you get the same setup as always, plus one quiet line offering to fill it in for you. And whatever you answer here now goes back to your Track account, so the next app does not ask either.
 
