@@ -105,26 +105,36 @@ export const WeightTrackerScreen: React.FC<WeightTrackerScreenProps> = ({
   // parent relative and was landing the scroll ~200px too high. Returns false if
   // the card is not mounted yet so the caller can retry on the next frame.
   const scrollToInsightCard = (id: InsightId): boolean => {
-    const slot = insightSlotRefs.current[id];
+    const slot = insightSlotRefs.current[id] as any;
     const sv = insightsScrollRef.current as any;
     if (!slot || !sv) return false;
-    let handle: number | null = null;
-    if (typeof sv.getInnerViewNode === 'function') {
+    // On the new architecture measureLayout wants the host component itself,
+    // and throws "must be called with a ref to a native component" when handed
+    // a numeric node handle. getInnerViewRef returns that host instance. The
+    // numeric path stays for the old architecture
+    let target: any = null;
+    if (typeof sv.getInnerViewRef === 'function') target = sv.getInnerViewRef();
+    if (!target && typeof sv.getInnerViewNode === 'function') {
       const node = sv.getInnerViewNode();
-      handle = typeof node === 'number' ? node : findNodeHandle(node);
+      target = typeof node === 'number' ? node : findNodeHandle(node);
     }
-    if (handle == null && typeof sv.getScrollableNode === 'function') {
-      handle = findNodeHandle(sv.getScrollableNode());
+    if (!target && typeof sv.getScrollableNode === 'function') {
+      target = findNodeHandle(sv.getScrollableNode());
     }
-    if (handle == null) handle = findNodeHandle(sv);
-    if (handle == null) return false;
-    slot.measureLayout(
-      handle,
-      (_x: number, y: number) => {
-        insightsScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
-      },
-      () => {},
-    );
+    if (target == null) target = findNodeHandle(sv);
+    if (target == null) return false;
+    try {
+      slot.measureLayout(
+        target,
+        (_x: number, y: number) => {
+          insightsScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+        },
+        () => {},
+      );
+    } catch {
+      // A missed scroll is a small disappointment. A red screen is not
+      return false;
+    }
     return true;
   };
 

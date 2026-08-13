@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { ExerciseEntry } from '../components/ExerciseLogSection';
-import { supabaseDataService } from './supabaseDataService';
+import { supabaseDataService, isAuthNotReady } from './supabaseDataService';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 import { generateId, ensureUUID } from '../utils/uuid';
 import { ParsedFood } from '../utils/foodNutrition';
@@ -1032,6 +1032,13 @@ const processSyncQueue = async (accountInfo: AccountInfo | null): Promise<void> 
       try {
         await executeSyncOperation(op, account);
       } catch (error) {
+        // No live session yet. Keep the op exactly as it was and stop: the
+        // whole queue is blocked on the same thing, and spending attempts on
+        // it would empty the queue before she signs back in.
+        if (isAuthNotReady(error)) {
+          remaining.push(op);
+          continue;
+        }
         // Do NOT abort the whole queue on one bad op (head-of-line blocking).
         // Retry this op up to a cap, then drop it so every later op still syncs.
         const attempts = ((op as any)._attempts || 0) + 1;
@@ -1844,7 +1851,8 @@ export const dataStorage = {
         try {
           await supabaseDataService.saveUserSettings(accountInfo, { entryCount: count });
         } catch (error) {
-          console.error('Error syncing entry count to Supabase:', error);
+          // Signed out is expected and silent. The op queues either way
+          if (!isAuthNotReady(error)) console.error('Error syncing entry count to Supabase:', error);
           await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { entryCount: count } });
         }
       } else {
@@ -1998,7 +2006,7 @@ export const dataStorage = {
         try {
           await supabaseDataService.saveUserSettings(accountInfo, { deviceInfo: info });
         } catch (error) {
-          console.error('Error syncing device info to Supabase:', error);
+          if (!isAuthNotReady(error)) console.error('Error syncing device info to Supabase:', error);
           await enqueueSyncOperation({ entity: 'settings', action: 'upsert', payload: { deviceInfo: info } });
         }
       } else {

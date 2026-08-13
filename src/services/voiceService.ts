@@ -27,6 +27,12 @@ function getNativeModule(): any {
   if (nativeChecked) return nativeModule;
   nativeChecked = true;
   if (Platform.OS === 'web') return null;
+  // Ask the registry BEFORE requiring. The package throws while it is being
+  // evaluated when the binary has no such native module, and a throw during
+  // module evaluation is reported as an uncaught error even when the require
+  // sits inside a try. Checking first means we never trigger it
+  const registered = (globalThis as any)?.expo?.modules?.ExpoSpeechRecognition;
+  if (!registered) return null;
   try {
     nativeModule = require('expo-speech-recognition')?.ExpoSpeechRecognitionModule ?? null;
   } catch {

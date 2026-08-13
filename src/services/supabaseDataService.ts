@@ -59,6 +59,15 @@ const formatDate = (timestamp: number) => {
 // the profiles row (created by a server trigger on signup) carries the
 // shared name. Reading the session every time keeps RLS happy and survives
 // cache wipes, same as before, minus the email joins.
+// A cloud write with no live session is not a failure, it is "not yet". The
+// cached supabaseUserId survives sign out and a killed session, so the app can
+// believe it is signed in when it is not. Ops that hit this must be requeued
+// untouched: burning retries here empties the queue before she signs back in,
+// which is how the goals sync was lost once already
+export const AUTH_NOT_READY = 'AUTH_NOT_READY';
+export const isAuthNotReady = (e: unknown): boolean =>
+  e instanceof Error && e.message === AUTH_NOT_READY;
+
 async function getOrCreateUser(accountInfo?: AccountInfo | null): Promise<AppUser | null> {
   if (!isSupabaseConfigured() || !supabase) return null;
 
@@ -200,7 +209,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const rows = payloads.map((payload) => mealPayloadToRow(user.id, payload));
     const { error } = await supabase.from('kcal_food_logs').upsert(rows, { onConflict: 'id' });
@@ -214,7 +223,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('kcal_food_logs')
@@ -252,7 +261,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     // one row per day: dedupe the batch by date, last write wins, because a
     // single upsert statement cannot touch the same key twice
@@ -277,7 +286,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     // local ids are date based, so a delete targets days. Only kcal's own
     // rows die: a sibling app's weigh in is never deleted from here
@@ -434,7 +443,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const rows = exercises.map((entry) => {
       const loggedDate = new Date(entry.timestamp).toISOString().slice(0, 10);
@@ -469,7 +478,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('kcal_exercise_logs')
@@ -524,7 +533,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('push_tokens')
@@ -550,7 +559,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('push_tokens')
@@ -589,7 +598,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase.from('kcal_push_history').insert({
       id: record.id,
@@ -616,7 +625,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     // Note: Supabase doesn't support raw SQL in update, so we fetch, increment, and update
     const { data: existing } = await supabase
@@ -680,7 +689,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('kcal_saved_prompts')
@@ -706,7 +715,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase.from('kcal_saved_prompts').delete().eq('id', id).eq('user_id', user.id);
 
@@ -829,7 +838,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const updateData: any = {};
     if (settings.entryCount !== undefined) updateData.entry_count = settings.entryCount;
@@ -904,7 +913,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('kcal_referral_codes')
@@ -1043,7 +1052,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase.from('kcal_referral_rewards').insert({
       id: reward.id,
@@ -1092,7 +1101,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     try {
       const { error } = await supabase.from('kcal_streak_freezes').upsert(
@@ -1116,7 +1125,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     try {
       const { error } = await supabase.from('analytics_events').insert({
@@ -1137,7 +1146,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const rows = insights.map((i) => ({
       id: i.id,
       user_id: user.id,
@@ -1168,7 +1177,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const { error } = await supabase.from('kcal_detected_patterns').upsert(
       {
         user_id: user.id,
@@ -1201,7 +1210,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const { error } = await supabase.from('kcal_weekly_action_plans').upsert(
       {
         user_id: user.id,
@@ -1236,7 +1245,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const rows = Object.entries(unlocks).map(([insightId, value]) => ({
       user_id: user.id,
       insight_id: insightId,
@@ -1282,7 +1291,7 @@ export const supabaseDataService = {
   ): Promise<void> {
     if (!isSupabaseConfigured() || !supabase || (!accountInfo?.supabaseUserId && !accountInfo?.email)) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     // Six is a schema constraint on the other side, not a suggestion
     const capped = signals.slice(0, 6);
     const { error } = await supabase
@@ -1331,7 +1340,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     // the typed columns are the cross app contract: TrackLifts reads
     // calories and protein_g so its coach can speak to the other half.
     // They must never drift from the payload, written together always
@@ -1381,7 +1390,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const { error } = await supabase
       .from('kcal_settings')
       .upsert(
@@ -1415,7 +1424,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
     const rows = cycles.map((cycle) => ({
       id: (cycle as any).id || `${cycle.startDate}_${cycle.endDate}`,
       user_id: user.id,
@@ -1448,7 +1457,7 @@ export const supabaseDataService = {
     const user = await getOrCreateUser(accountInfo);
     // Throw, never silently no-op: the sync queue reads a resolved promise as
     // success and dequeues the op forever. See the goals-sync postmortem.
-    if (!user) throw new Error('could not resolve app user for cloud write');
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     try {
       // Every kcal owned table, then kcal's rows in the shared journals.
