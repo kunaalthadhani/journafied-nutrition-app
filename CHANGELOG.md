@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.5.8**
+Logging a meal takes seconds again. Typing "chicken shawarma wrap and a small fries" now comes back in about eight seconds instead of well over a minute, broken into the pita, the chicken, the garlic sauce, the pickles and the fries. Photos are on a stronger model than before too. The coach deliberately stays on the slower, more thoughtful brain, because taking a moment before answering is a good trait in a coach and a terrible one in a calculator. Nothing changed in how you use the app, and nothing you have logged was touched.
+
 **v1.5.7**
 Meals parse again, properly this time. The last fix stopped the errors but left the app talking to a model that thinks itself in circles and never actually answers, so every meal came back as "could not reach the food AI" after a minute of waiting. The brain behind food logging has been changed to one that answers, and it is a good one: "chicken shawarma wrap and a small fries" comes back as pita, shawarma chicken, garlic sauce, pickles and fries, priced separately. It is slower than it should be, up to about a minute and a half for a complicated meal, so the app now waits properly instead of giving up early. Photos already used this model and were never affected.
 

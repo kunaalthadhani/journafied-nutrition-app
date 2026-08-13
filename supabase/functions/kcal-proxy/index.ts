@@ -19,6 +19,12 @@ const MOONSHOT_MODEL = ENV_MODEL && !DEAD_TEXT_MODELS.has(ENV_MODEL) ? ENV_MODEL
 const MOONSHOT_VISION_MODEL = Deno.env.get("MOONSHOT_VISION_MODEL") ?? "kimi-k3";
 const MOONSHOT_URL = "https://api.moonshot.ai/v1/chat/completions";
 const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+const OPENAI_URL = "https://api.openai.com/v1/chat/completions";
+// Measured against the real food prompt: mini returns five correct items in
+// under 7 seconds with the strict schema on, where kimi took 77. Photos get
+// the frontier tier because portion estimation is worth paying for
+const OPENAI_TEXT_MODEL = Deno.env.get("OPENAI_TEXT_MODEL") ?? "gpt-5.4-mini";
+const OPENAI_VISION_MODEL = Deno.env.get("OPENAI_VISION_MODEL") ?? "gpt-5.6-terra";
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -231,58 +237,99 @@ serve(async (req) => {
         Array.isArray(m?.content) &&
         (m.content as { type?: string }[]).some((part) => part?.type === "image_url"),
     );
-    const model = hasImage ? MOONSHOT_VISION_MODEL : MOONSHOT_MODEL;
+    // ── Which brain answers this call ──
+    // OpenAI is fast and honours strict schemas, so it takes food, photos and
+    // every short prompt. The coach stays on kimi deliberately: it is free on
+    // the family account, and thinking slowly before speaking is a virtue in a
+    // coach and a disaster in a parser. No OpenAI key means everything falls
+    // back to Moonshot and the app still works
+    const wantsCoach = body.call_type === "coach-chat";
+    const useOpenAI = !!OPENAI_API_KEY && !wantsCoach;
 
-    const chatBody: Record<string, unknown> = {
-      model,
-      messages: body.messages,
-    };
+    const chatBody: Record<string, unknown> = { messages: body.messages };
 
-    // kimi rejects any temperature but 1 with a 400, and the client sends 0.3
-    // to 0.7 on every prompt. Drop it here rather than rewrite six call sites:
-    // the proxy already translates model names, it translates this too
-    // The model thinks before it answers, and thinking spends tokens. The
-    // client's old 150 to 600 budgets would starve the actual answer, so the
-    // floor is high. ALWAYS set a cap: food analysis sends none, and uncapped
-    // the model ran past the gateway's own limit and died at 150 seconds
-    chatBody.max_tokens = body.max_tokens === undefined
-      ? MAX_OUTPUT_TOKENS
-      : Math.min(Math.max(2048, Number(body.max_tokens) || 1), MAX_OUTPUT_TOKENS);
-    // Moonshot speaks json_object but returns garbage on strict json_schema.
-    // Downgrade: enforce json_object and hand the schema to the model in
-    // words, which kimi follows well. The client's parser stays unchanged
-    if (body.response_format?.type === "json_schema") {
-      chatBody.response_format = { type: "json_object" };
-      const schema = body.response_format.json_schema?.schema;
-      if (schema) {
-        chatBody.messages = [
-          ...(body.messages as unknown[]),
-          {
-            role: "system",
-            content: `Respond with a single JSON object that strictly matches this JSON Schema, no extra keys, no prose: ${JSON.stringify(schema)}`,
-          },
-        ];
+    if (useOpenAI) {
+      // Photos get the frontier tier, portion estimation is where paying more
+      // actually buys accuracy. Everything else rides the mini tier
+      chatBody.model = hasImage ? OPENAI_VISION_MODEL : OPENAI_TEXT_MODEL;
+      // This family rejects max_tokens outright and wants max_completion_tokens
+      chatBody.max_completion_tokens = body.max_tokens === undefined
+        ? MAX_OUTPUT_TOKENS
+        : Math.min(Math.max(256, Number(body.max_tokens) || 1), MAX_OUTPUT_TOKENS);
+      // Both of the workarounds Moonshot forced on us go away here. The client's
+      // own temperature is honoured again, and a strict schema is passed through
+      // as a real constraint instead of being re-explained in prose
+      if (body.temperature !== undefined) chatBody.temperature = body.temperature;
+      if (body.response_format) chatBody.response_format = body.response_format;
+    } else {
+      chatBody.model = hasImage ? MOONSHOT_VISION_MODEL : MOONSHOT_MODEL;
+      // kimi rejects any temperature but 1, so it is dropped rather than sent
+      // The model thinks before it answers, and thinking spends tokens. ALWAYS
+      // set a cap: food analysis sends none, and uncapped it ran past the
+      // gateway's own limit and died at 150 seconds
+      chatBody.max_tokens = body.max_tokens === undefined
+        ? MAX_OUTPUT_TOKENS
+        : Math.min(Math.max(2048, Number(body.max_tokens) || 1), MAX_OUTPUT_TOKENS);
+      // Moonshot returns garbage on strict json_schema. Downgrade: enforce
+      // json_object and hand the schema to the model in words
+      if (body.response_format?.type === "json_schema") {
+        chatBody.response_format = { type: "json_object" };
+        const schema = body.response_format.json_schema?.schema;
+        if (schema) {
+          chatBody.messages = [
+            ...(body.messages as unknown[]),
+            {
+              role: "system",
+              content: `Respond with a single JSON object that strictly matches this JSON Schema, no extra keys, no prose: ${JSON.stringify(schema)}`,
+            },
+          ];
+        }
+      } else if (body.response_format) {
+        chatBody.response_format = body.response_format;
       }
-    } else if (body.response_format) {
-      chatBody.response_format = body.response_format;
     }
 
-    const chatRes = await fetch(MOONSHOT_URL, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${MOONSHOT_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(chatBody),
-      // When the client closes the connection (timeout / user backs out)
-      // req.signal fires and the upstream fetch aborts with it.
-      signal: req.signal,
-    });
+    const upstreamUrl = useOpenAI ? OPENAI_URL : MOONSHOT_URL;
+    const upstreamKey = useOpenAI ? OPENAI_API_KEY : MOONSHOT_API_KEY;
+    const callUpstream = (payload: Record<string, unknown>) =>
+      fetch(upstreamUrl, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${upstreamKey}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+        // When the client closes the connection (timeout / user backs out)
+        // req.signal fires and the upstream fetch aborts with it.
+        signal: req.signal,
+      });
+
+    let chatRes = await callUpstream(chatBody);
+    let errText = "";
+
+    // Every provider we have used has, at some point, decided one of these
+    // params is no longer allowed on one of its models, and answered with a
+    // 400 that killed the whole app silently. Rather than hardcode which model
+    // tolerates what, drop the offending param and try once more
+    if (!chatRes.ok) {
+      errText = await chatRes.text();
+      const offender = /temperature/i.test(errText)
+        ? "temperature"
+        : /response_format|json_schema/i.test(errText)
+        ? "response_format"
+        : null;
+      if (chatRes.status === 400 && offender && offender in chatBody) {
+        const retryBody = { ...chatBody };
+        delete retryBody[offender];
+        chatRes = await callUpstream(retryBody);
+        if (chatRes.ok) errText = "";
+        else errText = await chatRes.text();
+      }
+    }
 
     if (!chatRes.ok) {
-      const err = await chatRes.text();
       return new Response(
-        JSON.stringify({ error: `AI error: ${err}` }),
+        JSON.stringify({ error: `AI error: ${errText}` }),
         { status: chatRes.status, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
