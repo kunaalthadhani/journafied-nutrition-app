@@ -22,6 +22,7 @@ import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { usePreferences } from '../contexts/PreferencesContext';
+import { dataStorage, FamilyProfile } from '../services/dataStorage';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -54,25 +55,64 @@ interface CalorieCalculatorScreenProps {
   onBack: () => void;
   onCalculated: (result: CalorieCalculationResult) => void;
   initialData?: CalorieCalculationResult | any;
+  // Opens the account screen from the first question. Absent means no door
+  onSignInRequest?: () => void;
 }
 
 type Goal = 'lose' | 'maintain' | 'gain';
 type Gender = 'male' | 'female' | 'prefer_not_to_say';
 type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
-type StepId = 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity';
+type StepId = 'receipt' | 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity';
+
+// Which questions the family profile already answers. A question is only
+// skipped when the answer is a real value, never when it is a default or a
+// legacy age with no date behind it
+const answeredByFamily = (p: FamilyProfile | null, goal: Goal | null): Set<StepId> => {
+  const s = new Set<StepId>();
+  if (!p) return s;
+  if (p.gender) s.add('sex');
+  // Only a real date skips the question. A legacy age number does not: kcal is
+  // the app that collects the date, and it owes the family the backfill
+  if (p.dob) s.add('dob');
+  if (p.heightCm) s.add('height');
+  if (p.weightKg && (goal === 'maintain' || p.goalWeightKg)) s.add('weight');
+  if (p.name) s.add('name');
+  if (p.bodyGoal) s.add('goal');
+  return s;
+};
+
+// Approved verbatim by the lifts side. Session length under 30 pulls down one
+// step, which is future proofing: lifts never writes under 45 today
+const ACTIVITY_LADDER = ['sedentary', 'light', 'moderate', 'very'] as const;
+const activityFromTraining = (days: number | null, minutes: number | null): string | null => {
+  if (days == null) return null;
+  let idx = days <= 1 ? 0 : days <= 3 ? 1 : days <= 5 ? 2 : 3;
+  if (minutes != null && minutes < 30) idx = Math.max(0, idx - 1);
+  return ACTIVITY_LADDER[idx];
+};
+
+// A training goal suggests a body goal, it never sets one silently
+const bodyGoalFromTraining = (t: string | null): Goal | null => {
+  if (t === 'fat_loss') return 'lose';
+  if (t === 'muscle') return 'gain';
+  return null;
+};
 
 const MACRO_COLORS = { protein: Acid.protein, carbs: Acid.carbs, fat: Acid.fat };
 
 // The name comes LAST, not first: it has no effect on the math, and the first
 // question should be about the user's goal, not admin. Asked right before the
 // plan reveal it reads as personalization instead of a form.
-const buildSteps = (goal: Goal | null, hasName?: boolean): StepId[] => {
+const buildSteps = (goal: Goal | null, hasName?: boolean, known?: Set<StepId>): StepId[] => {
   const s: StepId[] = ['goal', 'sex', 'dob', 'height', 'weight'];
   if (goal !== 'maintain') s.push('pace');
   s.push('activity');
   if (!hasName) s.push('name');
-  return s;
+  const trimmed = known && known.size > 0 ? s.filter(id => !known.has(id)) : s;
+  // The receipt leads: she sees what the family already knew before she is
+  // asked anything, and can correct any of it in place
+  return known && known.size > 0 ? (['receipt', ...trimmed] as StepId[]) : trimmed;
 };
 
 const macroGrams = (cal: number, pct: number, perGram: number) => Math.round((cal * pct / 100) / perGram);
@@ -225,7 +265,7 @@ const ageFromDob = (month: number, day: number, year: number): number => {
 
 // ── Component ───────────────────────────────────────────────────────
 export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = ({
-  onBack, onCalculated, initialData,
+  onBack, onCalculated, initialData, onSignInRequest,
 }) => {
   const insets = useSafeAreaInsets();
   const { weightUnit: preferredWeightUnit, setWeightUnit: persistWeightUnit } = usePreferences();
@@ -281,8 +321,66 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
+  // ── The family profile ──────────────────────────────────────────
+  // Read before we ask. Null while unknown and when signed out, and then the
+  // questionnaire runs in full exactly as it always has
+  const [familyProfile, setFamilyProfile] = useState<FamilyProfile | null>(null);
+  const [sessionKnown, setSessionKnown] = useState(false);
+  const [activityFromLifts, setActivityFromLifts] = useState<string | null>(null);
+  const [goalSuggestedByLifts, setGoalSuggestedByLifts] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const p = await dataStorage.loadFamilyProfile();
+      if (cancelled) return;
+      setFamilyProfile(p);
+      // Resolve the door quietly rather than branching on first paint: the
+      // session rehydrates a beat after mount on a cold web open
+      setSessionKnown(true);
+      if (!p) return;
+
+      // Local truth wins. Only fill what this flow does not already hold
+      if (p.gender && !initialData?.gender) setGender(p.gender);
+      if (p.dob && !initialData?.dob) {
+        const d = new Date(p.dob);
+        if (!Number.isNaN(d.getTime())) {
+          setDobMonth(d.getMonth() + 1); setDobDay(d.getDate()); setDobYear(d.getFullYear());
+          setDobTouched(true);
+        }
+      }
+      if (p.heightCm && initialData?.heightCm == null && initialData?.heightFeet == null) {
+        setHeightCmVal(Math.round(p.heightCm)); setHeightUnit('cm'); setHeightTouched(true);
+      }
+      if (p.weightKg && !initialData?.currentWeightKg) {
+        setWeight(kgToDisplay(p.weightKg, preferredWeightUnit));
+      }
+      if (p.goalWeightKg && !initialData?.targetWeightKg) {
+        setTargetWeight(kgToDisplay(p.goalWeightKg, preferredWeightUnit));
+      }
+      if (p.name && !initialData?.name) setUserName(p.name);
+      if (p.bodyGoal && !initialData?.goal) setGoal(p.bodyGoal);
+      else if (!initialData?.goal) {
+        const suggested = bodyGoalFromTraining(p.trainingGoal);
+        if (suggested) { setGoal(suggested); setGoalSuggestedByLifts(true); }
+      }
+      const act = activityFromTraining(p.daysPerWeek, p.sessionLengthMin);
+      if (act && !initialData?.activityLevel) { setActivityLevel(act); setActivityFromLifts(act); }
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Tapping a receipt line puts that question back into the flow. Correcting
+  // is how "editable in place" works without a second editor
+  const [correcting, setCorrecting] = useState<StepId[]>([]);
+
   const hasExistingName = !!(initialData?.name && initialData.name.trim().length > 0);
-  const steps = buildSteps(goal, hasExistingName);
+  const knownFromFamily = (() => {
+    const s = answeredByFamily(familyProfile, goal);
+    correcting.forEach(id => s.delete(id));
+    return s;
+  })();
+  const steps = buildSteps(goal, hasExistingName, knownFromFamily);
   const currentStepId = steps[currentIdx];
 
   useEffect(() => { setWeightUnit(preferredWeightUnit); setTargetWeightUnit(preferredWeightUnit); }, [preferredWeightUnit]);
@@ -489,6 +587,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   // ── Disabled check ──────────────────────────────────────────────
   const isDisabled = (): boolean => {
     switch (currentStepId) {
+      case 'receipt': return false;
       case 'name': return userName.trim() === '';
       case 'goal': return !goal;
       case 'sex': return !gender;
@@ -900,9 +999,53 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     );
   };
 
+  // The receipt: what the family already knew, said out loud, every line
+  // correctable. Never a silent assumption
+  const renderReceipt = () => {
+    const p = familyProfile;
+    if (!p) return null;
+    const rows: { id: StepId; label: string; value: string }[] = [];
+    if (knownFromFamily.has('name') && p.name) rows.push({ id: 'name', label: 'NAME', value: p.name });
+    if (knownFromFamily.has('goal') && p.bodyGoal) rows.push({ id: 'goal', label: 'GOAL', value: p.bodyGoal === 'lose' ? 'Lose weight' : p.bodyGoal === 'gain' ? 'Gain weight' : 'Maintain' });
+    if (knownFromFamily.has('sex') && p.gender) rows.push({ id: 'sex', label: 'SEX', value: p.gender === 'male' ? 'Male' : 'Female' });
+    if (knownFromFamily.has('dob') && p.age != null) rows.push({ id: 'dob', label: 'AGE', value: `${p.age}` });
+    if (knownFromFamily.has('height') && p.heightCm) rows.push({ id: 'height', label: 'HEIGHT', value: `${Math.round(p.heightCm)} cm` });
+    if (knownFromFamily.has('weight') && p.weightKg) {
+      rows.push({ id: 'weight', label: 'WEIGHT', value: `${kgToDisplay(p.weightKg, preferredWeightUnit)} ${preferredWeightUnit}${p.goalWeightKg ? `, aiming for ${kgToDisplay(p.goalWeightKg, preferredWeightUnit)}` : ''}` });
+    }
+    return (
+      <View style={{ paddingHorizontal: 24 }}>
+        <Text style={{ fontSize: 11, letterSpacing: 2, color: Acid.tx3, marginBottom: 10 }}>FROM YOUR TRACK ACCOUNT</Text>
+        <Text style={{ fontFamily: Acid.serif, fontSize: 26, lineHeight: 32, color: Acid.tx, marginBottom: 20 }}>
+          I already know this much. Fix anything I got wrong.
+        </Text>
+        {rows.map(r => (
+          <View key={r.id} style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Acid.hair }}>
+            <Text style={{ fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, width: 74 }}>{r.label}</Text>
+            <Text style={{ flex: 1, fontSize: 15, color: Acid.tx }}>{r.value}</Text>
+            <TouchableOpacity onPress={() => setCorrecting(prev => (prev.includes(r.id) ? prev : [...prev, r.id]))} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+              <Text style={{ fontSize: 12, color: Acid.lime, textDecorationLine: 'underline' }}>Change</Text>
+            </TouchableOpacity>
+          </View>
+        ))}
+        {!!activityFromLifts && (
+          <Text style={{ fontSize: 12, lineHeight: 18, color: Acid.tx3, marginTop: 16 }}>
+            You train {familyProfile?.daysPerWeek} days a week in TrackLifts, so I started you at {activityFromLifts}. You can change it next.
+          </Text>
+        )}
+        {goalSuggestedByLifts && (
+          <Text style={{ fontSize: 12, lineHeight: 18, color: Acid.tx3, marginTop: 8 }}>
+            Your TrackLifts goal suggests {goal === 'lose' ? 'losing' : 'gaining'} weight. Change it on the next screen if that is not right.
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   const renderCurrentStep = () => {
     if (showResult) return renderResult();
     switch (currentStepId) {
+      case 'receipt': return renderReceipt();
       case 'name': return renderName();
       case 'goal': return renderGoal(); case 'sex': return renderSex();
       case 'dob': return renderDob(); case 'height': return renderHeight();
@@ -916,6 +1059,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight');
   const showFooter = !showResult && !isAutoStep;
   const nextLabel = editingFromResult ? 'Done'
+    : currentStepId === 'receipt' ? 'Looks right'
     : currentStepId === 'name' ? 'See my plan'
     : (currentStepId === 'weight' && goal !== 'maintain' && weight.trim() !== '' && targetWeight.trim() === '') ? 'Skip'
     : 'Next';
@@ -951,6 +1095,23 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
           <Animated.View style={{ transform: [{ translateX: slideAnim }, { scale: scaleAnim }], opacity: fadeAnim }}>
             {renderCurrentStep()}
           </Animated.View>
+
+          {/* The door, on the first question only. Rendered once the session is
+              known so a cold open cannot flash it at someone already signed in.
+              Signed out, everything below still works without an account */}
+          {currentIdx === 0 && !showResult && sessionKnown && !familyProfile && !!onSignInRequest && (
+            <View style={{ paddingHorizontal: 24, marginTop: 28, alignItems: 'center' }}>
+              <Text style={{ fontSize: 13, color: Acid.tx3, textAlign: 'center' }}>
+                Already on TrackLifts?{' '}
+                <Text
+                  style={{ color: Acid.lime, textDecorationLine: 'underline' }}
+                  onPress={onSignInRequest}
+                >
+                  Sign in and I fill this in.
+                </Text>
+              </Text>
+            </View>
+          )}
         </ScrollView>
 
         {showFooter && (

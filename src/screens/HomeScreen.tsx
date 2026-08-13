@@ -2417,6 +2417,7 @@ export const HomeScreen: React.FC = () => {
           onBack={handleGoalsBack}
           onSave={handleGoalsSave}
           initialGoals={savedGoals}
+          onSignInRequest={() => { setShowSetGoals(false); setShowAccount(true); }}
         />
       </Modal>
     );

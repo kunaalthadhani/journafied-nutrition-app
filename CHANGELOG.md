@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.0**
+If you already use TrackLifts, TrackKcal stops asking you things it can look up. Sign in and the setup skips your sex, height, weight, goal weight and name, shows you what it found in one card, and lets you correct any line with a tap. It also starts your activity level from how often you actually train, and tells you why it picked that so you can change it. If you are not signed in nothing changes, you get the same setup as always, plus one quiet line offering to fill it in for you. And whatever you answer here now goes back to your Track account, so the next app does not ask either.
+
 **v1.5.9**
 Three fixes under the surface. The important one: if your session had quietly expired, the app still thought you were signed in, tried to save to the cloud, failed, and after five tries threw the change away. So the settings or counts you changed while signed out were gone before you signed back in. Now it recognises "not signed in yet" for what it is, keeps everything queued exactly as it was, and sends it the moment you are back. Also, tapping through to an unlocked insight in the weight tracker could crash the screen instead of scrolling to it, and the app could report a scary error about the microphone on phones whose build does not include voice yet. Both silenced properly, not hidden.
 

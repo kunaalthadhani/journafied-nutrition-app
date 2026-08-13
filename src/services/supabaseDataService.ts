@@ -20,6 +20,7 @@ import type {
   CalorieBankConfig,
   CalorieBankCompletedCycle,
   DailySummary,
+  FamilyProfile,
   HabitSignal,
   LiftsDay,
 } from './dataStorage';
@@ -385,9 +386,19 @@ export const supabaseDataService = {
       const p: Record<string, unknown> = { updated_at: new Date().toISOString() };
       if (goals.gender === 'male' || goals.gender === 'female') p.gender = goals.gender;
       if (goals.age) p.age = goals.age;
+      // kcal is the only app that collects a real date, so it owns the backfill
+      // of the canonical birth fact. Age stays written for readers that predate
+      // dob, but dob is what the family should be deriving from
+      if (goals.dob) p.dob = goals.dob;
       if (goals.heightCm) p.height_cm = goals.heightCm;
       if (goals.currentWeightKg) p.weight_kg = goals.currentWeightKg;
       if (goals.targetWeightKg) p.goal_weight_kg = goals.targetWeightKg;
+      // body_goal, never the old shared `goal` column: lifts wrote its training
+      // word into that one, and a training word read as a body goal would set
+      // the wrong calorie target
+      if (goals.goal === 'lose' || goals.goal === 'maintain' || goals.goal === 'gain') {
+        p.body_goal = goals.goal;
+      }
       await supabase.from('profiles').update(p).eq('id', user.id);
     } catch { /* profile push is enrichment, the goal is already saved */ }
   },
@@ -1279,6 +1290,48 @@ export const supabaseDataService = {
       };
     });
     return out;
+  },
+
+  // Onboarding reads before it asks. FAMILY.md law six: a signed in user is
+  // never asked a question whose answer already sits on profiles. Age is
+  // derived from dob and never read from the age column when a dob exists,
+  // because a stored age is wrong within a year and nobody owns incrementing it
+  async fetchFamilyProfile(accountInfo: AccountInfo | null): Promise<FamilyProfile | null> {
+    if (!isSupabaseConfigured() || !supabase || !accountInfo?.supabaseUserId) return null;
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('name, gender, dob, age, height_cm, weight_kg, goal_weight_kg, weight_unit, body_goal, training_goal, days_per_week, session_length_min')
+      .eq('id', accountInfo.supabaseUserId)
+      .maybeSingle();
+    if (error) { if (__DEV__) console.warn('fetchFamilyProfile error:', error.message); return null; }
+    if (!data) return null;
+
+    const ageFromDob = (() => {
+      if (!data.dob) return null;
+      const d = new Date(data.dob as string);
+      if (Number.isNaN(d.getTime())) return null;
+      const now = new Date();
+      let a = now.getFullYear() - d.getFullYear();
+      const m = now.getMonth() - d.getMonth();
+      if (m < 0 || (m === 0 && now.getDate() < d.getDate())) a -= 1;
+      return a >= 0 && a < 130 ? a : null;
+    })();
+
+    return {
+      name: (data.name as string) || null,
+      gender: (data.gender as 'male' | 'female' | null) ?? null,
+      dob: (data.dob as string) || null,
+      age: ageFromDob ?? (typeof data.age === 'number' ? data.age : null),
+      ageIsDerived: ageFromDob !== null,
+      heightCm: typeof data.height_cm === 'number' ? data.height_cm : null,
+      weightKg: typeof data.weight_kg === 'number' ? data.weight_kg : null,
+      goalWeightKg: typeof data.goal_weight_kg === 'number' ? data.goal_weight_kg : null,
+      weightUnit: (data.weight_unit as 'kg' | 'lb' | null) ?? null,
+      bodyGoal: (data.body_goal as 'lose' | 'maintain' | 'gain' | null) ?? null,
+      trainingGoal: (data.training_goal as string) || null,
+      daysPerWeek: typeof data.days_per_week === 'number' ? data.days_per_week : null,
+      sessionLengthMin: typeof data.session_length_min === 'number' ? data.session_length_min : null,
+    };
   },
 
   // ---- The family wall ----

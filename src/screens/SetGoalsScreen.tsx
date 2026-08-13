@@ -29,6 +29,9 @@ interface SetGoalsScreenProps {
   onBack: () => void;
   onSave: (goals: GoalData) => void;
   initialGoals?: GoalData;
+  // Opens the account screen so the questionnaire can read the family profile
+  // instead of asking questions the family already answered
+  onSignInRequest?: () => void;
 }
 
 interface GoalData {
@@ -82,6 +85,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   onBack,
   onSave,
   initialGoals,
+  onSignInRequest,
 }) => {
   const { weightUnit } = usePreferences();
   // Frozen at mount. A background auth event can call setSavedGoals on Home and
@@ -271,6 +275,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       <CalorieCalculatorScreen
         onBack={handleCalculatorBack}
         onCalculated={handleCalculatedCalories}
+        onSignInRequest={onSignInRequest}
         initialData={{
           name, dob,
           currentWeightKg, targetWeightKg, age, gender,

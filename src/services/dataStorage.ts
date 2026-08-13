@@ -357,6 +357,24 @@ export interface DailySummary {
 
 // ---- The family contract ----
 
+// What the family already knows about her, read before onboarding asks. Null
+// when signed out, and then the questionnaire runs in full as it always has
+export interface FamilyProfile {
+  name: string | null;
+  gender: 'male' | 'female' | null;
+  dob: string | null; // YYYY-MM-DD, the canonical birth fact
+  age: number | null;
+  ageIsDerived: boolean; // true when it came from dob, false when it is the legacy number
+  heightCm: number | null;
+  weightKg: number | null;
+  goalWeightKg: number | null;
+  weightUnit: 'kg' | 'lb' | null;
+  bodyGoal: 'lose' | 'maintain' | 'gain' | null;
+  trainingGoal: string | null; // lifts owned, read only, suggests a body goal
+  daysPerWeek: number | null;
+  sessionLengthMin: number | null;
+}
+
 // What kcal publishes about her habits. Plain sentences, six at most, read by
 // the TrackLifts coach so it can speak about food without guessing
 export interface HabitSignal {
@@ -2842,6 +2860,19 @@ export const dataStorage = {
   },
 
   // ---- The family wall, kcal side ----
+
+  // Signed out returns null and the questionnaire asks everything, which is
+  // the law: the app works without an account
+  async loadFamilyProfile(): Promise<FamilyProfile | null> {
+    try {
+      const accountInfo = await getCachedAccountInfo();
+      if (!accountInfo?.supabaseUserId) return null;
+      return await supabaseDataService.fetchFamilyProfile(accountInfo);
+    } catch (e) {
+      if (__DEV__) console.warn('loadFamilyProfile failed', e);
+      return null;
+    }
+  },
 
   async loadLiftsDays(): Promise<LiftsDay[]> {
     try {
