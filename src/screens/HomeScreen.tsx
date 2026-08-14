@@ -82,7 +82,7 @@ import { buildBrief } from '../utils/briefEngine';
 import { PatternDetectionCard } from '../components/PatternDetectionCard';
 import { patternDetectionService } from '../services/patternDetectionService';
 import { smartReminderService } from '../services/smartReminderService';
-import { DetectedPattern, LiftsDay, LiftsSupplement } from '../services/dataStorage';
+import { DetectedPattern, LiftsDay, LiftsSupplement, sumSupplements } from '../services/dataStorage';
 import { useUser } from '../contexts/UserContext';
 
 export const HomeScreen: React.FC = () => {
@@ -248,8 +248,22 @@ export const HomeScreen: React.FC = () => {
 
   // Calculate all foods from current day's meals for nutrition totals
   const allLoggedFoods = currentDayMeals.flatMap(meal => meal.foods);
-  // Calculate current nutrition from current day's foods
-  const currentNutrition = calculateTotalNutrition(allLoggedFoods);
+  // Calculate current nutrition from current day's foods, then add what
+  // TrackLifts published for the same day. The summary written to storage folds
+  // the identical figures in, so the number on screen and the number the bank
+  // settles on can never disagree
+  const mealNutrition = calculateTotalNutrition(allLoggedFoods);
+  const currentNutrition = React.useMemo(() => {
+    const s = sumSupplements(liftsSupplements, currentDateKey);
+    if (!s.calories && !s.protein && !s.carbs && !s.fat) return mealNutrition;
+    return {
+      ...mealNutrition,
+      totalCalories: mealNutrition.totalCalories + s.calories,
+      totalProtein: mealNutrition.totalProtein + s.protein,
+      totalCarbs: mealNutrition.totalCarbs + s.carbs,
+      totalFat: mealNutrition.totalFat + s.fat,
+    };
+  }, [mealNutrition, liftsSupplements, currentDateKey]);
 
   // Generate macro data from saved goals with current values (with null safety)
   // When calorie banking is active, use the adjusted targets from the cycle
@@ -949,6 +963,9 @@ export const HomeScreen: React.FC = () => {
     // reconcile would persist wrong results (a zeroed count even syncs to
     // the cloud). The old single-try code aborted instead; this preserves that.
     let stage1Ok = false;
+    // Dates the cached supplements covered before the refresh. A day that loses
+    // its last row still has to be rebuilt, or its calories never leave
+    let cachedSuppDates: string[] = [];
 
     try {
       // Cheap no-ops in steady state; must precede the summaries read on the
@@ -990,6 +1007,7 @@ export const HomeScreen: React.FC = () => {
       setDetectedPatterns(patterns);
       setLiftsDays(liftsCached);
       setLiftsSupplements(suppsCached);
+      cachedSuppDates = suppsCached.map((s: LiftsSupplement) => s.date);
 
       // Calorie Bank: paint it with the bars, it is pure local math. ALWAYS
       // load the config (do not gate on the cold `plan` variable, which is
@@ -1098,6 +1116,17 @@ export const HomeScreen: React.FC = () => {
         ]);
         setLiftsDays(freshLifts);
         setLiftsSupplements(freshSupps);
+        // Supplements land after the days were last computed, so rebuild every
+        // day they touch. Includes days that just lost their last row, which is
+        // how an untick removes its calories again
+        if (stage1Ok) {
+          const touched = Array.from(new Set([
+            ...freshSupps.map(s => s.date),
+            ...cachedSuppDates,
+          ]));
+          await dataStorage.resyncSupplementDays(touched);
+          setSummariesByDate(await dataStorage.loadDailySummaries());
+        }
 
         // Load saved prompts
         const storedPrompts = await dataStorage.loadSavedPrompts();
@@ -2965,11 +2994,9 @@ export const HomeScreen: React.FC = () => {
                 <Text style={{ fontSize: 10, letterSpacing: 2, fontWeight: '600', color: Acid.tx3 }}>
                   FROM TRACKLIFTS
                 </Text>
-                {/* Until the counting pass lands, say so. A number on her day
-                    that she assumes is counted is worse than no number */}
                 {(supplementLine.kcal != null || supplementLine.protein != null) && (
                   <Text style={{ fontSize: 10, letterSpacing: 1, color: Acid.tx3, marginTop: 4, fontStyle: 'italic' }}>
-                    not counted in today's total yet
+                    counted in your day
                   </Text>
                 )}
                 {supplementLine.rows.map((r, i) => (

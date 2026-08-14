@@ -337,6 +337,13 @@ export interface DailySummary {
   goalCalories?: number;
   goalProtein?: number;
 
+  // The slice of the day that came from TrackLifts. Already included in the
+  // totals above, kept separately so the home screen can attribute it
+  supplementCalories?: number;
+  supplementProtein?: number;
+  supplementCarbs?: number;
+  supplementFat?: number;
+
   // ── Micros and detailed macros (all optional, may be missing on older summaries) ──
   totalFiber?: number;
   totalSugar?: number;
@@ -411,7 +418,25 @@ export interface LiftsSupplement {
   doseLabel: string | null; // display only, never parsed
   kcal: number | null;
   proteinG: number | null;
+  carbsG: number | null;
+  fatG: number | null;
+  // A stable product slug, null for own brand rows. The macros above are the
+  // truth of the day they were scooped and are never re-derived from a
+  // catalogue: a reformulation must not rewrite what she actually consumed
+  catalogId: string | null;
 }
+
+// Everything TrackLifts published for one day, summed. Each column counts
+// independently: a row with calories and no fat contributes calories only
+export const sumSupplements = (rows: LiftsSupplement[], dateKey: string) => {
+  const day = rows.filter(r => r.date === dateKey);
+  return {
+    calories: day.reduce((s, r) => s + (r.kcal ?? 0), 0),
+    protein: day.reduce((s, r) => s + (r.proteinG ?? 0), 0),
+    carbs: day.reduce((s, r) => s + (r.carbsG ?? 0), 0),
+    fat: day.reduce((s, r) => s + (r.fatG ?? 0), 0),
+  };
+};
 
 // ---- Smart Reminder Types ----
 
@@ -3020,12 +3045,65 @@ export const dataStorage = {
     };
   },
 
+  // Folds TrackLifts' supplements into a day. Always applied to a summary
+  // freshly computed from meals, never to one that already carries them, so
+  // recomputing a day can never double count. The supplement figures are kept
+  // beside the totals so the home screen can still say where they came from
+  applySupplements(summary: DailySummary, supps: LiftsSupplement[]): DailySummary {
+    const s = sumSupplements(supps, summary.date);
+    if (s.calories === 0 && s.protein === 0 && s.carbs === 0 && s.fat === 0) return summary;
+    const r1 = (v: number) => Number(v.toFixed(1));
+    return {
+      ...summary,
+      totalCalories: Math.round(summary.totalCalories + s.calories),
+      totalProtein: r1(summary.totalProtein + s.protein),
+      totalCarbs: r1(summary.totalCarbs + s.carbs),
+      totalFat: r1(summary.totalFat + s.fat),
+      supplementCalories: Math.round(s.calories),
+      supplementProtein: r1(s.protein),
+      supplementCarbs: r1(s.carbs),
+      supplementFat: r1(s.fat),
+    };
+  },
+
+  // Supplements arrive from the network after the day was last computed, so a
+  // refresh has to rebuild the days it touched. Meals are the base every time,
+  // which is what keeps this safe to run as often as we like
+  async resyncSupplementDays(dates: string[]): Promise<void> {
+    if (dates.length === 0) return;
+    const supps = await this.loadLiftsSupplements().catch(() => [] as LiftsSupplement[]);
+    const goals = await this.loadGoals().catch(() => null);
+    await withWriteLock('summaries', async () => {
+      const summaries = await this.loadDailySummaries();
+      let changed = false;
+      for (const dateKey of dates) {
+        const meals = await this.getDailyLog(dateKey);
+        const base = this.recalculateDailySummary(dateKey, meals);
+        const prior = summaries[dateKey];
+        base.goalCalories = prior?.goalCalories ?? (goals?.calories || undefined);
+        base.goalProtein = prior?.goalProtein ?? (goals?.proteinGrams || undefined);
+        const next = this.applySupplements(base, supps);
+        // A day with neither meals nor supplements should not be invented
+        if (next.entryCount === 0 && !next.supplementCalories && !next.supplementProtein) {
+          if (prior) { delete summaries[dateKey]; changed = true; }
+          continue;
+        }
+        if (JSON.stringify(prior) !== JSON.stringify(next)) { summaries[dateKey] = next; changed = true; }
+      }
+      if (changed) await this.saveDailySummaries(summaries);
+    });
+  },
+
   async updateSummaryForDate(dateKey: string, mealsForDay: MealEntry[]): Promise<void> {
     const goals = await this.loadGoals().catch(() => null);
+    const supps = await this.loadLiftsSupplements().catch(() => [] as LiftsSupplement[]);
     return withWriteLock('summaries', async () => {
       try {
         const summaries = await this.loadDailySummaries();
-        const newSummary = this.recalculateDailySummary(dateKey, mealsForDay);
+        const newSummary = this.applySupplements(
+          this.recalculateDailySummary(dateKey, mealsForDay),
+          supps,
+        );
         // Keep the goal a day already carried. Re-editing an old meal must not
         // rewrite history with today's target
         const prior = summaries[dateKey];

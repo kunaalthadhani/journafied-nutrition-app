@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.2**
+Supplements now count. A shake ticked in TrackLifts adds its calories, protein, carbs and fat to your day here, the same as food you logged yourself, and the line still says where it came from. Creatine and vitamins carry no numbers so they change nothing, they just show. Untick something over there and its numbers come back out of your day. The weekly calorie bank counts them too, because your body does not care which app the shake arrived through.
+
 **v1.6.1**
 Supplements you tick in TrackLifts now show up on your day here, under their own "from TrackLifts" heading with whatever each one actually carries. Creatine shows as creatine and nothing else, because it is not food. A protein shake shows its calories and its protein. Untick something there and the line disappears here. They are shown separately from your food log on purpose: you logged them in the other app, and the number you see here should always tell you where it came from.
 
