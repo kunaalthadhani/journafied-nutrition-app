@@ -234,13 +234,9 @@ const pSt = StyleSheet.create({
 
 // ── Helpers for DOB picker ──────────────────────────────────────────
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
-const MONTH_ITEMS = MONTHS.map((m, i) => ({ label: m.slice(0, 3), value: i + 1 }));
-const DAY_ITEMS = Array.from({ length: 31 }, (_, i) => ({ label: String(i + 1), value: i + 1 }));
+const MONTH_ITEMS = MONTHS.map((m, i) => ({ label: m.slice(0, 3).toUpperCase(), value: i + 1 }));
 const currentYear = new Date().getFullYear();
-const YEAR_ITEMS = Array.from({ length: 80 }, (_, i) => {
-  const y = currentYear - 14 - i;
-  return { label: String(y), value: y };
-});
+const daysInMonth = (m: number, y: number) => new Date(y || 2000, m, 0).getDate();
 
 // ── Helpers for Height picker ───────────────────────────────────────
 const CM_ITEMS = Array.from({ length: 121 }, (_, i) => {
@@ -280,6 +276,13 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [dobMonth, setDobMonth] = useState(initDob ? initDob.getMonth() + 1 : 1);
   const [dobDay, setDobDay] = useState(initDob ? initDob.getDate() : 1);
   const [dobYear, setDobYear] = useState(initDob ? initDob.getFullYear() : 2000);
+  const [dobFocus, setDobFocus] = useState<'day' | 'year' | null>(null);
+
+  // Typing a date can produce one that does not exist. A wheel could not, which
+  // was its only real advantage, so the check moves here
+  const dobValid = dobMonth >= 1 && dobMonth <= 12
+    && dobYear >= 1900 && dobYear <= currentYear - 13
+    && dobDay >= 1 && dobDay <= daysInMonth(dobMonth, dobYear);
 
   // Keep age derived from DOB
   const age = String(ageFromDob(dobMonth, dobDay, dobYear));
@@ -591,7 +594,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       case 'name': return userName.trim() === '';
       case 'goal': return !goal;
       case 'sex': return !gender;
-      case 'dob': return !dobTouched;
+      case 'dob': return !dobTouched || !dobValid;
       case 'height': return !heightTouched;
       case 'weight': return weight.trim() === '' || !(parseFloat(weight) > 0);
       case 'pace': return selectedRate === null;
@@ -861,19 +864,82 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     );
   };
 
+  // Month is picked, day and year are typed. Naming the month outright also
+  // settles the day/month order question a numeric field would have raised
   const renderDob = () => {
+    const dayText = dobDay > 0 ? String(dobDay) : '';
+    const yearText = dobYear > 0 ? String(dobYear) : '';
     return (
       <View style={st.step}>
         <Text style={st.title}>When were you born?</Text>
-        <Text style={st.sub}>We'll calculate your age automatically</Text>
-        <View style={st.pickerRow}>
-          <ScrollPicker items={MONTH_ITEMS} selectedValue={dobMonth} onValueChange={v => { setDobMonth(v as number); setDobTouched(true); }} width={90} />
-          <ScrollPicker items={DAY_ITEMS} selectedValue={dobDay} onValueChange={v => { setDobDay(v as number); setDobTouched(true); }} width={60} />
-          <ScrollPicker items={YEAR_ITEMS} selectedValue={dobYear} onValueChange={v => { setDobYear(v as number); setDobTouched(true); }} width={80} />
+        <Text style={st.sub}>Age changes what your body burns at rest</Text>
+
+        <Text style={st.dobLabel}>MONTH</Text>
+        <View style={st.monthGrid}>
+          {MONTH_ITEMS.map(m => {
+            const on = dobMonth === m.value;
+            return (
+              <TouchableOpacity
+                key={m.value}
+                style={[st.monthChip, on && st.monthChipOn]}
+                onPress={() => {
+                  setDobMonth(m.value);
+                  // February cannot hold the 31st someone left behind
+                  const max = daysInMonth(m.value, dobYear);
+                  if (dobDay > max) setDobDay(max);
+                  setDobTouched(true);
+                }}
+                activeOpacity={0.7}
+              >
+                <Text style={[st.monthChipTxt, { color: on ? Acid.moss : Acid.tx2 }]}>{m.label}</Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
-        {!dobTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to your date, or tap it to confirm</Text>
-        )}
+
+        <View style={st.dobRow}>
+          <View style={{ flex: 1 }}>
+            <Text style={st.dobLabel}>DAY</Text>
+            <TextInput
+              style={[st.dobField, { borderBottomColor: dobFocus === 'day' ? Acid.lime : Acid.hair2 }]}
+              selectionColor={Acid.lime}
+              keyboardType="number-pad"
+              maxLength={2}
+              value={dayText}
+              placeholder="--"
+              placeholderTextColor={Acid.tx3}
+              onFocus={() => setDobFocus('day')}
+              onBlur={() => setDobFocus(null)}
+              onChangeText={t => {
+                const n = Number(t.replace(/\D/g, ''));
+                setDobDay(Math.min(n || 0, daysInMonth(dobMonth, dobYear)));
+                setDobTouched(true);
+              }}
+            />
+          </View>
+          <View style={{ flex: 1.4 }}>
+            <Text style={st.dobLabel}>YEAR</Text>
+            <TextInput
+              style={[st.dobField, { borderBottomColor: dobFocus === 'year' ? Acid.lime : Acid.hair2 }]}
+              selectionColor={Acid.lime}
+              keyboardType="number-pad"
+              maxLength={4}
+              value={yearText}
+              placeholder="----"
+              placeholderTextColor={Acid.tx3}
+              onFocus={() => setDobFocus('year')}
+              onBlur={() => setDobFocus(null)}
+              onChangeText={t => {
+                setDobYear(Number(t.replace(/\D/g, '')) || 0);
+                setDobTouched(true);
+              }}
+            />
+          </View>
+        </View>
+
+        <Text style={st.dobEcho}>
+          {dobValid ? `That makes you ${age}.` : 'Pick a month, then type the day and year.'}
+        </Text>
       </View>
     );
   };
@@ -1056,7 +1122,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   };
 
   const isAutoStep = currentStepId === 'goal' || currentStepId === 'sex' || currentStepId === 'pace' || currentStepId === 'activity';
-  const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight');
+  const isInputStep = !showResult && (currentStepId === 'name' || currentStepId === 'weight' || currentStepId === 'dob');
   const showFooter = !showResult && !isAutoStep;
   const nextLabel = editingFromResult ? 'Done'
     : currentStepId === 'receipt' ? 'Looks right'
@@ -1179,6 +1245,20 @@ const st = StyleSheet.create({
 
   // Picker
   pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 },
+  dobLabel: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 10 },
+  monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 28 },
+  monthChip: {
+    width: '22%', paddingVertical: 11, borderRadius: 999, borderWidth: 1,
+    borderColor: Acid.hair2, alignItems: 'center',
+  },
+  monthChipOn: { backgroundColor: Acid.lime, borderColor: Acid.lime },
+  monthChipTxt: { fontSize: 11, letterSpacing: 1 },
+  dobRow: { flexDirection: 'row', gap: 28 },
+  dobField: {
+    borderBottomWidth: 1.5, paddingVertical: 6, paddingHorizontal: 0,
+    fontSize: 28, fontFamily: Acid.serif, color: Acid.tx,
+  },
+  dobEcho: { fontFamily: Acid.serif, fontSize: 17, color: Acid.tx2, marginTop: 26 },
   pickerUnit: { fontSize: 18, fontWeight: '600', marginLeft: 4 },
   ageBadge: { marginTop: 20, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
   ageBadgeText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },

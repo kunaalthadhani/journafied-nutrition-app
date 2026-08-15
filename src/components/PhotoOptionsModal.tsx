@@ -7,7 +7,7 @@ import {
   Modal,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronDown, ChevronRight, Camera, Image, Info } from 'lucide-react-native';
+import { ChevronRight, Camera, Image, Info } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
@@ -73,154 +73,148 @@ export const PhotoOptionsModal: React.FC<PhotoOptionsModalProps> = ({
     }
   }, [visible]);
 
+  // A sheet the height of its own contents. The page sheet it used to be opened
+  // to the top of the screen for two rows of text, and the empty space below
+  // them read as a screen that had failed to load
   return (
     <Modal
       visible={visible}
+      transparent
       animationType="slide"
       onRequestClose={onClose}
       onDismiss={onModalDismiss}
-      presentationStyle="pageSheet"
     >
-      <SafeAreaView style={[styles.container, { backgroundColor: Acid.moss }]} edges={['top', 'left', 'right']}>
-        {/* Header */}
-        <View style={[styles.header, { borderBottomColor: Acid.hair }]}>
-          <TouchableOpacity
-            onPress={onClose}
-            style={styles.closeButton}
-            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-          >
-            <ChevronDown size={28} color={Acid.tx} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: Acid.tx }]}>
-            Add Image
-          </Text>
-          <View style={styles.closeButton} />
-        </View>
+      <View style={styles.backdropWrap}>
+        <TouchableOpacity style={styles.backdrop} activeOpacity={1} onPress={onClose} />
+        <SafeAreaView style={styles.sheet} edges={['bottom', 'left', 'right']}>
+          <View style={styles.grabber} />
+          <Text style={styles.eyebrow}>ADD A PHOTO</Text>
 
-        {/* Content */}
-        <View style={styles.content}>
-          {/* Accuracy Tip */}
           {showTip && (
-            <View style={[styles.tipBanner, { backgroundColor: Acid.good + '20', borderColor: Acid.good + '30' }]}>
-              <Info size={16} color={Acid.good} style={{ marginTop: 1 }} />
-              <Text style={[styles.tipText, { color: Acid.tx2 }]}>
-                Typing your meal is more accurate for portions and calories. Image analysis works best for identifying what's on your plate.
+            <View style={styles.tipRow}>
+              <Info size={14} color={Acid.tx3} style={{ marginTop: 2 }} />
+              <Text style={styles.tipText}>
+                Typing is more accurate for portions. A photo is best for naming what is on the plate.
               </Text>
             </View>
           )}
 
-          {/* Take Photo */}
           <TouchableOpacity
-            style={[styles.optionCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}
+            style={styles.optionRow}
             onPress={() => {
               onClose();
-              setTimeout(onTakePhoto, 300);
+              setTimeout(onTakePhoto, 250);
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
           >
-            <View style={[styles.iconContainer, { backgroundColor: '#EFF6FF' }]}>
-              <Camera size={24} color="#3B82F6" />
-            </View>
+            <Camera size={20} color={Acid.lime} />
             <View style={styles.textContainer}>
-              <Text style={[styles.optionTitle, { color: Acid.tx }]}>Take Photo</Text>
-              <Text style={[styles.optionDescription, { color: Acid.tx2 }]}>Use your camera to capture food</Text>
+              <Text style={styles.optionTitle}>Take a photo</Text>
+              <Text style={styles.optionDescription}>Use the camera</Text>
             </View>
-            <ChevronRight size={20} color={Acid.tx3} />
+            <ChevronRight size={18} color={Acid.tx3} />
           </TouchableOpacity>
 
-          {/* Choose from Library */}
           <TouchableOpacity
-            style={[styles.optionCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}
+            style={[styles.optionRow, styles.optionRowLast]}
             onPress={() => {
               onClose();
-              setTimeout(onUploadPhoto, 300);
+              setTimeout(onUploadPhoto, 250);
             }}
-            activeOpacity={0.7}
+            activeOpacity={0.6}
           >
-            <View style={[styles.iconContainer, { backgroundColor: '#F0FDF4' }]}>
-              <Image size={24} color={Acid.good} />
-            </View>
+            <Image size={20} color={Acid.lime} />
             <View style={styles.textContainer}>
-              <Text style={[styles.optionTitle, { color: Acid.tx }]}>Choose from Library</Text>
-              <Text style={[styles.optionDescription, { color: Acid.tx2 }]}>Select an existing photo</Text>
+              <Text style={styles.optionTitle}>Choose from library</Text>
+              <Text style={styles.optionDescription}>Pick a photo you already have</Text>
             </View>
-            <ChevronRight size={20} color={Acid.tx3} />
+            <ChevronRight size={18} color={Acid.tx3} />
           </TouchableOpacity>
-        </View>
 
-      </SafeAreaView>
+          <TouchableOpacity onPress={onClose} style={styles.cancelRow} activeOpacity={0.6}>
+            <Text style={styles.cancelText}>Cancel</Text>
+          </TouchableOpacity>
+        </SafeAreaView>
+      </View>
     </Modal>
   );
 };
 
 const styles = StyleSheet.create({
-  container: {
+  backdropWrap: {
     flex: 1,
+    justifyContent: 'flex-end',
   },
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  backdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+  },
+  sheet: {
+    backgroundColor: Acid.moss,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderColor: Acid.hair,
     paddingHorizontal: Spacing.lg,
-    paddingVertical: Spacing.md,
-    marginBottom: Spacing.md,
+    paddingTop: 10,
   },
-  closeButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
+  grabber: {
+    alignSelf: 'center',
+    width: 38,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: Acid.hair2,
+    marginBottom: 18,
   },
-  headerTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
+  eyebrow: {
+    fontSize: 11,
+    letterSpacing: 2,
+    color: Acid.tx3,
+    marginBottom: 14,
   },
-  content: {
-    paddingHorizontal: Spacing.lg,
-    gap: Spacing.md,
-  },
-  tipBanner: {
+  tipRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
     gap: Spacing.sm,
-    padding: Spacing.md,
-    borderRadius: 12,
-    borderWidth: 1,
+    paddingBottom: 16,
   },
   tipText: {
     flex: 1,
-    fontSize: Typography.fontSize.sm,
-    lineHeight: Typography.fontSize.sm * 1.5,
+    fontSize: 12,
+    lineHeight: 18,
+    color: Acid.tx3,
   },
-  optionCard: {
+  optionRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    padding: Spacing.lg,
-    borderRadius: 16,
-    borderWidth: 1,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
-    shadowRadius: 8,
-    elevation: 2,
+    gap: 14,
+    paddingVertical: 16,
+    borderTopWidth: 1,
+    borderTopColor: Acid.hair,
   },
-  iconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 14,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: Spacing.md,
+  optionRowLast: {
+    borderBottomWidth: 1,
+    borderBottomColor: Acid.hair,
   },
   textContainer: {
     flex: 1,
   },
   optionTitle: {
     fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: 4,
+    color: Acid.tx,
+    marginBottom: 2,
   },
   optionDescription: {
-    fontSize: Typography.fontSize.sm,
+    fontSize: 12,
+    color: Acid.tx3,
+  },
+  cancelRow: {
+    paddingVertical: 18,
+    alignItems: 'center',
+  },
+  cancelText: {
+    fontSize: 13,
+    letterSpacing: 1,
+    color: Acid.tx3,
   },
 });

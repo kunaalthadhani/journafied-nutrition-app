@@ -100,7 +100,7 @@ TrackKcal lives on the family Supabase project shared with TrackLifts (and Femm 
 
 **AsyncStorage first, Supabase eventual.** Local writes return immediately. Sync to Supabase happens in the background. Never block UX on a network call.
 
-**Strict JSON schemas on all JSON prompts.** All 5 JSON returning prompts use `response_format: { type: 'json_schema', strict: true }`. Free text prompts (Coach, Weekly Insights, Image Vision, Deficit and Surplus) do not need schemas.
+**Strict JSON schemas on all JSON prompts.** All 6 JSON returning prompts use `response_format: { type: 'json_schema', strict: true }`. Free text prompts (Coach, Weekly Insights, Deficit and Surplus) do not need schemas. Image Vision joined the JSON side when it became a reader: it returns packaging it can literally read plus a description of anything prepared, and a transcribed label panel is passed to the nutrition pass as a `LABEL PANEL` line that outranks the model's own estimate.
 
 **Prompt versioning auto invalidates cache.** The food analysis and confidence hint caches tag entries with a hash of the prompt text. When you edit a prompt, the hash changes and old entries are silently re analyzed on next read. See [src/utils/promptVersion.ts](src/utils/promptVersion.ts).
 

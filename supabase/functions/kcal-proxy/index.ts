@@ -259,7 +259,10 @@ serve(async (req) => {
       // Both of the workarounds Moonshot forced on us go away here. The client's
       // own temperature is honoured again, and a strict schema is passed through
       // as a real constraint instead of being re-explained in prose
-      if (body.temperature !== undefined) chatBody.temperature = body.temperature;
+      // The vision tier rejects any temperature but its default. Sending one
+      // anyway cost a full round trip carrying the base64 image before the
+      // self-healing retry stripped it and asked again
+      if (body.temperature !== undefined && !hasImage) chatBody.temperature = body.temperature;
       if (body.response_format) chatBody.response_format = body.response_format;
     } else {
       chatBody.model = hasImage ? MOONSHOT_VISION_MODEL : MOONSHOT_MODEL;

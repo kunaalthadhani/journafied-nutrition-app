@@ -7,16 +7,12 @@ import {
   ScrollView,
   TouchableOpacity,
   InteractionManager,
-  ActivityIndicator,
-  Animated,
-  Easing,
   Alert,
   KeyboardAvoidingView,
   BackHandler,
   Keyboard,
   Modal,
 } from 'react-native';
-import { BlurView } from 'expo-blur';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { format, isSameDay, subDays, addDays } from 'date-fns';
@@ -49,7 +45,7 @@ import { checkAndResetCycle } from '../services/calorieBankService';
 import { InsightUnlocks, InsightDefinition, InsightStats, InsightId, getUnlockedInsightIds, getNewlyUnlockedInsights, getFirstUnseenUnlock } from '../utils/insightUnlockEngine';
 import { InsightUnlockCard } from '../components/InsightUnlockCard';
 import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
-import { ImageUploadStatus } from '../components/ImageUploadStatus';
+import { PhotoAnalyzingOverlay } from '../components/PhotoAnalyzingOverlay';
 import { AccountWallModal } from '../components/AccountWallModal';
 import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
 import { analyzeFoodWithChatGPT, analyzeFoodFromImage, updateFoodCache } from '../services/openaiService';
@@ -142,7 +138,6 @@ export const HomeScreen: React.FC = () => {
   const [mealsByDate, setMealsByDate] = useState<Record<string, Meal[]>>({});
   const [summariesByDate, setSummariesByDate] = useState<Record<string, DailySummary>>({});
   const [exercisesByDate, setExercisesByDate] = useState<Record<string, ExerciseEntry[]>>({});
-  const [isAnalyzingFood, setIsAnalyzingFood] = useState(false);
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcribedText, setTranscribedText] = useState('');
@@ -150,17 +145,13 @@ export const HomeScreen: React.FC = () => {
   // build made before on-device speech shipped, which hides the mic instead
   // of offering a button that cannot work.
   const [micAvailable] = useState(() => voiceService.isSupported());
-  const [uploadStatusVisible, setUploadStatusVisible] = useState(false);
+  // Kept only so a failed analysis can be retried without picking the photo again
   const [uploadedImage, setUploadedImage] = useState<string | null>(null);
-  const [uploadFileName, setUploadFileName] = useState('');
-  const [uploadProgress, setUploadProgress] = useState(0);
-  const [uploadStatus, setUploadStatus] = useState<'uploading' | 'completed' | 'failed' | 'analyzing'>('uploading');
-  const [uploadStatusMessage, setUploadStatusMessage] = useState<string | null>(null);
-  const uploadIntervalRef = React.useRef<NodeJS.Timeout | null>(null);
+  // The photo currently under the progress bar. Cleared on handoff or on an
+  // answer, whichever lands first
+  const [analyzingPhoto, setAnalyzingPhoto] = useState<string | null>(null);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
-  const overlayOpacity = React.useRef(new Animated.Value(0)).current;
-  const [showAnalyzingOverlay, setShowAnalyzingOverlay] = useState(false);
   const [goalsSet, setGoalsSet] = useState(false);
   // Shimmer the calorie card until goals hydrate, so the default never flashes
   // to the real number on cold open. Capped so it can never hang if goals are
@@ -1542,6 +1533,19 @@ export const HomeScreen: React.FC = () => {
     }));
   };
 
+  // Screen state only, never written to storage. If the app dies mid re-analysis
+  // the meal is still on disk exactly as it was
+  const setMealPending = (dateKey: string, mealId: string, pending: boolean) => {
+    setMealsByDate(prev => ({
+      ...prev,
+      [dateKey]: (prev[dateKey] || []).map(m =>
+        m.id === mealId
+          ? { ...m, isLoading: pending, loadingState: pending ? 'analyzing' as const : 'done' as const }
+          : m
+      ),
+    }));
+  };
+
   const handleInputSubmit = async (text: string) => {
     Keyboard.dismiss(); // Dismiss keyboard immediately
     if (__DEV__) console.log('Input submitted:', text);
@@ -1667,7 +1671,9 @@ export const HomeScreen: React.FC = () => {
         // SUCCESS: Update Pending Meal
         const finalizedMeal: Meal = {
           ...pendingMeal,
-          summary: summary || pendingMeal.summary,
+          // Never fall back to the pending placeholder. "Crunching the meal..."
+          // as a permanent title is worse than just showing what she typed
+          summary: summary || trimmed,
           foods: parsedFoods,
           isLoading: false,
           loadingState: 'done'
@@ -1799,13 +1805,15 @@ export const HomeScreen: React.FC = () => {
       );
       return;
     }
+    // The row being edited carries its own pending state. A full screen blocker
+    // for a change to one line was heavier than the change
+    setMealPending(currentDateKey, mealId, true);
     try {
-      setIsAnalyzingFood(true);
       let parsedFoods;
+      let newSummary: string | undefined;
       try {
         const analysisResult = await analyzeFoodWithChatGPT(newPrompt);
         if (analysisResult.clarificationQuestion) {
-          setIsAnalyzingFood(false);
           // Ask usage to clarify
           // Since we are in an edit flow, we just tell them what's missing so they can edit again.
           Alert.alert(
@@ -1816,7 +1824,6 @@ export const HomeScreen: React.FC = () => {
           return;
         }
         if (analysisResult.aiUnavailable) {
-          setIsAnalyzingFood(false);
           Alert.alert(
             'Could not reach the food AI',
             'Your edit was not saved. Check your connection and try again in a moment.',
@@ -1825,13 +1832,13 @@ export const HomeScreen: React.FC = () => {
           return;
         }
         parsedFoods = analysisResult.foods;
+        newSummary = analysisResult.summary;
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           Alert.alert(
             'Food Analysis Not Configured',
             'Food analysis is not configured. Please contact support.'
           );
-          setIsAnalyzingFood(false);
           return;
         }
         throw apiError; // Re-throw other errors
@@ -1852,7 +1859,17 @@ export const HomeScreen: React.FC = () => {
       await commitMealChange(currentDateKey, (currentMeals) =>
         currentMeals.map(meal =>
           meal.id === mealId
-            ? { ...meal, prompt: newPrompt, foods: parsedFoods, updatedAt: new Date().toISOString() }
+            ? {
+              ...meal,
+              prompt: newPrompt,
+              // The old summary described the old meal. Keeping it left the
+              // entry wearing the name of food she had just replaced
+              summary: newSummary || newPrompt,
+              foods: parsedFoods,
+              isLoading: false,
+              loadingState: 'done' as const,
+              updatedAt: new Date().toISOString(),
+            }
             : meal
         )
       );
@@ -1870,7 +1887,7 @@ export const HomeScreen: React.FC = () => {
       );
       // Do NOT update meal or increment entry count on error
     } finally {
-      setIsAnalyzingFood(false);
+      setMealPending(currentDateKey, mealId, false);
     }
   };
 
@@ -2027,77 +2044,64 @@ export const HomeScreen: React.FC = () => {
     setPhotoModalVisible(false);
   };
 
-  const resetUploadState = () => {
-    if (uploadIntervalRef.current) {
-      clearInterval(uploadIntervalRef.current);
-      uploadIntervalRef.current = null;
-    }
-    setUploadedImage(null);
-    setUploadFileName('');
-    setUploadProgress(0);
-    setUploadStatus('uploading');
-    setUploadStatusMessage(null);
-    setUploadStatusVisible(false);
-  };
-
-  const simulateUpload = async (imageUri: string) => {
-    // Clear any existing interval
-    if (uploadIntervalRef.current) {
-      clearInterval(uploadIntervalRef.current);
-    }
-
-    // Simulate upload progress
-    let progress = 0;
-    uploadIntervalRef.current = setInterval(() => {
-      progress += Math.random() * 15;
-      if (progress >= 100) {
-        progress = 100;
-        setUploadProgress(100);
-        setUploadStatus('analyzing');
-        setUploadStatusMessage(null);
-        setUploadStatusVisible(false);
-        setIsAnalyzingFood(true);
-        if (uploadIntervalRef.current) {
-          clearInterval(uploadIntervalRef.current);
-          uploadIntervalRef.current = null;
-        }
-
-        // Wait a moment, then start analyzing
-        setTimeout(() => {
-          analyzeUploadedImage(imageUri);
-        }, 300);
-      } else {
-        setUploadProgress(Math.round(progress));
-      }
-    }, 300);
-  };
-
+  // The photo lands in the log the instant it is picked, same as typing does.
+  // There is no upload: the image never leaves the phone until the analysis call,
+  // so the old progress bar was counting nothing.
   const analyzeUploadedImage = async (imageUri?: string) => {
     const uriToAnalyze = imageUri || uploadedImage;
     if (!uriToAnalyze) {
-      if (__DEV__) console.log('No uploaded image to analyze, imageUri:', imageUri, 'uploadedImage:', uploadedImage);
+      if (__DEV__) console.log('No image to analyze, imageUri:', imageUri, 'uploadedImage:', uploadedImage);
       return;
     }
 
-    try {
-      // Same entry gate as the text path. canAddEntry is the single source of
-      // truth for the free daily limit (disabled pre-launch). The photo path used
-      // to keep its own hardcoded 3-meal check, so a free user was capped on
-      // photos but not on text.
-      if (!canAddEntry()) {
-        Alert.alert(
-          "Daily Limit Reached",
-          "Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!"
-        );
-        resetUploadState();
-        setIsAnalyzingFood(false);
-        return;
-      }
+    // Same entry gate as the text path. canAddEntry is the single source of
+    // truth for the free daily limit (disabled pre-launch). The photo path used
+    // to keep its own hardcoded 3-meal check, so a free user was capped on
+    // photos but not on text.
+    if (!canAddEntry()) {
+      Alert.alert(
+        "Daily Limit Reached",
+        "Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!"
+      );
+      setUploadedImage(null);
+      return;
+    }
 
-      setIsAnalyzingFood(true);
+    const dateKey = getDateKey(selectedDate);
+    const pendingId = generateId();
+    const pendingMeal: Meal = {
+      id: pendingId,
+      prompt: 'Photo',
+      summary: 'Reading the photo...',
+      foods: [],
+      timestamp: Date.now(),
+      imageUri: uriToAnalyze,
+      updatedAt: new Date().toISOString(),
+      isLoading: true,
+      loadingState: 'analyzing',
+    };
+
+    setMealsByDate(prev => ({
+      ...prev,
+      [dateKey]: [...(prev[dateKey] || []), pendingMeal],
+    }));
+
+    // The bar goes up over work that is already running. It never gates the
+    // call, and an answer that beats it dismisses it early rather than waiting
+    setAnalyzingPhoto(uriToAnalyze);
+
+    const failWith = (title: string, message: string) => {
+      setAnalyzingPhoto(null);
+      removePendingMeal(dateKey, pendingId);
+      Alert.alert(title, message, [
+        { text: 'Cancel', style: 'cancel', onPress: () => setUploadedImage(null) },
+        { text: 'Try again', onPress: () => analyzeUploadedImage(uriToAnalyze) },
+      ]);
+    };
+
+    try {
       if (__DEV__) console.log('Starting image analysis for URI:', uriToAnalyze);
 
-      // Add timeout to prevent infinite hanging
       let parsedFoods: ParsedFood[] = [];
       let summary: string | undefined;
 
@@ -2107,110 +2111,85 @@ export const HomeScreen: React.FC = () => {
           setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
         );
 
-        // Analyze the image using OpenAI Vision API
         const result = await Promise.race([analysisPromise, timeoutPromise]);
         parsedFoods = result.foods || [];
         summary = result.summary;
 
       } catch (apiError: any) {
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
-          setUploadStatus('failed');
-          setUploadStatusMessage('Food analysis is not configured. Please contact support.');
-          setUploadStatusVisible(true);
-          setIsAnalyzingFood(false);
+          setAnalyzingPhoto(null);
+          removePendingMeal(dateKey, pendingId);
+          setUploadedImage(null);
+          Alert.alert('Food Analysis Not Configured', 'Food analysis is not configured. Please contact support.');
           return;
         }
         throw apiError; // Re-throw other errors
       }
 
+      // Beat the bar. No floor: a fast answer is the feature, not something to
+      // hide behind an animation
+      setAnalyzingPhoto(null);
+
       if (__DEV__) console.log('Analysis complete, parsed foods:', parsedFoods);
 
-      if (parsedFoods.length > 0) {
-        // Check for first log ever
-        if (entryCount === 0) {
-          setShowFirstLogMessage(true);
-        }
-
-        // Get current date key at the time of analysis
-        const dateKey = getDateKey(selectedDate);
-
-        // Create a new meal entry with the image and parsed foods
-        const createdAt = Date.now();
-        const newMeal: Meal = {
-          id: generateId(),
-          prompt: `Image`,
-          summary: summary,
-          foods: parsedFoods,
-          timestamp: createdAt,
-          imageUri: uriToAnalyze,
-          updatedAt: new Date().toISOString()
-        };
-
-        // Add meal to the date the photo was taken on. If the user switched days
-        // during upload/analysis, commitMealChange merges into that day's shard
-        // rather than overwriting whatever day is now loaded.
-        await commitMealChange(dateKey, (list) => [...list, newMeal]);
-
-        // Mirror the text path. The photo path used to skip this, so photo-only
-        // users never advanced the entry counter: the account-wall nag never
-        // fired and the first-log banner re-showed on every photo.
-        await incrementEntryCount();
-        await analyticsService.trackMealLogged(selectedDate);
-
-        const accountInfo = await dataStorage.loadAccountInfo();
-        if (accountInfo?.email) {
-          const referralResult = await referralService.processMealLoggingProgress(accountInfo.email);
-          if (referralResult.rewardsAwarded && referralResult.entriesAwarded) {
-            Alert.alert(
-              '🎉 Referral Reward Earned!',
-              referralResult.message || `You've earned +${referralResult.entriesAwarded} free entries!`,
-              [{ text: 'Awesome!', style: 'default' }]
-            );
-            const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
-            setTotalEarnedEntries(earned);
-          }
-        }
-        if (__DEV__) console.log('Meal added to date:', dateKey);
-        resetUploadState();
-      } else {
-        if (__DEV__) console.log('No foods recognized in image');
-        setUploadStatus('failed');
-        setUploadStatusMessage('No food detected');
-        setUploadStatusVisible(true);
+      if (parsedFoods.length === 0) {
+        failWith('No food detected', 'I could not find anything to log in that photo. Try a closer shot, or describe the meal instead.');
+        return;
       }
+
+      // Check for first log ever
+      if (entryCount === 0) {
+        setShowFirstLogMessage(true);
+      }
+
+      const finalizedMeal: Meal = {
+        ...pendingMeal,
+        summary: summary || 'Photo',
+        foods: parsedFoods,
+        isLoading: false,
+        loadingState: 'done',
+      };
+
+      // Upsert for the same reason the text path does: a wholesale reload during
+      // analysis drops the optimistic row, and a plain map would lose the meal.
+      // commitMealChange merges into the photo's day if the user has moved on.
+      await commitMealChange(dateKey, (list) => {
+        const hasPending = list.some(m => m.id === pendingId);
+        return hasPending
+          ? list.map(m => m.id === pendingId ? finalizedMeal : m)
+          : [...list, finalizedMeal];
+      });
+
+      // Mirror the text path. The photo path used to skip this, so photo-only
+      // users never advanced the entry counter: the account-wall nag never
+      // fired and the first-log banner re-showed on every photo.
+      await incrementEntryCount();
+      await analyticsService.trackMealLogged(selectedDate);
+
+      const accountInfo = await dataStorage.loadAccountInfo();
+      if (accountInfo?.email) {
+        const referralResult = await referralService.processMealLoggingProgress(accountInfo.email);
+        if (referralResult.rewardsAwarded && referralResult.entriesAwarded) {
+          Alert.alert(
+            '🎉 Referral Reward Earned!',
+            referralResult.message || `You've earned +${referralResult.entriesAwarded} free entries!`,
+            [{ text: 'Awesome!', style: 'default' }]
+          );
+          const earned = await dataStorage.getTotalEarnedEntriesFromReferrals(accountInfo.email);
+          setTotalEarnedEntries(earned);
+        }
+      }
+      if (__DEV__) console.log('Meal added to date:', dateKey);
+      setUploadedImage(null);
     } catch (error) {
       if (__DEV__) console.error('Error analyzing image:', error);
-      setUploadStatus('failed');
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-      setUploadStatusMessage(`Failed to analyze image: ${errorMessage}`);
-      setUploadStatusVisible(true);
-    } finally {
-      setIsAnalyzingFood(false);
-    }
-  };
-
-  const handleRetryUpload = async () => {
-    if (uploadStatus === 'failed' && uploadedImage) {
-      // Retry analysis
-      setUploadStatus('analyzing');
-      setUploadStatusMessage(null);
-      setUploadStatusVisible(false);
-      setIsAnalyzingFood(true);
-      await analyzeUploadedImage(uploadedImage);
-    } else if (uploadedImage) {
-      // Retry upload
-      setUploadProgress(0);
-      setUploadStatus('uploading');
-      setUploadStatusMessage(null);
-      simulateUpload(uploadedImage);
+      failWith('Could not read the photo', 'The analysis did not come back. Check your connection and try again.');
     }
   };
 
   const handleClosePhotoModal = () => {
     if (__DEV__) console.log('Closing photo modal');
     setPhotoModalVisible(false);
-    // Don't reset upload state here - only reset if user explicitly closes
-    // resetUploadState();
   };
 
   // Handle modal dismissal
@@ -2308,30 +2287,19 @@ export const HomeScreen: React.FC = () => {
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const fileName = asset.uri.split('/').pop() || `photo_${Date.now()}.jpg`;
-
-        if (uploadIntervalRef.current) {
-          clearInterval(uploadIntervalRef.current);
-          uploadIntervalRef.current = null;
-        }
-
         setUploadedImage(asset.uri);
-        setUploadFileName(fileName);
-        setUploadProgress(0);
-        setUploadStatus('uploading');
-        setUploadStatusVisible(true);
 
         // Pass the URI directly to avoid state timing issues
-        simulateUpload(asset.uri);
+        analyzeUploadedImage(asset.uri);
       } else {
         if (__DEV__) console.log('Camera was canceled');
-        resetUploadState();
+        setUploadedImage(null);
       }
     } catch (error) {
       if (__DEV__) console.error('Error taking photo:', error);
       isOpeningCameraRef.current = false;
       alert(`Failed to take photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      resetUploadState();
+      setUploadedImage(null);
     }
   };
 
@@ -2390,64 +2358,21 @@ export const HomeScreen: React.FC = () => {
 
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
-        const fileName = asset.fileName || asset.uri.split('/').pop() || `image_${Date.now()}.jpg`;
-
-        if (uploadIntervalRef.current) {
-          clearInterval(uploadIntervalRef.current);
-          uploadIntervalRef.current = null;
-        }
-
         setUploadedImage(asset.uri);
-        setUploadFileName(fileName);
-        setUploadProgress(0);
-        setUploadStatus('uploading');
-        setUploadStatusVisible(true);
 
         // Pass the URI directly to avoid state timing issues
-        simulateUpload(asset.uri);
+        analyzeUploadedImage(asset.uri);
       } else {
         if (__DEV__) console.log('Image picker was canceled');
-        resetUploadState();
+        setUploadedImage(null);
       }
     } catch (error) {
       if (__DEV__) console.error('Error uploading photo:', error);
       isOpeningCameraRef.current = false;
       alert(`Failed to upload photo: ${error instanceof Error ? error.message : 'Unknown error'}`);
-      resetUploadState();
+      setUploadedImage(null);
     }
   };
-
-  // Cleanup on unmount
-  React.useEffect(() => {
-    return () => {
-      if (uploadIntervalRef.current) {
-        clearInterval(uploadIntervalRef.current);
-      }
-    };
-  }, []);
-
-  React.useEffect(() => {
-    if (isAnalyzingFood) {
-      setShowAnalyzingOverlay(true);
-      Animated.timing(overlayOpacity, {
-        toValue: 1,
-        duration: 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start();
-    } else {
-      Animated.timing(overlayOpacity, {
-        toValue: 0,
-        duration: 220,
-        easing: Easing.out(Easing.quad),
-        useNativeDriver: true,
-      }).start(({ finished }) => {
-        if (finished) {
-          setShowAnalyzingOverlay(false);
-        }
-      });
-    }
-  }, [isAnalyzingFood, overlayOpacity]);
 
   // Removed floating blob animation
 
@@ -3095,7 +3020,6 @@ export const HomeScreen: React.FC = () => {
             onSubmit={handleInputSubmit}
             onMicPress={handleMicPress}
             micAvailable={micAvailable}
-            isLoading={isAnalyzingFood}
             isListening={isListening}
             transcribedText={transcribedText}
             onTranscribedTextChange={setTranscribedText}
@@ -3106,11 +3030,7 @@ export const HomeScreen: React.FC = () => {
             quickPrompts={savedPrompts}
             onQuickPromptPress={handleSelectSavedPrompt}
             onQuickPromptRemove={handleRemoveSavedPrompt}
-            placeholder={
-              isAnalyzingFood ? "Analyzing your entry..." :
-                isListening ? "Listening..." :
-                  "Describe your meal"
-            }
+            placeholder={isListening ? "Listening..." : "Describe your meal"}
           />
 
           {/* THE COLUMN — the day filling up as you eat. Lives inside the
@@ -3366,44 +3286,10 @@ export const HomeScreen: React.FC = () => {
           onModalDismiss={handleModalDismiss}
         />
 
-        <ImageUploadStatus
-          visible={uploadStatusVisible}
-          imageUri={uploadedImage}
-          fileName={uploadFileName}
-          progress={uploadProgress}
-          status={uploadStatus}
-          statusMessage={uploadStatusMessage}
-          onClose={() => {
-            setUploadStatusVisible(false);
-            resetUploadState();
-          }}
-          onRetry={handleRetryUpload}
+        <PhotoAnalyzingOverlay
+          imageUri={analyzingPhoto}
+          onHandoff={() => setAnalyzingPhoto(null)}
         />
-
-        {showAnalyzingOverlay && (
-          <Animated.View
-            style={[styles.analyzingOverlay, { opacity: overlayOpacity }]}
-            pointerEvents={isAnalyzingFood ? 'auto' : 'none'}
-          >
-            <BlurView intensity={20} tint="dark" style={StyleSheet.absoluteFill} />
-            <View style={[
-              styles.analyzingCard,
-              {
-                backgroundColor: Acid.mossDeep,
-                borderColor: Acid.hair,
-                shadowColor: '#000',
-              }
-            ]}>
-              <ActivityIndicator size="large" color={Acid.lime} style={{ marginBottom: 16 }} />
-              <Text style={[styles.analyzingTitle, { color: Acid.tx }]}>
-                Analyzing
-              </Text>
-              <Text style={[styles.analyzingSubtitle, { color: Acid.tx2 }]}>
-                Identifying food and macros...
-              </Text>
-            </View>
-          </Animated.View>
-        )}
 
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}
         {/* Animation handled by iOS. No internal slideAnim. */}
@@ -3480,35 +3366,5 @@ const styles = StyleSheet.create({
   },
   bottomSpacer: {
     height: 160, // Space for bottom input bar + chips + safe area
-  },
-  analyzingOverlay: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    alignItems: 'center',
-    justifyContent: 'center',
-    zIndex: 50,
-  },
-  analyzingCard: {
-    padding: 32,
-    borderRadius: 24,
-    borderWidth: 1,
-    alignItems: 'center',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 8,
-    minWidth: 200,
-  },
-  analyzingTitle: {
-    fontSize: Typography.fontSize.lg,
-    fontWeight: Typography.fontWeight.semiBold,
-    marginBottom: 4,
-  },
-  analyzingSubtitle: {
-    fontSize: Typography.fontSize.sm,
-    fontWeight: Typography.fontWeight.normal,
   },
 });

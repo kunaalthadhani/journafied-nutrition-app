@@ -85,6 +85,8 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
 3. **The Quantifier (The Physicist):**
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
+   - **LABEL PANEL RULE — MANUFACTURER DATA OUTRANKS YOU:** If the input contains a line starting with "LABEL PANEL", those figures were read off the physical packaging and they are the truth. Use them EXACTLY for calories, protein, carbs and fat. Do NOT re-estimate, do NOT round to a value you find more plausible, do NOT substitute figures you remember for that product. Scale them to the actual amount eaten using the stated basis: if the panel is per 100g and the item is a 60g bar, take 60 percent of every figure; if the panel is already per bar or per serving, use it as is and multiply by the quantity. Estimate ONLY the micronutrients the panel does not list. Confidence for that item is **high**, and \`confidence_reason\` should say the numbers came off the label.
+   - **NAMED BRAND RULE:** If a brand is named but no panel was given, keep the brand in \`log_name\` and estimate from what you know of that product. Never silently swap it for a generic. If you do not know that specific product, estimate the category honestly and set confidence to **medium** at best.
    - **CRITICAL WEIGHT RULE:** If the user states an explicit weight in grams, ounces, pounds, or kilograms (e.g. "100g", "100 grams", "8 oz", "1 lb", "0.5 kg"), that is the TOTAL weight of the item. Use it directly. Do NOT multiply by quantity. Do NOT scale by per-piece weight. "100 grams chicken thigh" means total_weight_g = 100, not 100 pieces × 100g.
    - **CRITICAL IDENTITY RULE:** Preserve the specific cut, type, variety, brand, or preparation the user named. If they say "chicken thigh," do not substitute "chicken breast." If they say "skim milk," do not substitute "whole milk." If they say "brown rice," do not substitute "white rice." If they say "olive oil," do not substitute "vegetable oil." The user's words are authoritative for what the food IS. Your job is to estimate the macros, not pick the food.
    - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, Calcium, Iron, Magnesium, Zinc, Omega-3 (total grams, ALA + EPA + DHA combined), and key Vitamins (A, C, D, B12). Use standard nutritional data.
@@ -578,6 +580,159 @@ Tone: Like a nutritionist reviewing your food diary face-to-face. Specific, hone
 /**
  * Analyze food from an image using OpenAI Vision API
  */
+// Packaged food is a lookup, not an estimate. A wrapper carries an exact answer
+// and the old prompt walked straight past it, describing "a chocolate protein
+// bar" while the brand sat legible in the frame. So the reader now has two jobs
+// that used to be one: read any packaging, and describe anything that is food
+// rather than product.
+const VISION_READER_PROMPT = `You are a Food Label Reader and Food Analyst working from a single photo.
+
+You have two separate jobs. Do both.
+
+## JOB 1 — READ ANY PACKAGING
+
+If the frame contains packaged or branded product (a protein bar, a yoghurt pot, a cereal box, a bottle, a ready meal, a sachet), read it.
+
+**THE ABSOLUTE RULE — BRANDS ARE READ, NEVER RECOGNISED.**
+Only report a brand or product name whose letters you can actually READ in this image. Never infer one from the shape of the wrapper, the colour scheme, the style of the packaging, or because it resembles a product you know. A wrapper you cannot read is an unbranded item, and that is a perfectly good answer. Set the field to null and move on.
+A wrong brand is far worse than no brand, because a wrong brand comes attached to confident wrong numbers.
+
+**THE NUTRITION PANEL IS THE JACKPOT.**
+If a nutrition information panel is visible and legible, transcribe it. These are the manufacturer's own figures and they beat any estimate. Copy the digits you can see. Record what the figures are per: per 100g, per serving, per bar, per bottle. Never fill the panel from memory of the product. Only from digits visible in THIS image. If it is blurred, angled away, or cropped, leave it null.
+
+Also record the net weight exactly as printed on the pack ("60g", "330ml", "4 x 25g"), and how many of the item appear in the frame.
+
+## JOB 2 — DESCRIBE ANY PREPARED FOOD
+
+For anything on a plate, in a bowl, or otherwise not in packaging, describe it in detail for calorie estimation. Name every visible component, the protein, the base, the sauce by type ("creamy garlic", "tomato and herb"), and the cooking method. Estimate portion sizes against whatever is in frame for scale, a fork, a hand, the plate rim. Mention visible oil or butter sheen ONLY where you can genuinely see it, and mention when a dish looks dry, because guessing oil onto everything inflates fat on every meal.
+
+Name regional dishes by their actual names where you recognise them: machboos, biryani, shawarma, manakish, falafel, labneh, kunafa, karak. The nutrition pass knows these dishes. It cannot use a name you did not give it.
+
+A frame can have both jobs in it (a protein bar next to a bowl of oats) or only one. If there is no packaging, return an empty packaged list. If there is no prepared food, return an empty prepared string. If there is no food at all, return both empty.`;
+
+const VISION_READER_SCHEMA = {
+  type: 'json_schema' as const,
+  json_schema: {
+    name: 'vision_reading',
+    strict: true,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['packaged', 'prepared'],
+      properties: {
+        packaged: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['brand', 'product', 'variant', 'net_weight_label', 'count', 'panel'],
+            properties: {
+              brand: { type: ['string', 'null'], description: 'Only if readable in the image' },
+              product: { type: ['string', 'null'] },
+              variant: { type: ['string', 'null'], description: 'Flavour or variant, if printed' },
+              net_weight_label: { type: ['string', 'null'], description: 'Exactly as printed, e.g. "60g"' },
+              count: { type: 'number', description: 'How many of this item are in the frame' },
+              panel: {
+                type: ['object', 'null'],
+                additionalProperties: false,
+                required: ['basis', 'calories', 'protein_g', 'carbs_g', 'fat_g', 'sugar_g', 'fiber_g', 'saturated_fat_g', 'sodium_mg'],
+                properties: {
+                  basis: { type: 'string', description: 'e.g. "per 100g", "per bar (60g)", "per serving"' },
+                  calories: { type: ['number', 'null'] },
+                  protein_g: { type: ['number', 'null'] },
+                  carbs_g: { type: ['number', 'null'] },
+                  fat_g: { type: ['number', 'null'] },
+                  sugar_g: { type: ['number', 'null'] },
+                  fiber_g: { type: ['number', 'null'] },
+                  saturated_fat_g: { type: ['number', 'null'] },
+                  sodium_mg: { type: ['number', 'null'] },
+                },
+              },
+            },
+          },
+        },
+        prepared: { type: 'string', description: 'Prose description of non-packaged food, empty if none' },
+      },
+    },
+  },
+};
+
+interface VisionPanel {
+  basis: string;
+  calories: number | null;
+  protein_g: number | null;
+  carbs_g: number | null;
+  fat_g: number | null;
+  sugar_g: number | null;
+  fiber_g: number | null;
+  saturated_fat_g: number | null;
+  sodium_mg: number | null;
+}
+
+interface VisionPackaged {
+  brand: string | null;
+  product: string | null;
+  variant: string | null;
+  net_weight_label: string | null;
+  count: number;
+  panel: VisionPanel | null;
+}
+
+interface VisionReading {
+  packaged: VisionPackaged[];
+  prepared: string;
+}
+
+const parseVisionReading = (raw: string): VisionReading => {
+  try {
+    const cleaned = raw.replace(/```json/g, '').replace(/```/g, '').trim();
+    const parsed = JSON.parse(cleaned);
+    return {
+      packaged: Array.isArray(parsed?.packaged) ? parsed.packaged : [],
+      prepared: typeof parsed?.prepared === 'string' ? parsed.prepared : '',
+    };
+  } catch {
+    // A reader that returned prose instead of JSON is still useful. Treat the
+    // whole thing as a description rather than losing the call
+    return { packaged: [], prepared: raw };
+  }
+};
+
+// Turns the reading into the text the nutrition pass consumes. A transcribed
+// panel is passed through as a LABEL PANEL block, which that prompt is told to
+// treat as manufacturer truth instead of re-estimating.
+const describeReading = (r: VisionReading): string => {
+  const parts: string[] = [];
+
+  r.packaged.forEach(p => {
+    const name = [p.brand, p.product, p.variant].filter(Boolean).join(' ').trim();
+    const label = name || 'unbranded packaged item';
+    const qty = p.count > 1 ? `${p.count} x ` : '';
+    const weight = p.net_weight_label ? `, net weight ${p.net_weight_label}` : '';
+    parts.push(`${qty}${label}${weight}`);
+
+    if (p.panel) {
+      const rows = [
+        p.panel.calories != null && `calories ${p.panel.calories}`,
+        p.panel.protein_g != null && `protein ${p.panel.protein_g}g`,
+        p.panel.carbs_g != null && `carbs ${p.panel.carbs_g}g`,
+        p.panel.fat_g != null && `fat ${p.panel.fat_g}g`,
+        p.panel.sugar_g != null && `sugar ${p.panel.sugar_g}g`,
+        p.panel.fiber_g != null && `fibre ${p.panel.fiber_g}g`,
+        p.panel.saturated_fat_g != null && `saturated fat ${p.panel.saturated_fat_g}g`,
+        p.panel.sodium_mg != null && `sodium ${p.panel.sodium_mg}mg`,
+      ].filter(Boolean);
+      if (rows.length) {
+        parts.push(`LABEL PANEL for ${label} (${p.panel.basis}): ${rows.join(', ')}`);
+      }
+    }
+  });
+
+  if (r.prepared.trim()) parts.push(r.prepared.trim());
+
+  return parts.join('. ');
+};
+
 export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: ParsedFood[], summary?: string }> {
   try {
     if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
@@ -590,48 +745,38 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
     const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
     const imageDataUrl = `data:image/${imageFormat};base64,${base64Image}`;
 
-    if (__DEV__) console.log('Sending request to OpenAI Vision API (Describer Mode)...');
+    if (__DEV__) console.log('Sending request to OpenAI Vision API (Reader Mode)...');
 
-    // Step 1: Vision AI describes the food
+    // Step 1: Vision AI reads the frame
     const visionData = await invokeAI({
       model: 'gpt-4o',
       messages: [
-        {
-          role: 'system',
-          content: `You are a specialized Food Analyst.
-            Describe the food in this image in extreme detail.
-            Identify every visible ingredient, sauce (e.g. "Creamy Alfredo", "Tomato Basil"), and estimate precise portion sizes (e.g. "Approx 200g", "1 Large Bowl").
-            If you see oil or butter sheen, mention it.
-            Return ONLY the description text.`
-        },
+        { role: 'system', content: VISION_READER_PROMPT },
         {
           role: 'user',
           content: [
-            {
-              type: 'text',
-              text: 'Describe this dish for caloric analysis.'
-            },
-            {
-              type: 'image_url',
-              image_url: {
-                url: imageDataUrl
-              }
-            }
+            { type: 'text', text: 'Read this frame for nutrition logging.' },
+            { type: 'image_url', image_url: { url: imageDataUrl } },
           ]
         }
       ],
-      temperature: 0.3,
-      max_tokens: 300,
+      max_tokens: 900,
+      response_format: VISION_READER_SCHEMA,
       call_type: 'food-image-vision',
     });
 
-    const description = visionData.choices[0]?.message?.content;
+    const raw = visionData.choices[0]?.message?.content;
+    if (!raw) throw new Error('No reading from Vision AI');
 
-    if (!description) throw new Error('No description from Vision AI');
+    const reading = parseVisionReading(raw);
+    if (__DEV__) console.log('Vision reading:', JSON.stringify(reading));
 
-    if (__DEV__) console.log('Vision Description:', description);
+    const description = describeReading(reading);
+    if (!description.trim()) throw new Error('Vision AI found nothing to log');
 
-    // Step 2: Text Agent analyzes the description
+    if (__DEV__) console.log('Handoff to nutrition pass:', description);
+
+    // Step 2: Text Agent analyzes the reading
     // using the centralized logic (Gatekeeper -> Chef -> Physicist)
     const result = await analyzeFoodWithChatGPT(description, false);
 

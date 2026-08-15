@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.3**
+Photograph a packaged thing and the app now reads the packet. Brand, product, flavour, net weight, and if the nutrition panel is in shot it copies the manufacturer's own numbers straight off the label instead of guessing. Those numbers win over any estimate, so a protein bar shot with the back of the wrapper visible should now be exactly right rather than roughly right. It will only ever claim a brand it can actually read in your photo, never one it thinks the wrapper looks like, because a wrong brand comes with confident wrong numbers attached. It also knows regional dishes by name now, so machboos comes back as machboos and not as rice with chicken.
+
+The photo flow is rebuilt. Take a photo and the reading starts immediately, with a progress bar over your own picture telling you what it is doing. After a few seconds it hands the rest of the wait to your food log, where the meal sits being put together, and you can carry on typing while it finishes. If it comes back sooner than that, you get it sooner. The old version showed a fake upload bar that was counting nothing, waited for it to finish before it started any real work, and then locked the whole screen behind "Analyzing". Photos were also being sent twice on every single log, which we have stopped. The photo menu is now a small sheet with two options instead of a full page with empty space under it, and editing a meal no longer blacks out the screen for a change to one line. One real bug fixed: after you edited a meal it kept the name of the food you had just replaced, and that wrong name was being saved for next time too. Both sorted. The date of birth question is new as well, month by name and the day and year typed, faster than spinning three wheels and it cannot land you on the wrong year by accident.
+
 **v1.6.2**
 Supplements now count. A shake ticked in TrackLifts adds its calories, protein, carbs and fat to your day here, the same as food you logged yourself, and the line still says where it came from. Creatine and vitamins carry no numbers so they change nothing, they just show. Untick something over there and its numbers come back out of your day. The weekly calorie bank counts them too, because your body does not care which app the shake arrived through.
 

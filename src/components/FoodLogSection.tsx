@@ -1,5 +1,5 @@
 import React, { useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Animated, ScrollView, ActivityIndicator, Dimensions, PanResponder } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, Modal, TextInput, Animated, ScrollView, ActivityIndicator, Dimensions, PanResponder, Image } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { format } from 'date-fns';
 import { Colors } from '../constants/colors';
@@ -42,7 +42,23 @@ const PARSING_MESSAGES = [
   'Inspecting every morsel...',
 ];
 
-const getParsingMessage = () => PARSING_MESSAGES[Math.floor(Math.random() * PARSING_MESSAGES.length)];
+// A photo has already spent its first call being read, under the progress bar.
+// This row is the second half, so it continues the sentence instead of starting
+// a new one with a joke
+const PHOTO_MESSAGES = [
+  'Constructing your meal...',
+  'Turning the plate into numbers...',
+  'Working out the portions...',
+];
+
+// Picked from the meal id, not at random. Drawing on every render meant the
+// line changed under the reader each time the screen repainted
+const pendingMessage = (mealId: string, imageUri?: string) => {
+  const pool = imageUri ? PHOTO_MESSAGES : PARSING_MESSAGES;
+  let h = 0;
+  for (let i = 0; i < mealId.length; i++) h = (h * 31 + mealId.charCodeAt(i)) >>> 0;
+  return pool[h % pool.length];
+};
 
 const SCREEN_HEIGHT = Dimensions.get('window').height;
 
@@ -237,9 +253,11 @@ export const FoodLogSection: React.FC<FoodLogSectionProps> = ({
               <View key={meal.id} style={styles.row}>
                 <Text style={styles.rowTime}>{timeLabel}</Text>
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color={Acid.lime} />
+                  {meal.imageUri
+                    ? <Image source={{ uri: meal.imageUri }} style={styles.pendingThumb} />
+                    : <ActivityIndicator size="small" color={Acid.lime} />}
                   <Text style={{ fontSize: 12, color: Acid.tx2, fontStyle: 'italic', flex: 1 }} numberOfLines={1}>
-                    {getParsingMessage()}
+                    {pendingMessage(meal.id, meal.imageUri)}
                   </Text>
                 </View>
               </View>
@@ -682,6 +700,11 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Acid.hair,
+  },
+  pendingThumb: {
+    width: 20,
+    height: 20,
+    borderRadius: 4,
   },
   rowTime: {
     width: 46,
