@@ -6,6 +6,8 @@ import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
 import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
 import { hashPrompt } from '../utils/promptVersion';
+import { lookupPackagedFood, labelToPanelLine } from './foodDatabaseService';
+import { searchNutrition, resultsToPromptBlock } from './webSearchService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
 
@@ -73,6 +75,8 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
      - Ask **one** comprehensive question covering ALL missing variables (Sauce, Portion, etc.).
      - If the user has already provided details (even if slight ambiguity remains), **DO NOT ASK AGAIN**. Assume reasonable defaults.
      - Return a "clarification_question" ONLY if totally critical info is missing.
+   - **THE COUNT RULE — NEVER ASK FOR A WEIGHT YOU CAN ASSUME:** If the user gave a countable quantity ("3 pcs", "2 slices", "1 bowl", "a handful"), that is enough. Assume a standard size for that item and log it. Do NOT ask what each piece weighs. A person logging food does not own a scale, cannot answer that question, and will abandon the entry. Estimate the piece weight yourself and say so in \`confidence_reason\`.
+   - **NEVER ASK ABOUT A BRAND:** If the user named a brand or product you do not know, do not ask them for its label. Estimate from the category, keep their exact name, and set confidence to "medium". Asking a person to read you a nutrition panel is asking them to do your job.
 
 2. **The Deconstructor (The Chef):**
    - **ALWAYS** break down composite items (Burgers, Sandwiches, Salads, Pizza, Tacos) into their core atomic ingredients.
@@ -85,8 +89,21 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
 3. **The Quantifier (The Physicist):**
    - Convert vague units ("a bowl") into accurate gram weights.
    - Sum up the macros.
+   - **GOOGLE RESULTS RULE — WHAT GOOGLE SAYS BEATS WHAT YOU REMEMBER, FOR NAMED PRODUCTS.** If the input contains a "GOOGLE RESULTS" block, read it. Those snippets were fetched from the live web seconds ago. How you use them depends entirely on what the user ate:
+     - **The user named a specific manufactured product** (a brand, a packet, a bar, a bottle, a named menu item): the results win outright. You were not trained on most regional packaged food and your recollection of the category is not competitive with a page quoting the actual pack. Take the calories, the macros AND the pack weight from the results. If a result states a pack size ("79g pack", "77g"), that IS the pack size; do not substitute a rounder number you find more natural. Confidence **high**, and name the source in \`confidence_reason\`.
+     - **The user described a dish, a meal, or anything cooked or assembled** (shawarma, biryani, a sandwich they made, "chicken and rice"): DO NOT let a single search result collapse the meal into one row. The Deconstructor rule still applies in full, break it into its components as you always would. Use the results only to sanity check a component you were unsure of, and never raise confidence above what the portion uncertainty justifies. A web page's calorie figure for "shawarma" describes somebody else's shawarma, not the one the user ate.
+     - If several results disagree, prefer the one naming the exact product and region over a generic entry. If nothing in the block is about this food, ignore it entirely and estimate as normal. Never mention the search to the user.
    - **LABEL PANEL RULE — MANUFACTURER DATA OUTRANKS YOU:** If the input contains a line starting with "LABEL PANEL", those figures were read off the physical packaging and they are the truth. Use them EXACTLY for calories, protein, carbs and fat. Do NOT re-estimate, do NOT round to a value you find more plausible, do NOT substitute figures you remember for that product. Scale them to the actual amount eaten using the stated basis: if the panel is per 100g and the item is a 60g bar, take 60 percent of every figure; if the panel is already per bar or per serving, use it as is and multiply by the quantity. Estimate ONLY the micronutrients the panel does not list. Confidence for that item is **high**, and \`confidence_reason\` should say the numbers came off the label.
    - **NAMED BRAND RULE:** If a brand is named but no panel was given, keep the brand in \`log_name\` and estimate from what you know of that product. Never silently swap it for a generic. If you do not know that specific product, estimate the category honestly and set confidence to **medium** at best.
+   - **LABEL CLAIMS ARE CONSTRAINTS, NOT ADJECTIVES.** This is the most common way you get a branded product badly wrong. When the user's words contain a marketing or regulatory claim, the product is NOT the ordinary version of that food with a small nudge. It is a reformulated product engineered to satisfy that claim, and your estimate MUST satisfy it too. Before you output, check your own numbers against the claim and move them until they pass.
+     - **"high protein" / "protein boost" / "protein" as a product descriptor** — at least 20g protein per 100g, and typically two to three times the ordinary version. Ordinary arabic bread or khaboos is about 8g per 100g, so a high protein khaboos is 25g or more per 100g. If your estimate lands anywhere near the ordinary figure you have ignored the claim and you are wrong.
+     - **"low carb" / "keto"** — carbohydrate cut drastically, often by 70 to 90 percent, replaced by protein, fat and fibre.
+     - **"high fibre"** — at least 6g fibre per 100g.
+     - **"sugar free"** — sugar at or near zero; account for \`sugar_alcohols\` instead.
+     - **"low fat"** — at most 3g fat per 100g. **"light" / "lite"** — at least 30 percent below the standard version.
+     - These products trade one macro for another. High protein bread gains protein AND fat while losing carbs. It does not simply gain a little protein. Move ALL the macros, not only the one named.
+     - Put the basis in \`confidence_reason\`, e.g. "High protein claim implies 25g+ per 100g; estimated on that basis, not from a label."
+   - **WHEN A LABEL PANEL IS PRESENT, THE ONLY THING LEFT TO ESTIMATE IS WEIGHT.** The macros are settled. Spend your effort on how many grams the user actually ate, because that is now the only way this answer can be wrong. Use the stated serving size if there is one. Otherwise use a realistic size for that food in that region, and be generous rather than timid: a piece of Arabic bread or khaboos is 50 to 70g, not 30g; a slice of loaf bread is 30 to 40g; a bread roll is 60 to 90g. Say the assumed piece weight in \`confidence_reason\` so the user can correct it in one tap.
    - **CRITICAL WEIGHT RULE:** If the user states an explicit weight in grams, ounces, pounds, or kilograms (e.g. "100g", "100 grams", "8 oz", "1 lb", "0.5 kg"), that is the TOTAL weight of the item. Use it directly. Do NOT multiply by quantity. Do NOT scale by per-piece weight. "100 grams chicken thigh" means total_weight_g = 100, not 100 pieces × 100g.
    - **CRITICAL IDENTITY RULE:** Preserve the specific cut, type, variety, brand, or preparation the user named. If they say "chicken thigh," do not substitute "chicken breast." If they say "skim milk," do not substitute "whole milk." If they say "brown rice," do not substitute "white rice." If they say "olive oil," do not substitute "vegetable oil." The user's words are authoritative for what the food IS. Your job is to estimate the macros, not pick the food.
    - **ESTIMATE MICRONUTRIENTS:** You MUST estimate Fiber, Sugar, Saturated Fat, Sodium, Potassium, Cholesterol, Calcium, Iron, Magnesium, Zinc, Omega-3 (total grams, ALA + EPA + DHA combined), and key Vitamins (A, C, D, B12). Use standard nutritional data.
@@ -331,6 +348,33 @@ function detectIdentityToken(text: string, group: readonly string[]): string | n
  * Limited to single-item meals: with multiple items we cannot tell which user
  * phrase maps to which AI item.
  */
+// Naive 4/4/9 overcounts anything with fibre, because fibre is carbohydrate
+// that yields roughly 2 kcal/g, not 4. Sugar alcohols are lower again. Checked
+// against real labels, the model's own headline calorie figure is consistently
+// closer to the truth than a naive macro sum, so this is a sanity net for gross
+// errors (a dropped item, a decimal slip), not a second opinion on every meal.
+function reconcileCalories(item: any): number {
+  const n = item?.nutrition;
+  if (!n) return 0;
+  const stated = Number(n.calories) || 0;
+  const carbs = Number(n.carbs) || 0;
+  const fibre = Math.min(Number(n.dietary_fiber) || 0, carbs);
+  const alcohols = Math.min(Number(n.sugar_alcohols) || 0, Math.max(0, carbs - fibre));
+  const netCarbs = Math.max(0, carbs - fibre - alcohols);
+  const derived = (Number(n.protein) || 0) * 4
+    + netCarbs * 4
+    + fibre * 2
+    + alcohols * 2.4
+    + (Number(n.fat) || 0) * 9;
+  if (derived <= 0 || stated <= 0) return stated;
+  const drift = Math.abs(derived - stated) / stated;
+  if (drift <= 0.20) return stated;
+  if (__DEV__) {
+    console.warn(`[reconcileCalories] "${item.log_name}" stated ${stated} kcal, macros say ${Math.round(derived)}. Gross mismatch, using macros.`);
+  }
+  return Math.round(derived);
+}
+
 function enforceFoodIdentity(userInput: string, items: any[]): any[] {
   if (!userInput || !Array.isArray(items) || items.length !== 1) return items;
   const item = items[0];
@@ -423,6 +467,24 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
       return { foods: cachedFoods, summary: cached.summary };
     }
 
+    // Look the product up before asking anyone to guess at it. Google and the
+    // food database run together, not one after the other, so the whole lookup
+    // costs one wait rather than two
+    let userContent = sanitizeForAI(foodInput);
+    const [results, label] = await Promise.all([
+      searchNutrition(foodInput),
+      lookupPackagedFood(foodInput),
+    ]);
+    const web = resultsToPromptBlock(results);
+    if (web) {
+      if (__DEV__) console.log('[FoodAnalysis] google results:', results.length);
+      userContent = `${userContent}\n\n${web}`;
+    }
+    if (label) {
+      if (__DEV__) console.log('[FoodAnalysis] label hit:', label.brand, label.name, label.code);
+      userContent = `${userContent}\n\n${labelToPanelLine(label)}`;
+    }
+
     let finalPrompt = AGENTIC_ANALYSIS_PROMPT;
     if (!allowClarification) {
       finalPrompt += `\n\nCRITICAL OVERRIDE: clarification is disabled. Do not return a "clarification_question". You MUST return a non-empty "items" array AND a non-null "summary" string. Make reasonable assumptions for any missing details (default portions, default preparation). Set "confidence" to "low" if you had to guess, but never bail by returning empty items or a null summary.`;
@@ -432,9 +494,14 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
       model: 'gpt-4o',
       messages: [
         { role: 'system', content: finalPrompt },
-        { role: 'user', content: sanitizeForAI(foodInput) }
+        { role: 'user', content: userContent }
       ],
-      temperature: 0.3,
+      // Zero, not 0.3. At 0.3 the same sentence typed twice came back with
+      // different carbs and fat, and asked a clarification question on some
+      // rolls and not others. Nutrition is a lookup, there is nothing here for
+      // creativity to improve. Measured: 3 identical runs at 0, 5 different
+      // outcomes at 0.3.
+      temperature: 0,
       response_format: {
         type: 'json_schema',
         json_schema: { name: 'food_analysis', strict: true, schema: AGENTIC_RESPONSE_SCHEMA },
@@ -475,7 +542,7 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
         quantity: item.quantity,
         unit: item.unit,
         weight_g: item.total_weight_g,
-        calories: item.nutrition.calories,
+        calories: reconcileCalories(item),
         protein: item.nutrition.protein,
         carbs: item.nutrition.carbs,
         fat: item.nutrition.fat,

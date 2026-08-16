@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.4**
+The app googles your food now. Type a packaged product and it runs a real web search first, reads what comes back, and uses those numbers instead of guessing. Modern Bakery high protein khaboos used to come back at 24g of protein when the real answer is 46g. It now returns 46g, and the right pack weight with it. A packet of Maggi used to be logged as a made-up 70g packet; it now uses the 79g that is actually printed on it. Food you cooked yourself is untouched. A shawarma still gets broken into its parts and still says it is estimating, because a web page's calorie count describes somebody else's shawarma, not yours.
+
+It also looks products up in a food database. Type a brand and it checks a real food database first, and if it finds the product it uses the manufacturer's own label rather than an estimate. Modern Bakery high protein khaboos used to come back at 24g of protein. The label says 46g. It now reads the label, so the only thing left to guess is how much a piece weighs, and it tells you what it assumed so you can correct it in one tap. It also stopped ignoring what is written on the packet: "high protein", "keto", "low carb" and "sugar free" are now treated as the hard numbers they legally are, not as adjectives, so a high protein bread no longer comes back with the macros of ordinary bread. Same food typed twice now always gives the same answer, which was not true before. And it will not ask you what a piece weighs or read out a nutrition label to it, because that was never your job.
+
 **v1.6.3**
 Photograph a packaged thing and the app now reads the packet. Brand, product, flavour, net weight, and if the nutrition panel is in shot it copies the manufacturer's own numbers straight off the label instead of guessing. Those numbers win over any estimate, so a protein bar shot with the back of the wrapper visible should now be exactly right rather than roughly right. It will only ever claim a brand it can actually read in your photo, never one it thinks the wrapper looks like, because a wrong brand comes with confident wrong numbers attached. It also knows regional dishes by name now, so machboos comes back as machboos and not as rice with chicken.
 

@@ -28,6 +28,66 @@ const OPENAI_VISION_MODEL = Deno.env.get("OPENAI_VISION_MODEL") ?? "gpt-5.6-terr
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
+// Two ways to reach Google. Serper returns Google's own answer box and snippets
+// from one key. Google's official Programmable Search needs a key and an engine
+// id. Whichever secret is set wins, Serper first because its answer box is the
+// same block the user sees at the top of a real search.
+const SERPER_API_KEY = Deno.env.get("SERPER_API_KEY");
+const GOOGLE_CSE_KEY = Deno.env.get("GOOGLE_CSE_KEY");
+const GOOGLE_CSE_ID = Deno.env.get("GOOGLE_CSE_ID");
+
+interface SearchResult {
+  title: string;
+  snippet: string;
+  link: string;
+}
+
+/** null means no search key is configured. An empty array means Google found nothing. */
+async function googleSearch(query: string): Promise<SearchResult[] | null> {
+  try {
+    if (SERPER_API_KEY) {
+      const res = await fetch("https://google.serper.dev/search", {
+        method: "POST",
+        headers: { "X-API-KEY": SERPER_API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ q: query, gl: "ae", num: 6 }),
+      });
+      if (!res.ok) return [];
+      const d = await res.json();
+      const out: SearchResult[] = [];
+      // The answer box is Google's own extracted answer. It goes first because
+      // it is the block that carries the number rather than a link to it
+      if (d.answerBox) {
+        const a = d.answerBox;
+        const text = [a.answer, a.snippet, a.title].filter(Boolean).join(" — ");
+        if (text) out.push({ title: "Google answer", snippet: String(text).slice(0, 600), link: a.link || "" });
+      }
+      if (d.knowledgeGraph?.description) {
+        out.push({ title: "Google knowledge panel", snippet: String(d.knowledgeGraph.description).slice(0, 400), link: d.knowledgeGraph.descriptionLink || "" });
+      }
+      for (const r of (d.organic || []).slice(0, 5)) {
+        out.push({ title: String(r.title || "").slice(0, 200), snippet: String(r.snippet || "").slice(0, 400), link: String(r.link || "") });
+      }
+      return out;
+    }
+
+    if (GOOGLE_CSE_KEY && GOOGLE_CSE_ID) {
+      const url = `https://www.googleapis.com/customsearch/v1?key=${GOOGLE_CSE_KEY}&cx=${GOOGLE_CSE_ID}&num=6&gl=ae&q=${encodeURIComponent(query)}`;
+      const res = await fetch(url);
+      if (!res.ok) return [];
+      const d = await res.json();
+      return (d.items || []).map((r: Record<string, string>) => ({
+        title: String(r.title || "").slice(0, 200),
+        snippet: String(r.snippet || "").slice(0, 400),
+        link: String(r.link || ""),
+      }));
+    }
+
+    return null;
+  } catch {
+    return [];
+  }
+}
+
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers":
@@ -156,6 +216,21 @@ serve(async (req) => {
       return jsonError("Too many requests. Slow down and try again shortly.", 429);
     }
 
+    // ── Google search ──
+    // The model cannot search and does not know regional packaged food. Google
+    // does. The key lives here as a secret, never in the bundle.
+    if (body.type === "web_search") {
+      const q = typeof body.query === "string" ? body.query.slice(0, 300) : "";
+      if (!q) return jsonError("Missing query.", 400);
+      const results = await googleSearch(q);
+      if (results === null) {
+        return jsonError("Search is not configured.", 501);
+      }
+      return new Response(JSON.stringify({ results }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // ── Whisper transcription (OpenAI only, optional) ──
     if (body.type === "transcription") {
       if (!OPENAI_API_KEY) {
@@ -264,6 +339,11 @@ serve(async (req) => {
       // self-healing retry stripped it and asked again
       if (body.temperature !== undefined && !hasImage) chatBody.temperature = body.temperature;
       if (body.response_format) chatBody.response_format = body.response_format;
+      // Tool passthrough exists for one reason: a model recalling a Gulf bakery
+      // product from memory is guessing, and a model that can look up the label
+      // is not. The self-healing retry below strips this if the tier rejects it
+      if (body.tools) chatBody.tools = body.tools;
+      if (body.tool_choice) chatBody.tool_choice = body.tool_choice;
     } else {
       chatBody.model = hasImage ? MOONSHOT_VISION_MODEL : MOONSHOT_MODEL;
       // kimi rejects any temperature but 1, so it is dropped rather than sent
@@ -320,6 +400,8 @@ serve(async (req) => {
         ? "temperature"
         : /response_format|json_schema/i.test(errText)
         ? "response_format"
+        : /tool|web_search/i.test(errText)
+        ? "tools"
         : null;
       if (chatRes.status === 400 && offender && offender in chatBody) {
         const retryBody = { ...chatBody };

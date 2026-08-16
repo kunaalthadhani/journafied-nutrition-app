@@ -13,9 +13,6 @@ import {
   Dimensions,
   LayoutAnimation,
   UIManager,
-  FlatList,
-  NativeSyntheticEvent,
-  NativeScrollEvent,
 } from 'react-native';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
@@ -138,118 +135,11 @@ const convertWeightField = (val: string, from: WeightUnit, to: WeightUnit): stri
   return kgToDisplay(kg, to);
 };
 
-// ── Scroll Picker ───────────────────────────────────────────────────
-const PICKER_ITEM_HEIGHT = 48;
-const PICKER_VISIBLE_ITEMS = 5;
-const PICKER_HEIGHT = PICKER_ITEM_HEIGHT * PICKER_VISIBLE_ITEMS;
-
-interface ScrollPickerProps {
-  items: { label: string; value: number | string }[];
-  selectedValue: number | string;
-  onValueChange: (value: number | string) => void;
-  width?: number;
-}
-
-const ScrollPicker: React.FC<ScrollPickerProps> = ({ items, selectedValue, onValueChange, width = 80 }) => {
-  const flatListRef = useRef<FlatList>(null);
-  const isScrollingRef = useRef(false);
-  const selectedIdx = items.findIndex(i => i.value === selectedValue);
-
-  useEffect(() => {
-    if (selectedIdx >= 0 && flatListRef.current && !isScrollingRef.current) {
-      setTimeout(() => {
-        flatListRef.current?.scrollToOffset({ offset: selectedIdx * PICKER_ITEM_HEIGHT, animated: false });
-      }, 50);
-    }
-  }, [selectedIdx]);
-
-  const scrollToItem = useCallback((idx: number) => {
-    const clamped = Math.max(0, Math.min(idx, items.length - 1));
-    isScrollingRef.current = true;
-    flatListRef.current?.scrollToOffset({ offset: clamped * PICKER_ITEM_HEIGHT, animated: true });
-    if (items[clamped]) onValueChange(items[clamped].value);
-    setTimeout(() => { isScrollingRef.current = false; }, 350);
-  }, [items, onValueChange]);
-
-  const handleScrollEnd = useCallback((e: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const y = e.nativeEvent.contentOffset.y;
-    const idx = Math.round(y / PICKER_ITEM_HEIGHT);
-    const clamped = Math.max(0, Math.min(idx, items.length - 1));
-    if (items[clamped] && items[clamped].value !== selectedValue) {
-      onValueChange(items[clamped].value);
-    }
-    isScrollingRef.current = false;
-  }, [items, selectedValue, onValueChange]);
-
-  const handleScrollBegin = useCallback(() => {
-    isScrollingRef.current = true;
-  }, []);
-
-  const paddingItems = Math.floor(PICKER_VISIBLE_ITEMS / 2);
-
-  return (
-    <View style={[pSt.container, { width, height: PICKER_HEIGHT }]}>
-      <View style={[pSt.highlight, { top: PICKER_ITEM_HEIGHT * paddingItems }]} />
-      <FlatList
-        ref={flatListRef}
-        data={items}
-        keyExtractor={(item, i) => `${item.value}-${i}`}
-        showsVerticalScrollIndicator={false}
-        snapToInterval={PICKER_ITEM_HEIGHT}
-        decelerationRate="fast"
-        onScrollBeginDrag={handleScrollBegin}
-        onMomentumScrollEnd={handleScrollEnd}
-        contentContainerStyle={{ paddingVertical: PICKER_ITEM_HEIGHT * paddingItems }}
-        getItemLayout={(_, index) => ({ length: PICKER_ITEM_HEIGHT, offset: PICKER_ITEM_HEIGHT * index, index })}
-        renderItem={({ item, index }) => {
-          const isSelected = item.value === selectedValue;
-          return (
-            <TouchableOpacity activeOpacity={0.7} onPress={() => scrollToItem(index)} style={[pSt.item, { height: PICKER_ITEM_HEIGHT }]}>
-              <Text style={[pSt.itemText, isSelected ? {
-                fontFamily: Acid.serif,
-                color: Acid.tx,
-                fontSize: 22,
-              } : {
-                color: Acid.tx3,
-                fontSize: 16,
-              }]}>{item.label}</Text>
-            </TouchableOpacity>
-          );
-        }}
-      />
-    </View>
-  );
-};
-
-const pSt = StyleSheet.create({
-  container: { overflow: 'hidden' },
-  highlight: {
-    position: 'absolute', left: 0, right: 0, height: PICKER_ITEM_HEIGHT,
-    borderTopWidth: 1.5, borderBottomWidth: 1.5, borderColor: Acid.lime + '55',
-    backgroundColor: Acid.limeSoft, zIndex: 1, pointerEvents: 'none',
-  },
-  item: { alignItems: 'center', justifyContent: 'center' },
-  itemText: { textAlign: 'center' },
-});
-
 // ── Helpers for DOB picker ──────────────────────────────────────────
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const MONTH_ITEMS = MONTHS.map((m, i) => ({ label: m.slice(0, 3).toUpperCase(), value: i + 1 }));
 const currentYear = new Date().getFullYear();
 const daysInMonth = (m: number, y: number) => new Date(y || 2000, m, 0).getDate();
-
-// ── Helpers for Height picker ───────────────────────────────────────
-const CM_ITEMS = Array.from({ length: 121 }, (_, i) => {
-  const v = 120 + i;
-  return { label: String(v), value: v };
-});
-const FT_ITEMS = Array.from({ length: 5 }, (_, i) => {
-  const v = 3 + i;
-  return { label: `${v}'`, value: v };
-});
-const IN_ITEMS = Array.from({ length: 12 }, (_, i) => ({
-  label: `${i}"`, value: i,
-}));
 
 const ageFromDob = (month: number, day: number, year: number): number => {
   const today = new Date();
@@ -277,6 +167,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [dobDay, setDobDay] = useState(initDob ? initDob.getDate() : 1);
   const [dobYear, setDobYear] = useState(initDob ? initDob.getFullYear() : 2000);
   const [dobFocus, setDobFocus] = useState<'day' | 'year' | null>(null);
+  const [measureFocus, setMeasureFocus] = useState<string | null>(null);
 
   // Typing a date can produce one that does not exist. A wheel could not, which
   // was its only real advantage, so the check moves here
@@ -944,31 +835,77 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     );
   };
 
+  // One numeral entry pattern, shared by height and weight. The number is the
+  // thing being asked for, so the number is the biggest thing on the screen
+  const renderMeasure = (
+    label: string,
+    value: string,
+    onChange: (t: string) => void,
+    unit: string,
+    key: string,
+    placeholder: string,
+  ) => (
+    <View style={{ flex: 1 }}>
+      <Text style={st.dobLabel}>{label}</Text>
+      <View style={st.measureRow}>
+        <TextInput
+          style={[st.measureField, { borderBottomColor: measureFocus === key ? Acid.lime : value ? Acid.hair2 : Acid.hair }]}
+          selectionColor={Acid.lime}
+          keyboardType="decimal-pad"
+          maxLength={5}
+          value={value}
+          placeholder={placeholder}
+          placeholderTextColor={Acid.tx3}
+          onFocus={() => setMeasureFocus(key)}
+          onBlur={() => setMeasureFocus(null)}
+          onChangeText={onChange}
+        />
+        <Text style={st.measureUnit}>{unit}</Text>
+      </View>
+    </View>
+  );
+
+  const renderUnitToggle = (units: readonly string[], active: string, onPick: (u: any) => void) => (
+    <View style={st.unitRow}>
+      {units.map(u => (
+        <TouchableOpacity key={u} onPress={() => onPick(u)} style={[st.unitChip, active === u && st.unitChipOn]} activeOpacity={0.7}>
+          <Text style={[st.unitChipTxt, { color: active === u ? Acid.moss : Acid.tx3 }]}>{u.toUpperCase()}</Text>
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
+
   const renderHeight = () => {
+    // Echoing the other unit back is the whole reason this beats a wheel. She
+    // knows her height in one system and can sanity check it in the other
+    const echo = heightUnit === 'cm'
+      ? (heightCmVal > 0 ? `${Math.floor(heightCmVal / 2.54 / 12)} foot ${Math.round((heightCmVal / 2.54) % 12)}` : '')
+      : (heightFtVal > 0 ? `${Math.round(heightFtVal * 30.48 + heightInVal * 2.54)} cm` : '');
+
     return (
       <View style={st.step}>
         <Text style={st.title}>How tall are you?</Text>
-        <View style={[st.toggle, { alignSelf: 'center', marginBottom: 24 }]}>
-          {(['cm', 'ft'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, heightUnit === u && st.togActive]} onPress={() => setHeightUnit(u)}>
-              <Text style={[st.togTxt, { color: heightUnit === u ? Acid.lime : Acid.tx3 }]}>{u.toUpperCase()}</Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {renderUnitToggle(['cm', 'ft'] as const, heightUnit, setHeightUnit)}
+
         {heightUnit === 'cm' ? (
-          <View style={st.pickerRow}>
-            <ScrollPicker items={CM_ITEMS} selectedValue={heightCmVal} onValueChange={v => { setHeightCmVal(v as number); setHeightTouched(true); }} width={100} />
-            <Text style={[st.pickerUnit, { color: Acid.tx2 }]}>cm</Text>
+          <View style={st.dobRow}>
+            {renderMeasure('HEIGHT', heightCmVal > 0 ? String(heightCmVal) : '', t => {
+              setHeightCmVal(Number(t.replace(/\D/g, '')) || 0); setHeightTouched(true);
+            }, 'cm', 'cm', '170')}
+            <View style={{ flex: 1 }} />
           </View>
         ) : (
-          <View style={st.pickerRow}>
-            <ScrollPicker items={FT_ITEMS} selectedValue={heightFtVal} onValueChange={v => { setHeightFtVal(v as number); setHeightTouched(true); }} width={80} />
-            <ScrollPicker items={IN_ITEMS} selectedValue={heightInVal} onValueChange={v => { setHeightInVal(v as number); setHeightTouched(true); }} width={80} />
+          <View style={st.dobRow}>
+            {renderMeasure('FEET', heightFtVal > 0 ? String(heightFtVal) : '', t => {
+              setHeightFtVal(Number(t.replace(/\D/g, '')) || 0); setHeightTouched(true);
+            }, 'ft', 'ft', '5')}
+            {renderMeasure('INCHES', String(heightInVal), t => {
+              setHeightInVal(Math.min(11, Number(t.replace(/\D/g, '')) || 0)); setHeightTouched(true);
+            }, 'in', 'in', '7')}
           </View>
         )}
-        {!heightTouched && (
-          <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 18, color: Acid.tx3 }}>Scroll to your height, or tap it to confirm</Text>
-        )}
+
+        <Text style={st.dobEcho}>{echo ? `That's ${echo}.` : 'Type your height.'}</Text>
       </View>
     );
   };
@@ -976,37 +913,44 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [weightError, setWeightError] = useState('');
 
   const renderWeight = () => {
+    // The two numbers are a journey, not two unrelated form fields. Showing the
+    // distance between them is the only thing on this screen she does not
+    // already know
+    const from = parseFloat(weight);
+    const to = parseFloat(targetWeight);
+    const delta = Number.isFinite(from) && Number.isFinite(to) ? Math.abs(from - to) : null;
+    const dir = Number.isFinite(from) && Number.isFinite(to) ? (to < from ? 'to lose' : to > from ? 'to gain' : null) : null;
+
+    const echo = goal === 'maintain'
+      ? (Number.isFinite(from) ? 'Holding steady from here.' : 'Type where you are now.')
+      : delta != null && dir
+        ? `${Math.round(delta * 10) / 10} ${weightUnit} ${dir}.`
+        : Number.isFinite(from)
+          ? 'A target is optional. You can add it later.'
+          : 'Type where you are now.';
+
     return (
       <View style={st.step}>
         <Text style={st.title}>Where are we starting?</Text>
-        {/* Unit toggle */}
-        <View style={[st.toggle, { alignSelf: 'center', marginBottom: 24 }]}>
-          {(['kg', 'lbs'] as const).map(u => (
-            <TouchableOpacity key={u} style={[st.togBtn, weightUnit === u && st.togActive]} onPress={() => { setWeight(w => convertWeightField(w, weightUnit, u)); setTargetWeight(t => convertWeightField(t, weightUnit, u)); setWeightUnit(u); setTargetWeightUnit(u); persistWeightUnit(u).catch(() => {}); }}>
-              <Text style={[st.togTxt, { color: weightUnit === u ? Acid.lime : Acid.tx3 }]}>{u.toUpperCase()}</Text>
-            </TouchableOpacity>
-          ))}
+        {renderUnitToggle(['kg', 'lbs'] as const, weightUnit, (u) => {
+          setWeight(w => convertWeightField(w, weightUnit, u));
+          setTargetWeight(t => convertWeightField(t, weightUnit, u));
+          setWeightUnit(u); setTargetWeightUnit(u);
+          persistWeightUnit(u).catch(() => {});
+        })}
+
+        <View style={st.dobRow}>
+          {renderMeasure('TODAY', weight, v => { setWeight(v); setWeightError(''); }, weightUnit, 'w-now',
+            weightUnit === 'kg' ? '70' : '150')}
+          {goal !== 'maintain'
+            ? renderMeasure('GOAL', targetWeight, v => { setTargetWeight(v); setWeightError(''); }, weightUnit, 'w-goal',
+              weightUnit === 'kg' ? '65' : '140')
+            : <View style={{ flex: 1 }} />}
         </View>
-        <View style={st.field}>
-          <Text style={st.fieldLbl}>CURRENT WEIGHT ({weightUnit.toUpperCase()})</Text>
-          <TextInput style={[st.input, { borderBottomColor: weight ? Acid.lime : Acid.hair2 }]}
-            selectionColor={Acid.lime}
-            value={weight} onChangeText={(v) => { setWeight(v); setWeightError(''); }} placeholder={weightUnit === 'kg' ? '70' : '150'}
-            placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} autoFocus />
-        </View>
-        {/* A target weight means nothing when the goal is to stay put */}
-        {goal !== 'maintain' && (
-          <View style={st.field}>
-            <Text style={st.fieldLbl}>TARGET WEIGHT ({weightUnit.toUpperCase()})<Text style={{ fontWeight: '400' }}>  (optional)</Text></Text>
-            <TextInput style={[st.input, { borderBottomColor: targetWeight ? Acid.lime : Acid.hair2 }]}
-              selectionColor={Acid.lime}
-              value={targetWeight} onChangeText={(v) => { setTargetWeight(v); setWeightError(''); }} placeholder={targetWeightUnit === 'kg' ? '65' : '140'}
-              placeholderTextColor={Acid.tx3} keyboardType="numeric" maxLength={5} />
-          </View>
-        )}
-        {weightError !== '' && (
-          <Text style={[st.weightWarning, { color: Acid.error }]}>{weightError}</Text>
-        )}
+
+        {weightError !== ''
+          ? <Text style={[st.weightWarning, { color: Acid.error, textAlign: 'left', marginTop: 26 }]}>{weightError}</Text>
+          : <Text style={st.dobEcho}>{echo}</Text>}
       </View>
     );
   };
@@ -1235,16 +1179,11 @@ const st = StyleSheet.create({
   dual: { flexDirection: 'row', gap: 24 },
   unitLbl: { marginTop: 6, fontSize: Typography.fontSize.sm, fontWeight: '500' },
 
-  toggle: { flexDirection: 'row', gap: 20 },
-  togBtn: { paddingVertical: 6, borderBottomWidth: 2, borderBottomColor: 'transparent' },
-  togActive: { borderBottomColor: Acid.lime },
-  togTxt: { fontSize: Typography.fontSize.xs, letterSpacing: 1, fontWeight: Typography.fontWeight.bold },
 
   // Weight warning
   weightWarning: { fontSize: Typography.fontSize.sm, textAlign: 'center', marginTop: -12, marginBottom: 8 },
 
   // Picker
-  pickerRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, marginTop: 8 },
   dobLabel: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 10 },
   monthGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 28 },
   monthChip: {
@@ -1259,9 +1198,19 @@ const st = StyleSheet.create({
     fontSize: 28, fontFamily: Acid.serif, color: Acid.tx,
   },
   dobEcho: { fontFamily: Acid.serif, fontSize: 17, color: Acid.tx2, marginTop: 26 },
-  pickerUnit: { fontSize: 18, fontWeight: '600', marginLeft: 4 },
-  ageBadge: { marginTop: 20, paddingHorizontal: 20, paddingVertical: 10, borderRadius: 20 },
-  ageBadgeText: { fontSize: Typography.fontSize.md, fontWeight: Typography.fontWeight.semiBold },
+  unitRow: { flexDirection: 'row', gap: 8, marginBottom: 30 },
+  unitChip: {
+    paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999,
+    borderWidth: 1, borderColor: Acid.hair2,
+  },
+  unitChipOn: { backgroundColor: Acid.lime, borderColor: Acid.lime },
+  unitChipTxt: { fontSize: 11, letterSpacing: 1.5 },
+  measureRow: { flexDirection: 'row', alignItems: 'baseline', gap: 8 },
+  measureField: {
+    flex: 1, borderBottomWidth: 1.5, paddingVertical: 6, paddingHorizontal: 0,
+    fontSize: 38, fontFamily: Acid.serif, color: Acid.tx,
+  },
+  measureUnit: { fontSize: 13, color: Acid.tx3, letterSpacing: 1 },
 
   // Breakdown
   breakdownCard: { width: '100%', paddingTop: 12, marginBottom: 20, borderTopWidth: 1, borderTopColor: Acid.hair },
