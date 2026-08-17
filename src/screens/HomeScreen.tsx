@@ -150,6 +150,10 @@ export const HomeScreen: React.FC = () => {
   // The photo currently under the progress bar. Cleared on handoff or on an
   // answer, whichever lands first
   const [analyzingPhoto, setAnalyzingPhoto] = useState<string | null>(null);
+  // A note restarts the read. The run counter stamps the abandoned answer stale,
+  // and the pending id is reused so the same row is updated, not duplicated
+  const photoRun = React.useRef(0);
+  const photoPendingId = React.useRef<string | null>(null);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
   const [goalsSet, setGoalsSet] = useState(false);
@@ -2047,8 +2051,13 @@ export const HomeScreen: React.FC = () => {
   // The photo lands in the log the instant it is picked, same as typing does.
   // There is no upload: the image never leaves the phone until the analysis call,
   // so the old progress bar was counting nothing.
-  const analyzeUploadedImage = async (imageUri?: string) => {
+  const analyzeUploadedImage = async (imageUri?: string, note?: string) => {
     const uriToAnalyze = imageUri || uploadedImage;
+    // A note arrives while the first read is already in flight. Bumping the run
+    // stamps that read stale so its answer is dropped rather than racing the
+    // one that knows she only ate two slices
+    const run = ++photoRun.current;
+    const isStale = () => photoRun.current !== run;
     if (!uriToAnalyze) {
       if (__DEV__) console.log('No image to analyze, imageUri:', imageUri, 'uploadedImage:', uploadedImage);
       return;
@@ -2068,10 +2077,13 @@ export const HomeScreen: React.FC = () => {
     }
 
     const dateKey = getDateKey(selectedDate);
-    const pendingId = generateId();
+    // A re-run after a note reuses the row already on screen, so she sees one
+    // meal being worked on rather than a second one appearing beside it
+    const pendingId = photoPendingId.current ?? generateId();
+    photoPendingId.current = pendingId;
     const pendingMeal: Meal = {
       id: pendingId,
-      prompt: 'Photo',
+      prompt: note?.trim() ? note.trim() : 'Photo',
       summary: 'Reading the photo...',
       foods: [],
       timestamp: Date.now(),
@@ -2081,21 +2093,28 @@ export const HomeScreen: React.FC = () => {
       loadingState: 'analyzing',
     };
 
-    setMealsByDate(prev => ({
-      ...prev,
-      [dateKey]: [...(prev[dateKey] || []), pendingMeal],
-    }));
+    setMealsByDate(prev => {
+      const list = prev[dateKey] || [];
+      const has = list.some(m => m.id === pendingId);
+      return {
+        ...prev,
+        [dateKey]: has ? list.map(m => m.id === pendingId ? pendingMeal : m) : [...list, pendingMeal],
+      };
+    });
 
     // The bar goes up over work that is already running. It never gates the
     // call, and an answer that beats it dismisses it early rather than waiting
     setAnalyzingPhoto(uriToAnalyze);
 
+    const done = () => { photoPendingId.current = null; };
+
     const failWith = (title: string, message: string) => {
       setAnalyzingPhoto(null);
       removePendingMeal(dateKey, pendingId);
+      done();
       Alert.alert(title, message, [
         { text: 'Cancel', style: 'cancel', onPress: () => setUploadedImage(null) },
-        { text: 'Try again', onPress: () => analyzeUploadedImage(uriToAnalyze) },
+        { text: 'Try again', onPress: () => analyzeUploadedImage(uriToAnalyze, note) },
       ]);
     };
 
@@ -2106,19 +2125,22 @@ export const HomeScreen: React.FC = () => {
       let summary: string | undefined;
 
       try {
-        const analysisPromise = analyzeFoodFromImage(uriToAnalyze);
+        const analysisPromise = analyzeFoodFromImage(uriToAnalyze, note);
         const timeoutPromise = new Promise<{ foods: ParsedFood[], summary?: string }>((_, reject) =>
           setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
         );
 
         const result = await Promise.race([analysisPromise, timeoutPromise]);
+        if (isStale()) return;
         parsedFoods = result.foods || [];
         summary = result.summary;
 
       } catch (apiError: any) {
+        if (isStale()) return;
         if (apiError?.message === 'OPENAI_API_KEY_NOT_CONFIGURED') {
           setAnalyzingPhoto(null);
           removePendingMeal(dateKey, pendingId);
+          done();
           setUploadedImage(null);
           Alert.alert('Food Analysis Not Configured', 'Food analysis is not configured. Please contact support.');
           return;
@@ -2144,11 +2166,12 @@ export const HomeScreen: React.FC = () => {
 
       const finalizedMeal: Meal = {
         ...pendingMeal,
-        summary: summary || 'Photo',
+        summary: summary || (note?.trim() ? note.trim() : 'Photo'),
         foods: parsedFoods,
         isLoading: false,
         loadingState: 'done',
       };
+      done();
 
       // Upsert for the same reason the text path does: a wholesale reload during
       // analysis drops the optimistic row, and a plain map would lose the meal.
@@ -2183,6 +2206,7 @@ export const HomeScreen: React.FC = () => {
       setUploadedImage(null);
     } catch (error) {
       if (__DEV__) console.error('Error analyzing image:', error);
+      if (isStale()) return;
       failWith('Could not read the photo', 'The analysis did not come back. Check your connection and try again.');
     }
   };
@@ -3289,6 +3313,11 @@ export const HomeScreen: React.FC = () => {
         <PhotoAnalyzingOverlay
           imageUri={analyzingPhoto}
           onHandoff={() => setAnalyzingPhoto(null)}
+          onNote={(note) => {
+            const uri = analyzingPhoto;
+            setAnalyzingPhoto(null);
+            if (uri) analyzeUploadedImage(uri, note);
+          }}
         />
 
         {/* Full Screen Modals for heavy screens to prevent unmounting HomeScreen */}

@@ -76,6 +76,7 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
      - If the user has already provided details (even if slight ambiguity remains), **DO NOT ASK AGAIN**. Assume reasonable defaults.
      - Return a "clarification_question" ONLY if totally critical info is missing.
    - **THE COUNT RULE — NEVER ASK FOR A WEIGHT YOU CAN ASSUME:** If the user gave a countable quantity ("3 pcs", "2 slices", "1 bowl", "a handful"), that is enough. Assume a standard size for that item and log it. Do NOT ask what each piece weighs. A person logging food does not own a scale, cannot answer that question, and will abandon the entry. Estimate the piece weight yourself and say so in \`confidence_reason\`.
+   - **A USER NOTE OUTRANKS THE PHOTO.** If the input contains a "USER NOTE" line, it came from the person who ate the food and it wins on anything a camera cannot establish. Quantity above all: a photo of a whole loaf with the note "only 2 slices" is two slices, not a loaf. The same goes for what was left, what was shared, what the kitchen left out, and which item in a crowded frame they actually mean. The photo still decides what the food IS; the note decides how much of it they ate and what was done to it.
    - **NO PORTION GIVEN IS NOT A REASON TO ASK.** "Chicken biryani" with no quantity means one standard plate. "Pasta" means one standard bowl. Assume the normal serving for that dish in the Gulf and South Asia, which is larger than a Western reference portion for rice dishes, and state the assumption in \`confidence_reason\`. A user who ate more will correct it in one tap. A user asked "how much did you eat?" abandons the entry.
    - **NEVER ASK ABOUT A BRAND:** If the user named a brand or product you do not know, do not ask them for its label. Estimate from the category, keep their exact name, and set confidence to "medium". Asking a person to read you a nutrition panel is asking them to do your job.
 
@@ -458,7 +459,19 @@ const AGENTIC_RESPONSE_SCHEMA = {
 // aiUnavailable says the call never landed. Without it a proxy outage looks
 // exactly like "we did not recognise your food", which blames the user for
 // our own downtime and teaches them to distrust a parser that never ran
-export async function analyzeFoodWithChatGPT(foodInput: string, allowClarification: boolean = true): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string, aiUnavailable?: boolean }> {
+/**
+ * `lookupQuery` overrides how the paid lookups are chosen:
+ *  - undefined: work it out from the user's words (the text logging path)
+ *  - null: do not look anything up, the caller already knows there is nothing to find
+ *  - a string: look up exactly this, ignoring the surrounding prose
+ * The photo path uses it, because a vision reading knows the brand as a field
+ * and must not have it guessed back out of a paragraph.
+ */
+export async function analyzeFoodWithChatGPT(
+  foodInput: string,
+  allowClarification: boolean = true,
+  lookupQuery?: string | null,
+): Promise<{ foods: ParsedFood[], summary?: string, clarificationQuestion?: string, aiUnavailable?: boolean }> {
   try {
     if (__DEV__) console.log('Starting Agentic Analysis for:', foodInput);
 
@@ -477,11 +490,14 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     let userContent = sanitizeForAI(foodInput);
     // Nothing to look up when every word is ordinary food. A biryani has no
     // manufacturer, so searching for one costs three seconds and a billed query
-    // to learn nothing
-    const worthLookingUp = mentionsSomethingUnfamiliar(foodInput);
-    const [results, label] = worthLookingUp
-      ? await Promise.all([searchNutrition(foodInput), lookupPackagedFood(foodInput)])
+    // to learn nothing. A caller that already knows the answer says so instead.
+    const target = lookupQuery === undefined
+      ? (mentionsSomethingUnfamiliar(foodInput) ? foodInput : null)
+      : lookupQuery;
+    const [results, label] = target
+      ? await Promise.all([searchNutrition(target), lookupPackagedFood(target)])
       : [[], null];
+    if (__DEV__) console.log('[FoodAnalysis] lookup target:', JSON.stringify(target));
     const web = resultsToPromptBlock(results);
     if (web) {
       if (__DEV__) console.log('[FoodAnalysis] google results:', results.length);
@@ -807,7 +823,31 @@ const describeReading = (r: VisionReading): string => {
   return parts.join('. ');
 };
 
-export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: ParsedFood[], summary?: string }> {
+/**
+ * What, if anything, to google after reading a photo.
+ *
+ * The reading is structured, and flattening it to prose before this decision
+ * threw the structure away one line too early. A photo of a biryani used to
+ * search, not because it found a brand, but because "visible", "sheen" and
+ * "side" are not in the food word list. That was a billed query and three
+ * seconds spent learning nothing.
+ *
+ * null means do not search:
+ *  - a panel was transcribed off the wrapper, which already beats any search
+ *  - nothing packaged was found, so it is a dish and there is no maker to look up
+ */
+const searchQueryForReading = (r: VisionReading): string | null => {
+  const named = r.packaged.find(p => (p.brand || p.product) && !p.panel);
+  if (!named) return null;
+  return [named.brand, named.product, named.variant].filter(Boolean).join(' ').trim() || null;
+};
+
+/**
+ * `note` is whatever the user typed over the photo. A camera cannot see what
+ * was left on the plate, what was asked of the kitchen, or that the loaf in
+ * frame was only two slices' worth, so this is the only channel for any of it.
+ */
+export async function analyzeFoodFromImage(imageUri: string, note?: string): Promise<{ foods: ParsedFood[], summary?: string }> {
   try {
     if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
     // Read image as base64 using legacy API
@@ -829,7 +869,14 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
         {
           role: 'user',
           content: [
-            { type: 'text', text: 'Read this frame for nutrition logging.' },
+            {
+              type: 'text',
+              text: note?.trim()
+                // The reader is told the note exists so it can look for what she
+                // pointed at, but it must still report only what it can see
+                ? `Read this frame for nutrition logging. The user adds: "${sanitizeForAI(note.trim())}". Use that to work out which part of the frame matters, but still report only what is actually visible.`
+                : 'Read this frame for nutrition logging.',
+            },
             { type: 'image_url', image_url: { url: imageDataUrl } },
           ]
         }
@@ -845,14 +892,26 @@ export async function analyzeFoodFromImage(imageUri: string): Promise<{ foods: P
     const reading = parseVisionReading(raw);
     if (__DEV__) console.log('Vision reading:', JSON.stringify(reading));
 
-    const description = describeReading(reading);
-    if (!description.trim()) throw new Error('Vision AI found nothing to log');
+    let description = describeReading(reading);
+    if (!description.trim() && !note?.trim()) throw new Error('Vision AI found nothing to log');
+
+    // Her words go last and are labelled, so the nutrition pass reads them as
+    // the correction they are rather than as more of the camera's description
+    if (note?.trim()) {
+      description = `${description}\n\nUSER NOTE, which outranks the photo on quantity and on anything the camera cannot see: ${sanitizeForAI(note.trim())}`;
+    }
 
     if (__DEV__) console.log('Handoff to nutrition pass:', description);
 
+    // Only google a product the reader actually named and could not read a panel
+    // for. A brand typed in the note counts as naming one
+    const readingQuery = searchQueryForReading(reading);
+    const lookupTarget = readingQuery
+      ?? (note?.trim() && mentionsSomethingUnfamiliar(note) ? note.trim() : null);
+
     // Step 2: Text Agent analyzes the reading
     // using the centralized logic (Gatekeeper -> Chef -> Physicist)
-    const result = await analyzeFoodWithChatGPT(description, false);
+    const result = await analyzeFoodWithChatGPT(description, false, lookupTarget);
 
     // If clarification is needed, we (unfortunately) can't ask the user in this flow yet without refactoring HomeScreen.
     // For now, we assume the Vision description was good enough. 

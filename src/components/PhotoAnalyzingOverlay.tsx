@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, Image, StyleSheet, Animated, Easing, Modal } from 'react-native';
+import { View, Text, Image, StyleSheet, Animated, Easing, Modal, TextInput, TouchableOpacity, KeyboardAvoidingView, Platform } from 'react-native';
 import { Acid } from '../constants/acid';
 
 // The bar covers the first of the two calls a photo costs: the model reading
@@ -20,11 +20,16 @@ const CAPTIONS: { at: number; text: string }[] = [
 interface PhotoAnalyzingOverlayProps {
   imageUri: string | null;
   onHandoff: () => void;
+  /** Fired when the user tells us something the camera cannot see. */
+  onNote: (note: string) => void;
 }
 
-export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff }) => {
+export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff, onNote }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const [caption, setCaption] = useState(CAPTIONS[0].text);
+  const [note, setNote] = useState('');
+  const [typing, setTyping] = useState(false);
+  const handoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visible = !!imageUri;
 
   useEffect(() => {
@@ -32,6 +37,8 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
 
     progress.setValue(0);
     setCaption(CAPTIONS[0].text);
+    setNote('');
+    setTyping(false);
 
     Animated.timing(progress, {
       toValue: 1,
@@ -43,10 +50,29 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
     const timers = CAPTIONS.slice(1).map(c => setTimeout(() => setCaption(c.text), c.at));
     // The analysis usually outlives the bar, so the bar hands the wait over to
     // the log row rather than holding the screen until an answer arrives
-    timers.push(setTimeout(onHandoff, HANDOFF_MS));
+    handoffTimer.current = setTimeout(onHandoff, HANDOFF_MS);
 
-    return () => { timers.forEach(clearTimeout); };
+    return () => {
+      timers.forEach(clearTimeout);
+      if (handoffTimer.current) clearTimeout(handoffTimer.current);
+    };
   }, [visible]);
+
+  // Typing holds the screen. Without this the handoff fires at 2.8s and takes
+  // the keyboard away mid sentence, which would make the field a trap rather
+  // than an offer
+  useEffect(() => {
+    if (!typing) return;
+    if (handoffTimer.current) { clearTimeout(handoffTimer.current); handoffTimer.current = null; }
+    progress.stopAnimation();
+  }, [typing]);
+
+  const submitNote = () => {
+    const trimmed = note.trim();
+    setTyping(false);
+    if (trimmed) onNote(trimmed);
+    else onHandoff();
+  };
 
   if (!visible) return null;
 
@@ -54,7 +80,7 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
   // already running and will land in the log either way
   return (
     <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={onHandoff}>
-      <View style={st.wrap}>
+      <KeyboardAvoidingView style={st.wrap} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <Image source={{ uri: imageUri! }} style={st.shot} resizeMode="cover" />
         <View style={st.scrim} />
 
@@ -73,9 +99,31 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
             />
           </View>
 
-          <Text style={st.note}>You can keep logging while this finishes.</Text>
+          {/* The camera cannot see what was left on the plate. This is the only
+              channel for it, and it must stay optional: type nothing and the
+              screen behaves exactly as it did before the field existed */}
+          <TextInput
+            style={[st.field, { borderColor: typing ? Acid.lime : Acid.hair2 }]}
+            value={note}
+            onChangeText={setNote}
+            onFocus={() => setTyping(true)}
+            placeholder="Only ate 2 slices? Tell me here"
+            placeholderTextColor={Acid.tx3}
+            selectionColor={Acid.lime}
+            returnKeyType="done"
+            onSubmitEditing={submitNote}
+            maxLength={140}
+          />
+
+          {typing
+            ? (
+              <TouchableOpacity onPress={submitNote} style={st.cta} activeOpacity={0.7}>
+                <Text style={st.ctaTxt}>{note.trim() ? 'USE THIS' : 'SKIP'}</Text>
+              </TouchableOpacity>
+            )
+            : <Text style={st.note}>Optional. You can keep logging while this finishes.</Text>}
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 };
@@ -90,4 +138,11 @@ const st = StyleSheet.create({
   track: { height: 3, borderRadius: 2, backgroundColor: Acid.hair, overflow: 'hidden' },
   fill: { height: 3, borderRadius: 2, backgroundColor: Acid.lime },
   note: { fontSize: 12, color: Acid.tx3, marginTop: 16 },
+  field: {
+    marginTop: 22, borderWidth: 1, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12,
+    fontSize: 14, color: Acid.tx, backgroundColor: 'rgba(238,242,230,0.04)',
+  },
+  cta: { marginTop: 14, alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999, backgroundColor: Acid.lime },
+  ctaTxt: { fontSize: 11, letterSpacing: 1.5, color: Acid.moss },
 });
