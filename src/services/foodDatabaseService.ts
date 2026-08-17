@@ -152,15 +152,57 @@ const toLabel = (hit: any): FoodLabel | null => {
  * use its own first words as a stand-in brand, or every dish matches a packaged
  * version of itself. "Modern Bakery" can, because nobody eats a modern.
  */
-const FOOD_WORDS = new Set([
-  'chicken', 'beef', 'lamb', 'mutton', 'fish', 'tuna', 'salmon', 'prawn', 'shrimp',
-  'egg', 'eggs', 'cheese', 'milk', 'yoghurt', 'yogurt', 'labneh', 'butter', 'cream',
-  'rice', 'bread', 'pasta', 'noodle', 'noodles', 'potato', 'salad', 'soup', 'sandwich',
-  'wrap', 'burger', 'pizza', 'shawarma', 'biryani', 'machboos', 'kebab', 'falafel',
-  'hummus', 'manakish', 'khaboos', 'kuboos', 'paratha', 'roti', 'naan', 'pita',
-  'chocolate', 'vanilla', 'strawberry', 'banana', 'apple', 'mango', 'orange',
-  'coffee', 'tea', 'juice', 'water', 'protein', 'grilled', 'fried', 'roasted', 'baked',
+export const FOOD_WORDS = new Set([
+  // proteins
+  'chicken', 'beef', 'lamb', 'mutton', 'goat', 'veal', 'pork', 'bacon', 'ham',
+  'fish', 'tuna', 'salmon', 'cod', 'hammour', 'prawn', 'prawns', 'shrimp', 'crab',
+  'egg', 'eggs', 'omelette', 'omelet', 'tofu', 'paneer', 'lentil', 'lentils', 'dal',
+  'chickpea', 'chickpeas', 'beans', 'mince', 'keema', 'kofta', 'patty', 'breast',
+  'thigh', 'wing', 'wings', 'drumstick', 'fillet', 'steak', 'sausage', 'meat',
+  // dairy
+  'cheese', 'cheddar', 'mozzarella', 'feta', 'halloumi', 'milk', 'yoghurt', 'yogurt',
+  'labneh', 'butter', 'ghee', 'cream', 'curd', 'raita', 'lassi',
+  // carbs and breads
+  'rice', 'basmati', 'bread', 'toast', 'pasta', 'spaghetti', 'penne', 'macaroni',
+  'noodle', 'noodles', 'potato', 'potatoes', 'fries', 'chips', 'oats', 'oatmeal',
+  'cereal', 'khaboos', 'kuboos', 'khubz', 'roti', 'chapati', 'paratha', 'naan',
+  'pita', 'tortilla', 'bun', 'croissant', 'bagel', 'couscous', 'quinoa', 'poha',
+  // dishes
+  'salad', 'soup', 'sandwich', 'wrap', 'burger', 'cheeseburger', 'pizza', 'taco',
+  'burrito', 'shawarma', 'shwarma', 'biryani', 'briyani', 'machboos', 'majboos',
+  'kabsa', 'mandi', 'madhbi', 'harees', 'thareed', 'saloona', 'kebab', 'kabab',
+  'tikka', 'karahi', 'korma', 'curry', 'masala', 'butter chicken', 'vindaloo',
+  'rogan', 'josh', 'pulao', 'pilaf', 'khichdi', 'dosa', 'idli', 'sambar', 'vada',
+  'samosa', 'pakora', 'bhaji', 'chaat', 'falafel', 'hummus', 'moutabel', 'tabbouleh',
+  'fattoush', 'manakish', 'manakeesh', 'fatayer', 'sambousek', 'grill', 'mixed',
+  'kunafa', 'knafeh', 'baklava', 'luqaimat', 'halwa', 'kheer', 'gulab', 'jamun',
+  // produce
+  'tomato', 'onion', 'garlic', 'cucumber', 'lettuce', 'spinach', 'carrot', 'pepper',
+  'broccoli', 'cabbage', 'aubergine', 'eggplant', 'courgette', 'okra', 'peas', 'corn',
+  'apple', 'banana', 'mango', 'orange', 'grape', 'grapes', 'date', 'dates', 'melon',
+  'watermelon', 'strawberry', 'berries', 'avocado', 'lemon', 'lime', 'pineapple',
+  // fats, sauces, extras
+  'oil', 'olive', 'mayo', 'mayonnaise', 'ketchup', 'mustard', 'tahini', 'sauce',
+  'dressing', 'pickle', 'pickles', 'nuts', 'almond', 'almonds', 'cashew', 'peanut',
+  'seeds', 'honey', 'sugar', 'salt', 'spices', 'herbs', 'coriander', 'mint',
+  // drinks
+  'coffee', 'karak', 'tea', 'chai', 'juice', 'water', 'soda', 'cola', 'smoothie',
+  'shake', 'milkshake', 'latte', 'cappuccino', 'espresso',
+  // preparation and generic descriptors
+  'grilled', 'fried', 'roasted', 'baked', 'boiled', 'steamed', 'raw', 'cooked',
+  'homemade', 'home', 'plate', 'bowl', 'portion', 'protein', 'chocolate', 'vanilla',
+  'strawberry', 'plain', 'spicy', 'sweet', 'savoury', 'savory',
 ]);
+
+/**
+ * Cheap gate for the paid lookups. If every distinctive word the user typed is
+ * an ordinary food word, nobody manufactured this and there is nothing to look
+ * up: "chicken biryani" is a dish, "modern bakery khaboos" is a product. Getting
+ * it wrong is cheap in both directions, a wasted search or a fallback estimate,
+ * so it errs toward searching.
+ */
+export const mentionsSomethingUnfamiliar = (query: string): boolean =>
+  tokens(query).some(t => !FOOD_WORDS.has(t));
 
 const namedTheBrand = (asked: Set<string>, label: FoodLabel): boolean => {
   if (label.brand) {

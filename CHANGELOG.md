@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.5**
+Biryani gets broken down properly now. Log one and you get the rice, the chicken, the ghee, the raita and the spice base as separate lines, instead of one vague total or a question asking how much you ate. The ghee alone is 135 calories and about a sixth of the meal, which is exactly the sort of thing you should be able to see. Same for machboos, kabsa, mandi, harees, thareed, karahi, korma, butter chicken, daal, dosa, chaat, shawarma and mixed grill. Named restaurant items stay whole on purpose, because a McDonald's cheeseburger has a real published number and splitting it into three guesses would make it worse. And it no longer asks you how much you ate. No portion means a normal plate, and you can correct it in one tap. Home cooked food is also fast again: the app only goes online when you mention something it might not know, so a biryani is instant while a Maggi packet still gets looked up.
+
 **v1.6.4**
 The app googles your food now. Type a packaged product and it runs a real web search first, reads what comes back, and uses those numbers instead of guessing. Modern Bakery high protein khaboos used to come back at 24g of protein when the real answer is 46g. It now returns 46g, and the right pack weight with it. A packet of Maggi used to be logged as a made-up 70g packet; it now uses the 79g that is actually printed on it. Food you cooked yourself is untouched. A shawarma still gets broken into its parts and still says it is estimating, because a web page's calorie count describes somebody else's shawarma, not yours.
 

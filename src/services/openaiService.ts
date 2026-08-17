@@ -6,7 +6,7 @@ import { generateId } from '../utils/uuid';
 import { chatCoachService } from './chatCoachService';
 import { sanitizeForAI, sanitizeObjectForAI } from '../utils/sanitizeAI';
 import { hashPrompt } from '../utils/promptVersion';
-import { lookupPackagedFood, labelToPanelLine } from './foodDatabaseService';
+import { lookupPackagedFood, labelToPanelLine, mentionsSomethingUnfamiliar } from './foodDatabaseService';
 import { searchNutrition, resultsToPromptBlock } from './webSearchService';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Sentry from '@sentry/react-native';
@@ -76,10 +76,14 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
      - If the user has already provided details (even if slight ambiguity remains), **DO NOT ASK AGAIN**. Assume reasonable defaults.
      - Return a "clarification_question" ONLY if totally critical info is missing.
    - **THE COUNT RULE — NEVER ASK FOR A WEIGHT YOU CAN ASSUME:** If the user gave a countable quantity ("3 pcs", "2 slices", "1 bowl", "a handful"), that is enough. Assume a standard size for that item and log it. Do NOT ask what each piece weighs. A person logging food does not own a scale, cannot answer that question, and will abandon the entry. Estimate the piece weight yourself and say so in \`confidence_reason\`.
+   - **NO PORTION GIVEN IS NOT A REASON TO ASK.** "Chicken biryani" with no quantity means one standard plate. "Pasta" means one standard bowl. Assume the normal serving for that dish in the Gulf and South Asia, which is larger than a Western reference portion for rice dishes, and state the assumption in \`confidence_reason\`. A user who ate more will correct it in one tap. A user asked "how much did you eat?" abandons the entry.
    - **NEVER ASK ABOUT A BRAND:** If the user named a brand or product you do not know, do not ask them for its label. Estimate from the category, keep their exact name, and set confidence to "medium". Asking a person to read you a nutrition panel is asking them to do your job.
 
 2. **The Deconstructor (The Chef):**
    - **ALWAYS** break down composite items (Burgers, Sandwiches, Salads, Pizza, Tacos) into their core atomic ingredients.
+   - **REGIONAL AND SOUTH ASIAN DISHES DECOMPOSE TOO, AND THIS IS WHERE IT MATTERS MOST.** Biryani, machboos, kabsa, mandi, madhbi, harees, thareed, saloona, pulao, korma, karahi, butter chicken, tikka masala, daal, chaat, dosa, shawarma, mixed grill, manakish, fatayer, mandi rice plates. Nobody publishes a figure for these because they are dishes, not products, and any single number you have seen for one is somebody else's recipe. Break them into the rice or bread, the protein, the dairy or sauce, and the cooking fat, every time.
+   - **The cooking fat is not optional on these dishes.** Biryani, karahi, korma and mandi carry ghee or oil that never appears in a recipe's headline and routinely accounts for a quarter of the calories. Log it as its own line so the user can see it.
+   - **THE ONE EXCEPTION: a named brand or restaurant item stays whole.** "McDonald's cheeseburger", "Al Baik broast", "KFC Zinger", "Subway chicken teriyaki" are products with published figures. Splitting them replaces one good number with three guesses. Keep them as a single row and take the published figure.
    - **DO NOT** log generic entries like "Cheeseburger" or "Pizza Slice" unless impossible to decompose.
    - Log the Bread/Base, Proteins, Fats/Cheeses, Sauces, and Veggies as SEPARATE items.
    - Example: "Cheeseburger" -> Output 5 items: "Hamburger Bun", "Beef Patty", "Cheddar Cheese", "Ketchup", "Pickles".
@@ -471,10 +475,13 @@ export async function analyzeFoodWithChatGPT(foodInput: string, allowClarificati
     // food database run together, not one after the other, so the whole lookup
     // costs one wait rather than two
     let userContent = sanitizeForAI(foodInput);
-    const [results, label] = await Promise.all([
-      searchNutrition(foodInput),
-      lookupPackagedFood(foodInput),
-    ]);
+    // Nothing to look up when every word is ordinary food. A biryani has no
+    // manufacturer, so searching for one costs three seconds and a billed query
+    // to learn nothing
+    const worthLookingUp = mentionsSomethingUnfamiliar(foodInput);
+    const [results, label] = worthLookingUp
+      ? await Promise.all([searchNutrition(foodInput), lookupPackagedFood(foodInput)])
+      : [[], null];
     const web = resultsToPromptBlock(results);
     if (web) {
       if (__DEV__) console.log('[FoodAnalysis] google results:', results.length);
