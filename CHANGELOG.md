@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.6.6**
+New app icon. The serif k on its lime line, which is the mark you picked back in July and which never actually made it onto a phone. The wordmark in the app is unchanged. You will only see the new icon after a fresh build, because icons are baked in rather than sent over the air.
+
+You can also talk to a photo now. While it is reading, there is an optional line where you can tell it what the camera cannot see. Photograph a whole loaf and type "only 2 slices" and it logs two slices. Same for what you left, what you shared, and what you asked the kitchen to leave out. Type nothing and it behaves exactly as before. And photos of home cooked food no longer go online for no reason, so a plate of biryani is fast again while a branded packet still gets looked up.
+
 **v1.6.5**
 Biryani gets broken down properly now. Log one and you get the rice, the chicken, the ghee, the raita and the spice base as separate lines, instead of one vague total or a question asking how much you ate. The ghee alone is 135 calories and about a sixth of the meal, which is exactly the sort of thing you should be able to see. Same for machboos, kabsa, mandi, harees, thareed, karahi, korma, butter chicken, daal, dosa, chaat, shawarma and mixed grill. Named restaurant items stay whole on purpose, because a McDonald's cheeseburger has a real published number and splitting it into three guesses would make it worse. And it no longer asks you how much you ate. No portion means a normal plate, and you can correct it in one tap. Home cooked food is also fast again: the app only goes online when you mention something it might not know, so a biryani is instant while a Maggi packet still gets looked up.
 
