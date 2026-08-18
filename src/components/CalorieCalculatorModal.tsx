@@ -20,6 +20,7 @@ import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { dataStorage, FamilyProfile } from '../services/dataStorage';
+import { DIET_PLANS, DietPlanId, getDietPlan } from '../utils/dietPlans';
 
 if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
   UIManager.setLayoutAnimationEnabledExperimental(true);
@@ -46,6 +47,7 @@ export interface CalorieCalculationResult {
   proteinPercentage?: number;
   carbsPercentage?: number;
   fatPercentage?: number;
+  dietPlan?: DietPlanId;
 }
 
 interface CalorieCalculatorScreenProps {
@@ -60,7 +62,7 @@ type Goal = 'lose' | 'maintain' | 'gain';
 type Gender = 'male' | 'female' | 'prefer_not_to_say';
 type HeightUnit = 'cm' | 'ft';
 type WeightUnit = 'kg' | 'lbs';
-type StepId = 'receipt' | 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity';
+type StepId = 'receipt' | 'name' | 'goal' | 'sex' | 'dob' | 'height' | 'weight' | 'pace' | 'activity' | 'diet';
 
 // Which questions the family profile already answers. A question is only
 // skipped when the answer is a real value, never when it is a default or a
@@ -105,6 +107,9 @@ const buildSteps = (goal: Goal | null, hasName?: boolean, known?: Set<StepId>): 
   const s: StepId[] = ['goal', 'sex', 'dob', 'height', 'weight'];
   if (goal !== 'maintain') s.push('pace');
   s.push('activity');
+  // The diet comes after the body maths because it changes the macro split,
+  // not the calorie number, so it belongs next to the split it moves
+  s.push('diet');
   if (!hasName) s.push('name');
   const trimmed = known && known.size > 0 ? s.filter(id => !known.has(id)) : s;
   // The receipt leads: she sees what the family already knew before she is
@@ -201,6 +206,21 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const [fatPct, setFatPct] = useState(initialData?.fatPercentage || 25);
   const [editingMacros, setEditingMacros] = useState(false);
   const totalPct = proteinPct + carbsPct + fatPct;
+
+  // ── Diet ────────────────────────────────────────────────────────
+  const [dietPlan, setDietPlan] = useState<DietPlanId>(initialData?.dietPlan || 'none');
+
+  // Picking a diet moves the split. Someone who then hand tunes the macros keeps
+  // their numbers, because the last edit wins and the diet is a starting point
+  // rather than a lock.
+  const pickDiet = (id: DietPlanId) => {
+    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+    setDietPlan(id);
+    const m = getDietPlan(id).macros;
+    setProteinPct(m.protein);
+    setCarbsPct(m.carbs);
+    setFatPct(m.fat);
+  };
 
   // ── Navigation ──────────────────────────────────────────────────
   const [currentIdx, setCurrentIdx] = useState(0);
@@ -474,6 +494,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       activityRate: selectedRate !== null ? selectedRate : undefined,
       activityLevel: activityLevel as CalorieCalculationResult['activityLevel'],
       proteinPercentage: proteinPct, carbsPercentage: carbsPct, fatPercentage: fatPct,
+      dietPlan,
     });
     onBack();
   };
@@ -490,6 +511,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       case 'weight': return weight.trim() === '' || !(parseFloat(weight) > 0);
       case 'pace': return selectedRate === null;
       case 'activity': return !activityLevel;
+      case 'diet': return false;
       default: return false;
     }
   };
@@ -530,6 +552,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       { label: 'Activity', value: activityLevel === 'sedentary' ? 'Sedentary' : activityLevel === 'light' ? 'Lightly active' : activityLevel === 'moderate' ? 'Moderately active' : 'Very active', icon: 'activity', step: 'activity' },
     ];
     if (goal !== 'maintain' && selectedRate) chips.push({ label: 'Pace', value: `${fmtPace(selectedRate, weightUnit)}/wk`, icon: 'trending-up', step: 'pace' });
+    chips.push({ label: 'Diet', value: dietPlan === 'none' ? 'None' : getDietPlan(dietPlan).label, icon: 'coffee', step: 'diet' });
     chips.push({ label: 'Age', value: age, icon: 'user', step: 'dob' });
     chips.push({ label: 'Height', value: heightLabel, icon: 'arrow-up', step: 'height' });
     chips.push({ label: 'Weight', value: `${weight} ${weightUnit}`, icon: 'anchor', step: 'weight' });
@@ -1009,6 +1032,29 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
     );
   };
 
+  // Optional by design. Most people do not follow a diet, and asking as though
+  // they should is how a tracker starts feeling like homework.
+  const renderDiet = () => (
+    <View style={st.step}>
+      <Text style={st.title}>Following a diet?</Text>
+      <Text style={st.sub}>This sets your macro split and tells your coach what never to suggest. You can change it any time.</Text>
+      <View style={st.opts}>
+        {DIET_PLANS.map(p => (
+          <TouchableOpacity key={p.id} style={st.optCard} onPress={() => pickDiet(p.id)}>
+            <View style={{ flex: 1 }}>
+              <Text style={[st.optTitle, { color: dietPlan === p.id ? Acid.lime : Acid.tx }]}>{p.label}</Text>
+              <Text style={st.optSub}>{p.hint}</Text>
+            </View>
+            {dietPlan === p.id && <Feather name="check" size={20} color={Acid.lime} />}
+          </TouchableOpacity>
+        ))}
+      </View>
+      <Text style={{ fontSize: 11, lineHeight: 16, color: Acid.tx3, paddingHorizontal: 24, marginTop: 4 }}>
+        Allergies and intolerances are not covered here. Your coach does not know them, so check anything it suggests.
+      </Text>
+    </View>
+  );
+
   // The receipt: what the family already knew, said out loud, every line
   // correctable. Never a silent assumption
   const renderReceipt = () => {
@@ -1061,6 +1107,7 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
       case 'dob': return renderDob(); case 'height': return renderHeight();
       case 'weight': return renderWeight();
       case 'pace': return renderPace(); case 'activity': return renderActivity();
+      case 'diet': return renderDiet();
       default: return null;
     }
   };
@@ -1071,6 +1118,8 @@ export const CalorieCalculatorScreen: React.FC<CalorieCalculatorScreenProps> = (
   const nextLabel = editingFromResult ? 'Done'
     : currentStepId === 'receipt' ? 'Looks right'
     : currentStepId === 'name' ? 'See my plan'
+    : (currentStepId === 'diet' && currentIdx === steps.length - 1) ? 'See my plan'
+    : currentStepId === 'diet' ? (dietPlan === 'none' ? 'Skip' : 'Next')
     : (currentStepId === 'weight' && goal !== 'maintain' && weight.trim() !== '' && targetWeight.trim() === '') ? 'Skip'
     : 'Next';
   // In a one-field edit the back arrow finishes the edit (when valid) instead

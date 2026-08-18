@@ -6,6 +6,17 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.7.0**
+The coach no longer makes you wait two weeks. It used to refuse to talk until you had logged 14 days, and worse, below 14 days it could not actually see the days you had logged. So on day three it was blind to three days it was holding, and then told you off for not having enough data. Both fixed. Ask it anything from day one. What changes as you log is not whether it answers, it is how big a claim it is allowed to make: nothing logged and it works from your goal and your targets, a few days in and it uses your real numbers and tells you which days it read them from, and at 14 days it starts talking about patterns and weeks. It will never refuse you for lack of data. If it genuinely cannot answer, it tells you which number is missing. The question mark on the coach screen now shows you exactly where you stand.
+
+The weekly review remembers. It used to write each Sunday from scratch, having thrown the last one away. It now keeps the last three and writes the new one having read the previous two, so it follows up on what it asked you for, tells you what moved rather than restating the level, and never makes the same point in the same words twice. "Your protein is up from 68g to 91g" instead of "your protein was 91g". And it arrives on Sunday evening now, as a notification and a line on your home screen, instead of waiting for you to go looking for it.
+
+You can pick a diet. High protein, low carb, keto, Mediterranean, vegetarian or vegan, asked once when you set your calories and changeable any time. It sets your macro split, because keto with a 45 per cent carb target is not keto. And every part of the app that talks to you obeys it, so the coach will not offer you chicken if you are vegetarian and Smart Suggest will not put rice in front of you in ketosis. Allergies and intolerances are not covered, and the app says so rather than pretending.
+
+Change your diet and the app knows you changed it, and what from. For the first month on a new plan the coach reads your numbers in that light instead of taking them at face value. Your seven day carb average three days into keto is mostly your old diet, and it will say that rather than congratulate you for a number you did not earn. It judges you against the diet you are on now, never the one you left, and if a switch is why your protein dropped it says the switch is why. Come off a diet entirely and it treats that as a decision, not a relapse.
+
+The free plan now has real edges: three logged meals a day, typed. Photo logging is Premium. You can see how many logs you have left before you run into it, and deleting a meal gives the slot back. Editing a meal you already logged is free and always will be, because correcting yourself should never cost you a slot. None of this affects you today, since everything Premium is still free for everyone until the app store release.
+
 **v1.6.6**
 New app icon. The serif k on its lime line, which is the mark you picked back in July and which never actually made it onto a phone. The wordmark in the app is unchanged. You will only see the new icon after a fresh build, because icons are baked in rather than sent over the air.
 

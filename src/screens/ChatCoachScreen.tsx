@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Acid } from '../constants/acid';
 import { Feather } from '@expo/vector-icons';
-import { chatCoachService, ChatCoachContext } from '../services/chatCoachService';
+import { chatCoachService, ChatCoachContext, COACH_MIN_LOGGED_DAYS } from '../services/chatCoachService';
 import { getCoachChatResponse } from '../services/openaiService';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
@@ -37,8 +37,10 @@ interface ChatCoachScreenProps {
  * Generates a proactive opening insight based on real user data.
  */
 function buildOpeningInsight(ctx: ChatCoachContext): string {
-    if (ctx.dataQuality === 'insufficient') {
-        return "I need more data to give you useful advice. Keep logging meals and tracking weight, I'll be ready when you are.";
+    // Nothing logged is not a reason to stonewall. It is a reason to open with
+    // the one thing that helps: get the first meal down.
+    if (ctx.dataQuality === 'none') {
+        return "Nothing logged yet, so I'm working blind. Log a meal and ask me anything, I'll answer from whatever you've got.";
     }
 
     const parts: string[] = [];
@@ -80,8 +82,10 @@ function buildOpeningInsight(ctx: ChatCoachContext): string {
  * Builds two context-aware starter questions based on user data.
  */
 function buildStarterQuestions(ctx: ChatCoachContext | null): string[] {
-    if (!ctx || ctx.dataQuality === 'insufficient') {
-        return [];
+    if (!ctx) return [];
+    // With nothing logged the starters are the reason to start, not a blank
+    if (ctx.dataQuality === 'none') {
+        return ['What should I eat to hit my goal?', 'How many calories should I be eating?'];
     }
 
     const q1 = ctx.todaysLog.meals.length > 0
@@ -95,6 +99,41 @@ function buildStarterQuestions(ctx: ChatCoachContext | null): string[] {
             : "What should I eat for my next meal?";
 
     return [q1, q2];
+}
+
+/**
+ * The coach never locks. What changes with logged days is the size of the claim
+ * it is allowed to make. This is that ladder, told to the user in their terms.
+ */
+function describeEvidence(ctx: ChatCoachContext | null) {
+    const days = ctx?.loggedDays ?? 0;
+    const quality = ctx?.dataQuality ?? 'none';
+
+    if (quality === 'none') {
+        return {
+            heading: 'Nothing logged yet',
+            body: 'It can still answer. It knows your goal, your targets and your numbers, so ask it anything. It just will not pretend to know what you eat until you log a meal.',
+            days,
+            progress: 0,
+        };
+    }
+
+    if (quality === 'thin') {
+        const left = COACH_MIN_LOGGED_DAYS - days;
+        return {
+            heading: `${days} day${days === 1 ? '' : 's'} logged`,
+            body: `It answers with your real numbers and tells you which days it read them from. It will not call anything a habit or a trend yet, because a few days is not a pattern. ${left} more day${left === 1 ? '' : 's'} of logging and it starts reading patterns.`,
+            days,
+            progress: days / COACH_MIN_LOGGED_DAYS,
+        };
+    }
+
+    return {
+        heading: `${days} days logged`,
+        body: 'It has enough to read patterns now. It can talk about your week, what changed, what keeps repeating and what to do about it.',
+        days,
+        progress: 1,
+    };
 }
 
 export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPremium = false }) => {
@@ -113,6 +152,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
 
     const starterQuestions = buildStarterQuestions(context);
     const showStarters = messages.length <= 1 && !loading && starterQuestions.length > 0;
+    const evidence = describeEvidence(context);
 
     useEffect(() => {
         loadContextAndLimits();
@@ -182,8 +222,9 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
         }
     };
 
-    const isInsufficient = context?.dataQuality === 'insufficient';
-
+    // There is no locked state any more. The only thing that can close the box
+    // is the daily message limit, which is a real limit rather than a verdict
+    // on how much the user has logged.
     return (
         <SafeAreaView style={{ flex: 1, backgroundColor: Acid.moss }} edges={['top']}>
             {/* Header */}
@@ -250,16 +291,8 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                     </View>
                 )}
 
-                {/* Input Area or Lock State */}
-                {isInsufficient ? (
-                    <View style={styles.lockContainer}>
-                        <Feather name="lock" size={20} color={Acid.tx3} style={{ marginBottom: 8 }} />
-                        <Text style={styles.lockTitle}>AI Nutritionist Locked</Text>
-                        <Text style={styles.lockSub}>
-                            Log meals for 14 days and track your weight to unlock the AI Nutritionist. The more data you log, the smarter it gets.
-                        </Text>
-                    </View>
-                ) : !limitStatus.allowed ? (
+                {/* Input Area. Open regardless of how much has been logged. */}
+                {!limitStatus.allowed ? (
                     <View style={styles.lockContainer}>
                         <Feather name="moon" size={20} color={Acid.tx3} style={{ marginBottom: 8 }} />
                         <Text style={styles.lockTitle}>Daily Limit Reached</Text>
@@ -317,8 +350,27 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                         <Text style={styles.infoBody}>
                             You can ask it things like "Am I eating enough protein?", "What should I have for dinner?", or "Why is my weight not changing?" and it will answer using your real data. It will only suggest foods it has seen in your meal history, so you will never get recommendations for things you do not eat.
                         </Text>
+
+                        <View style={styles.infoDivider} />
+
+                        <Text style={styles.infoSectionTitle}>It never locks</Text>
                         <Text style={styles.infoBody}>
-                            The more consistently you log, the better it gets. It uses your last 14 days of data to understand your patterns, which is why it requires 14 days of logging before it unlocks.
+                            You can talk to it from day one. It will never refuse you because you have not logged enough. What changes as you log is not whether it answers, it is how big a claim it is allowed to make.
+                        </Text>
+
+                        <View style={styles.evidenceCard}>
+                            <Text style={styles.evidenceHeading}>{evidence.heading}</Text>
+                            <View style={styles.evidenceTrack}>
+                                <View style={[styles.evidenceFill, { width: `${Math.round(Math.min(1, evidence.progress) * 100)}%` }]} />
+                            </View>
+                            <Text style={styles.evidenceBody}>{evidence.body}</Text>
+                        </View>
+
+                        <Text style={styles.infoBody}>
+                            Day one, it works from your goal and your targets. A handful of days in, it uses your real numbers and tells you which days it read them from. At {COACH_MIN_LOGGED_DAYS} days it has enough history to call something a pattern, so it starts talking about weeks and trends instead of single meals.
+                        </Text>
+                        <Text style={styles.infoBody}>
+                            If it truly cannot answer something, it will tell you which number is missing rather than sending you away.
                         </Text>
 
                         <View style={styles.infoDivider} />
@@ -477,5 +529,36 @@ const styles = StyleSheet.create({
         height: 1,
         backgroundColor: Acid.hair,
         marginVertical: Spacing.lg,
+    },
+    evidenceCard: {
+        borderWidth: 1,
+        borderColor: Acid.hair2,
+        borderRadius: 14,
+        padding: Spacing.md,
+        marginBottom: Spacing.md,
+        backgroundColor: Acid.limeSoft,
+    },
+    evidenceHeading: {
+        fontFamily: Acid.serifItalic,
+        fontSize: 17,
+        color: Acid.tx,
+        marginBottom: Spacing.sm,
+    },
+    evidenceTrack: {
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: Acid.hair2,
+        overflow: 'hidden',
+        marginBottom: Spacing.sm,
+    },
+    evidenceFill: {
+        height: 3,
+        borderRadius: 2,
+        backgroundColor: Acid.lime,
+    },
+    evidenceBody: {
+        fontSize: Typography.fontSize.sm,
+        lineHeight: Typography.fontSize.sm * 1.6,
+        color: Acid.tx2,
     },
 });

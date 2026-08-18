@@ -16,6 +16,7 @@ import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { CalorieCalculatorScreen, CalorieCalculationResult } from '../components/CalorieCalculatorModal';
+import { DIET_PLANS, DietPlanId, getDietPlan } from '../utils/dietPlans';
 import { QuickSignupScreen } from './QuickSignupScreen';
 import { usePreferences } from '../contexts/PreferencesContext';
 
@@ -55,6 +56,7 @@ interface GoalData {
   dob?: string;
   trackingGoal?: string;
   activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
+  dietPlan?: DietPlanId;
 }
 
 const MACRO_COLORS = {
@@ -117,8 +119,10 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
   const [dob, setDob] = useState<string | undefined>(initialGoals?.dob);
   const [trackingGoal, setTrackingGoal] = useState<string | undefined>(initialGoals?.trackingGoal);
   const [activityLevel, setActivityLevel] = useState<'sedentary' | 'light' | 'moderate' | 'very' | undefined>(initialGoals?.activityLevel);
+  const [dietPlan, setDietPlan] = useState<DietPlanId>(initialGoals?.dietPlan || 'none');
 
   const [isEditingMacros, setIsEditingMacros] = useState(false);
+  const [isEditingDiet, setIsEditingDiet] = useState(false);
   const [isEditingCalories, setIsEditingCalories] = useState(false);
   const [calDraft, setCalDraft] = useState('');
 
@@ -166,6 +170,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
     if (result.dob !== undefined) setDob(result.dob);
     if (result.trackingGoal !== undefined) setTrackingGoal(result.trackingGoal);
     if (result.activityLevel !== undefined) setActivityLevel(result.activityLevel);
+    if (result.dietPlan !== undefined) setDietPlan(result.dietPlan);
     // Apply the macro split the user saw, and may have edited, on the calculator
     // result screen. Without this a returning user's macro tweaks were silently
     // dropped: the first-time path below stages them but the recalc path did not.
@@ -199,6 +204,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       name: result.name,
       dob: result.dob,
       trackingGoal: result.trackingGoal ?? trackingGoal,
+      dietPlan: result.dietPlan ?? dietPlan,
     };
     setProteinPercentage(norm.p);
     setCarbsPercentage(norm.c);
@@ -252,7 +258,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
       carbsGrams: macroGrams(calories, normC, 4),
       fatGrams: macroGrams(calories, normF, 9),
       currentWeightKg, targetWeightKg, age, gender, heightCm, heightFeet, heightInches,
-      goal, activityRate, name, dob, trackingGoal, activityLevel,
+      goal, activityRate, name, dob, trackingGoal, activityLevel, dietPlan,
     });
     onBack();
   };
@@ -280,7 +286,7 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
           name, dob,
           currentWeightKg, targetWeightKg, age, gender,
           heightCm, heightFeet, heightInches,
-          goal, activityRate, activityLevel,
+          goal, activityRate, activityLevel, dietPlan,
           proteinPercentage, carbsPercentage, fatPercentage,
         }}
       />
@@ -424,6 +430,41 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
 
         {!isEditingMacros && (
           <Text style={st.helperTxt}>You can adjust this anytime</Text>
+        )}
+
+        {/* Diet. Changing it resets the split, because that is what a diet is */}
+        <Text style={st.sectionLabel}>DIET</Text>
+        <TouchableOpacity
+          style={st.customizeBtn}
+          onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingDiet(v => !v); }}
+        >
+          <Text style={st.customizeTxt}>{getDietPlan(dietPlan).label}</Text>
+          <Feather name={isEditingDiet ? 'chevron-up' : 'chevron-down'} size={16} color={Acid.tx2} />
+        </TouchableOpacity>
+
+        {isEditingDiet && (
+          <View style={st.editSection}>
+            {DIET_PLANS.map(p => (
+              <TouchableOpacity
+                key={p.id}
+                style={st.editRow}
+                onPress={() => {
+                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                  setDietPlan(p.id);
+                  setProteinPercentage(p.macros.protein);
+                  setCarbsPercentage(p.macros.carbs);
+                  setFatPercentage(p.macros.fat);
+                  setIsEditingDiet(false);
+                }}
+              >
+                <View style={{ flex: 1 }}>
+                  <Text style={[st.macroName, { color: dietPlan === p.id ? Acid.lime : Acid.tx }]}>{p.label}</Text>
+                  <Text style={st.helperTxt}>{p.hint}</Text>
+                </View>
+                {dietPlan === p.id && <Feather name="check" size={18} color={Acid.lime} />}
+              </TouchableOpacity>
+            ))}
+          </View>
         )}
       </ScrollView>
 

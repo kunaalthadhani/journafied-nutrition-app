@@ -7,6 +7,7 @@ import { ParsedFood } from '../utils/foodNutrition';
 import { calculateStreak } from '../utils/streakUtils';
 import { parseISO, format } from 'date-fns';
 import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
+import { DietChange, DietPlanId } from '../utils/dietPlans';
 
 // --- Write serialization to prevent race conditions on rapid saves ---
 // Per-key promise chain: ensures read-modify-write operations for the same
@@ -94,6 +95,7 @@ export interface WeeklyActionPlan {
 
 const STORAGE_KEYS = {
   GOALS: '@trackkal:goals',
+  DIET_HISTORY: '@trackkal:dietHistory',
   MEALS: '@trackkal:meals',
   EXERCISES: '@trackkal:exercises',
   WEIGHT_ENTRIES: '@trackkal:weightEntries',
@@ -169,6 +171,7 @@ export interface ExtendedGoalData {
   dob?: string;
   trackingGoal?: string;
   activityLevel?: 'sedentary' | 'light' | 'moderate' | 'very';
+  dietPlan?: DietPlanId;
 }
 
 export interface WeightEntry {
@@ -916,6 +919,26 @@ const getCachedAccountInfo = async (): Promise<AccountInfo | null> => {
   }
 };
 
+/**
+ * Append a switch when the diet actually changed. The very first diet a user
+ * picks is not a switch, it is a starting point, so nothing is written until
+ * there is a previous value to move away from.
+ */
+const recordDietChange = async (next?: DietPlanId): Promise<void> => {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.GOALS);
+    const prev: DietPlanId | undefined = raw ? JSON.parse(raw)?.dietPlan : undefined;
+    if (!prev || !next || prev === next) return;
+
+    const history = await dataStorage.loadDietHistory();
+    // Six is a year of monthly switching. Older than that tells nobody anything.
+    const trimmed = [...history, { from: prev, to: next, changedAt: new Date().toISOString() }].slice(-6);
+    await AsyncStorage.setItem(STORAGE_KEYS.DIET_HISTORY, JSON.stringify(trimmed));
+  } catch (error) {
+    if (__DEV__) console.warn('Could not record diet change:', error);
+  }
+};
+
 export type MealSyncPayload = {
   meal: MealEntry;
   dateKey: string;
@@ -1349,9 +1372,24 @@ export const dataStorage = {
     await processSyncQueue(accountInfo);
   },
 
+  async loadDietHistory(): Promise<DietChange[]> {
+    try {
+      const raw = await AsyncStorage.getItem(STORAGE_KEYS.DIET_HISTORY);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  },
+
   // Save goals with all profile data
   async saveGoals(goals: ExtendedGoalData): Promise<void> {
     try {
+      // Every path that changes a diet lands here, so this is the one place the
+      // switch can be caught. Without it the coach sees the new diet with no
+      // idea it is new, and cannot explain the numbers that came before it.
+      await recordDietChange(goals.dietPlan);
+
       await AsyncStorage.setItem(STORAGE_KEYS.GOALS, JSON.stringify(goals));
 
       // Sync to Supabase if user is logged in. Email-only counts: the writer can

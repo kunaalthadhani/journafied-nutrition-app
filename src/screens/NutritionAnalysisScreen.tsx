@@ -16,12 +16,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
-import { format, subDays, subMonths, subYears, parseISO, startOfWeek, endOfWeek, startOfDay, isSameDay } from 'date-fns';
+import { format, subDays, subMonths, subYears, parseISO, startOfDay, isSameDay } from 'date-fns';
 import Svg, { Path, Circle, Line, Defs, LinearGradient, Stop, Text as SvgText, Polygon, Rect } from 'react-native-svg';
 import { Meal } from '../components/FoodLogSection';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { analyticsService } from '../services/analyticsService';
 import { generateWeeklyInsights } from '../services/openaiService';
+import { weeklyReviewService, reviewWeekKey } from '../services/weeklyReviewService';
+import { buildDietContext } from '../utils/dietPlans';
 import { dataStorage, DailySummary } from '../services/dataStorage';
 import { generateInsights, getActionForInsight } from '../services/insightService';
 import { patternDetectionService } from '../services/patternDetectionService';
@@ -898,12 +900,10 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   const [isGeneratingInsight, setIsGeneratingInsight] = useState(false);
   const insightRequestInFlight = useRef(false);
 
-  // Get the start of the current week as cache key
-  // When calorie bank is active, align to the bank's cycle start day
-  const getWeekKey = () => {
-    const weekStartDay = calorieBankData?.enabled ? calorieBankData.cycleStartDayNum : 1;
-    return format(startOfWeek(new Date(), { weekStartsOn: weekStartDay as 0 | 1 | 2 | 3 | 4 | 5 | 6 }), 'yyyy-MM-dd');
-  };
+  // The review used to key off the calorie bank cycle day, which meant a
+  // Monday user got a fresh review on Monday while the Sunday push and banner
+  // were announcing it a day early. One Sunday anchor for all three now.
+  const getWeekKey = () => reviewWeekKey();
 
   useEffect(() => {
     // isUnlocked matters: this fires a PAID call, so a locked card must never
@@ -927,25 +927,41 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const loadOrGenerate = async () => {
       const weekKey = getWeekKey();
 
-      // Check cache first
+      // The cache is a short history now, not a single week, so the review can
+      // be written against what it said before. Newest first, three kept.
+      let history: { weekKey: string; text: string; generatedAt: string }[] = [];
       try {
         const cached = await AsyncStorage.getItem(INSIGHT_CACHE_KEY);
         if (cached) {
           const parsed = JSON.parse(cached);
-          if (parsed.weekKey === weekKey && parsed.text) {
-            setInsightText(parsed.text);
-            setInsightIsNew(false);
-            insightRequestInFlight.current = false;
-            return;
-          }
+          // Migrate the old single-week shape rather than throwing it away
+          history = Array.isArray(parsed?.entries)
+            ? parsed.entries
+            : (parsed?.weekKey && parsed?.text ? [parsed] : []);
         }
       } catch {
-        // Cache miss, continue to generate
+        history = [];
+      }
+
+      const thisWeek = history.find(e => e.weekKey === weekKey);
+      if (thisWeek?.text) {
+        setInsightText(thisWeek.text);
+        setInsightIsNew(false);
+        // Seeing it is reading it. The home banner stops nagging.
+        weeklyReviewService.markRead();
+        insightRequestInFlight.current = false;
+        return;
       }
 
       // Generate new insight
       setIsGeneratingInsight(true);
       try {
+        const [goals, dietHistory] = await Promise.all([
+          dataStorage.loadGoals(),
+          dataStorage.loadDietHistory(),
+        ]);
+        const dietForPrompt = buildDietContext(goals?.dietPlan, dietHistory);
+
         const lastWeek = completedLogged.slice(-7);
         const lastTwoWeeks = completedLogged.slice(-14);
 
@@ -1020,15 +1036,26 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
           mealTimingDistribution: timingBuckets,
           topFoods,
           ...(calorieBankData ? { calorieBank: calorieBankData } : {}),
+          ...(dietForPrompt ? { diet: dietForPrompt } : {}),
         };
 
-        const text = await generateWeeklyInsights(weeklySummary);
+        // The two weeks before this one, so the review can follow up on what it
+        // asked for rather than restating the same advice
+        const priorReviews = history
+          .filter(e => e.weekKey !== weekKey && e.text)
+          .slice(0, 2)
+          .map(e => ({ weekKey: e.weekKey, text: e.text }));
+
+        const text = await generateWeeklyInsights(weeklySummary, priorReviews);
         // null = the call failed. Do not cache failure text for a week; leave
         // the card empty so the next visit retries.
         if (text) {
           setInsightText(text);
           setInsightIsNew(true);
-          await AsyncStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ weekKey, text, generatedAt: new Date().toISOString() }));
+          const next = [{ weekKey, text, generatedAt: new Date().toISOString() }, ...history.filter(e => e.weekKey !== weekKey)]
+            .slice(0, 3);
+          await AsyncStorage.setItem(INSIGHT_CACHE_KEY, JSON.stringify({ entries: next }));
+          await weeklyReviewService.markRead();
         }
       } catch (err) {
         console.error(err);

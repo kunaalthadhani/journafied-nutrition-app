@@ -622,9 +622,18 @@ export async function analyzeFoodWithChatGPT(
   }
 }
 
+export interface PriorReview {
+  weekKey: string;
+  text: string;
+}
+
 // Returns null on failure so the caller can skip caching. Returning apologetic
 // filler here used to get cached for a whole week as if it were the insight.
-export async function generateWeeklyInsights(weeklyData: any): Promise<string | null> {
+//
+// `priorReviews` are the last two weeks of this same card, newest first. Without
+// them every week was written from scratch, so the review could never say
+// "your protein is up on last week" and nothing accumulated for the reader.
+export async function generateWeeklyInsights(weeklyData: any, priorReviews: PriorReview[] = []): Promise<string | null> {
   try {
     const data = await invokeAI({
       model: 'gpt-4o-mini',
@@ -649,11 +658,27 @@ Pick the 3 most impactful from their data:
 - Logging gaps: how many days they actually logged and why incomplete data limits the advice you can give.
 - If calorie banking data is present: how effectively they used their bank, whether their distribution pattern is healthy or shows restrict/binge tendencies, and whether their cap setting seems right for their behavior.
 
-Tone: Like a nutritionist reviewing your food diary face-to-face. Specific, honest, no filler. Every sentence should contain a number or a food name from their data.`
+Tone: Like a nutritionist reviewing your food diary face-to-face. Specific, honest, no filler. Every sentence should contain a number or a food name from their data.
+
+### WHAT YOU TOLD THEM BEFORE
+If the input contains "priorReviews", those are the reviews you wrote for this same person in the previous weeks, newest first. Use them. A nutritionist who has seen someone for three weeks does not start from scratch each time.
+
+- **Follow up on what you asked for.** If you told them to add Greek yogurt after lunch and their protein is up 22g, say so and name it. If you asked for something and nothing changed, say that plainly and once, without nagging.
+- **Compare, do not repeat.** Do not make the same point in the same words two weeks running. If a problem persists, say it is persisting and go one level deeper into why, or drop it and take the next most useful thing.
+- **Movement is the story.** "Your protein is up from 68g to 91g" beats "your protein was 91g" every time. Reach for the change over the level wherever you have both.
+- If there are no prior reviews, write this week on its own and do not mention that you have no history.
+
+### THE DIET THEY CHOSE
+If the input contains "diet", they follow "diet.plan" and "diet.rule" is a constraint on every action you suggest, not a preference to weigh. Never suggest a food their diet forbids. If the week's log broke the diet, that is worth one of your three insights, said plainly with the numbers. If "diet" is absent they follow no diet, so do not invent one. You do not know their allergies or intolerances, so never call a food safe for them.
+
+If "diet.switchedFrom" is present they changed diet "diet.daysOnPlan" days ago. If that lands inside the week you are reviewing, it is the story of the week and one insight belongs to it: what actually moved since the switch, in their numbers. Averages spanning the switch are two diets blended, so say that before you draw a conclusion from them. Judge the week against the diet they are on now, never the one they left. If they switched to no specific plan, they came off a diet, which is a decision and not a relapse.`
         },
         {
           role: 'user',
-          content: JSON.stringify(sanitizeObjectForAI(weeklyData))
+          content: JSON.stringify(sanitizeObjectForAI({
+            ...weeklyData,
+            ...(priorReviews.length ? { priorReviews } : {}),
+          }))
         }
       ],
       temperature: 0.4,
@@ -768,7 +793,7 @@ interface VisionPackaged {
   panel: VisionPanel | null;
 }
 
-interface VisionReading {
+export interface VisionReading {
   packaged: VisionPackaged[];
   prepared: string;
 }
@@ -843,82 +868,82 @@ const searchQueryForReading = (r: VisionReading): string | null => {
 };
 
 /**
+ * A photo costs two calls: the expensive one that looks, and the cheap one that
+ * counts. They are split so a note typed over the photo only re-runs the second.
+ * Restarting both doubled the wait for the exact people who were trying to help
+ * us get it right, which is the wrong way round.
+ */
+export async function readFoodPhoto(imageUri: string): Promise<VisionReading> {
+  if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
+  const base64Image = await FileSystem.readAsStringAsync(imageUri, {
+    encoding: FileSystem.EncodingType.Base64,
+  });
+
+  const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
+  const imageDataUrl = `data:image/${imageFormat};base64,${base64Image}`;
+
+  if (__DEV__) console.log('Sending request to OpenAI Vision API (Reader Mode)...');
+
+  const visionData = await invokeAI({
+    model: 'gpt-4o',
+    messages: [
+      { role: 'system', content: VISION_READER_PROMPT },
+      {
+        role: 'user',
+        content: [
+          { type: 'text', text: 'Read this frame for nutrition logging.' },
+          { type: 'image_url', image_url: { url: imageDataUrl } },
+        ],
+      },
+    ],
+    max_tokens: 900,
+    response_format: VISION_READER_SCHEMA,
+    call_type: 'food-image-vision',
+  });
+
+  const raw = visionData.choices[0]?.message?.content;
+  if (!raw) throw new Error('No reading from Vision AI');
+  const reading = parseVisionReading(raw);
+  if (__DEV__) console.log('Vision reading:', JSON.stringify(reading));
+  return reading;
+}
+
+/**
+ * Turns a reading into food. Cheap, and safe to run again when the user adds a
+ * note, because the photo has already been looked at.
+ */
+export async function analyzePhotoReading(
+  reading: VisionReading,
+  note?: string,
+): Promise<{ foods: ParsedFood[], summary?: string }> {
+  let description = describeReading(reading);
+  if (!description.trim() && !note?.trim()) throw new Error('Vision AI found nothing to log');
+
+  // Her words go last and are labelled, so the nutrition pass reads them as
+  // the correction they are rather than as more of the camera's description
+  if (note?.trim()) {
+    description = `${description}\n\nUSER NOTE, which outranks the photo on quantity and on anything the camera cannot see: ${sanitizeForAI(note.trim())}`;
+  }
+
+  if (__DEV__) console.log('Handoff to nutrition pass:', description);
+
+  const readingQuery = searchQueryForReading(reading);
+  const lookupTarget = readingQuery
+    ?? (note?.trim() && mentionsSomethingUnfamiliar(note) ? note.trim() : null);
+
+  const result = await analyzeFoodWithChatGPT(description, false, lookupTarget);
+  return { foods: result.foods, summary: result.summary };
+}
+
+/**
  * `note` is whatever the user typed over the photo. A camera cannot see what
  * was left on the plate, what was asked of the kitchen, or that the loaf in
  * frame was only two slices' worth, so this is the only channel for any of it.
  */
 export async function analyzeFoodFromImage(imageUri: string, note?: string): Promise<{ foods: ParsedFood[], summary?: string }> {
   try {
-    if (__DEV__) console.log('Reading image as base64 from URI:', imageUri);
-    // Read image as base64 using legacy API
-    const base64Image = await FileSystem.readAsStringAsync(imageUri, {
-      encoding: FileSystem.EncodingType.Base64,
-    });
-
-    // Determine image format from URI
-    const imageFormat = imageUri.toLowerCase().endsWith('.png') ? 'png' : 'jpeg';
-    const imageDataUrl = `data:image/${imageFormat};base64,${base64Image}`;
-
-    if (__DEV__) console.log('Sending request to OpenAI Vision API (Reader Mode)...');
-
-    // Step 1: Vision AI reads the frame
-    const visionData = await invokeAI({
-      model: 'gpt-4o',
-      messages: [
-        { role: 'system', content: VISION_READER_PROMPT },
-        {
-          role: 'user',
-          content: [
-            {
-              type: 'text',
-              text: note?.trim()
-                // The reader is told the note exists so it can look for what she
-                // pointed at, but it must still report only what it can see
-                ? `Read this frame for nutrition logging. The user adds: "${sanitizeForAI(note.trim())}". Use that to work out which part of the frame matters, but still report only what is actually visible.`
-                : 'Read this frame for nutrition logging.',
-            },
-            { type: 'image_url', image_url: { url: imageDataUrl } },
-          ]
-        }
-      ],
-      max_tokens: 900,
-      response_format: VISION_READER_SCHEMA,
-      call_type: 'food-image-vision',
-    });
-
-    const raw = visionData.choices[0]?.message?.content;
-    if (!raw) throw new Error('No reading from Vision AI');
-
-    const reading = parseVisionReading(raw);
-    if (__DEV__) console.log('Vision reading:', JSON.stringify(reading));
-
-    let description = describeReading(reading);
-    if (!description.trim() && !note?.trim()) throw new Error('Vision AI found nothing to log');
-
-    // Her words go last and are labelled, so the nutrition pass reads them as
-    // the correction they are rather than as more of the camera's description
-    if (note?.trim()) {
-      description = `${description}\n\nUSER NOTE, which outranks the photo on quantity and on anything the camera cannot see: ${sanitizeForAI(note.trim())}`;
-    }
-
-    if (__DEV__) console.log('Handoff to nutrition pass:', description);
-
-    // Only google a product the reader actually named and could not read a panel
-    // for. A brand typed in the note counts as naming one
-    const readingQuery = searchQueryForReading(reading);
-    const lookupTarget = readingQuery
-      ?? (note?.trim() && mentionsSomethingUnfamiliar(note) ? note.trim() : null);
-
-    // Step 2: Text Agent analyzes the reading
-    // using the centralized logic (Gatekeeper -> Chef -> Physicist)
-    const result = await analyzeFoodWithChatGPT(description, false, lookupTarget);
-
-    // If clarification is needed, we (unfortunately) can't ask the user in this flow yet without refactoring HomeScreen.
-    // For now, we assume the Vision description was good enough. 
-    // If it *still* asks for clarification, it returns empty foods.
-    // To handle this better, we could recursively call with "Ignore ambiguity" flag, but let's trust gpt-4o vision + text.
-    return { foods: result.foods, summary: result.summary };
-
+    const reading = await readFoodPhoto(imageUri);
+    return await analyzePhotoReading(reading, note);
   } catch (error) {
     if (__DEV__) console.error('Error in image analysis:', error);
     throw error;
@@ -979,6 +1004,11 @@ You will receive:
       3. **Calorie Control:** Ensure it fits within the remaining calories.
 4.  **Variety:** Do not suggest exactly what they just ate in their last meal today.
 5.  **Quantity:** Specify exact portions (e.g., "Repeat your Greek Yogurt Bowl but add...", "Have your usual Chicken Wrap").
+
+### The Diet They Chose
+If the context contains "diet", they follow "diet.plan" and "diet.rule" is a hard constraint. Never suggest a food it forbids, even when that food sits in Available Foods. This outranks every other rule here, including FORCE_HUNGRY. If nothing in their history fits the diet, say so and describe the shape of the meal they need instead of naming a food they cannot eat. If "diet" is absent they follow no diet.
+
+If "diet.switchedFrom" is present they only changed diet "diet.daysOnPlan" days ago, so most of Available Foods is what they ate on the OLD diet. Suggest only from the part of that list the new diet allows. If almost none of it survives, say their history has not caught up yet and describe the meal instead of naming one.
 
 ### Special Mode: FORCE_HUNGRY
 If "force_hungry" is true:

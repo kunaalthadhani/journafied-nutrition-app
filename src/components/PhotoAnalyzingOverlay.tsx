@@ -22,13 +22,16 @@ interface PhotoAnalyzingOverlayProps {
   onHandoff: () => void;
   /** Fired when the user tells us something the camera cannot see. */
   onNote: (note: string) => void;
+  /** True once the photo itself has been read and only the counting is left. */
+  read: boolean;
 }
 
-export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff, onNote }) => {
+export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff, onNote, read }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const [caption, setCaption] = useState(CAPTIONS[0].text);
   const [note, setNote] = useState('');
   const [typing, setTyping] = useState(false);
+  const [sent, setSent] = useState(false);
   const handoffTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const visible = !!imageUri;
 
@@ -39,6 +42,7 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
     setCaption(CAPTIONS[0].text);
     setNote('');
     setTyping(false);
+    setSent(false);
 
     Animated.timing(progress, {
       toValue: 1,
@@ -58,20 +62,37 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
     };
   }, [visible]);
 
-  // Typing holds the screen. Without this the handoff fires at 2.8s and takes
-  // the keyboard away mid sentence, which would make the field a trap rather
-  // than an offer
+  // Typing holds the screen, because a handoff at 2.8s would take the keyboard
+  // away mid sentence. But the bar must NOT stop: a frozen bar reads as a hang,
+  // which is exactly what it looked like. It creeps on instead, because the
+  // work really is still running
   useEffect(() => {
     if (!typing) return;
     if (handoffTimer.current) { clearTimeout(handoffTimer.current); handoffTimer.current = null; }
-    progress.stopAnimation();
+    Animated.timing(progress, {
+      toValue: 1,
+      duration: 30000,
+      easing: Easing.out(Easing.quad),
+      useNativeDriver: false,
+    }).start();
   }, [typing]);
+
+  // The photo has been looked at. Say so, because "still reading" while it is
+  // actually counting is the second half of what felt stuck
+  useEffect(() => {
+    if (read) setCaption(note.trim() ? 'Counting that in' : 'Working out the numbers');
+  }, [read]);
 
   const submitNote = () => {
     const trimmed = note.trim();
     setTyping(false);
-    if (trimmed) onNote(trimmed);
-    else onHandoff();
+    if (trimmed) {
+      setSent(true);
+      setCaption('Counting that in');
+      onNote(trimmed);
+    } else {
+      onHandoff();
+    }
   };
 
   if (!visible) return null;
@@ -102,26 +123,38 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
           {/* The camera cannot see what was left on the plate. This is the only
               channel for it, and it must stay optional: type nothing and the
               screen behaves exactly as it did before the field existed */}
-          <TextInput
-            style={[st.field, { borderColor: typing ? Acid.lime : Acid.hair2 }]}
-            value={note}
-            onChangeText={setNote}
-            onFocus={() => setTyping(true)}
-            placeholder="Only ate 2 slices? Tell me here"
-            placeholderTextColor={Acid.tx3}
-            selectionColor={Acid.lime}
-            returnKeyType="done"
-            onSubmitEditing={submitNote}
-            maxLength={140}
-          />
+          {/* Once she has sent it, the field becomes a receipt. Leaving an
+              editable box open next to a running job is what made it feel like
+              nothing had happened */}
+          {sent ? (
+            <View style={st.receipt}>
+              <Text style={st.receiptTick}>✓</Text>
+              <Text style={st.receiptTxt}>{note.trim()}</Text>
+            </View>
+          ) : (
+            <TextInput
+              style={[st.field, { borderColor: typing ? Acid.lime : Acid.hair2 }]}
+              value={note}
+              onChangeText={setNote}
+              onFocus={() => setTyping(true)}
+              placeholder="Only ate 2 slices? Tell me here"
+              placeholderTextColor={Acid.tx3}
+              selectionColor={Acid.lime}
+              returnKeyType="done"
+              onSubmitEditing={submitNote}
+              maxLength={140}
+            />
+          )}
 
-          {typing
-            ? (
-              <TouchableOpacity onPress={submitNote} style={st.cta} activeOpacity={0.7}>
-                <Text style={st.ctaTxt}>{note.trim() ? 'USE THIS' : 'SKIP'}</Text>
-              </TouchableOpacity>
-            )
-            : <Text style={st.note}>Optional. You can keep logging while this finishes.</Text>}
+          {sent
+            ? <Text style={st.note}>Got it. Redoing the numbers with that.</Text>
+            : typing
+              ? (
+                <TouchableOpacity onPress={submitNote} style={st.cta} activeOpacity={0.7}>
+                  <Text style={st.ctaTxt}>{note.trim() ? 'USE THIS' : 'SKIP'}</Text>
+                </TouchableOpacity>
+              )
+              : <Text style={st.note}>Optional. You can keep logging while this finishes.</Text>}
         </View>
       </KeyboardAvoidingView>
     </Modal>
@@ -145,4 +178,11 @@ const st = StyleSheet.create({
   },
   cta: { marginTop: 14, alignSelf: 'flex-start', paddingVertical: 10, paddingHorizontal: 18, borderRadius: 999, backgroundColor: Acid.lime },
   ctaTxt: { fontSize: 11, letterSpacing: 1.5, color: Acid.moss },
+  receipt: {
+    marginTop: 22, flexDirection: 'row', alignItems: 'flex-start', gap: 10,
+    borderWidth: 1, borderColor: Acid.limeSoft, borderRadius: 12,
+    paddingHorizontal: 14, paddingVertical: 12, backgroundColor: Acid.limeSoft,
+  },
+  receiptTick: { fontSize: 13, color: Acid.lime, lineHeight: 20 },
+  receiptTxt: { flex: 1, fontSize: 14, lineHeight: 20, color: Acid.tx },
 });

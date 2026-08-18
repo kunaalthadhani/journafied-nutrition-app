@@ -52,9 +52,13 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
         setLoading(true);
         setLogState('idle'); // a fresh suggestion is a new, loggable meal
         try {
-            const ctx = await chatCoachService.buildContext({ minLoggedDays: 3, requireWeight: false });
+            const ctx = await chatCoachService.buildContext();
 
-            if (ctx.dataQuality === 'insufficient') {
+            // Smart Suggest has its own bar and it is a real one: it only
+            // suggests foods the user is known to eat, so with nothing to draw
+            // on it has nothing to say. That is this feature's limit, not a
+            // verdict on whether the coach may speak.
+            if (ctx.loggedDays < 3 || ctx.topFoods.length === 0) {
                 setSuggestion({
                     displayText: "Smart Suggest needs a few days of meal data to learn what you eat. Keep logging and check back soon.",
                     loggableText: "",
@@ -94,7 +98,8 @@ export const SmartSuggestBanner: React.FC<SmartSuggestBannerProps> = ({ isPremiu
                 mealsEatenToday: ctx.todaysLog.meals.length,
                 timeOfDay: new Date().getHours(),
                 goal: ctx.userProfile.goalType,
-                availableFoods: ctx.topFoods || []
+                availableFoods: ctx.topFoods || [],
+                ...(ctx.diet ? { diet: ctx.diet } : {}),
             };
 
             const result = await generateSmartSuggestion(promptContext, forceNew, { forceHungry });

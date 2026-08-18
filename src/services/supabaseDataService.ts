@@ -371,6 +371,7 @@ export const supabaseDataService = {
         body_goal: goals.goal || null,
         activity_rate: goals.activityRate || null,
         activity_level: goals.activityLevel || null,
+        diet_plan: goals.dietPlan || null,
         is_active: true,
       });
 
@@ -446,6 +447,7 @@ export const supabaseDataService = {
       name: data.name || undefined,
       trackingGoal: data.tracking_goal || undefined,
       activityLevel: (data.activity_level as 'sedentary' | 'light' | 'moderate' | 'very') || undefined,
+      dietPlan: (data.diet_plan as ExtendedGoalData['dietPlan']) || undefined,
     };
   },
 

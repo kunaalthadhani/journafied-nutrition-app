@@ -48,7 +48,8 @@ import { PhotoOptionsModal } from '../components/PhotoOptionsModal';
 import { PhotoAnalyzingOverlay } from '../components/PhotoAnalyzingOverlay';
 import { AccountWallModal } from '../components/AccountWallModal';
 import { calculateTotalNutrition, ParsedFood } from '../utils/foodNutrition';
-import { analyzeFoodWithChatGPT, analyzeFoodFromImage, updateFoodCache } from '../services/openaiService';
+import { analyzeFoodWithChatGPT, readFoodPhoto, analyzePhotoReading, updateFoodCache } from '../services/openaiService';
+import type { VisionReading } from '../services/openaiService';
 import { authService } from '../services/authService';
 import { ParsedExercise, calculateExerciseCalories, parseExerciseInput } from '../utils/exerciseParser';
 import { voiceService } from '../services/voiceService';
@@ -69,6 +70,8 @@ import { StreakWidgetCard } from '../components/StreakWidgetCard';
 import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
+import { WeeklyReviewBanner } from '../components/WeeklyReviewBanner';
+import { weeklyReviewService } from '../services/weeklyReviewService';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
 import { AppWalkthroughModal } from '../components/AppWalkthroughModal';
@@ -154,6 +157,10 @@ export const HomeScreen: React.FC = () => {
   // and the pending id is reused so the same row is updated, not duplicated
   const photoRun = React.useRef(0);
   const photoPendingId = React.useRef<string | null>(null);
+  // The reading survives a note, so the expensive look happens once per photo
+  const photoReading = React.useRef<VisionReading | null>(null);
+  // Drives the overlay's "photo read, now counting" state
+  const [photoRead, setPhotoRead] = useState(false);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
   const [goalsSet, setGoalsSet] = useState(false);
@@ -221,6 +228,7 @@ export const HomeScreen: React.FC = () => {
   const [openNutritionOnInsights, setOpenNutritionOnInsights] = useState(false);
   const [openWeightOnInsights, setOpenWeightOnInsights] = useState(false);
   const [scrollToInsightId, setScrollToInsightId] = useState<InsightId | null>(null);
+  const [weeklyReviewUnread, setWeeklyReviewUnread] = useState(false);
 
   // Calorie Bank
   const [calorieBankConfig, setCalorieBankConfig] = useState<CalorieBankConfig | null>(null);
@@ -549,6 +557,8 @@ export const HomeScreen: React.FC = () => {
         // disabled reminder stops and a new meal time takes effect without waiting
         // for the next cold start.
         smartReminderService.scheduleAllReminders().catch(() => {});
+        // Self cancels when notifications were just turned off
+        weeklyReviewService.scheduleSundayReminder().catch(() => {});
       } catch (e) {
         if (__DEV__) console.error('Settings back refresh failed:', e);
       }
@@ -666,6 +676,14 @@ export const HomeScreen: React.FC = () => {
         if (typedData.type === 'smart_reminder' && typeof typedData.reminderId === 'string') {
           smartReminderService.recordReminderOpened(typedData.reminderId as string)
             .catch(err => console.error('Failed to record reminder open:', err));
+        }
+
+        // The Sunday push promised a review, so land on it rather than on Home
+        if (typedData.type === 'weekly_review') {
+          setWeeklyReviewUnread(false);
+          setScrollToInsightId('ai-weekly-insight');
+          setOpenNutritionOnInsights(true);
+          setShowNutritionAnalysis(true);
         }
       } catch (error) {
         if (__DEV__) console.error('Error handling notification response:', error);
@@ -1462,9 +1480,36 @@ export const HomeScreen: React.FC = () => {
         if (__DEV__) console.log('Push notification registration skipped: requires physical device.');
       } else if (registration.status === 'granted') {
         if (__DEV__) console.log('Push token stored for broadcasts.');
+        weeklyReviewService.scheduleSundayReminder();
       }
     })();
   }, []);
+
+  // The banner is the same announcement as the Sunday push, for anyone who has
+  // notifications off or never opened the one that fired.
+  useEffect(() => {
+    if (!isPremium || !insightUnlocks['ai-weekly-insight']) {
+      setWeeklyReviewUnread(false);
+      return;
+    }
+    let alive = true;
+    weeklyReviewService.isUnread().then(unread => {
+      if (alive) setWeeklyReviewUnread(unread);
+    });
+    return () => { alive = false; };
+  }, [isPremium, insightUnlocks, showNutritionAnalysis]);
+
+  const openWeeklyReview = () => {
+    setWeeklyReviewUnread(false);
+    setScrollToInsightId('ai-weekly-insight');
+    setOpenNutritionOnInsights(true);
+    setShowNutritionAnalysis(true);
+  };
+
+  const dismissWeeklyReview = () => {
+    setWeeklyReviewUnread(false);
+    weeklyReviewService.markRead();
+  };
 
   useEffect(() => {
     const responseListener =
@@ -1501,9 +1546,37 @@ export const HomeScreen: React.FC = () => {
     }
   };
 
-  const canAddEntry = () => {
-    // TODO: Re-enable daily limit (3 meals/day for free users) before launch
-    return true;
+  // Free plan: three meals a day, text only. The count is the day's actual meal
+  // list rather than a stored tally, so deleting a meal gives the slot back and
+  // there is no counter to drift out of step with what the user can see.
+  const FREE_MEALS_PER_DAY = 3;
+
+  const mealsLoggedOn = (dateKey: string) =>
+    (mealsByDate[dateKey] || []).length;
+
+  const canAddEntry = (dateKey: string = getDateKey(selectedDate)) =>
+    isPremium || mealsLoggedOn(dateKey) < FREE_MEALS_PER_DAY;
+
+  const showPhotoPremiumAlert = () => {
+    Alert.alert(
+      'Photo logging is Premium',
+      'Premium reads the label, finds the brand and counts the plate. On free you can type your meal instead.',
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See Premium', onPress: () => handleOpenSubscription() },
+      ]
+    );
+  };
+
+  const showDailyLimitAlert = () => {
+    Alert.alert(
+      'That is three for today',
+      `The free plan logs ${FREE_MEALS_PER_DAY} meals a day. Premium is unlimited, and it reads photos.`,
+      [
+        { text: 'Not now', style: 'cancel' },
+        { text: 'See Premium', onPress: () => handleOpenSubscription() },
+      ]
+    );
   };
 
   // Apply a real (persisted) meal-list change to a specific day. If the user is
@@ -1571,20 +1644,8 @@ export const HomeScreen: React.FC = () => {
       return true;
     }
 
-    // Enforce 3/day limit
     if (!canAddEntry()) {
-      Alert.alert(
-        'Daily Limit Reached',
-        'Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          {
-            text: 'View Offer', onPress: () => {
-              handleOpenSubscription();
-            }
-          },
-        ]
-      );
+      showDailyLimitAlert();
       return;
     }
 
@@ -1796,19 +1857,10 @@ export const HomeScreen: React.FC = () => {
     });
   };
 
+  // No daily gate here. An edit is a correction, not a new meal, and locking
+  // someone out of fixing their third meal of the day is a worse product than
+  // the handful of extra calls it costs.
   const handleEditMealPrompt = async (mealId: string, newPrompt: string) => {
-    // Enforce free plan entry limit for edits
-    if (!(await canAddEntry())) {
-      Alert.alert(
-        'Entry Limit Reached',
-        'You have reached your free entry limit. Upgrade to Premium for unlimited entries.',
-        [
-          { text: 'Cancel', style: 'cancel' },
-          { text: 'Upgrade', onPress: () => handleOpenSubscription() },
-        ]
-      );
-      return;
-    }
     // The row being edited carries its own pending state. A full screen blocker
     // for a change to one line was heavier than the change
     setMealPending(currentDateKey, mealId, true);
@@ -1994,6 +2046,10 @@ export const HomeScreen: React.FC = () => {
   };
 
   const handlePlusPress = () => {
+    if (!isPremium) {
+      showPhotoPremiumAlert();
+      return;
+    }
     setPhotoModalVisible(true);
   };
 
@@ -2063,15 +2119,18 @@ export const HomeScreen: React.FC = () => {
       return;
     }
 
+    // Photo is premium. Reaching here without it means a stale modal or a note
+    // re-run, so send them to the offer rather than burning a vision call.
+    if (!isPremium) {
+      showPhotoPremiumAlert();
+      setUploadedImage(null);
+      return;
+    }
+
     // Same entry gate as the text path. canAddEntry is the single source of
-    // truth for the free daily limit (disabled pre-launch). The photo path used
-    // to keep its own hardcoded 3-meal check, so a free user was capped on
-    // photos but not on text.
+    // truth for the free daily limit.
     if (!canAddEntry()) {
-      Alert.alert(
-        "Daily Limit Reached",
-        "Free plan is limited to 3 meals per day. Claim your 10-day Premium trial or upgrade for unlimited logging!"
-      );
+      showDailyLimitAlert();
       setUploadedImage(null);
       return;
     }
@@ -2106,7 +2165,11 @@ export const HomeScreen: React.FC = () => {
     // call, and an answer that beats it dismisses it early rather than waiting
     setAnalyzingPhoto(uriToAnalyze);
 
-    const done = () => { photoPendingId.current = null; };
+    const done = () => {
+      photoPendingId.current = null;
+      photoReading.current = null;
+      setPhotoRead(false);
+    };
 
     const failWith = (title: string, message: string) => {
       setAnalyzingPhoto(null);
@@ -2125,12 +2188,22 @@ export const HomeScreen: React.FC = () => {
       let summary: string | undefined;
 
       try {
-        const analysisPromise = analyzeFoodFromImage(uriToAnalyze, note);
-        const timeoutPromise = new Promise<{ foods: ParsedFood[], summary?: string }>((_, reject) =>
+        // The photo is only looked at once. A note re-runs the counting pass
+        // against the reading we already have, so adding one costs a second or
+        // two rather than the whole wait over again
+        const readingPromise = photoReading.current
+          ? Promise.resolve(photoReading.current)
+          : readFoodPhoto(uriToAnalyze).then(r => { photoReading.current = r; return r; });
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
           setTimeout(() => reject(new Error('Analysis timeout after 30 seconds')), 30000)
         );
 
-        const result = await Promise.race([analysisPromise, timeoutPromise]);
+        const reading = await Promise.race([readingPromise, timeoutPromise]);
+        if (isStale()) return;
+        setPhotoRead(true);
+
+        const result = await Promise.race([analyzePhotoReading(reading, note), timeoutPromise]);
         if (isStale()) return;
         parsedFoods = result.foods || [];
         summary = result.summary;
@@ -2312,6 +2385,11 @@ export const HomeScreen: React.FC = () => {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setUploadedImage(asset.uri);
+        // A new photo is a new reading. Without this the next shot would be
+        // counted against the last one's look
+        photoReading.current = null;
+        photoPendingId.current = null;
+        setPhotoRead(false);
 
         // Pass the URI directly to avoid state timing issues
         analyzeUploadedImage(asset.uri);
@@ -2383,6 +2461,11 @@ export const HomeScreen: React.FC = () => {
       if (!result.canceled && result.assets && result.assets[0]) {
         const asset = result.assets[0];
         setUploadedImage(asset.uri);
+        // A new photo is a new reading. Without this the next shot would be
+        // counted against the last one's look
+        photoReading.current = null;
+        photoPendingId.current = null;
+        setPhotoRead(false);
 
         // Pass the URI directly to avoid state timing issues
         analyzeUploadedImage(asset.uri);
@@ -2761,6 +2844,12 @@ export const HomeScreen: React.FC = () => {
               </View>
             )}
 
+            <WeeklyReviewBanner
+              visible={isSameDay(selectedDate, new Date()) && weeklyReviewUnread}
+              onPress={openWeeklyReview}
+              onDismiss={dismissWeeklyReview}
+            />
+
             {/* Daily AI Coach Card - Premium Only */}
             {isSameDay(selectedDate, new Date()) && isPremium && smartSuggestEnabled && (
               <SmartSuggestBanner
@@ -2928,6 +3017,22 @@ export const HomeScreen: React.FC = () => {
                   }}
                 />
               </View>
+            )}
+
+            {/* Free users should meet the ceiling before they walk into it */}
+            {!isPremium && isSameDay(selectedDate, new Date()) && (
+              <TouchableOpacity
+                activeOpacity={0.7}
+                onPress={handleOpenSubscription}
+                style={{ paddingHorizontal: 20, paddingTop: 16, flexDirection: 'row', alignItems: 'center', gap: 6 }}
+              >
+                <Text style={{ fontSize: 11, letterSpacing: 0.5, color: Acid.tx3 }}>
+                  {mealsLoggedOn(currentDateKey) >= FREE_MEALS_PER_DAY
+                    ? `That is all ${FREE_MEALS_PER_DAY} free logs for today.`
+                    : `${FREE_MEALS_PER_DAY - mealsLoggedOn(currentDateKey)} of ${FREE_MEALS_PER_DAY} free logs left today.`}
+                </Text>
+                <Text style={{ fontSize: 11, letterSpacing: 0.5, color: Acid.lime }}>Go unlimited</Text>
+              </TouchableOpacity>
             )}
 
             <ExerciseLogSection
@@ -3224,23 +3329,26 @@ export const HomeScreen: React.FC = () => {
               <Text style={{ fontFamily: Acid.serifItalic, fontSize: 20, color: Acid.tx, marginBottom: 8 }}>Log something</Text>
               {[
                 { icon: 'type', label: 'Type it', hint: 'Describe your meal in words', action: () => setShouldFocusInput(true) },
-                { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', action: () => handlePlusPress() },
+                { icon: 'camera', label: 'Snap it', hint: 'Photograph your plate', locked: !isPremium, action: () => handlePlusPress() },
                 ...(micAvailable
                   ? [{ icon: 'mic', label: 'Say it', hint: 'Speak, then check the words', action: () => handleMicPress() }]
                   : []),
                 { icon: 'activity', label: 'Weigh in', hint: "Log today's weight", action: () => { setWeightLogRequest(true); handleWeightTracker(); } },
                 { icon: 'droplet', label: 'Water', hint: 'Count your glasses', action: () => setShowWaterSheet(true) },
-              ].map(row => (
+              ].map((row: any) => (
                 <TouchableOpacity
                   key={row.label}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 14, paddingVertical: 16, borderTopWidth: 1, borderTopColor: Acid.hair }}
                   onPress={() => { setShowQuickLog(false); setTimeout(row.action, 250); }}
                 >
-                  <Feather name={row.icon as any} size={19} color={Acid.lime} />
-                  <View>
-                    <Text style={{ fontSize: 15, fontWeight: '600', color: Acid.tx }}>{row.label}</Text>
+                  <Feather name={row.icon as any} size={19} color={row.locked ? Acid.tx3 : Acid.lime} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '600', color: row.locked ? Acid.tx2 : Acid.tx }}>{row.label}</Text>
                     <Text style={{ fontSize: 12, color: Acid.tx3, marginTop: 1 }}>{row.hint}</Text>
                   </View>
+                  {row.locked && (
+                    <Text style={{ fontSize: 10, fontWeight: '700', letterSpacing: 0.5, color: Acid.tx3 }}>PREMIUM</Text>
+                  )}
                 </TouchableOpacity>
               ))}
               <TouchableOpacity
@@ -3312,10 +3420,12 @@ export const HomeScreen: React.FC = () => {
 
         <PhotoAnalyzingOverlay
           imageUri={analyzingPhoto}
+          read={photoRead}
           onHandoff={() => setAnalyzingPhoto(null)}
           onNote={(note) => {
+            // The overlay stays up through the re-run. Dismissing it here is
+            // what made the note feel like it vanished
             const uri = analyzingPhoto;
-            setAnalyzingPhoto(null);
             if (uri) analyzeUploadedImage(uri, note);
           }}
         />
