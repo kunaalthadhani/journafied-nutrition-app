@@ -19,8 +19,10 @@ const localDateKey = (d: Date = new Date()): string =>
     `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 
 export const COACH_LIMITS = {
-    FREE: 7,
-    PREMIUM: 10
+    FREE: 10,
+    // Premium is uncapped. The coach runs on the family Moonshot account where
+    // a message costs close to nothing, so a cap here would be theatre.
+    PREMIUM: Infinity
 };
 
 // The coach used to refuse to speak below 14 logged days, and told the user so
@@ -476,7 +478,7 @@ ${JSON.stringify(safeContext, null, 2)}
      * Checks if the user can send a message today.
      * Returns the number of messages remaining.
      */
-    checkDailyLimit: async (isPremium: boolean): Promise<{ allowed: boolean, remaining: number }> => {
+    checkDailyLimit: async (isPremium: boolean): Promise<{ allowed: boolean, remaining: number, unlimited: boolean }> => {
         try {
             const today = localDateKey();
             const data = await AsyncStorage.getItem(STORAGE_KEYS.COACH_USAGE);
@@ -490,15 +492,19 @@ ${JSON.stringify(safeContext, null, 2)}
             }
 
             const limit = isPremium ? COACH_LIMITS.PREMIUM : COACH_LIMITS.FREE;
+            if (!Number.isFinite(limit)) {
+                return { allowed: true, remaining: Infinity, unlimited: true };
+            }
             return {
                 allowed: parsed.count < limit,
-                remaining: Math.max(0, limit - parsed.count)
+                remaining: Math.max(0, limit - parsed.count),
+                unlimited: false
             };
         } catch (e) {
             console.error(e);
             // Fail open so a storage hiccup never bricks the coach, but stay
             // conservative: allow this one message, do not hand out a full quota.
-            return { allowed: true, remaining: 1 };
+            return { allowed: true, remaining: 1, unlimited: false };
         }
     },
 

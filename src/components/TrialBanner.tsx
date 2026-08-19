@@ -5,16 +5,29 @@ import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { TrialState, trialLabel } from '../utils/trial';
 
-// TrackLifts has no custom scheme yet, so the store listing is the reliable
-// door. Play shows Open rather than Install when the app is already there.
 const LIFTS_PACKAGE = 'com.tracklifts.app';
+// Agreed with the Lifts side. Until their build ships with it, openURL simply
+// throws and we fall through to the store, which is the correct answer for
+// someone who does not have the app anyway.
+const LIFTS_SCHEME = 'tracklifts://';
 
+/**
+ * Installed, open it. Not installed, send them to the store to get it.
+ *
+ * canOpenURL is deliberately not used: on Android 11+ it returns false for any
+ * scheme not declared in the manifest's <queries>, and on iOS for any scheme
+ * not in LSApplicationQueriesSchemes. Both would make an installed app look
+ * absent. Attempting the open and catching the failure asks the real question.
+ */
 export const openTrackLifts = async () => {
-  const store = `market://details?id=${LIFTS_PACKAGE}`;
   const web = `https://play.google.com/store/apps/details?id=${LIFTS_PACKAGE}`;
   try {
-    const canStore = await Linking.canOpenURL(store);
-    await Linking.openURL(canStore ? store : web);
+    await Linking.openURL(LIFTS_SCHEME);
+    return;
+  } catch { /* not installed, or no scheme in their build yet */ }
+
+  try {
+    await Linking.openURL(`market://details?id=${LIFTS_PACKAGE}`);
   } catch {
     Linking.openURL(web).catch(() =>
       Alert.alert('Could not open the store', 'Search for TrackLifts in Google Play.')

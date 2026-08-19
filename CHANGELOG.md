@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.1**
+The coach gets 10 messages a day on the free plan, and Premium is uncapped. It used to be 7 and 10, which was not a difference worth having. Opening TrackLifts from TrackKcal now tries the app first and only falls back to the Play Store if you do not have it installed.
+
 **v1.8.0**
 Three weeks free, everything on, and it covers both apps. Make your Track account in TrackKcal and the same trial is already running in TrackLifts, and the other way round. One trial per person rather than one per app, counted from the day you signed up, so reinstalling does not restart it and neither does installing the other half. The home screen tells you how many days are left and reminds you that the gym app is sitting there unlocked. There is a link to open it from the banner and another in Settings.
 

@@ -16,7 +16,7 @@ import {
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Acid } from '../constants/acid';
 import { Feather } from '@expo/vector-icons';
-import { chatCoachService, ChatCoachContext, COACH_MIN_LOGGED_DAYS } from '../services/chatCoachService';
+import { chatCoachService, ChatCoachContext, COACH_MIN_LOGGED_DAYS, COACH_LIMITS } from '../services/chatCoachService';
 import { getCoachChatResponse } from '../services/openaiService';
 import { Typography } from '../constants/typography';
 import { Spacing } from '../constants/spacing';
@@ -142,7 +142,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     const [inputText, setInputText] = useState('');
     const [loading, setLoading] = useState(false);
     const [context, setContext] = useState<ChatCoachContext | null>(null);
-    const [limitStatus, setLimitStatus] = useState({ allowed: true, remaining: 3 });
+    const [limitStatus, setLimitStatus] = useState({ allowed: true, remaining: 10, unlimited: false });
     const [showInfo, setShowInfo] = useState(false);
     const flatListRef = useRef<FlatList>(null);
     // Synchronous re-entry guard. `loading` is React state and updates a tick
@@ -235,7 +235,9 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                 <View>
                     <Text style={styles.headerTitle}>AI Nutritionist</Text>
                     <Text style={styles.headerSubtitle}>
-                        {limitStatus.remaining} messages left
+                        {limitStatus.unlimited
+                            ? 'Ask as much as you like'
+                            : `${limitStatus.remaining} message${limitStatus.remaining === 1 ? '' : 's'} left today`}
                     </Text>
                 </View>
                 <TouchableOpacity onPress={() => setShowInfo(true)} style={styles.headerBtn}>
@@ -297,7 +299,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                         <Feather name="moon" size={20} color={Acid.tx3} style={{ marginBottom: 8 }} />
                         <Text style={styles.lockTitle}>Daily Limit Reached</Text>
                         <Text style={styles.lockSub}>
-                            Refresh tomorrow for more wisdom.
+                            That is your {COACH_LIMITS.FREE} for today. It resets in the morning, and Premium never counts.
                         </Text>
                     </View>
                 ) : (
