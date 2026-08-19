@@ -17,6 +17,7 @@ import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { authService } from '../services/authService';
 import { dataStorage, AccountInfo } from '../services/dataStorage';
+import { TRIAL_DAYS } from '../utils/trial';
 
 interface QuickSignupScreenProps {
   prefilledName?: string;
@@ -132,13 +133,28 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
           showsVerticalScrollIndicator={false}
         >
           <View style={[styles.iconWrap, { backgroundColor: Acid.mossDeep }]}>
-            <Feather name="bookmark" size={36} color={Acid.lime} />
+            <Feather name="unlock" size={36} color={Acid.lime} />
           </View>
 
-          <Text style={[styles.title, { color: Acid.tx }]}>Save your plan</Text>
+          <Text style={[styles.title, { color: Acid.tx }]}>Start your three weeks</Text>
           <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
-            Keep your goals and meals across devices. No password needed.
+            No card, no password. The email is what the trial is attached to.
           </Text>
+
+          {/* The offer, said before the fields rather than discovered after
+              them. The gym line is the reason this beats "save your plan" */}
+          <View style={styles.offer}>
+            {[
+              { icon: 'zap', text: `Everything in TrackKcal, on for ${TRIAL_DAYS} days` },
+              { icon: 'activity', text: 'TrackLifts unlocked at the same time, same account' },
+              { icon: 'cloud', text: 'Your goals and meals kept across devices' },
+            ].map(row => (
+              <View key={row.text} style={styles.offerRow}>
+                <Feather name={row.icon as any} size={14} color={Acid.lime} />
+                <Text style={styles.offerText}>{row.text}</Text>
+              </View>
+            ))}
+          </View>
 
           <View style={styles.fields}>
             <Field
@@ -190,7 +206,7 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
             ) : (
               <>
                 <Text style={[styles.primaryBtnText, { color: canSubmit ? Acid.moss : Acid.tx3 }]}>
-                  Continue
+                  Start my three weeks
                 </Text>
                 <Feather name="arrow-right" size={18} color={canSubmit ? Acid.moss : Acid.tx3} style={{ marginLeft: 6 }} />
               </>
@@ -198,11 +214,11 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
           </TouchableOpacity>
 
           <TouchableOpacity onPress={handleSkip} style={styles.skipBtn} hitSlop={{ top: 8, bottom: 8, left: 16, right: 16 }}>
-            <Text style={[styles.skipText, { color: Acid.tx3 }]}>Skip for now</Text>
+            <Text style={[styles.skipText, { color: Acid.tx3 }]}>Skip, I will stay on the free plan</Text>
           </TouchableOpacity>
 
           <Text style={[styles.footerNote, { color: Acid.tx3 }]}>
-            We use your email only to save your data. No spam.
+            We use your email to hold your account and your trial. No spam.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
@@ -261,6 +277,27 @@ const styles = StyleSheet.create({
   },
   title: { fontSize: 26, fontWeight: 'bold', textAlign: 'center', marginBottom: 6 },
   subtitle: { fontSize: 15, textAlign: 'center', lineHeight: 21, marginBottom: 28, paddingHorizontal: 12 },
+  offer: {
+    width: '100%',
+    borderWidth: 1,
+    borderColor: Acid.hair2,
+    backgroundColor: Acid.limeSoft,
+    borderRadius: 12,
+    padding: 14,
+    gap: 10,
+    marginBottom: 4,
+  },
+  offerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  offerText: {
+    flex: 1,
+    fontSize: Typography.fontSize.xs,
+    lineHeight: Typography.fontSize.xs * 1.5,
+    color: Acid.tx,
+  },
   fields: { width: '100%', gap: 14, marginBottom: 8 },
   fieldWrap: { gap: 6 },
   fieldLabel: { fontSize: 13, fontWeight: '600' },

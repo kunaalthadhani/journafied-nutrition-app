@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.2**
+The signup screen says what you actually get. It used to be headed "Save your plan" and offered to keep your meals across devices, which is true and is the least interesting thing about handing over an email. It now leads with the three weeks: everything in TrackKcal on, TrackLifts unlocked at the same time on the same account, and yes, your data kept across devices. Skipping is still there and now says what it costs you.
+
 **v1.8.1**
 The coach gets 10 messages a day on the free plan, and Premium is uncapped. It used to be 7 and 10, which was not a difference worth having. Opening TrackLifts from TrackKcal now tries the app first and only falls back to the Play Store if you do not have it installed.
 
