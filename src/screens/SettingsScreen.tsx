@@ -21,6 +21,7 @@ import * as Updates from 'expo-updates';
 import { Typography } from '../constants/typography';
 import { Acid } from '../constants/acid';
 import { APP_VERSION } from '../constants/appVersion';
+import { openTrackLifts } from '../components/TrialBanner';
 import { usePreferences } from '../contexts/PreferencesContext';
 import { featureFlags } from '../config/featureFlags';
 import { dataStorage } from '../services/dataStorage';
@@ -533,6 +534,12 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SettingItem icon="help-circle" title="Help & Support" onPress={() => Alert.alert('Help', 'Support content coming soon.')} />
           <SettingItem icon="book-open" title="How it Works" onPress={onHowItWorks} />
           <SettingItem icon="mail" title="Send Feedback" subtitle="Tell us what to fix or build" onPress={() => onOpenFeedback?.()} />
+          <SettingItem
+            icon="activity"
+            title="TrackLifts"
+            subtitle="The gym half. Same account, same subscription."
+            onPress={openTrackLifts}
+          />
           <SettingItem icon="shield" title="Privacy Policy" onPress={() => openLegal('privacy')} />
           <SettingItem icon="file-text" title="Terms of Service" onPress={() => openLegal('terms')} />
           <SettingItem icon="info" title="About" onPress={() => (onOpenAbout ? onOpenAbout() : handleAbout())} />

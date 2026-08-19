@@ -881,6 +881,7 @@ export const supabaseDataService = {
   // answered: it comes from entitlements, which exists independently.
   async fetchUserSettings(accountInfo: AccountInfo | null): Promise<{
     entryCount?: number;
+    trialStartedAt?: string | null;
     userPlan: 'free' | 'premium';
     deviceInfo: any;
   } | null> {
@@ -914,9 +915,23 @@ export const supabaseDataService = {
       if (ent?.kcal_premium || ent?.track_plus) userPlan = 'premium';
     } catch { /* free until proven premium */ }
 
+    // The family trial clock. profiles is created by a server trigger on
+    // signup, so this exists for everyone, no client can write it, and a
+    // reinstall does not reset it. One trial per person, every app.
+    let trialStartedAt: string | null = null;
+    try {
+      const { data: prof } = await supabase
+        .from('profiles')
+        .select('created_at')
+        .eq('id', user.id)
+        .maybeSingle();
+      trialStartedAt = (prof?.created_at as string | undefined) ?? null;
+    } catch { /* no clock, no trial, never a crash */ }
+
     return {
       entryCount: data ? (data.entry_count || 0) : undefined,
       userPlan,
+      trialStartedAt,
       deviceInfo: data?.device_info || null,
     };
   },

@@ -8,6 +8,7 @@ import { calculateStreak } from '../utils/streakUtils';
 import { parseISO, format } from 'date-fns';
 import { FREE_PREMIUM_LAUNCH } from '../config/featureFlags';
 import { DietChange, DietPlanId } from '../utils/dietPlans';
+import { trialFrom } from '../utils/trial';
 
 // --- Write serialization to prevent race conditions on rapid saves ---
 // Per-key promise chain: ensures read-modify-write operations for the same
@@ -190,6 +191,7 @@ export interface AccountInfo {
   passwordHash?: string; // Should be hashed, not plain text
   hasUsedReferralCode?: boolean; // Track if user has used a referral code
   premiumUntil?: string; // ISO date string for premium trial expiry
+  trialStartedAt?: string; // profiles.created_at, the family trial clock
 }
 
 // ... existing code ...
@@ -210,9 +212,16 @@ export const isPremiumEntitled = (accountInfo: AccountInfo | null, plan?: string
   if (!accountInfo?.email) return false;
   if (FREE_PREMIUM_LAUNCH) return true;
   if (plan === 'premium') return true;
+  // Three weeks from the day they made their Track account, in every app at
+  // once. See src/utils/trial.ts for why the clock lives on profiles.
+  if (trialFrom(accountInfo.trialStartedAt).active) return true;
   if (accountInfo.premiumUntil) return new Date(accountInfo.premiumUntil) > new Date();
   return false;
 };
+
+/** The trial as the UI needs to talk about it. Read-only, never a gate. */
+export const trialStateFor = (accountInfo: AccountInfo | null) =>
+  trialFrom(accountInfo?.trialStartedAt);
 
 export interface AnalyticsEvent {
   eventName: string;
@@ -2073,6 +2082,11 @@ export const dataStorage = {
       if (accountInfo?.supabaseUserId) {
         try {
           const remoteSettings = await supabaseDataService.fetchUserSettings(accountInfo);
+          // Cache the trial clock beside the plan. Both are server truth and
+          // both are read on every boot, so they travel together.
+          if (remoteSettings?.trialStartedAt && remoteSettings.trialStartedAt !== accountInfo.trialStartedAt) {
+            await dataStorage.saveAccountInfo({ ...accountInfo, trialStartedAt: remoteSettings.trialStartedAt });
+          }
           if (remoteSettings && remoteSettings.userPlan) {
             await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, remoteSettings.userPlan);
             return remoteSettings.userPlan;

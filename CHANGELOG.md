@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.0**
+Three weeks free, everything on, and it covers both apps. Make your Track account in TrackKcal and the same trial is already running in TrackLifts, and the other way round. One trial per person rather than one per app, counted from the day you signed up, so reinstalling does not restart it and neither does installing the other half. The home screen tells you how many days are left and reminds you that the gym app is sitting there unlocked. There is a link to open it from the banner and another in Settings.
+
+The AI Nutritionist is free. It was half gated before, which meant free users could reach it through the tab bar and not through the home screen, which is worse than either answer. It is open to everyone now.
+
 **v1.7.1**
 The Privacy Policy and Terms links in Settings used to open a box that just said "Privacy Policy" back at you. They now open the real documents. Both were rewritten from scratch against what the app actually does, because the old ones were written in May and had gone out of date in ways that matter. The important one: your conversations with the AI Nutritionist are processed by Moonshot AI, a company in China. That was never disclosed. It is now, in plain words, along with every other company that touches your data and exactly what each one receives. There is also a page at trackkcal.com/delete-account explaining how to delete everything, including for people who no longer have the app installed. The About screen shows the real version number instead of 1.0.0.
 

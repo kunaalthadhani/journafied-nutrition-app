@@ -34,7 +34,7 @@ import { Colors } from '../constants/colors';
 import { Typography } from '../constants/typography';
 import { MacroData } from '../types';
 import { FoodLogSection } from '../components/FoodLogSection';
-import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary, isPremiumEntitled } from '../services/dataStorage';
+import { MealEntry as Meal, dataStorage, ExtendedGoalData, SavedPrompt, AccountInfo, StreakFreezeData, AdjustmentRecord, DailySummary, isPremiumEntitled, trialStateFor } from '../services/dataStorage';
 import { ExerciseLogSection, ExerciseEntry } from '../components/ExerciseLogSection';
 import { CalorieBankCard } from '../components/CalorieBankCard';
 import { CalorieBankWeeklyCard } from '../components/CalorieBankWeeklyCard';
@@ -71,6 +71,7 @@ import { SmartAdjustmentBanner } from '../components/SmartAdjustmentBanner';
 import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
 import { WeeklyReviewBanner } from '../components/WeeklyReviewBanner';
+import { TrialBanner } from '../components/TrialBanner';
 import { weeklyReviewService } from '../services/weeklyReviewService';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
@@ -189,6 +190,9 @@ export const HomeScreen: React.FC = () => {
   // userPlan here is the cached answer from the family entitlements row, so
   // kcal_premium and track_plus both land as 'premium'. One gate, no local copy
   // of the rules.
+  const trial = React.useMemo(() => trialStateFor(accountInfo), [accountInfo]);
+  // A subscriber is not on a trial, so the banner never nags someone paying.
+  const isSubscriber = userPlan === 'premium';
   const isPremium = React.useMemo(
     () => isPremiumEntitled(accountInfo, userPlan),
     [userPlan, accountInfo],
@@ -2844,6 +2848,14 @@ export const HomeScreen: React.FC = () => {
               </View>
             )}
 
+            {isSameDay(selectedDate, new Date()) && (
+              <TrialBanner
+                trial={trial}
+                isSubscriber={isSubscriber}
+                onSeePlans={handleOpenSubscription}
+              />
+            )}
+
             <WeeklyReviewBanner
               visible={isSameDay(selectedDate, new Date()) && weeklyReviewUnread}
               onPress={openWeeklyReview}
@@ -3113,15 +3125,16 @@ export const HomeScreen: React.FC = () => {
                     waterTargetMl: WATER_TARGET_ML,
                   }).text}
                 </Text>
-                {isPremium && (
-                  <TouchableOpacity
-                    onPress={() => { if (canNavigate('chatCoach')) setShowChatCoach(true); }}
-                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                    style={{ marginTop: 8 }}
-                  >
-                    <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: Acid.lime }}>ASK COACH →</Text>
-                  </TouchableOpacity>
-                )}
+                {/* The coach is free. This door used to be premium only while
+                    the tab bar let free users in anyway, so the same feature
+                    was gated through one entrance and open through the other */}
+                <TouchableOpacity
+                  onPress={() => { if (canNavigate('chatCoach')) setShowChatCoach(true); }}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  style={{ marginTop: 8 }}
+                >
+                  <Text style={{ fontSize: 11, letterSpacing: 1.5, fontWeight: '600', color: Acid.lime }}>ASK COACH →</Text>
+                </TouchableOpacity>
               </View>
             )}
 
