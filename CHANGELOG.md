@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.7.1**
+The Privacy Policy and Terms links in Settings used to open a box that just said "Privacy Policy" back at you. They now open the real documents. Both were rewritten from scratch against what the app actually does, because the old ones were written in May and had gone out of date in ways that matter. The important one: your conversations with the AI Nutritionist are processed by Moonshot AI, a company in China. That was never disclosed. It is now, in plain words, along with every other company that touches your data and exactly what each one receives. There is also a page at trackkcal.com/delete-account explaining how to delete everything, including for people who no longer have the app installed. The About screen shows the real version number instead of 1.0.0.
+
 **v1.7.0**
 The coach no longer makes you wait two weeks. It used to refuse to talk until you had logged 14 days, and worse, below 14 days it could not actually see the days you had logged. So on day three it was blind to three days it was holding, and then told you off for not having enough data. Both fixed. Ask it anything from day one. What changes as you log is not whether it answers, it is how big a claim it is allowed to make: nothing logged and it works from your goal and your targets, a few days in and it uses your real numbers and tells you which days it read them from, and at 14 days it starts talking about patterns and weeks. It will never refuse you for lack of data. If it genuinely cannot answer, it tells you which number is missing. The question mark on the coach screen now shows you exactly where you stand.
 

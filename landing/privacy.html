@@ -31,85 +31,112 @@
         <article class="legal-inner">
             <p class="eyebrow">Privacy Policy</p>
             <h1>Privacy Policy</h1>
-            <p class="legal-meta">Last updated: 27 May 2026</p>
+            <p class="legal-meta">Last updated: 18 August 2026</p>
 
-            <p>This Privacy Policy explains what data TrackKcal collects, why we collect it, and what we do with it. We try to keep this in plain English. If something is unclear, email us at <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a> and we will fix it.</p>
+            <p>This Privacy Policy explains what data TrackKcal collects, why we collect it, and who else sees it. We try to keep this in plain English. If something is unclear, email us at <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a> and we will fix it.</p>
 
             <h2>Who we are</h2>
-            <p>TrackKcal is a mobile application owned and operated by Kunaal Thadhani, based in the United Arab Emirates. We can be reached at <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a>.</p>
+            <p>TrackKcal is a mobile application owned and operated by Kunaal Thadhani, based in the United Arab Emirates. We can be reached at <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a>. For the purposes of the UAE Personal Data Protection Law and the GDPR, we are the data controller.</p>
 
             <h2>What we collect</h2>
 
             <h3>Account information</h3>
-            <p>When you sign up we collect your email address. If you choose to add a name or phone number, we collect those too. We do not collect your physical address.</p>
+            <p>When you sign up we collect your email address. If you choose to add a name, we collect that too. We do not collect your physical address and we never see your payment card details.</p>
 
             <h3>Health and nutrition data you give us</h3>
-            <p>If you choose to use the app, you give us:</p>
+            <p>This is health data, which the law treats as sensitive. We only have it because you type it in. If you use the app, you give us:</p>
             <ul>
-                <li>Food log entries (what you ate, when, the AI's estimated calories and nutrients)</li>
-                <li>Weight entries (the values you record, dated)</li>
-                <li>Goals you set (target weight, target calories, dietary preferences)</li>
-                <li>Exercise entries you log</li>
-                <li>Optional messages you send to the in-app AI Nutritionist</li>
+                <li>Food log entries: what you ate, when, and the estimated calories and nutrients</li>
+                <li>Photos of food you choose to log by camera or from your library</li>
+                <li>Weight entries you record, dated</li>
+                <li>Water and exercise entries you record</li>
+                <li>Goals you set: target weight, target calories, macro split, activity level, and any diet you follow such as keto or vegetarian</li>
+                <li>Date of birth, sex, and height, which we need in order to calculate your calorie target</li>
+                <li>Messages you send to the in-app AI Nutritionist, which may include anything you choose to type about your eating, your body, or your health</li>
             </ul>
-            <p>This information is stored against your account. You can edit or delete any entry at any time inside the app.</p>
+            <p>You can edit or delete any entry at any time inside the app.</p>
 
             <h3>Usage and device data</h3>
-            <p>We collect anonymous information about how you use the app: which screens you open, how often, which features you tap, app version, operating system, and device model. This helps us decide what to build and fix. It is not tied to your identity beyond your user ID.</p>
+            <p>We collect information about how you use the app: which screens you open, how often, which features you tap, app version, operating system, and device model. This is tied to a random identifier and, once you sign in, to your user ID. It helps us decide what to build and what to fix.</p>
 
             <h3>Crash and error data</h3>
-            <p>When the app crashes or hits an error, we collect the crash details so we can fix the bug. This may include the screen you were on and any non-sensitive context about the action that failed. We do not include your food log content in crash reports.</p>
+            <p>When the app crashes or a request fails, we collect the error details so we can fix the bug. This includes the screen you were on and technical context about the request that failed. We do not put your food log content or your coach messages into crash reports.</p>
+
+            <h3>Notification token</h3>
+            <p>If you turn on notifications, your device is issued a push token, which we store so we can send you reminders and your weekly review. Turning notifications off stops this.</p>
 
             <h2>How we use your data</h2>
             <ul>
                 <li><strong>To run the app.</strong> Save your meals, sync across your devices, show your history.</li>
-                <li><strong>To analyze food you describe.</strong> The text or photo you submit is sent to our AI processing service so it can return nutrition estimates.</li>
-                <li><strong>To improve the product.</strong> We look at usage patterns in aggregate to decide what to build next.</li>
+                <li><strong>To analyse food you describe or photograph.</strong> What you type or photograph is sent to an AI provider so it can return a nutrition estimate. Where the food looks like a branded packaged product, the product name is also sent to a search provider and a food database so we can use real label figures instead of a guess.</li>
+                <li><strong>To give you coaching and weekly reviews.</strong> A summary of your logged data is sent to an AI provider to produce advice that is specific to you.</li>
+                <li><strong>To improve the product.</strong> We look at usage patterns to decide what to build next.</li>
                 <li><strong>To send you reminders.</strong> Only if you turn notifications on. We do not send marketing emails by default.</li>
                 <li><strong>To respond to you.</strong> If you email us, we read it and reply.</li>
             </ul>
             <p>We do not sell your data. We do not share it with advertisers. We do not build a profile of you for any third party.</p>
 
             <h2>Who else sees your data</h2>
-            <p>We use a small number of trusted providers to run the app. Each one only sees the data needed to do its job.</p>
+            <p>We use a small number of providers to run the app. Each one only receives the data needed to do its job. This is the complete list.</p>
             <ul>
-                <li><strong>Supabase</strong> hosts our database and handles authentication. Your account record and your logged data live here. Supabase is operated by Supabase Inc., a US-incorporated company with infrastructure in multiple regions.</li>
-                <li><strong>OpenAI</strong> runs the AI models that analyze food descriptions, photos, and voice notes. When you log a meal, the description or image is sent to OpenAI for processing. OpenAI states that data submitted via its API is not used to train their models.</li>
-                <li><strong>Sentry</strong> receives crash and error reports. Our Sentry instance is hosted in the European Union region.</li>
-                <li><strong>Mixpanel</strong> receives anonymized usage events so we can measure how the app is being used.</li>
-                <li><strong>Apple and Google</strong> handle app distribution and, if and when we enable paid tiers, payment processing.</li>
+                <li><strong>Supabase</strong> hosts our database and handles sign-in. Your account record and everything you log lives here. Hosted in Asia Pacific (Seoul), operated by a company incorporated in the United States.</li>
+                <li><strong>OpenAI</strong> analyses food descriptions and food photos, and writes your weekly review. Servers in the United States.</li>
+                <li><strong>Moonshot AI (Kimi)</strong> powers the AI Nutritionist. It receives your conversations with the coach and the summary of your logged data it answers from. <strong>Moonshot is based in China and your data is processed there.</strong> If OpenAI is unavailable, food and photo analysis falls back to Moonshot too.</li>
+                <li><strong>Serper</strong> runs a web search when you type something that looks like a branded packaged product, so we can find the real label. It receives the product name only. Nothing about you goes with it. United States.</li>
+                <li><strong>Open Food Facts</strong>, a non-profit product label database, also receives the product name only. European Union.</li>
+                <li><strong>Sentry</strong> receives crash and error reports. Hosted in the European Union.</li>
+                <li><strong>Mixpanel</strong> receives usage events. Hosted in the European Union.</li>
+                <li><strong>Expo</strong> delivers push notifications and receives your device push token and the notification text. United States.</li>
+                <li><strong>RevenueCat</strong> manages subscriptions once paid tiers are live. It receives your user ID and whether your subscription is active. It never sees your card. United States.</li>
+                <li><strong>Google Play</strong> handles distribution and payment. Your card details go to Google, never to us.</li>
+                <li><strong>Your phone's speech service.</strong> If you describe a meal by voice, the speech is transcribed by Apple or Google under their own policy, not ours. We only receive the finished text.</li>
             </ul>
+
+            <h2>The AI providers, specifically</h2>
+            <p>You should know exactly what happens when you use the AI, because it is the part of the app where your data leaves our servers.</p>
+            <ul>
+                <li>When you log food by text or photo, that description or image goes to <strong>OpenAI in the United States</strong>. OpenAI states that data submitted through its API is not used to train its models.</li>
+                <li>When you talk to the <strong>AI Nutritionist</strong>, your messages and a summary of your logged data go to <strong>Moonshot AI, a company based in China</strong>. If you are not comfortable with that, do not use the AI Nutritionist. Every other part of the app works without it.</li>
+                <li>We do not send your name or your email address to any AI provider. What we send is your food, your numbers, and what you type.</li>
+            </ul>
+
+            <h2>TrackLifts and the Track family</h2>
+            <p>TrackKcal is part of a family of apps that share one account. If you also use TrackLifts, or any future app in the family, some of your data is shared between them so you do not have to enter it twice.</p>
+            <ul>
+                <li><strong>Shared profile:</strong> your name, sex, date of birth, height, current weight, goal weight, and preferred units.</li>
+                <li><strong>Shared journals:</strong> your weight entries and your water entries. Each app can see all of them and knows which app recorded each one.</li>
+                <li><strong>Supplements:</strong> if TrackLifts records a supplement carrying calories or protein, TrackKcal counts it in your day.</li>
+                <li><strong>Subscription:</strong> if you subscribe in one app, the family knows, so your subscription can apply across apps.</li>
+            </ul>
+            <p>Your food log is not shared. Your coach conversations are not shared. If you only use TrackKcal, nothing is shared with anything.</p>
 
             <h2>Where your data lives</h2>
-            <p>Our database is hosted in Asia-Pacific (Seoul). Crash reports are stored in the European Union. AI processing happens on servers operated by OpenAI in the United States. By using TrackKcal you consent to your data being transferred to and processed in these regions.</p>
+            <p>Our database is hosted in Asia Pacific (Seoul). Crash reports and usage analytics are stored in the European Union. AI processing happens in the United States and in China, as set out above. By using TrackKcal you consent to your data being transferred to and processed in these regions, including countries that may not offer the same level of data protection as your own.</p>
 
             <h2>How long we keep it</h2>
-            <p>We keep your account and your data for as long as you have an account. If you delete your account inside the app, we delete:</p>
-            <ul>
-                <li>Your food, weight, exercise, and goal entries</li>
-                <li>Your account profile and login credentials</li>
-                <li>Any reminders or preferences you set</li>
-            </ul>
-            <p>Anonymized usage data and crash reports may persist in our analytics and error tracking systems after account deletion because those records cannot be tied back to you.</p>
+            <p>We keep your account and your data for as long as you have an account. If you delete your account we delete your food, weight, water, exercise and goal entries, your profile, your coach conversations, and your preferences.</p>
+            <p>Anonymised usage data and crash reports may persist in our analytics and error tracking systems after account deletion, because those records cannot be tied back to you. Data already sent to an AI provider is held under that provider's own retention policy and we cannot recall it.</p>
 
             <h2>Your rights</h2>
             <p>You can:</p>
             <ul>
                 <li>See your data by opening the app</li>
                 <li>Edit or delete individual entries at any time</li>
-                <li>Delete your entire account from inside the app (Settings → Account → Delete Account)</li>
-                <li>Email us with any other request: <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a></li>
+                <li>Delete your entire account and all of its data from inside the app: Settings, then Account, then Delete Account</li>
+                <li>Request deletion without installing the app at <a href="delete-account.html">trackkcal.com/delete-account</a></li>
+                <li>Ask us for a copy of your data, or ask us to correct it, by email</li>
             </ul>
-            <p>If you are in the European Union or United Kingdom, you also have rights under GDPR to access, correct, port, or restrict processing of your personal data. Email us and we will help.</p>
+            <p>If you are in the European Union or the United Kingdom you have rights under the GDPR to access, correct, port, restrict, or object to the processing of your personal data, and to complain to your local supervisory authority. If you are in the United Arab Emirates you have equivalent rights under Federal Decree-Law No. 45 of 2021. Email us and we will help.</p>
+            <p>Our legal basis for processing your health data is your explicit consent, given when you create an account and log your first entry. You can withdraw it at any time by deleting your account.</p>
 
             <h2>Children</h2>
-            <p>TrackKcal is not intended for children under 13. We do not knowingly collect data from anyone under 13. If you believe a child under 13 has created an account, email us and we will delete it.</p>
+            <p>TrackKcal is not intended for anyone under 13, and the app will not accept a date of birth that makes you younger than that. We do not knowingly collect data from anyone under 13. If you believe a child under 13 has created an account, email us and we will delete it.</p>
 
             <h2>Security</h2>
-            <p>We use modern security practices to protect your data. Your password is hashed. Connections to our servers use HTTPS. Database access requires authentication. No system is perfectly secure, but we treat your data carefully.</p>
+            <p>Your password is hashed and we never see it. Connections use HTTPS. Database rows are protected by row level security, so one account cannot read another's. AI provider keys are held on our server and never shipped inside the app. No system is perfectly secure, but we treat your data carefully.</p>
 
             <h2>Changes to this policy</h2>
-            <p>If we change this policy, we will update the "Last updated" date at the top. For material changes we will also notify you inside the app or by email.</p>
+            <p>If we change this policy we will update the date at the top. For material changes, such as adding a new provider that receives your data, we will also notify you inside the app or by email.</p>
 
             <h2>Contact</h2>
             <p>Questions, complaints, or requests: <a href="mailto:TrackKcal@gmail.com">TrackKcal@gmail.com</a></p>
@@ -146,6 +173,7 @@
                     <ul>
                         <li><a href="privacy.html">Privacy Policy</a></li>
                         <li><a href="terms.html">Terms of Service</a></li>
+                        <li><a href="delete-account.html">Delete your data</a></li>
                     </ul>
                 </div>
             </div>

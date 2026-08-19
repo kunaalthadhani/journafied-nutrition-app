@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, ScrollView } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { APP_VERSION } from '../constants/appVersion';
 import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
 import { Colors } from '../constants/colors';
@@ -34,7 +35,7 @@ export const AboutScreen: React.FC<AboutScreenProps> = ({ onBack }) => {
       >
         <View style={[styles.card, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
           <Text style={[styles.appName, { color: Acid.tx }]}>TrackKcal</Text>
-          <Text style={[styles.version, { color: Acid.tx2 }]}>Version 1.0.0</Text>
+          <Text style={[styles.version, { color: Acid.tx2 }]}>Version {APP_VERSION}</Text>
           <Text style={[styles.description, { color: Acid.tx2 }]}>TrackKcal helps you log meals, track macros and weight, and visualize your nutrition trends with clean, smooth charts.</Text>
         </View>
 

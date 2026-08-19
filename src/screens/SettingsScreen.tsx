@@ -7,6 +7,7 @@ import {
   TouchableOpacity,
   Switch,
   Alert,
+  Linking,
   Modal,
   Animated,
   Dimensions,
@@ -298,6 +299,14 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
     Alert.alert('About TrackKcal', `Version ${APP_VERSION}\n\nA nutrition and fitness tracking app to help you achieve your health goals.`, [{ text: 'OK' }]);
   };
 
+  // These used to be alerts that printed their own title back at the user. Play
+  // requires the real policy to be reachable, and so does anyone reading it.
+  const openLegal = (doc: 'privacy' | 'terms') => {
+    Linking.openURL(`https://trackkcal.com/${doc}.html`).catch(() =>
+      Alert.alert('Could not open', `Read it at trackkcal.com/${doc}.html`)
+    );
+  };
+
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: Acid.moss }]} edges={['top']}>
       {/* Header */}
@@ -524,8 +533,8 @@ export const SettingsScreen: React.FC<SettingsScreenProps> = ({
           <SettingItem icon="help-circle" title="Help & Support" onPress={() => Alert.alert('Help', 'Support content coming soon.')} />
           <SettingItem icon="book-open" title="How it Works" onPress={onHowItWorks} />
           <SettingItem icon="mail" title="Send Feedback" subtitle="Tell us what to fix or build" onPress={() => onOpenFeedback?.()} />
-          <SettingItem icon="file-text" title="Privacy Policy" onPress={() => Alert.alert('Privacy', 'Privacy Policy')} />
-          <SettingItem icon="file-text" title="Terms of Service" onPress={() => Alert.alert('Terms', 'Terms of Service')} />
+          <SettingItem icon="shield" title="Privacy Policy" onPress={() => openLegal('privacy')} />
+          <SettingItem icon="file-text" title="Terms of Service" onPress={() => openLegal('terms')} />
           <SettingItem icon="info" title="About" onPress={() => (onOpenAbout ? onOpenAbout() : handleAbout())} />
         </SettingSection>
 
