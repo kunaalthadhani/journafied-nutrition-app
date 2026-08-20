@@ -7,14 +7,13 @@ Plain English log of what changed in each version and why it matters to you. New
 ## Proactive
 
 **v1.8.3**
-Fixed a bug introduced in 1.8.0 before anyone met it. Caching the trial date could overwrite your stored account with a thinner copy of itself on a cold start, losing your saved name and a couple of internal fields until the next sync put them back. Nothing you had logged was ever at risk. It now merges the one field instead of rewriting the whole record.
-
-**v1.8.3**
 You pick your own password now. Signing up used to invent one for you and never show it to you, which meant the account was yours but only on that one phone. TrackLifts is the same account and it could never let you in, because you did not know the password and there was no way to ask for a new one. Now there is a password field at signup, and if the email you type already has a Track account the same screen just signs you into it instead of sending you off to find a sign in page.
 
 Forgotten passwords come back by code. We email you six digits, you type them into the app, you pick a new password, you are in. The old way sent a link that opened nothing on a phone, so anyone who tapped it was stuck.
 
 After you sign up or sign in, the app tells you what you got. One account, both apps, and the real date your three weeks end, read from the day you made your Track account rather than from today. Make the account in TrackLifts and TrackKcal says how many days are actually left.
+
+Also fixed before anyone met it: caching the trial date could overwrite your stored account with a thinner copy of itself on a cold start, losing your saved name and a couple of internal fields until the next sync put them back. Nothing you had logged was ever at risk.
 
 **v1.8.2**
 The signup screen says what you actually get. It used to be headed "Save your plan" and offered to keep your meals across devices, which is true and is the least interesting thing about handing over an email. It now leads with the three weeks: everything in TrackKcal on, TrackLifts unlocked at the same time on the same account, and yes, your data kept across devices. Skipping is still there and now says what it costs you.
