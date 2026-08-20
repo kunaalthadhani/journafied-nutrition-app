@@ -63,3 +63,10 @@ web-build/
 # Local SQL helpers used in dev sessions
 _*.sql
 .gstack/
+
+# Google Cloud service account keys. These grant access to Play financial data
+# and must never reach the repo. Keep the file outside the project entirely.
+*.iam.gserviceaccount.json
+track-*.json
+*-service-account*.json
+google-services.json

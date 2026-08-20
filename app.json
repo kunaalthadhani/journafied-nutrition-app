@@ -38,7 +38,8 @@
         "READ_MEDIA_IMAGES",
         "READ_EXTERNAL_STORAGE",
         "RECORD_AUDIO",
-        "ACTIVITY_RECOGNITION"
+        "ACTIVITY_RECOGNITION",
+        "com.android.vending.BILLING"
       ]
     },
     "web": {
