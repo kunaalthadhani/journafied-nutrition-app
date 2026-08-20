@@ -7,7 +7,6 @@ import { NavigationContainer } from '@react-navigation/native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import 'react-native-gesture-handler';
 import { HomeScreen } from './src/screens/HomeScreen';
-import { PasswordRecoveryModal } from './src/components/PasswordRecoveryModal';
 import { Acid } from './src/constants/acid';
 import { ThemeProvider } from './src/constants/theme';
 import { PreferencesProvider } from './src/contexts/PreferencesContext';
@@ -78,7 +77,6 @@ export default Sentry.wrap(function App() {
           <UserProvider>
             <NavigationContainer>
               <HomeScreen />
-              <PasswordRecoveryModal />
               <StatusBar style="light" backgroundColor={Acid.moss} />
             </NavigationContainer>
           </UserProvider>

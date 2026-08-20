@@ -56,3 +56,18 @@ export const trialLabel = (t: TrialState): string => {
   if (t.daysLeft <= 1) return 'Last day';
   return `${t.daysLeft} days left`;
 };
+
+const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+
+/**
+ * "Tuesday 9 September", or "9 September" without the weekday. Spelled out by
+ * hand rather than through Intl, which is not on every Hermes build.
+ */
+export const trialDateLabel = (iso: string | null | undefined, weekday = true): string => {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (!Number.isFinite(d.getTime())) return '';
+  const tail = `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return weekday ? `${WEEKDAYS[d.getDay()]} ${tail}` : tail;
+};

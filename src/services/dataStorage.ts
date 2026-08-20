@@ -948,6 +948,24 @@ const recordDietChange = async (next?: DietPlanId): Promise<void> => {
   }
 };
 
+/**
+ * Merge a field or two into the stored account without going through
+ * saveAccountInfo, which replaces the record wholesale. Anything that only
+ * wants to update one key must come through here.
+ */
+const mergeIntoAccountInfo = async (patch: Partial<AccountInfo>): Promise<void> => {
+  try {
+    const raw = await AsyncStorage.getItem(STORAGE_KEYS.ACCOUNT_INFO);
+    const existing: AccountInfo = raw ? JSON.parse(raw) : {};
+    // Nothing to do, and no pointless write on every boot.
+    const unchanged = Object.entries(patch).every(([k, v]) => (existing as any)[k] === v);
+    if (unchanged) return;
+    await AsyncStorage.setItem(STORAGE_KEYS.ACCOUNT_INFO, JSON.stringify({ ...existing, ...patch }));
+  } catch (error) {
+    if (__DEV__) console.warn('mergeIntoAccountInfo failed:', error);
+  }
+};
+
 export type MealSyncPayload = {
   meal: MealEntry;
   dateKey: string;
@@ -2084,8 +2102,14 @@ export const dataStorage = {
           const remoteSettings = await supabaseDataService.fetchUserSettings(accountInfo);
           // Cache the trial clock beside the plan. Both are server truth and
           // both are read on every boot, so they travel together.
-          if (remoteSettings?.trialStartedAt && remoteSettings.trialStartedAt !== accountInfo.trialStartedAt) {
-            await dataStorage.saveAccountInfo({ ...accountInfo, trialStartedAt: remoteSettings.trialStartedAt });
+          //
+          // NOT saveAccountInfo with a spread: that replaces the whole record,
+          // and the accountInfo in hand may be the thin { email, uid } the
+          // session fallback rebuilds on a cold open. Spreading that over the
+          // real one drops name, appUserId, premiumUntil and the referral flag.
+          // This merges one field into whatever is actually on disk.
+          if (remoteSettings?.trialStartedAt) {
+            await mergeIntoAccountInfo({ trialStartedAt: remoteSettings.trialStartedAt });
           }
           if (remoteSettings && remoteSettings.userPlan) {
             await AsyncStorage.setItem(STORAGE_KEYS.USER_PLAN, remoteSettings.userPlan);

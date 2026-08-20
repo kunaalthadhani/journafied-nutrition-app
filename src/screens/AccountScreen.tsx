@@ -28,9 +28,13 @@ import { dataStorage, AccountInfo, ExtendedGoalData, StreakFreezeData } from '..
 import { referralService } from '../services/referralService';
 import { analyticsService } from '../services/analyticsService';
 import { usePreferences } from '../contexts/PreferencesContext';
-import { authService } from '../services/authService';
+import { authService, MIN_PASSWORD_LENGTH } from '../services/authService';
+import { AccountReceipt, readReceipt } from '../components/AccountReceipt';
+import { PasswordRecoveryModal } from '../components/PasswordRecoveryModal';
 import { COUNTRIES, Country } from '../constants/countries';
 import { FlatList } from 'react-native';
+
+type Receipt = Awaited<ReturnType<typeof readReceipt>>;
 
 /**
  * Parse a stored full phone number (e.g. "+971501234567") into
@@ -112,8 +116,10 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   // -- Forgot Password State --
   const [forgotPasswordVisible, setForgotPasswordVisible] = useState(false);
-  const [resetInput, setResetInput] = useState('');
-  const [resetLoading, setResetLoading] = useState(false);
+
+  // What she just got, shown on the screen she lands on rather than left to be
+  // guessed at. Cleared by hand.
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
 
   // -- Validation State --
   const [nameError, setNameError] = useState(false);
@@ -318,35 +324,13 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       if (data.session) {
         await syncAccountInfoFromSession(data.session);
         await loadLocalData(); // Refresh UI
+        setReceipt(await readReceipt('returning'));
       }
     } catch (e: any) {
       setAuthMessage(e.message || 'Login failed.');
       // If login fails, suggest reset?
     } finally {
       setAuthStatus('idle');
-    }
-  };
-
-  const handleForgotPassword = async () => {
-    if (!resetInput.trim()) {
-      Alert.alert("Missing Info", "Please enter your email.");
-      return;
-    }
-
-    try {
-      setResetLoading(true);
-      setAuthMessage(null);
-
-      await authService.resetPasswordForEmail(resetInput.trim());
-      setForgotPasswordVisible(false);
-      Alert.alert(
-        "Reset Link Sent",
-        "Check your email (including spam) for password reset instructions. Note: it may take a few minutes to arrive.",
-      );
-    } catch (e: any) {
-      Alert.alert("Error", e.message || "Failed to send reset link. Please try again in a few minutes.");
-    } finally {
-      setResetLoading(false);
     }
   };
 
@@ -357,8 +341,8 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
     if (!name.trim()) { setNameError(true); hasError = true; } else setNameError(false);
     if (!emailRegex.test(emailInput.trim())) { setEmailError(true); hasError = true; } else setEmailError(false);
 
-    if (!password.trim() || password.length < 6) {
-      setAuthMessage("Password must be at least 6 characters.");
+    if (!password.trim() || password.length < MIN_PASSWORD_LENGTH) {
+      setAuthMessage(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
       hasError = true;
     }
 
@@ -384,6 +368,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
         await dataStorage.saveAccountInfo(provisional);
         await syncAccountInfoFromSession(data.session);
         await loadLocalData();
+        setReceipt(await readReceipt('new'));
       } else if (data.user && !data.session) {
         // Email confirmation is enabled in Supabase — user created but needs to
         // confirm. Persist just the name (not a signed-in identity) so the
@@ -530,7 +515,7 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
           <View style={{ position: 'relative' }}>
             <TextInput
               style={[{ color: Acid.tx, fontSize: 16, paddingVertical: 10, paddingHorizontal: 0, paddingRight: 40 }, acidField({ key: 'password' })]}
-              placeholder="Min. 6 characters"
+              placeholder={`Min. ${MIN_PASSWORD_LENGTH} characters`}
               placeholderTextColor={Acid.tx3}
               value={password}
               onChangeText={setPassword}
@@ -646,6 +631,17 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
 
   const renderLoggedIn = () => (
     <ScrollView style={styles.content} contentContainerStyle={styles.summaryContent} showsVerticalScrollIndicator={false}>
+      {receipt && (
+        <View style={[styles.summaryCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
+          <AccountReceipt kind={receipt.kind} trial={receipt.trial} premium={receipt.premium} />
+          <TouchableOpacity onPress={() => setReceipt(null)} style={{ alignSelf: 'flex-start', marginTop: 16, paddingVertical: 4 }}>
+            <Text style={{ color: Acid.lime, fontSize: 11, fontWeight: '700', letterSpacing: 1.5, textDecorationLine: 'underline' }}>
+              GOT IT
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Profile Card */}
       <View style={[styles.summaryCard, { backgroundColor: Acid.mossDeep, borderColor: Acid.hair }]}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
@@ -852,56 +848,19 @@ export const AccountScreen: React.FC<AccountScreenProps> = ({
       </Modal>
 
 
-      {/* Forgot Password Modal */}
-      <Modal
+      <PasswordRecoveryModal
         visible={forgotPasswordVisible}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setForgotPasswordVisible(false)}
-      >
-        <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined} style={{ flex: 1 }}>
-          <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}>
-            <View style={{ backgroundColor: Acid.mossDeep, borderRadius: 16, padding: 24, width: '100%', maxWidth: 340 }}>
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={{ fontSize: 18, fontWeight: 'bold', color: Acid.tx }}>Reset Password</Text>
-                <TouchableOpacity onPress={() => setForgotPasswordVisible(false)}>
-                  <Feather name="x" size={24} color={Acid.tx2} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={{ fontSize: 14, color: Acid.tx2, marginBottom: 8 }}>
-                Enter your email to receive a reset link.
-              </Text>
-
-              <TextInput
-                style={[styles.input, {
-                  backgroundColor: Acid.mossDeep,
-                  color: Acid.tx,
-                  borderColor: Acid.hair
-                }]}
-                placeholder="john@example.com"
-                placeholderTextColor={Acid.tx3}
-                value={resetInput}
-                onChangeText={setResetInput}
-                keyboardType="email-address"
-                autoCapitalize="none"
-              />
-
-              <TouchableOpacity
-                style={[styles.primaryButton, { marginTop: 16 }, resetLoading && styles.primaryButtonDisabled]}
-                onPress={handleForgotPassword}
-                disabled={resetLoading}
-              >
-                {resetLoading ? (
-                  <ActivityIndicator color="white" />
-                ) : (
-                  <Text style={styles.primaryButtonText}>Send Reset Code</Text>
-                )}
-              </TouchableOpacity>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+        initialEmail={emailInput.trim().toLowerCase()}
+        onClose={() => setForgotPasswordVisible(false)}
+        onDone={async (session) => {
+          setForgotPasswordVisible(false);
+          setAuthMessage(null);
+          setPassword('');
+          await syncAccountInfoFromSession(session);
+          await loadLocalData();
+          setReceipt(await readReceipt('returning'));
+        }}
+      />
 
     </SafeAreaView >
   );
@@ -955,28 +914,6 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: Typography.fontSize.md,
     fontWeight: Typography.fontWeight.semiBold,
-  },
-  input: {
-    borderWidth: 1,
-    borderRadius: 8,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    fontSize: Typography.fontSize.md,
-  },
-  primaryButton: {
-    backgroundColor: '#171717', // Neutral-900 or Acid.tx equivalent
-    borderRadius: 10,
-    paddingVertical: 14,
-    alignItems: 'center',
-    marginTop: 16,
-  },
-  primaryButtonText: {
-    color: Acid.moss,
-    fontSize: Typography.fontSize.md,
-    fontWeight: Typography.fontWeight.semiBold,
-  },
-  primaryButtonDisabled: {
-    opacity: 0.6,
   },
   errorText: {
     fontSize: Typography.fontSize.sm,

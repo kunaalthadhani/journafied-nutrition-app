@@ -1,10 +1,14 @@
 import { Session, AuthChangeEvent } from '@supabase/supabase-js';
-import { Platform } from 'react-native';
 import { supabase, isSupabaseConfigured } from './supabaseClient';
 import { dataStorage } from './dataStorage';
 import { supabaseDataService } from './supabaseDataService';
 
 type AuthListener = (event: AuthChangeEvent, session: Session | null) => void;
+
+// Mirrors the family project's auth password_min_length. If the client asks for
+// less, the user types a password, passes our check, and is refused by the
+// server, which reads as a broken app rather than a rule.
+export const MIN_PASSWORD_LENGTH = 8;
 
 const ensureClient = () => {
   if (!isSupabaseConfigured() || !supabase) {
@@ -13,46 +17,6 @@ const ensureClient = () => {
 };
 
 export const authService = {
-  async sendOtp(email: string) {
-    ensureClient();
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // Single OTP email — creates user if needed, avoids double-email rate limit issue.
-    return supabase!.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: undefined,
-      },
-    });
-  },
-
-  async sendSignupOtp(email: string, _password?: string) {
-    ensureClient();
-    const normalizedEmail = email.trim().toLowerCase();
-
-    // Send a single OTP email. shouldCreateUser: true creates the user if
-    // they don't exist yet. Password is set later via updatePassword() after
-    // the OTP is verified. This avoids the double-email problem (signUp sends
-    // its own confirmation email, burning through the rate limit).
-    return supabase!.auth.signInWithOtp({
-      email: normalizedEmail,
-      options: {
-        shouldCreateUser: true,
-        emailRedirectTo: undefined,
-      },
-    });
-  },
-
-  async verifyOtp(email: string, token: string) {
-    ensureClient();
-    return supabase!.auth.verifyOtp({
-      email,
-      token,
-      type: 'email',
-    });
-  },
-
   async getSession() {
     ensureClient();
     return supabase!.auth.getSession();
@@ -63,15 +27,22 @@ export const authService = {
     return supabase!.auth.onAuthStateChange(callback);
   },
 
+  // Recovery is a six digit code, never a link. A link has to land somewhere,
+  // and on a phone that somewhere was a scheme that did not exist, so the user
+  // walked out of the app and never walked back in. The code comes to the same
+  // inbox and gets typed into the screen she is already on.
   async resetPasswordForEmail(email: string) {
     ensureClient();
-    // On web the link must return to the PWA origin so the recovery token lands
-    // somewhere that can consume it (detectSessionInUrl is on for web). On native
-    // use the app deep link.
-    const redirectTo = Platform.OS === 'web' && typeof window !== 'undefined'
-      ? window.location.origin
-      : 'io.supabase.trackkcal://reset-callback/';
-    return supabase!.auth.resetPasswordForEmail(email, { redirectTo });
+    return supabase!.auth.resetPasswordForEmail(email.trim().toLowerCase());
+  },
+
+  async verifyRecoveryCode(email: string, token: string) {
+    ensureClient();
+    return supabase!.auth.verifyOtp({
+      email: email.trim().toLowerCase(),
+      token: token.trim(),
+      type: 'recovery',
+    });
   },
 
   async signUp(email: string, password: string) {

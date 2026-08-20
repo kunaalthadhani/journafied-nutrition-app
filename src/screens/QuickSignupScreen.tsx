@@ -13,10 +13,13 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Feather } from '@expo/vector-icons';
+import { Session } from '@supabase/supabase-js';
 import { Acid } from '../constants/acid';
 import { Typography } from '../constants/typography';
-import { authService } from '../services/authService';
+import { authService, MIN_PASSWORD_LENGTH } from '../services/authService';
 import { dataStorage, AccountInfo } from '../services/dataStorage';
+import { AccountReceipt, readReceipt } from '../components/AccountReceipt';
+import { PasswordRecoveryModal } from '../components/PasswordRecoveryModal';
 import { TRIAL_DAYS } from '../utils/trial';
 
 interface QuickSignupScreenProps {
@@ -24,17 +27,7 @@ interface QuickSignupScreenProps {
   onComplete: () => void; // both success and skip resolve here
 }
 
-// Cryptographically reasonable random password. User never sees this — auth is
-// invisible at signup. If they ever need to sign in elsewhere, they go through
-// password reset. Acceptable tradeoff for zero-friction launch onboarding.
-function randomPassword(): string {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%';
-  let out = '';
-  for (let i = 0; i < 24; i++) {
-    out += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return out;
-}
+type Receipt = Awaited<ReturnType<typeof readReceipt>>;
 
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -46,64 +39,83 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
 }) => {
   const [name, setName] = useState(prefilledName || '');
   const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [phone, setPhone] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [offerRecovery, setOfferRecovery] = useState(false);
+  const [recoveryOpen, setRecoveryOpen] = useState(false);
+  const [receipt, setReceipt] = useState<Receipt | null>(null);
 
-  const canSubmit = name.trim().length > 0 && isValidEmail(email) && !submitting;
+  const canSubmit =
+    name.trim().length > 0 &&
+    isValidEmail(email) &&
+    password.length >= MIN_PASSWORD_LENGTH &&
+    !submitting;
+
+  const finish = async (session: Session, kind: 'new' | 'returning') => {
+    const accountInfo: AccountInfo = {
+      name: name.trim(),
+      email: (session.user.email || email.trim()).toLowerCase(),
+      phoneNumber: phone.trim() || undefined,
+      supabaseUserId: session.user.id,
+    };
+    await dataStorage.saveAccountInfo(accountInfo);
+
+    setReceipt(await readReceipt(kind));
+    setSubmitting(false);
+  };
 
   const handleContinue = async () => {
     if (!canSubmit) return;
     setSubmitting(true);
     setError(null);
+    setOfferRecovery(false);
 
     const cleanEmail = email.trim().toLowerCase();
-    const password = randomPassword();
 
     try {
       const { data, error: signUpError } = await authService.signUp(cleanEmail, password);
 
-      // Email already registered. There is no sign-in path on this onboarding
-      // screen, so we point them to Skip and sign in from Settings. We cannot
-      // recover their existing account here without their real password.
       if (signUpError) {
         const msg = signUpError.message || '';
-        if (msg.toLowerCase().includes('already') || msg.toLowerCase().includes('registered')) {
-          setError('That email already has an account. Tap Skip and sign in from Settings.');
-        } else {
-          setError(msg || 'Could not create account. Try again.');
+        // One door. The email is already hers, so try the password she just
+        // typed against the account that exists rather than bouncing her out of
+        // onboarding to find a sign in screen somewhere else.
+        if (/already|registered/i.test(msg)) {
+          const { data: signInData, error: signInError } = await authService.signIn(cleanEmail, password);
+          if (signInData?.session && !signInError) {
+            await finish(signInData.session, 'returning');
+            return;
+          }
+          setError('That email already has a Track account and this password does not open it.');
+          setOfferRecovery(true);
+          setSubmitting(false);
+          return;
         }
+        setError(msg || 'Could not create your account. Try again.');
         setSubmitting(false);
         return;
       }
 
       if (!data?.session) {
         // No session means Supabase has "Confirm email" ON. Do NOT persist email
-        // as a signed-in identity: that marks the user signed in and premium with
-        // a random password they never saw and cannot recover (a ghost account).
-        // We agreed verification is OFF for launch, so this is a safety net. Keep
-        // just the name so onboarding survives, tell them to confirm, continue as
-        // a guest.
+        // as a signed-in identity: that marks the user signed in and premium
+        // before the account is usable. We agreed verification is OFF for
+        // launch, so this is a safety net. Keep just the name so onboarding
+        // survives, tell them to confirm, continue as a guest.
         if (__DEV__) console.warn('[QuickSignup] no session returned — check Supabase Auth > Providers > Email > Confirm email = OFF');
         await dataStorage.saveAccountInfo({ name: name.trim() });
         setSubmitting(false);
         Alert.alert(
           'Confirm your email',
-          `We sent a confirmation link to ${cleanEmail}. Tap it, then sign in from Settings to finish creating your account.`
+          `We sent a confirmation link to ${cleanEmail}. Tap it, then sign in from Settings with the password you just picked.`
         );
         onComplete();
         return;
       }
 
-      const accountInfo: AccountInfo = {
-        name: name.trim(),
-        email: cleanEmail,
-        phoneNumber: phone.trim() || undefined,
-        supabaseUserId: data.session.user.id,
-      };
-      await dataStorage.saveAccountInfo(accountInfo);
-
-      onComplete();
+      await finish(data.session, 'new');
     } catch (e: any) {
       setError(e?.message || 'Something went wrong. Try again.');
       setSubmitting(false);
@@ -120,6 +132,29 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
       ],
     );
   };
+
+  if (receipt) {
+    return (
+      <SafeAreaView style={[styles.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+          <View style={[styles.iconWrap, { backgroundColor: Acid.mossDeep }]}>
+            <Feather name="check" size={36} color={Acid.lime} />
+          </View>
+
+          <AccountReceipt kind={receipt.kind} trial={receipt.trial} premium={receipt.premium} />
+
+          <TouchableOpacity
+            style={[styles.primaryBtn, { backgroundColor: Acid.lime }]}
+            onPress={onComplete}
+            activeOpacity={0.85}
+          >
+            <Text style={[styles.primaryBtnText, { color: Acid.moss }]}>Start tracking</Text>
+            <Feather name="arrow-right" size={18} color={Acid.moss} style={{ marginLeft: 6 }} />
+          </TouchableOpacity>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
 
   return (
     <SafeAreaView style={[styles.safe, { backgroundColor: Acid.moss }]} edges={['top', 'bottom']}>
@@ -138,7 +173,7 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
 
           <Text style={[styles.title, { color: Acid.tx }]}>Start your three weeks</Text>
           <Text style={[styles.subtitle, { color: Acid.tx2 }]}>
-            No card, no password. The email is what the trial is attached to.
+            No card. This email and password are your Track account, in both apps.
           </Text>
 
           {/* The offer, said before the fields rather than discovered after
@@ -169,12 +204,22 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
             <Field
               label="Email"
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => { setEmail(v); setOfferRecovery(false); }}
               placeholder="you@example.com"
               autoCapitalize="none"
               keyboardType="email-address"
               autoComplete="email"
               autoCorrect={false}
+            />
+            <Field
+              label="Password"
+              value={password}
+              onChangeText={(v) => { setPassword(v); setOfferRecovery(false); }}
+              placeholder={`At least ${MIN_PASSWORD_LENGTH} characters`}
+              autoCapitalize="none"
+              autoComplete="new-password"
+              autoCorrect={false}
+              secureTextEntry
             />
             <Field
               label="Mobile (optional)"
@@ -188,6 +233,12 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
 
           {error && (
             <Text style={[styles.error, { color: Acid.error }]}>{error}</Text>
+          )}
+
+          {offerRecovery && (
+            <TouchableOpacity onPress={() => setRecoveryOpen(true)} style={styles.recoveryBtn}>
+              <Text style={styles.recoveryText}>EMAIL ME A CODE AND SET A NEW ONE</Text>
+            </TouchableOpacity>
           )}
 
           <TouchableOpacity
@@ -222,6 +273,18 @@ export const QuickSignupScreen: React.FC<QuickSignupScreenProps> = ({
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <PasswordRecoveryModal
+        visible={recoveryOpen}
+        initialEmail={email.trim().toLowerCase()}
+        onClose={() => setRecoveryOpen(false)}
+        onDone={async (session) => {
+          setRecoveryOpen(false);
+          setError(null);
+          setOfferRecovery(false);
+          await finish(session, 'returning');
+        }}
+      />
     </SafeAreaView>
   );
 };
@@ -233,12 +296,13 @@ interface FieldProps {
   placeholder?: string;
   autoCapitalize?: 'none' | 'sentences' | 'words' | 'characters';
   keyboardType?: 'default' | 'email-address' | 'phone-pad';
-  autoComplete?: 'email' | 'tel' | 'name' | 'off';
+  autoComplete?: 'email' | 'tel' | 'name' | 'new-password' | 'off';
   autoCorrect?: boolean;
   maxLength?: number;
+  secureTextEntry?: boolean;
 }
 
-const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, maxLength }) => (
+const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, autoCapitalize, keyboardType, autoComplete, autoCorrect, maxLength, secureTextEntry }) => (
   <View style={styles.fieldWrap}>
     <Text style={[styles.fieldLabel, { color: Acid.tx2 }]}>{label}</Text>
     <TextInput
@@ -259,6 +323,7 @@ const Field: React.FC<FieldProps> = ({ label, value, onChangeText, placeholder, 
       autoComplete={autoComplete}
       autoCorrect={autoCorrect}
       maxLength={maxLength}
+      secureTextEntry={secureTextEntry}
     />
   </View>
 );
@@ -309,6 +374,14 @@ const styles = StyleSheet.create({
     fontSize: 15,
   },
   error: { fontSize: 13, marginTop: 12, textAlign: 'center', alignSelf: 'stretch' },
+  recoveryBtn: { marginTop: 10, paddingVertical: 6 },
+  recoveryText: {
+    fontSize: 11,
+    fontWeight: '700',
+    letterSpacing: 1.2,
+    color: Acid.lime,
+    textDecorationLine: 'underline',
+  },
   primaryBtn: {
     width: '100%',
     height: 52,
