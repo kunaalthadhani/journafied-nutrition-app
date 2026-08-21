@@ -11,8 +11,9 @@ import type { CustomerInfo, PurchasesPackage } from 'react-native-purchases';
 // every function returns a polite nothing.
 
 // Public Google API key for the TrackKcal app in the shared RevenueCat project.
-// TODO: paste the goog_ key from RevenueCat > Apps > TrackKcal > App settings.
-const GOOGLE_KEY = '';
+// Public by design: it ships in the APK and can only read offerings and start
+// a purchase. The secret key never leaves the dashboard.
+const GOOGLE_KEY = 'goog_PJXVwVCaxvHhotKLBoiDdaJdgUi';
 
 // Package identifiers exactly as created in the RevenueCat default offering.
 // Same names as Lifts so the two clients read the same shape.

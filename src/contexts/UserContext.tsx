@@ -5,6 +5,7 @@ import { subscribeMealsForUser, unsubscribeMeals } from '../services/realtimeMea
 import { supabaseDataService } from '../services/supabaseDataService';
 import { authService } from '../services/authService';
 import { smartReminderService } from '../services/smartReminderService';
+import { configurePurchases, purchasesReady, syncPurchaseIdentity } from '../services/purchases';
 import { format } from 'date-fns';
 
 interface UserContextType {
@@ -175,6 +176,16 @@ export const UserProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
 
                 setAccountInfo(fresh || null);
+
+                // Point RevenueCat at the same person the rest of the app is
+                // looking at. appUserID is the supabase uid, which is what makes
+                // Track Plus bought in TrackLifts show up here.
+                if (event === 'SIGNED_OUT') {
+                    void syncPurchaseIdentity(null);
+                } else if (fresh?.supabaseUserId) {
+                    if (!purchasesReady()) configurePurchases(fresh.supabaseUserId);
+                    else void syncPurchaseIdentity(fresh.supabaseUserId);
+                }
 
                 // Background push/pull. These can be slow; do not block the UI
                 // by awaiting. The auth listener returning fast also matters
