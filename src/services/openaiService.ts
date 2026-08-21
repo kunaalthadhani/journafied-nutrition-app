@@ -97,6 +97,11 @@ You are an advanced 3-Stage Nutrition AI Agent designed to emulate a human nutri
    - **GOOGLE RESULTS RULE — WHAT GOOGLE SAYS BEATS WHAT YOU REMEMBER, FOR NAMED PRODUCTS.** If the input contains a "GOOGLE RESULTS" block, read it. Those snippets were fetched from the live web seconds ago. How you use them depends entirely on what the user ate:
      - **The user named a specific manufactured product** (a brand, a packet, a bar, a bottle, a named menu item): the results win outright. You were not trained on most regional packaged food and your recollection of the category is not competitive with a page quoting the actual pack. Take the calories, the macros AND the pack weight from the results. If a result states a pack size ("79g pack", "77g"), that IS the pack size; do not substitute a rounder number you find more natural. Confidence **high**, and name the source in \`confidence_reason\`.
      - **The user described a dish, a meal, or anything cooked or assembled** (shawarma, biryani, a sandwich they made, "chicken and rice"): DO NOT let a single search result collapse the meal into one row. The Deconstructor rule still applies in full, break it into its components as you always would. Use the results only to sanity check a component you were unsure of, and never raise confidence above what the portion uncertainty justifies. A web page's calorie figure for "shawarma" describes somebody else's shawarma, not the one the user ate.
+     - **PER 100g IS THE DEFAULT AND IT IS ALMOST NEVER WHAT THEY ATE.** Nutrition figures on the web are published per 100g unless the page explicitly says otherwise. A pack is rarely 100g. So a figure from the results is a RATE, not an answer: multiply it by the real pack weight over 100. Chupa Chups sour belts are 356 kcal per 100g in a 57g pack, so the pack is 356 x 0.57 = 203 kcal, not 356. Logging 356 there is wrong by 75 percent.
+       - Read the basis before you use any number. "per 100g", "per serving", "per bar", "per pack". Only "per pack" or "per piece" can be used without scaling.
+       - When the results give both a per 100g table and a per pack figure, use the per pack figure. It is the same arithmetic already done for you.
+       - Partial packs scale by count. A 57g pack of 8 belts is 7.1g a belt, so 3 belts is 21g, not 3 packs and not 3 x 100g.
+       - **Self check before you answer:** if the pack weight is not 100g and your total calories equal the per 100g figure, you have made exactly this mistake. Go back and scale.
      - If several results disagree, prefer the one naming the exact product and region over a generic entry. If nothing in the block is about this food, ignore it entirely and estimate as normal. Never mention the search to the user.
    - **LABEL PANEL RULE — MANUFACTURER DATA OUTRANKS YOU:** If the input contains a line starting with "LABEL PANEL", those figures were read off the physical packaging and they are the truth. Use them EXACTLY for calories, protein, carbs and fat. Do NOT re-estimate, do NOT round to a value you find more plausible, do NOT substitute figures you remember for that product. Scale them to the actual amount eaten using the stated basis: if the panel is per 100g and the item is a 60g bar, take 60 percent of every figure; if the panel is already per bar or per serving, use it as is and multiply by the quantity. Estimate ONLY the micronutrients the panel does not list. Confidence for that item is **high**, and \`confidence_reason\` should say the numbers came off the label.
    - **NAMED BRAND RULE:** If a brand is named but no panel was given, keep the brand in \`log_name\` and estimate from what you know of that product. Never silently swap it for a generic. If you do not know that specific product, estimate the category honestly and set confidence to **medium** at best.
@@ -358,6 +363,45 @@ function detectIdentityToken(text: string, group: readonly string[]): string | n
 // against real labels, the model's own headline calorie figure is consistently
 // closer to the truth than a naive macro sum, so this is a sanity net for gross
 // errors (a dropped item, a decimal slip), not a second opinion on every meal.
+/**
+ * Catch the per 100g mistake before it reaches the log.
+ *
+ * Nutrition on the web is published per 100g by default, and a pack is rarely
+ * 100g. When the model reports the rate instead of the amount, the result is
+ * physically impossible: Chupa Chups sour belts came back as 81g of carbs
+ * inside a 57g pack. Food cannot weigh less than the macros in it.
+ *
+ * So: if the macros outweigh the food, and they would be sane read as per 100g,
+ * rescale the whole row by weight/100. Deliberately conservative, it only fires
+ * on packs under 100g where the error is provable. A 250g pack reported per
+ * 100g is under counted and mass cannot prove it; only the prompt rule covers
+ * that direction.
+ */
+function rescaleIfPer100g(item: any): void {
+  const n = item?.nutrition;
+  const weight = Number(item?.total_weight_g) || 0;
+  if (!n || weight <= 0 || weight >= 100) return;
+
+  const macroMass = (Number(n.protein) || 0) + (Number(n.carbs) || 0) + (Number(n.fat) || 0);
+  if (macroMass <= weight) return;      // physically fine, nothing to fix
+  if (macroMass > 100) return;          // not per 100g either, leave it alone
+
+  const factor = weight / 100;
+  for (const k of Object.keys(n)) {
+    const v = Number(n[k]);
+    if (Number.isFinite(v)) n[k] = Math.round(v * factor * 10) / 10;
+  }
+  if (__DEV__) {
+    console.warn(`[rescaleIfPer100g] "${item.log_name}" had ${macroMass}g of macros in a ${weight}g item. Rescaled by ${factor}.`);
+  }
+  try {
+    Sentry.captureMessage(`Per-100g rescale: ${item.log_name} ${macroMass}g macros in ${weight}g`, {
+      level: 'warning',
+      tags: { ai_call_type: 'food-analysis', per_100g_rescale: 'true' },
+    });
+  } catch { /* never break a log for telemetry */ }
+}
+
 function reconcileCalories(item: any): number {
   const n = item?.nutrition;
   if (!n) return 0;
@@ -559,6 +603,8 @@ export async function analyzeFoodWithChatGPT(
     const finalFoods: ParsedFood[] = [];
 
     for (const item of items) {
+      // Physics before arithmetic: fix the scale, then reconcile the calories
+      rescaleIfPer100g(item);
       finalFoods.push({
         id: generateId(),
         name: item.log_name,

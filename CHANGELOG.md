@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.5**
+Packaged food was being logged at the per 100g figure instead of what is actually in the packet. A pack of Chupa Chups sour belts came back as 356 calories because that is the rate per 100g. The pack is 57g, so the real answer is about 207. The search had already found the right product and the right numbers, it just never multiplied them by the pack size.
+
+Two fixes. It now knows that nutrition published online is per 100g unless it says otherwise, and that a rate is not an answer. And there is a hard check behind that: 81g of carbs cannot fit inside a 57g packet, so when the numbers outweigh the food the app rescales them itself rather than trusting the estimate. Packs over 100g cannot be checked this way, so they still lean on the first fix.
+
 **v1.8.4**
 Typing a note over a photo no longer loses what you wrote. The moment the numbers came back the screen closed, taking the keyboard and your half finished sentence with it, which was worst for exactly the people trying to help it get the answer right. It now waits: if the field is empty it leaves the instant the answer lands, and if you are mid sentence it stays and tells you the numbers are in and it will redo them with what you send.
 
