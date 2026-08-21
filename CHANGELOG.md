@@ -6,6 +6,11 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.7**
+The coach answers a word at a time now instead of a paragraph appearing all at once, and while it is working it says so in its own voice rather than spinning a wheel at you.
+
+The five screens you see on first open were rewritten. They used to describe the app in the abstract, an icon and a sentence each. They now show it: the meal you typed turning into a breakdown, the day's number and bars, a real label beating a guess, and the coach answering with your own numbers in it.
+
 **v1.8.6**
 Your goals stopped quietly failing to save. If you changed your plan while signed out, or before the app had finished waking up, the sync gave up after five tries and threw the change away instead of holding it until you signed in. Every other kind of data already knew how to wait. Goals and preferences now do too.
 

@@ -136,6 +136,30 @@ function describeEvidence(ctx: ChatCoachContext | null) {
     };
 }
 
+/**
+ * Reveals a reply a word at a time. The coach's answers are short by design, so
+ * this is about the reading feeling alive rather than about hiding latency.
+ * The text is already in hand when this starts.
+ */
+const StreamingText: React.FC<{ text: string; animate: boolean; style: any }> = ({ text, animate, style }) => {
+    const words = React.useMemo(() => text.split(' '), [text]);
+    const [shown, setShown] = useState(animate ? 0 : words.length);
+
+    useEffect(() => {
+        if (!animate) { setShown(words.length); return; }
+        setShown(0);
+        const id = setInterval(() => {
+            setShown(v => {
+                if (v >= words.length) { clearInterval(id); return v; }
+                return v + 1;
+            });
+        }, 42);
+        return () => clearInterval(id);
+    }, [text, animate, words.length]);
+
+    return <Text style={style}>{words.slice(0, shown).join(' ')}</Text>;
+};
+
 export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPremium = false }) => {
     const insets = useSafeAreaInsets();
     const [messages, setMessages] = useState<Message[]>([]);
@@ -149,6 +173,10 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
     // late, so a fast double tap (or a starter-question tap mid send) could fire
     // two requests before the button disables. This blocks the second one.
     const sendingRef = useRef(false);
+    // The one message allowed to animate. Set when a reply lands and never
+    // recomputed in render, so a re-render cannot replay a message the user
+    // already read and dev double-render cannot swallow the animation.
+    const [streamId, setStreamId] = useState<string | null>(null);
 
     const starterQuestions = buildStarterQuestions(context);
     const showStarters = messages.length <= 1 && !loading && starterQuestions.length > 0;
@@ -205,6 +233,7 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
             const result = await getCoachChatResponse(history);
 
             const aiMsg: Message = { id: (Date.now() + 1).toString(), role: 'assistant', content: result.text, createdAt: Date.now() };
+            setStreamId(aiMsg.id);
             setMessages(prev => [...prev, aiMsg]);
 
             // Only spend a message when the coach actually answered. A network
@@ -281,15 +310,20 @@ export const ChatCoachScreen: React.FC<ChatCoachScreenProps> = ({ onClose, isPre
                             </View>
                         ) : (
                             <View style={styles.coachMsg}>
-                                <Text style={styles.coachText}>{item.content}</Text>
+                                <StreamingText
+                                    text={item.content}
+                                    animate={item.id === streamId}
+                                    style={styles.coachText}
+                                />
                             </View>
                         )
                     )}
                 />
 
-                {loading && (
-                    <View style={{ padding: 10, alignItems: 'center' }}>
-                        <ActivityIndicator color={Acid.lime} />
+                {loading && messages.length > 0 && (
+                    <View style={styles.thinkingRow}>
+                        <View style={styles.thinkingDot} />
+                        <Text style={styles.thinkingText}>Thinking.</Text>
                     </View>
                 )}
 
@@ -436,6 +470,24 @@ const styles = StyleSheet.create({
         color: Acid.tx2,
         flex: 1,
         marginRight: Spacing.sm,
+    },
+    thinkingRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        gap: 10,
+        paddingHorizontal: 16,
+        paddingBottom: 20,
+    },
+    thinkingDot: {
+        width: 6,
+        height: 6,
+        borderRadius: 3,
+        backgroundColor: Acid.limeDim,
+    },
+    thinkingText: {
+        fontFamily: Acid.serifItalic,
+        fontSize: 17,
+        color: Acid.tx3,
     },
     coachMsg: {
         maxWidth: '92%',

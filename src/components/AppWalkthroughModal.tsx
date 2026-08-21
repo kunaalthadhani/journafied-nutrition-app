@@ -24,51 +24,123 @@ interface WalkthroughModalProps {
 
 interface Step {
     id: string;
+    /** Two lines. The break is deliberate, it is what makes it read as a title. */
     title: string;
-    tagline: string;
-    description: string;
-    icon: string;
+    body: string;
+    /** The micro line under the demo. Says the honest part. */
+    footer?: string;
+    demo: 'log' | 'today' | 'label' | 'coach' | 'plan';
     isFinal?: boolean;
 }
 
 const STEPS: Step[] = [
     {
         id: '1',
-        title: 'Say it. Snap it. Done.',
-        tagline: 'No typing required',
-        description: '"Had 2 eggs and toast" — say it or type it, and we break down every calorie and macro instantly.',
-        icon: 'mic',
+        title: 'Say the meal.\nThat is the whole job.',
+        body: 'Type it, speak it, or photograph it. No barcodes, no searching a database, no picking the closest wrong thing off a list.',
+        footer: 'ONE SENTENCE IN · A FULL BREAKDOWN OUT',
+        demo: 'log',
     },
     {
         id: '2',
-        title: 'Built around your body',
-        tagline: 'Adapts as you progress',
-        description: 'Your age, weight, and goals set your daily targets. As your body changes, your plan adapts automatically.',
-        icon: 'target',
+        title: 'Home holds today.\nNothing else.',
+        body: 'One number that matters, and the macros under it. Yesterday is settled and put away, tomorrow has not happened. Today is the only thing asking anything of you.',
+        footer: 'YOUR TARGETS, FROM YOUR BODY AND YOUR GOAL',
+        demo: 'today',
     },
     {
         id: '3',
-        title: 'See what\'s really happening',
-        tagline: 'Trends over time',
-        description: 'Track weight trends, spot patterns, and understand how your meals affect your progress over weeks and months.',
-        icon: 'trending-up',
+        title: 'It reads the label.\nIt does not guess it.',
+        body: 'Name a packaged product and it searches the web and the manufacturer database before answering. Photograph the panel and it copies the real figures straight off the pack.',
+        footer: 'A LABEL BEATS AN ESTIMATE, EVERY TIME',
+        demo: 'label',
     },
     {
         id: '4',
-        title: 'Your AI Nutritionist',
-        tagline: 'Answers based on your data',
-        description: 'Ask anything — "Is my protein too low?" "What should I eat before a workout?" Get answers based on your actual data.',
-        icon: 'message-circle',
+        title: 'A coach that has\nactually read your logs.',
+        body: 'Ask it anything from day one. It answers from your food, your weight and your goal, and it tells you how many days it read that from rather than pretending to know more.',
+        footer: 'IT NEVER REFUSES YOU FOR LACK OF DATA',
+        demo: 'coach',
     },
     {
         id: '5',
-        title: 'Let\'s build your plan',
-        tagline: 'Takes about 2 minutes',
-        description: 'We\'ll personalize your calories and goals based on a few details about you.',
-        icon: 'play-circle',
+        title: 'Let us build\nyour plan.',
+        body: 'A few questions about your body and your goal, and you get the calorie and macro targets the rest of the app measures you against. Two minutes.',
+        demo: 'plan',
         isFinal: true,
     },
 ];
+
+// The demos show the product rather than describing it. Static on purpose: a
+// walkthrough that animates is a walkthrough people wait through.
+const Demo: React.FC<{ kind: Step['demo'] }> = ({ kind }) => {
+    if (kind === 'log') {
+        return (
+            <View style={styles.demo}>
+                <Text style={styles.demoInput}>2 eggs on toast and a flat white</Text>
+                <View style={styles.demoRule} />
+                {[['Scrambled eggs · 2', '182'], ['Sourdough toast · 1 slice', '120'], ['Flat white · regular', '96']].map(([a, b]) => (
+                    <View key={a} style={styles.demoRow}>
+                        <Text style={styles.demoName}>{a}</Text>
+                        <Text style={styles.demoKcal}>{b}</Text>
+                    </View>
+                ))}
+            </View>
+        );
+    }
+    if (kind === 'today') {
+        return (
+            <View style={styles.demo}>
+                <Text style={styles.demoBig}>1,438<Text style={styles.demoBigUnit}> kcal left</Text></Text>
+                {[['PROTEIN', 0.62], ['CARBS', 0.44], ['FAT', 0.31]].map(([label, pct]) => (
+                    <View key={label as string} style={{ marginTop: 12 }}>
+                        <Text style={styles.demoMicro}>{label as string}</Text>
+                        <View style={styles.demoTrack}>
+                            <View style={[styles.demoFill, { width: `${(pct as number) * 100}%` }]} />
+                        </View>
+                    </View>
+                ))}
+            </View>
+        );
+    }
+    if (kind === 'label') {
+        return (
+            <View style={styles.demo}>
+                <Text style={styles.demoMicro}>YOU TYPED</Text>
+                <Text style={styles.demoInput}>modern bakery high protein khaboos</Text>
+                <View style={styles.demoRule} />
+                <View style={styles.demoRow}>
+                    <Text style={styles.demoName}>Protein, from the label</Text>
+                    <Text style={styles.demoKcal}>46g</Text>
+                </View>
+                <View style={styles.demoRow}>
+                    <Text style={[styles.demoName, { color: Acid.tx3 }]}>A guess would have said</Text>
+                    <Text style={[styles.demoKcal, { color: Acid.tx3, textDecorationLine: 'line-through' }]}>24g</Text>
+                </View>
+            </View>
+        );
+    }
+    if (kind === 'coach') {
+        return (
+            <View style={styles.demo}>
+                <Text style={styles.demoAsk}>am i eating enough protein?</Text>
+                <Text style={styles.demoReply}>
+                    You are averaging 91g against a 150g target across your 6 logged days. That is the gap. Your usual chicken wrap twice a week would close most of it.
+                </Text>
+            </View>
+        );
+    }
+    return (
+        <View style={styles.demo}>
+            {[['Your calorie target', 'from your body'], ['Your macro split', 'from your goal'], ['Your diet, if you follow one', 'keto, vegan, and more'], ['Everything premium', 'free for three weeks']].map(([a, b]) => (
+                <View key={a} style={styles.demoRow}>
+                    <Text style={styles.demoName}>{a}</Text>
+                    <Text style={styles.demoKcal}>{b}</Text>
+                </View>
+            ))}
+        </View>
+    );
+};
 
 export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, onClose, onSignUp, hideOffer }) => {
     const [currentIndex, setCurrentIndex] = useState(0);
@@ -138,37 +210,31 @@ export const AppWalkthroughModal: React.FC<WalkthroughModalProps> = ({ visible, 
 
     const listKey = React.useMemo(() => `walkthrough-${visible}-${hideOffer}`, [visible, hideOffer]);
 
-    const renderItem = ({ item }: { item: Step }) => {
-        const isFinal = item.isFinal;
+    const renderItem = ({ item, index }: { item: Step; index: number }) => (
+        <View style={[styles.stepContainer, { width: ITEM_WIDTH }]}>
+            <Text style={styles.counter}>
+                HOW IT WORKS · {index + 1} OF {filteredSteps.length}
+            </Text>
 
-        return (
-            <View style={[styles.stepContainer, { width: ITEM_WIDTH }]}>
-                <Feather name={item.icon as any} size={34} color={Acid.lime} style={{ marginBottom: 28 }} />
+            <Text style={styles.title}>{item.title}</Text>
+            <Text style={styles.description}>{item.body}</Text>
 
-                <Text style={styles.tagline}>{item.tagline.toUpperCase()}</Text>
+            <Demo kind={item.demo} />
 
-                <Text style={styles.title}>{item.title}</Text>
+            {!!item.footer && <Text style={styles.footerMicro}>{item.footer}</Text>}
 
-                <Text style={styles.description}>{item.description}</Text>
-
-                {/* Final card CTA buttons */}
-                {isFinal && (
-                    <View style={{ width: '100%', marginTop: 36, gap: 12 }}>
-                        <TouchableOpacity
-                            style={styles.ctaButton}
-                            onPress={handleSignUpPress}
-                        >
-                            <Text style={styles.ctaButtonText}>Get Started</Text>
-                        </TouchableOpacity>
-
-                        <TouchableOpacity onPress={handleFinish} style={{ padding: 10 }}>
-                            <Text style={{ color: Acid.tx3, textAlign: 'center', fontSize: 14 }}>Explore on my own</Text>
-                        </TouchableOpacity>
-                    </View>
-                )}
-            </View>
-        );
-    };
+            {item.isFinal && (
+                <View style={{ width: '100%', marginTop: 28, gap: 12 }}>
+                    <TouchableOpacity style={styles.ctaButton} onPress={handleSignUpPress}>
+                        <Text style={styles.ctaButtonText}>Build my plan</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={handleFinish} style={{ padding: 10 }}>
+                        <Text style={{ color: Acid.tx3, textAlign: 'center', fontSize: 14 }}>Explore on my own</Text>
+                    </TouchableOpacity>
+                </View>
+            )}
+        </View>
+    );
 
     const currentStep = filteredSteps[currentIndex];
     const isLastNonFinal = !currentStep?.isFinal && currentIndex === filteredSteps.length - 1;
@@ -285,12 +351,39 @@ const styles = StyleSheet.create({
         paddingHorizontal: 32,
         paddingBottom: 40,
     },
-    tagline: {
+    counter: {
         fontSize: 11,
-        letterSpacing: 2,
-        color: Acid.lime,
-        marginBottom: 14,
+        letterSpacing: 1.6,
+        color: Acid.limeDim,
+        marginBottom: 18,
     },
+    footerMicro: {
+        fontSize: 10,
+        letterSpacing: 1.4,
+        color: Acid.tx3,
+        marginTop: 18,
+    },
+    demo: {
+        width: '100%',
+        marginTop: 26,
+        padding: 16,
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: Acid.hair2,
+        backgroundColor: Acid.mossDeep,
+    },
+    demoRule: { height: 1, backgroundColor: Acid.hair, marginVertical: 12 },
+    demoRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingVertical: 5 },
+    demoName: { fontSize: 13, color: Acid.tx, flex: 1, marginRight: 12 },
+    demoKcal: { fontSize: 13, color: Acid.tx2 },
+    demoInput: { fontSize: 14, color: Acid.tx, lineHeight: 20 },
+    demoMicro: { fontSize: 10, letterSpacing: 1.4, color: Acid.tx3, marginBottom: 6 },
+    demoBig: { fontFamily: Acid.serif, fontSize: 36, color: Acid.tx },
+    demoBigUnit: { fontFamily: undefined, fontSize: 13, color: Acid.tx3 },
+    demoTrack: { height: 4, borderRadius: 2, backgroundColor: Acid.hair2, overflow: 'hidden', marginTop: 4 },
+    demoFill: { height: 4, borderRadius: 2, backgroundColor: Acid.lime },
+    demoAsk: { fontSize: 14, color: Acid.lime, textAlign: 'right', marginBottom: 14 },
+    demoReply: { fontFamily: Acid.serifItalic, fontSize: 15, lineHeight: 23, color: Acid.tx },
     title: {
         fontFamily: Acid.serifItalic,
         fontSize: 34,
