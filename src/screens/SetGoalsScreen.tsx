@@ -433,39 +433,48 @@ export const SetGoalsScreen: React.FC<SetGoalsScreenProps> = ({
         )}
 
         {/* Diet. Changing it resets the split, because that is what a diet is */}
-        <Text style={st.sectionLabel}>DIET</Text>
+        <Text style={[st.sectionLabel, { marginTop: 32 }]}>DIET</Text>
         <TouchableOpacity
-          style={st.customizeBtn}
+          style={st.dietToggle}
+          activeOpacity={0.7}
           onPress={() => { LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut); setIsEditingDiet(v => !v); }}
         >
-          <Text style={st.customizeTxt}>{getDietPlan(dietPlan).label}</Text>
-          <Feather name={isEditingDiet ? 'chevron-up' : 'chevron-down'} size={16} color={Acid.tx2} />
+          <View style={{ flex: 1 }}>
+            <Text style={st.dietCurrent}>{getDietPlan(dietPlan).label}</Text>
+            <Text style={st.dietCurrentHint}>{getDietPlan(dietPlan).hint}</Text>
+          </View>
+          <Feather name={isEditingDiet ? 'chevron-up' : 'chevron-down'} size={18} color={Acid.tx2} />
         </TouchableOpacity>
 
         {isEditingDiet && (
-          <View style={st.editSection}>
-            {DIET_PLANS.map(p => (
-              <TouchableOpacity
-                key={p.id}
-                style={st.editRow}
-                onPress={() => {
-                  LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
-                  setDietPlan(p.id);
-                  setProteinPercentage(p.macros.protein);
-                  setCarbsPercentage(p.macros.carbs);
-                  setFatPercentage(p.macros.fat);
-                  setIsEditingDiet(false);
-                }}
-              >
-                <View style={{ flex: 1 }}>
-                  <Text style={[st.macroName, { color: dietPlan === p.id ? Acid.lime : Acid.tx }]}>{p.label}</Text>
-                  <Text style={st.helperTxt}>{p.hint}</Text>
-                </View>
-                {dietPlan === p.id && <Feather name="check" size={18} color={Acid.lime} />}
-              </TouchableOpacity>
-            ))}
+          <View style={st.dietList}>
+            {DIET_PLANS.map(p => {
+              const on = dietPlan === p.id;
+              return (
+                <TouchableOpacity
+                  key={p.id}
+                  style={st.dietRow}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+                    setDietPlan(p.id);
+                    setProteinPercentage(p.macros.protein);
+                    setCarbsPercentage(p.macros.carbs);
+                    setFatPercentage(p.macros.fat);
+                    setIsEditingDiet(false);
+                  }}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[st.dietName, on && { color: Acid.lime }]}>{p.label}</Text>
+                    <Text style={st.dietHint}>{p.hint}</Text>
+                  </View>
+                  {on && <Feather name="check" size={18} color={Acid.lime} />}
+                </TouchableOpacity>
+              );
+            })}
           </View>
         )}
+
       </ScrollView>
 
       {/* Save button */}
@@ -503,6 +512,45 @@ const st = StyleSheet.create({
   // Macros
   sectionLabel: { fontSize: 10, letterSpacing: 1.5, color: Acid.tx3, marginBottom: 12, textTransform: 'uppercase' },
   macroBar: { width: '100%', height: 4, borderRadius: 2, flexDirection: 'row', overflow: 'hidden', backgroundColor: Acid.hair, marginBottom: 16 },
+  dietToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Acid.hair,
+  },
+  dietCurrent: {
+    fontSize: Typography.fontSize.md,
+    fontWeight: Typography.fontWeight.semiBold,
+    color: Acid.tx,
+  },
+  dietCurrentHint: {
+    fontSize: Typography.fontSize.xs,
+    color: Acid.tx3,
+    marginTop: 2,
+  },
+  dietList: {
+    paddingTop: 4,
+  },
+  dietRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: Acid.hair,
+  },
+  dietName: {
+    fontSize: Typography.fontSize.sm,
+    fontWeight: Typography.fontWeight.medium,
+    color: Acid.tx,
+  },
+  dietHint: {
+    fontSize: Typography.fontSize.xs,
+    color: Acid.tx3,
+    marginTop: 2,
+  },
   macroSeg: { height: '100%' },
   macroRows: { gap: 12, marginBottom: 8 },
   macroRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },

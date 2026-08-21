@@ -336,7 +336,10 @@ export const supabaseDataService = {
     // Throw instead of silently resolving. A silent no-op here reads as success to
     // the sync queue, which dequeues the op forever. Throwing lets callers enqueue
     // and the queue retry.
-    if (!user) throw new Error('saveNutritionGoals: could not resolve app user');
+    // AUTH_NOT_READY, not a plain Error: the sync queue requeues the first and
+    // drops the second after 5 attempts. Signing in later must not cost the
+    // goals someone set while signed out.
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     // First, deactivate all existing active goals for this user
     const { error: deactivateError } = await supabase
@@ -770,7 +773,8 @@ export const supabaseDataService = {
     if (!isSupabaseConfigured() || !supabase) return;
     if (!accountInfo?.supabaseUserId && !accountInfo?.email) return;
     const user = await getOrCreateUser(accountInfo);
-    if (!user) throw new Error('savePreferences: could not resolve app user');
+    // Same as goals: not ready is not a failure. See saveNutritionGoals.
+    if (!user) throw new Error(AUTH_NOT_READY);
 
     const { error } = await supabase
       .from('kcal_prefs')

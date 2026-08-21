@@ -6,6 +6,13 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.6**
+Your goals stopped quietly failing to save. If you changed your plan while signed out, or before the app had finished waking up, the sync gave up after five tries and threw the change away instead of holding it until you signed in. Every other kind of data already knew how to wait. Goals and preferences now do too.
+
+TrackLifts has a card on the home screen, the mirror of the one TrackKcal already has over there. Sessions and volume for the week once you have trained, and a way in if you have not. Tapping it opens the app if you have it and the store if you do not.
+
+Tapping an unlocked insight no longer throws an error instead of scrolling to it. The day title had its last letter clipped. The diet list in Nutrition Goals was borrowing the macro editor's centred styling and looked broken next to everything around it.
+
 **v1.8.5**
 Packaged food was being logged at the per 100g figure instead of what is actually in the packet. A pack of Chupa Chups sour belts came back as 356 calories because that is the rate per 100g. The pack is 57g, so the real answer is about 207. The search had already found the right product and the right numbers, it just never multiplied them by the pack size.
 

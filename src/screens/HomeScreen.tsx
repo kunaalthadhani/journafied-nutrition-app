@@ -72,6 +72,7 @@ import { SmartAdjustmentModal } from '../components/SmartAdjustmentModal';
 import { SmartSuggestBanner } from '../components/SmartSuggestBanner';
 import { WeeklyReviewBanner } from '../components/WeeklyReviewBanner';
 import { TrialBanner } from '../components/TrialBanner';
+import { TrackLiftsCard } from '../components/TrackLiftsCard';
 import { weeklyReviewService } from '../services/weeklyReviewService';
 import { ChatCoachScreen } from './ChatCoachScreen';
 import { chatCoachService } from '../services/chatCoachService';
@@ -2687,8 +2688,8 @@ export const HomeScreen: React.FC = () => {
           >
             <Feather name="chevron-left" size={20} color={Acid.tx3} />
           </TouchableOpacity>
-          <TouchableOpacity onPress={handleCalendarPress} activeOpacity={0.7} style={{ marginHorizontal: 8 }}>
-            <Text style={{ fontFamily: Acid.serif, fontSize: 24, lineHeight: 30, color: Acid.tx }}>
+          <TouchableOpacity onPress={handleCalendarPress} activeOpacity={0.7} style={{ marginHorizontal: 8, flexShrink: 0 }}>
+            <Text style={{ fontFamily: Acid.serif, fontSize: 24, lineHeight: 32, color: Acid.tx, paddingRight: 4 }}>
               {isSameDay(selectedDate, new Date()) ? 'Today' : format(selectedDate, 'EEEE d')}
             </Text>
           </TouchableOpacity>
@@ -2699,7 +2700,10 @@ export const HomeScreen: React.FC = () => {
           >
             <Feather name="chevron-right" size={20} color={Acid.tx3} />
           </TouchableOpacity>
-          <Text style={{ fontSize: 10, letterSpacing: 1.2, color: Acid.tx3, marginLeft: 'auto' }}>
+          <Text
+            numberOfLines={1}
+            style={{ fontSize: 10, letterSpacing: 1.2, color: Acid.tx3, marginLeft: 'auto', flexShrink: 1, paddingLeft: 8 }}
+          >
             {(() => {
               let logged = 0;
               for (let i = 0; i < 7; i++) {
@@ -3058,6 +3062,10 @@ export const HomeScreen: React.FC = () => {
               entries={currentDayExercises}
               onDeleteEntry={handleDeleteExerciseEntry}
             />
+
+            {isSameDay(selectedDate, new Date()) && (
+              <TrackLiftsCard accountInfo={accountInfo} />
+            )}
 
             {/* Her shelf, ticked in TrackLifts. A labeled line of its own, never
                 merged into the food log, because she did not log it here */}

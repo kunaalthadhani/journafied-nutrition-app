@@ -107,7 +107,8 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
   initialTab,
   scrollToInsight = null,
   onScrollToInsightConsumed,
-}) => {  const insightsScrollRef = useRef<ScrollView>(null);
+}) => {
+  const insightsScrollRef = useRef<ScrollView>(null);
   const insightSlotRefs = useRef<Partial<Record<InsightId, View | null>>>({});
   const pendingScrollRef = useRef<InsightId | null>(null);
   const consumedCbRef = useRef(onScrollToInsightConsumed);
@@ -121,23 +122,30 @@ export const NutritionAnalysisScreen: React.FC<NutritionAnalysisScreenProps> = (
     const slot = insightSlotRefs.current[id];
     const sv = insightsScrollRef.current as any;
     if (!slot || !sv) return false;
-    let handle: number | null = null;
-    if (typeof sv.getInnerViewNode === 'function') {
-      const node = sv.getInnerViewNode();
-      handle = typeof node === 'number' ? node : findNodeHandle(node);
+    // Fabric wants the inner view REF, the old architecture wants a numeric
+    // handle from findNodeHandle. Expo 54 is Fabric by default, and handing it a
+    // number is what threw "measureLayout must be called with a ref to a native
+    // component" on every unlock tap. Try the ref first, keep the handle as the
+    // fallback, and treat a throw as not-ready so the caller retries.
+    const target =
+      (typeof sv.getInnerViewRef === 'function' ? sv.getInnerViewRef() : null)
+      ?? (typeof sv.getInnerViewNode === 'function' ? sv.getInnerViewNode() : null)
+      ?? (typeof sv.getScrollableNode === 'function' ? sv.getScrollableNode() : null)
+      ?? sv;
+    if (!target) return false;
+
+    try {
+      slot.measureLayout(
+        target,
+        (_x: number, y: number) => {
+          insightsScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
+        },
+        () => {},
+      );
+    } catch {
+      // Not measurable yet, or the node is not native. The tick loop retries.
+      return false;
     }
-    if (handle == null && typeof sv.getScrollableNode === 'function') {
-      handle = findNodeHandle(sv.getScrollableNode());
-    }
-    if (handle == null) handle = findNodeHandle(sv);
-    if (handle == null) return false;
-    slot.measureLayout(
-      handle,
-      (_x: number, y: number) => {
-        insightsScrollRef.current?.scrollTo({ y: Math.max(0, y - 16), animated: true });
-      },
-      () => {},
-    );
     return true;
   };
 
