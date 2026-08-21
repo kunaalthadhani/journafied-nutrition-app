@@ -24,9 +24,11 @@ interface PhotoAnalyzingOverlayProps {
   onNote: (note: string) => void;
   /** True once the photo itself has been read and only the counting is left. */
   read: boolean;
+  /** True once the numbers are in. The overlay decides when to leave, not the caller. */
+  done: boolean;
 }
 
-export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff, onNote, read }) => {
+export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ imageUri, onHandoff, onNote, read, done }) => {
   const progress = useRef(new Animated.Value(0)).current;
   const [caption, setCaption] = useState(CAPTIONS[0].text);
   const [note, setNote] = useState('');
@@ -82,6 +84,15 @@ export const PhotoAnalyzingOverlay: React.FC<PhotoAnalyzingOverlayProps> = ({ im
   useEffect(() => {
     if (read) setCaption(note.trim() ? 'Counting that in' : 'Working out the numbers');
   }, [read]);
+
+  // The answer arrived. Leave at once when there is nothing to lose, and stay
+  // when there is: the caller used to unmount this the instant the numbers
+  // landed, which deleted whatever was half typed in the field.
+  useEffect(() => {
+    if (!done || sent) return;
+    if (!note.trim()) { onHandoff(); return; }
+    setCaption('Numbers are in. Send that and I will redo them.');
+  }, [done, sent]);
 
   const submitNote = () => {
     const trimmed = note.trim();

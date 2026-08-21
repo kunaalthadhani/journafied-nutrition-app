@@ -162,6 +162,9 @@ export const HomeScreen: React.FC = () => {
   const photoReading = React.useRef<VisionReading | null>(null);
   // Drives the overlay's "photo read, now counting" state
   const [photoRead, setPhotoRead] = useState(false);
+  // The answer is in. Not the same as "close the overlay": if she is mid note
+  // the overlay stays and keeps her words.
+  const [photoDone, setPhotoDone] = useState(false);
   const isOpeningCameraRef = React.useRef(false);
   const pendingActionRef = React.useRef<'camera' | 'library' | null>(null);
   const [goalsSet, setGoalsSet] = useState(false);
@@ -2168,6 +2171,7 @@ export const HomeScreen: React.FC = () => {
     // The bar goes up over work that is already running. It never gates the
     // call, and an answer that beats it dismisses it early rather than waiting
     setAnalyzingPhoto(uriToAnalyze);
+    setPhotoDone(false);
 
     const done = () => {
       photoPendingId.current = null;
@@ -2226,8 +2230,9 @@ export const HomeScreen: React.FC = () => {
       }
 
       // Beat the bar. No floor: a fast answer is the feature, not something to
-      // hide behind an animation
-      setAnalyzingPhoto(null);
+      // hide behind an animation. But this only reports the answer, it does not
+      // close the overlay: unmounting mid sentence threw away what she typed.
+      setPhotoDone(true);
 
       if (__DEV__) console.log('Analysis complete, parsed foods:', parsedFoods);
 
@@ -2394,6 +2399,7 @@ export const HomeScreen: React.FC = () => {
         photoReading.current = null;
         photoPendingId.current = null;
         setPhotoRead(false);
+        setPhotoDone(false);
 
         // Pass the URI directly to avoid state timing issues
         analyzeUploadedImage(asset.uri);
@@ -2470,6 +2476,7 @@ export const HomeScreen: React.FC = () => {
         photoReading.current = null;
         photoPendingId.current = null;
         setPhotoRead(false);
+        setPhotoDone(false);
 
         // Pass the URI directly to avoid state timing issues
         analyzeUploadedImage(asset.uri);
@@ -3434,7 +3441,8 @@ export const HomeScreen: React.FC = () => {
         <PhotoAnalyzingOverlay
           imageUri={analyzingPhoto}
           read={photoRead}
-          onHandoff={() => setAnalyzingPhoto(null)}
+          done={photoDone}
+          onHandoff={() => { setAnalyzingPhoto(null); setPhotoDone(false); }}
           onNote={(note) => {
             // The overlay stays up through the re-run. Dismissing it here is
             // what made the note feel like it vanished

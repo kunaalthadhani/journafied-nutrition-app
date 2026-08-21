@@ -6,6 +6,9 @@ Plain English log of what changed in each version and why it matters to you. New
 
 ## Proactive
 
+**v1.8.4**
+Typing a note over a photo no longer loses what you wrote. The moment the numbers came back the screen closed, taking the keyboard and your half finished sentence with it, which was worst for exactly the people trying to help it get the answer right. It now waits: if the field is empty it leaves the instant the answer lands, and if you are mid sentence it stays and tells you the numbers are in and it will redo them with what you send.
+
 **v1.8.3**
 You pick your own password now. Signing up used to invent one for you and never show it to you, which meant the account was yours but only on that one phone. TrackLifts is the same account and it could never let you in, because you did not know the password and there was no way to ask for a new one. Now there is a password field at signup, and if the email you type already has a Track account the same screen just signs you into it instead of sending you off to find a sign in page.
 
